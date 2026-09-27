@@ -21,6 +21,12 @@ export interface CommandFlags {
   readonly object?: string;
 }
 
+/**
+ * `profile lint` without --profile. The argument adapter reports it with its placement rules,
+ * before the read scope flags; core reports the same text because `CommandFlags.profile` is optional.
+ */
+export const lintProfileRequired = 'profile lint requires --profile build-spec@1.';
+
 /** A known command word with the right operand count, and flags placed where they are accepted. */
 export interface CommandArguments {
   readonly name: CommandName;

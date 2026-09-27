@@ -25,7 +25,7 @@ import type {
 } from '../../contract/records/command.js';
 import type { CommandFlags } from '../../contract/records/arguments.js';
 import type { Result } from '../../contract/errors.js';
-import { failure, success } from '../../contract/errors.js';
+import { failure, success, unreadableSource, unwritableOutput } from '../../contract/errors.js';
 import { checked } from '../shared/checks.js';
 import type { Parser } from '../shared/checks.js';
 import { mapped } from '../shared/results.js';
@@ -99,27 +99,22 @@ export function retains(flags: Pick<CommandFlags, 'request'>): Result<Retains> {
 }
 
 /**
- * A FILE operand. Only an empty path fails here, with the failure its read would give:
- * `source-unavailable`.
+ * A FILE operand. Only an empty path fails here, with the text its read would give:
+ * `source-unavailable`. It fails before the credential read, the server check or any send.
  */
 export function sourceFile(text: string): Result<FilePath> {
-  return checked(filePath, text, {
-    code: 'source-unavailable',
-    message: `Cannot read UTF-8 source: ${text}`,
-  });
+  return checked(filePath, text, unreadableSource(text));
 }
 
 /**
- * --out; absent stays absent. An empty path fails with `output-unavailable`, the failure its write
- * would give, before the command runs.
+ * --out; absent stays absent. An empty path fails with the text its write would give:
+ * `output-unavailable`. It fails before the command runs, so nothing is sent or committed.
  */
 export function writes(flags: Pick<CommandFlags, 'out'>): Result<Writes> {
   if (flags.out === undefined) return success({});
-  const out = flags.out;
-  return mapped(
-    checked(filePath, out, { code: 'output-unavailable', message: `Cannot write output: ${out}` }),
-    (path) => ({ out: path }),
-  );
+  return mapped(checked(filePath, flags.out, unwritableOutput(flags.out)), (path) => ({
+    out: path,
+  }));
 }
 
 /** A profile operand or --profile. Fails with `unknown-profile`. */

@@ -11,7 +11,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import type { RequestFiles } from '../../contract/ports/runtime.js';
 import type { SourceFile } from '../../contract/records/source-file.js';
 import type { LocalFailure, Result } from '../../contract/errors.js';
-import { failure, success } from '../../contract/errors.js';
+import { failure, success, unreadableSource, unwritableOutput } from '../../contract/errors.js';
 import type { FilePath } from '../../contract/brands.js';
 
 /** The largest source file a command reads. */
@@ -32,12 +32,8 @@ async function source(file: FilePath): Promise<Result<SourceFile, LocalFailure>>
       return failure({ code: 'source-too-large', message: 'DSL source exceeds 16 MiB' });
     return success({ file, source: new TextDecoder('utf-8', { fatal: true }).decode(bytes) });
   } catch {
-    return unreadable(file);
+    return failure(unreadableSource(file));
   }
-}
-/** The source cannot be read as UTF-8 text. */
-function unreadable(path: FilePath): Result<never, LocalFailure> {
-  return failure({ code: 'source-unavailable', message: `Cannot read UTF-8 source: ${path}` });
 }
 /**
  * Writes `text` to the explicit --out destination after the command ran. Never changes service
@@ -51,6 +47,6 @@ async function output(
     await writeFile(path, text, 'utf8');
     return success(undefined);
   } catch {
-    return failure({ code: 'output-unavailable', message: `Cannot write output: ${path}` });
+    return failure(unwritableOutput(path));
   }
 }

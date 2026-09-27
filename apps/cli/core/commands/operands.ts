@@ -1,9 +1,9 @@
 /*
  * `pnpm canvas` command assembly: the adapter's words and flags become one `ParsedCommand`, each
- * command carrying only the checked fields it reads. Pure. Checks run in the base CLI's order: the
- * read scope, --mode and --revision for every command, then the command's operand and its own
- * flags. A rejected value is a failure naming the argument; nothing was read or sent, so the
- * caller corrects it and runs the command again.
+ * command carrying only the checked fields it reads. Pure. Runs after the adapter's placement
+ * rules. Order: the read scope, --mode and --revision for every command, then the command's
+ * operand, its own flags, --request and --out. A rejected value is a failure naming the argument;
+ * nothing was read or sent, so the caller corrects it and runs the command again.
  */
 import type {
   ChangeMode,

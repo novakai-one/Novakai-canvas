@@ -7,6 +7,7 @@
 import { collectionId } from '../../contract/brands.js';
 import type { CollectionId } from '../../contract/brands.js';
 import type { ProfileCommand, Writes } from '../../contract/records/command.js';
+import { lintProfileRequired } from '../../contract/records/arguments.js';
 import type { CommandFlags } from '../../contract/records/arguments.js';
 import type { ProfileId } from '../../contract/records/profiles.js';
 import type { Result } from '../../contract/errors.js';
@@ -65,13 +66,13 @@ function scaffold(flags: CommandFlags): Result<Scaffold> {
   }));
 }
 
-/** --profile for lint: required, then known. Fails with `invalid-arguments` or `unknown-profile`. */
+/**
+ * --profile for lint: required, then known. Fails with `invalid-arguments` or `unknown-profile`.
+ * The argument adapter already reported a missing --profile; the check keeps this total.
+ */
 function lintProfile(text: string | undefined): Result<ProfileId> {
   if (text === undefined)
-    return failure({
-      code: 'invalid-arguments',
-      message: 'profile lint requires --profile build-spec@1.',
-    });
+    return failure({ code: 'invalid-arguments', message: lintProfileRequired });
   return profile(text);
 }
 

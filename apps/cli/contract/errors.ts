@@ -144,6 +144,22 @@ export function failure(input: FailureInput): Result<never, LocalFailure> {
   return { ok: false, error: { code, message, recovery, source } };
 }
 
+/**
+ * `source-unavailable` naming `path`: the FILE cannot be read as UTF-8 text. Core's FILE check (an
+ * empty path) and the local-files read report the same text.
+ */
+export function unreadableSource(path: string): FailureInput {
+  return { code: 'source-unavailable', message: `Cannot read UTF-8 source: ${path}` };
+}
+
+/**
+ * `output-unavailable` naming `path`: the --out file cannot be written. Core's --out check (an
+ * empty path) and the local-files write report the same text.
+ */
+export function unwritableOutput(path: string): FailureInput {
+  return { code: 'output-unavailable', message: `Cannot write output: ${path}` };
+}
+
 /** Wraps another owner's failure record without changing it. */
 export function rejected(
   code: ForeignCode,

@@ -8,6 +8,7 @@
 import { parseArgs } from 'node:util';
 import { commandName } from '../../contract/records/command.js';
 import type { CommandName } from '../../contract/records/command.js';
+import { lintProfileRequired } from '../../contract/records/arguments.js';
 import type { CommandArguments, CommandFlags } from '../../contract/records/arguments.js';
 import type { LocalFailure, Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
@@ -23,6 +24,73 @@ interface Token {
   readonly kind: string;
   readonly name?: string;
 }
+
+/** A word that joins the next word into one command name: `recipe admit` → `recipe-admit`. */
+type Family = 'theme' | 'recipe' | 'profile';
+
+/** How many operands a command takes after its name. */
+type OperandCount = 0 | 1;
+
+/** A placement rule: the message when the command may not take a flag it was given, else undefined. */
+type PlacementRule = (name: CommandName, flags: CommandFlags) => string | undefined;
+
+/** How Node parses one value flag core reads. */
+interface FlagOption {
+  readonly type: 'string';
+  readonly default?: string;
+}
+
+/** The value flags core reads, one per `CommandFlags` key: a missing or extra flag is a type error. */
+const commandFlags = Object.freeze({
+  revision: { type: 'string' },
+  mode: { type: 'string', default: 'create' },
+  request: { type: 'string' },
+  out: { type: 'string' },
+  id: { type: 'string' },
+  version: { type: 'string' },
+  family: { type: 'string' },
+  title: { type: 'string' },
+  namespace: { type: 'string' },
+  profile: { type: 'string' },
+  section: { type: 'string' },
+  object: { type: 'string' },
+} as const satisfies Readonly<Record<keyof CommandFlags, FlagOption>>);
+
+/** Every family word, keyed by itself. */
+const families: Readonly<Record<Family, Family>> = Object.freeze({
+  theme: 'theme',
+  recipe: 'recipe',
+  profile: 'profile',
+});
+
+/** The profile and scaffold placement rules, in the base CLI's order; the first broken rule is reported. */
+const profileRules: readonly PlacementRule[] = Object.freeze([
+  profileOnlyWithLint,
+  lintNeedsProfile,
+  scaffoldFlags,
+]);
+
+/** Every command's operand count: a missing or misspelt command is a type error. */
+const operandCounts: Readonly<Record<CommandName, OperandCount>> = Object.freeze({
+  help: 0,
+  describe: 0,
+  list: 0,
+  read: 1,
+  inspect: 1,
+  create: 1,
+  replace: 1,
+  patch: 1,
+  preview: 1,
+  receipt: 1,
+  retry: 1,
+  apply: 1,
+  'theme-admit': 1,
+  'recipe-admit': 1,
+  'recipe-instantiate': 1,
+  'profile-describe': 1,
+  'profile-scaffold': 1,
+  'profile-lint': 1,
+});
 
 /**
  * Flags are parsed by Node; unknown flags, extra operands and misplaced flags fail before any
@@ -42,18 +110,7 @@ export function readArguments(
         help: { type: 'boolean', short: 'h' },
         server: { type: 'string', default: 'http://127.0.0.1:5174' },
         workspace: { type: 'string', default: defaultWorkspace },
-        revision: { type: 'string' },
-        mode: { type: 'string', default: 'create' },
-        request: { type: 'string' },
-        out: { type: 'string' },
-        id: { type: 'string' },
-        version: { type: 'string' },
-        family: { type: 'string' },
-        title: { type: 'string' },
-        namespace: { type: 'string' },
-        profile: { type: 'string' },
-        section: { type: 'string' },
-        object: { type: 'string' },
+        ...commandFlags,
       },
     });
     const { help, server, workspace, ...flags } = parsed.values;
@@ -70,7 +127,7 @@ export function readArguments(
   }
 }
 
-/** The command word, then its operand count, then which flags it accepts. */
+/** A repeated read scope flag, then the command word, then its operands and flags. */
 function readCommand(
   positionals: readonly string[],
   flags: CommandFlags,
@@ -93,13 +150,13 @@ function operands(
   positionals: readonly string[],
   flags: CommandFlags,
 ): Result<CommandWords> {
-  const count = ['help', 'describe', 'list'].includes(name) ? 1 : 2;
-  if (positionals.length !== count)
-    return invalidArguments(`${name} requires ${count - 1} operand(s)`);
+  const count = operandCounts[name];
+  if (positionals.length !== count + 1)
+    return invalidArguments(`${name} requires ${count} operand(s)`);
   return placed({ name, operand: positionals[1] ?? '' }, flags);
 }
 
-/** --profile, --id and --title first, then the read scope flags. */
+/** The profile and scaffold rules first, then the read scope flags. */
 function placed(
   words: CommandWords,
   flags: CommandFlags,
@@ -107,6 +164,53 @@ function placed(
   const invalid = profileFlagFailure(words.name, flags) ?? readScopeFailure(words.name, flags);
   if (invalid !== undefined) return invalid;
   return success(words);
+}
+
+/** The first profile or scaffold placement rule the command breaks; `invalid-arguments`. */
+function profileFlagFailure(
+  name: CommandName,
+  flags: CommandFlags,
+): Result<never> | undefined {
+  const message = profileRules.map((rule) => rule(name, flags)).find((text) => text !== undefined);
+  if (message === undefined) return undefined;
+  return invalidArguments(message);
+}
+
+/** --profile names the profile `profile lint` checks against; no other command takes it. */
+function profileOnlyWithLint(
+  name: CommandName,
+  flags: Pick<CommandFlags, 'profile'>,
+): string | undefined {
+  if (flags.profile === undefined || name === 'profile-lint') return undefined;
+  return '--profile is only valid with profile lint.';
+}
+
+/** `profile lint` needs --profile. Checked before the read scope flags, as the base CLI does. */
+function lintNeedsProfile(
+  name: CommandName,
+  flags: Pick<CommandFlags, 'profile'>,
+): string | undefined {
+  if (name !== 'profile-lint' || flags.profile !== undefined) return undefined;
+  return lintProfileRequired;
+}
+
+/** --id and --title name what `profile scaffold` or `recipe admit` creates; no other command takes them. */
+function scaffoldFlags(
+  name: CommandName,
+  flags: Pick<CommandFlags, 'id' | 'title'>,
+): string | undefined {
+  if (takesScaffoldFlags(name) || !hasScaffoldFlags(flags)) return undefined;
+  return '--id and --title are only valid with profile scaffold or recipe admit.';
+}
+
+/** Whether the command names what it creates with --id and --title. */
+function takesScaffoldFlags(name: CommandName): boolean {
+  return name === 'profile-scaffold' || name === 'recipe-admit';
+}
+
+/** Whether --id or --title is given. */
+function hasScaffoldFlags(flags: Pick<CommandFlags, 'id' | 'title'>): boolean {
+  return flags.id !== undefined || flags.title !== undefined;
 }
 
 /** At most one of --section and --object, and only with read. Core checks their IDs. */
@@ -117,57 +221,35 @@ function readScopeFailure(
   const selected = [flags.section, flags.object].filter((value) => value !== undefined);
   if (selected.length > 1)
     return invalidArguments('--section and --object are mutually exclusive for read.');
-  return selected.length === 0 || name === 'read'
-    ? undefined
-    : invalidArguments('--section and --object are only valid with read.');
+  if (selected.length === 0 || name === 'read') return undefined;
+  return invalidArguments('--section and --object are only valid with read.');
 }
 
+/** Whether --section or --object is given twice; Node would silently keep only the last value. */
 function duplicateScopeFlag(tokens: readonly Token[]): boolean {
-  const names = tokens.flatMap((token) =>
-    token.kind === 'option' && (token.name === 'section' || token.name === 'object')
-      ? [token.name]
-      : [],
-  );
-  return names.some((name) => names.indexOf(name) !== names.lastIndexOf(name));
+  const names = tokens.filter(isScopeFlag).map((token) => token.name);
+  return names.some((name, index) => names.indexOf(name) !== index);
 }
 
-/** Help is a local command and never needs a running workspace. */
+/** Whether the token is a --section or --object option. */
+function isScopeFlag(token: Token): boolean {
+  return token.kind === 'option' && (token.name === 'section' || token.name === 'object');
+}
+
+/** Help is a local command and never needs a running workspace; a family word joins the next word. */
 function commandOperands(
   help: boolean | undefined,
   positionals: readonly string[],
 ): readonly string[] {
   if (help) return ['help'];
-  const family = { theme: 'theme', recipe: 'recipe', profile: 'profile' }[positionals[0] ?? ''];
-  if (family !== undefined) return [`${family}-${positionals[1]}`, ...positionals.slice(2)];
-  return positionals;
+  const [first = '', second = '', ...rest] = positionals;
+  if (!isFamily(first)) return positionals;
+  return [`${first}-${second}`, ...rest];
 }
 
-function profileFlagFailure(
-  name: CommandName,
-  flags: Pick<CommandFlags, 'profile' | 'id' | 'title'>,
-): Result<never> | undefined {
-  const rules = [profileFlagMessage(name, flags), scaffoldFlagMessage(name, flags)];
-  const message = rules.find((rule) => rule !== undefined);
-  return message === undefined ? undefined : invalidArguments(message.trim());
-}
-
-function profileFlagMessage(
-  name: CommandName,
-  flags: Pick<CommandFlags, 'profile'>,
-): string | undefined {
-  return flags.profile !== undefined && name !== 'profile-lint'
-    ? '--profile is only valid with profile lint.'
-    : undefined;
-}
-
-function scaffoldFlagMessage(
-  name: CommandName,
-  flags: Pick<CommandFlags, 'id' | 'title'>,
-): string | undefined {
-  const hasScaffoldFlags = flags.id !== undefined || flags.title !== undefined;
-  return name !== 'profile-scaffold' && name !== 'recipe-admit' && hasScaffoldFlags
-    ? '--id and --title are only valid with profile scaffold or recipe admit.'
-    : undefined;
+/** Whether `word` is a family word; inherited object keys such as `constructor` are not. */
+function isFamily(word: string): word is Family {
+  return Object.hasOwn(families, word);
 }
 
 /** A malformed or misplaced argument; nothing was read or sent. */
