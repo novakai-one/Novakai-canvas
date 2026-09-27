@@ -6,7 +6,8 @@
  * `projectCollection` comes from `api.ts`, the only non-compose file allowed to import core.
  * `prepareInstallation`, `readAgentCredential` and `createHeadlessBindings` come from the
  * composition root. The two envelope schemas parse service answers at the consumer edge.
- * `hostPath` brands the two installation paths the CLI passes to `prepareInstallation`.
+ * `hostPath` brands the paths the CLI chooses: the two it passes to `prepareInstallation` and the
+ * libavoid wasm path of its headless render jobs.
  * Everything else is a type. The service's own process entries (cli/) import compose.ts directly.
  */
 export { projectCollection } from './api.js';

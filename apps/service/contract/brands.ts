@@ -46,7 +46,9 @@ export const loopbackPort = z.number().int().min(1024).max(65535).brand<'Loopbac
 
 /**
  * Checks a host filesystem path chosen at startup: any non-empty text. Parsed by cli/serve.ts and
- * by the CLI for its installation paths; a request never supplies one.
+ * by the CLI for its installation and wasm paths. compose/producer.ts derives the libavoid wasm
+ * path from the resource root; the render worker re-parses it from the job envelope. A request
+ * never supplies one.
  */
 export const hostPath = z.string().min(1).brand<'HostPath'>();
 
