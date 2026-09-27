@@ -12,6 +12,10 @@ export interface SessionLifetime {
     operation: () => Promise<T>,
     unavailable: () => T,
   ): Promise<T>;
+  /**
+   * Drains admitted work, then closes the owners once; every call shares that answer. Passes the
+   * owners' close failure through; fails with `unavailable` at `shutdown` when closing throws.
+   */
   close(): Promise<Result<void>>;
 }
 

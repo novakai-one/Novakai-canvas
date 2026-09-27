@@ -20,29 +20,18 @@ interface WorkerSlot {
 /** The pool's idle worker: `none`, or one initialized worker waiting for the next job. */
 type IdleWorker = { readonly kind: 'none' } | { readonly kind: 'ready'; readonly slot: WorkerSlot };
 
-/** What happens to a job's worker when the job settles: kept for the next job, or terminated. */
-type Settlement = 'reuse' | 'terminate';
-
-/** A job's answer and what happens to its worker. */
+/** A job's answer, and whether its worker is kept for the next job (`reuse`) or terminated. */
 interface JobEnd {
   readonly result: Result<unknown>;
-  readonly settlement: Settlement;
+  readonly settlement: 'reuse' | 'terminate';
 }
 
-/** The one idle worker, shared by every job of one pool. */
-interface IdleCell {
-  /** The idle worker, or `start()`'s new one when none is idle; the cell is empty afterwards. */
-  readonly take: (start: () => WorkerSlot) => WorkerSlot;
+/** What one job runs with: the idle-worker hand-off and the time limit. */
+interface Pool {
+  /** The idle worker, or a new one when none is idle; no worker is idle afterwards. */
+  readonly take: () => WorkerSlot;
   /** Keeps `slot` as the idle worker when none is idle; otherwise terminates it. */
   readonly release: (slot: WorkerSlot) => void;
-  /** Empties the cell when `worker` is the idle one (it crashed or exited). */
-  readonly retire: (worker: NodeWorker) => void;
-}
-
-/** What one job runs with. */
-interface Pool {
-  readonly idle: IdleCell;
-  readonly start: () => WorkerSlot;
   readonly timeoutMs: number;
 }
 
@@ -59,55 +48,30 @@ export function createRenderTransport(
   entry: URL,
   timeoutMs: number,
 ): RenderTransport & { readonly ready: Promise<Result<void>> } {
-  const idle = createIdleCell();
-  const start = (): WorkerSlot => startWorker(entry, timeoutMs, (worker) => idle.retire(worker));
-  const first = start();
-  idle.release(first);
+  let idle = NO_IDLE;
+  const retire = (worker: NodeWorker): void => {
+    if (idle.kind === 'ready' && idle.slot.worker === worker) idle = NO_IDLE;
+  };
+  const take = (): WorkerSlot => {
+    const current = idle;
+    idle = NO_IDLE;
+    if (current.kind === 'ready') return current.slot;
+    return startWorker(entry, timeoutMs, retire);
+  };
+  const release = (slot: WorkerSlot): void => {
+    if (idle.kind === 'ready') {
+      void slot.worker.terminate();
+      return;
+    }
+    slot.worker.unref();
+    idle = { kind: 'ready', slot };
+  };
+  const first = take();
+  release(first);
   return {
     ready: first.ready,
-    run: (job, signal) => runJob(job, signal, { idle, start, timeoutMs }),
+    run: (job, signal) => runJob(job, signal, { take, release, timeoutMs }),
   };
-}
-
-/** An empty idle cell. Never fails. */
-function createIdleCell(): IdleCell {
-  let idle = NO_IDLE;
-  return {
-    take: (start) => {
-      const current = idle;
-      idle = NO_IDLE;
-      if (current.kind === 'ready') return current.slot;
-      return start();
-    },
-    release: (slot) => {
-      idle = keepIdle(idle, slot);
-    },
-    retire: (worker) => {
-      idle = retired(idle, worker);
-    },
-  };
-}
-
-/** `slot` as the new idle worker when none is idle; otherwise `slot`'s worker is terminated. */
-function keepIdle(
-  idle: IdleWorker,
-  slot: WorkerSlot,
-): IdleWorker {
-  if (idle.kind === 'ready') {
-    void slot.worker.terminate();
-    return idle;
-  }
-  slot.worker.unref();
-  return { kind: 'ready', slot };
-}
-
-/** `none` when `worker` is the idle one; otherwise the idle worker unchanged. */
-function retired(
-  idle: IdleWorker,
-  worker: NodeWorker,
-): IdleWorker {
-  if (idle.kind === 'ready' && idle.slot.worker === worker) return NO_IDLE;
-  return idle;
 }
 
 /**
@@ -184,10 +148,10 @@ async function runJob(
   pool: Pool,
 ): Promise<Result<unknown>> {
   try {
-    const slot = pool.idle.take(pool.start);
+    const slot = pool.take();
     const ready = await slot.ready;
     if (!ready.ok) return notStarted();
-    return await observe(slot.worker, job, signal, pool.timeoutMs, () => pool.idle.release(slot));
+    return await observe(slot.worker, job, signal, pool.timeoutMs, () => pool.release(slot));
   } catch {
     return notStarted();
   }
@@ -259,7 +223,7 @@ function terminate(message: string): JobEnd {
 }
 
 /**
- * Terminates a `terminate` worker first, or hands a `reuse` worker back to the pool at once.
+ * Hands a `reuse` worker back to the pool at once, or terminates a `terminate` worker first.
  * Answers the job's result; an unconfirmed termination is `unavailable` at `worker`.
  */
 async function settle(
@@ -273,16 +237,14 @@ async function settle(
 }
 
 /** `result` once the worker has terminated; `unavailable` at `worker` when that is not confirmed. */
-async function terminated(
+function terminated(
   worker: NodeWorker,
   result: Result<unknown>,
 ): Promise<Result<unknown>> {
-  try {
-    await worker.terminate();
-    return result;
-  } catch {
-    return failure('unavailable', 'worker', 'Worker termination could not be confirmed');
-  }
+  return worker.terminate().then(
+    () => result,
+    () => failure('unavailable', 'worker', 'Worker termination could not be confirmed'),
+  );
 }
 
 /**
