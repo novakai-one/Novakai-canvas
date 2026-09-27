@@ -1,3 +1,8 @@
+/*
+ * Authoring's two diagram planner roles: `dsl` lowers source text through Language, `model`
+ * plans a human change batch through Model. Both hand the new collection to the collection
+ * planner. Pure over the injected owners. Authoring owns scope, commit and retry.
+ */
 import type {
   AuthoringResult,
   IntentPlanner,
@@ -26,6 +31,28 @@ export interface DiagramPlannerOwners {
   readonly workspace: WorkspaceReader;
   readonly resources: ResourceSelector;
   readonly collections: CollectionPlanner;
+}
+
+/**
+ * Binds the `dsl` and `model` planners; HTTP credential policy restricts agents to `dsl`. Both
+ * fail with `invalid-input` at `intent` for a non-change request. `dsl` also fails with
+ * `invalid-input` at `dsl` (bad envelope) or `source` (Language parse, source kept),
+ * `revision-conflict` at `pins`, or `invariant-violation` at `source` (Language lower, source
+ * kept). `model` also fails with `invalid-input` at `model` or `invariant-violation` at the
+ * collection ID (Model plan, source kept). Reader, selector and collection planner failures pass
+ * through unchanged.
+ */
+export function createDiagramPlanners(owners: DiagramPlannerOwners): readonly IntentPlanner[] {
+  return [
+    {
+      id: plannerId.parse('dsl'),
+      plan: async (request, snapshot, pins) => lower(request, snapshot, pins, owners),
+    },
+    {
+      id: plannerId.parse('model'),
+      plan: async (request, snapshot) => model(request, snapshot, owners),
+    },
+  ];
 }
 /** A planner never interprets an undo/redo payload; Authoring owns those journal-based operations. */
 function payload(request: Request): AuthoringResult<Json> {
@@ -150,17 +177,4 @@ function modelCollection(
       planned.error,
     );
   return owners.collections.propose(snapshot, planned.value.candidate);
-}
-/** Trusted composition registers two explicit pathways; HTTP credential policy restricts agents to readable DSL. */
-export function createDiagramPlanners(owners: DiagramPlannerOwners): readonly IntentPlanner[] {
-  return [
-    {
-      id: plannerId.parse('dsl'),
-      plan: async (request, snapshot, pins) => lower(request, snapshot, pins, owners),
-    },
-    {
-      id: plannerId.parse('model'),
-      plan: async (request, snapshot) => model(request, snapshot, owners),
-    },
-  ];
 }

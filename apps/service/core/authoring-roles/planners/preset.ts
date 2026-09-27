@@ -1,3 +1,8 @@
+/*
+ * Authoring's `preset` planner role: repeats the preset preparation against Authoring's snapshot
+ * and proposes the preset record plus the metadata revision bump. A drifted preparation rejects
+ * without a write. Pure over the injected resource commands. Authoring owns commit and replay.
+ */
 import type {
   AuthoringErrorCode,
   AuthoringResult,
@@ -15,20 +20,20 @@ import type {
 import { workspaceMetadata } from '../../../contract/records/workspace/metadata.js';
 import { plannerId, proposalSchema } from '../../../contract/schemas.js';
 import { authoringFailure } from '../../../contract/errors.js';
-const authoringCodes: Readonly<Record<string, AuthoringErrorCode>> = {
-  'invalid-input': 'invalid-input',
-  'unsupported-version': 'unsupported-version',
-  'unknown-reference': 'unknown-reference',
-  'invariant-violation': 'invariant-violation',
-  'constraint-conflict': 'constraint-conflict',
-  'revision-conflict': 'revision-conflict',
-  'request-reused': 'request-reused',
-  'missing-asset': 'missing-asset',
-  'permission-denied': 'permission-denied',
-  'storage-unavailable': 'storage-unavailable',
-  'corrupt-record': 'corrupt-record',
-  cancelled: 'cancelled',
-};
+
+/**
+ * Binds the `preset` planner. `plan` fails with `invalid-input` at `preset` (not a change, or
+ * not an exact prepared preset) or `preset.proposal` (over Authoring's limits),
+ * `revision-conflict` at `preset` when the prepared content changed, `corrupt-record` at
+ * `metadata` when workspace metadata is missing or invalid, and with the preparation's own
+ * diagnostic when preparation fails (its code mapped to Authoring's, `invalid-input` otherwise).
+ */
+export function createPresetPlanner(owner: Pick<ResourceCommands, 'preparePreset'>): IntentPlanner {
+  return {
+    id: plannerId.parse('preset'),
+    plan: async (request, snapshot) => plan(request, snapshot, owner),
+  };
+}
 /** Preparation drift rejects without a write; retained requests recover through Authoring receipts. */
 function plan(
   request: Request,
@@ -107,6 +112,21 @@ function insertion(
     warnings: [],
   });
 }
+/** Preparation codes Authoring shares, mapped to themselves; any other code becomes `invalid-input`. */
+const authoringCodes: Readonly<Record<string, AuthoringErrorCode>> = {
+  'invalid-input': 'invalid-input',
+  'unsupported-version': 'unsupported-version',
+  'unknown-reference': 'unknown-reference',
+  'invariant-violation': 'invariant-violation',
+  'constraint-conflict': 'constraint-conflict',
+  'revision-conflict': 'revision-conflict',
+  'request-reused': 'request-reused',
+  'missing-asset': 'missing-asset',
+  'permission-denied': 'permission-denied',
+  'storage-unavailable': 'storage-unavailable',
+  'corrupt-record': 'corrupt-record',
+  cancelled: 'cancelled',
+};
 /** Owner failures retain their path/message/recovery while Authoring admits only its bounded code vocabulary. */
 function ownerRejected<T>(owner: ResourceDiagnostic): AuthoringResult<T> {
   const code = authoringCodes[owner.code] ?? 'invalid-input';
@@ -115,7 +135,6 @@ function ownerRejected<T>(owner: ResourceDiagnostic): AuthoringResult<T> {
     error: { ...owner, code, targets: [], traceId: null },
   };
 }
-
 /** Schema limits reject as a typed planner outcome; no Zod exception crosses Authoring. */
 function proposal(input: unknown): AuthoringResult<Proposal> {
   const parsed = proposalSchema.safeParse(input);
@@ -126,11 +145,4 @@ function proposal(input: unknown): AuthoringResult<Proposal> {
       'Prepared preset exceeds proposal limits',
     );
   return { ok: true, value: parsed.data };
-}
-/** Only the named semantic planner is registered; Authoring supplies snapshot, scope and atomic write authority. */
-export function createPresetPlanner(owner: Pick<ResourceCommands, 'preparePreset'>): IntentPlanner {
-  return {
-    id: plannerId.parse('preset'),
-    plan: async (request, snapshot) => plan(request, snapshot, owner),
-  };
 }

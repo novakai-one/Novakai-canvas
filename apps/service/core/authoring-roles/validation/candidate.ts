@@ -1,3 +1,9 @@
+/*
+ * Authoring's candidate validator role: the mandatory final gate over a stamped candidate. Every
+ * collection, preset, metadata and asset-admission record is checked against its owner and its
+ * retained bytes. Pure over the injected owners; private typed throws stop at `validate`.
+ * Authoring keeps the committed snapshot on rejection and owns scope, commit and recovery.
+ */
 import type {
   Assets,
   AuthoringResult,
@@ -21,6 +27,26 @@ export interface CandidateValidatorOwners {
   readonly workspace: WorkspaceReader;
   readonly resources: ResourceSelector;
   readonly assets: Pick<Assets, 'resolve'>;
+}
+
+/**
+ * Binds the validator. `validate` answers the read versions it consulted (history excluded), or:
+ * - `invariant-violation` at `candidate` when a record is missing, a revision or retained byte
+ *   manifest differs, metadata is invalid or names another workspace, or bytes are missing
+ *   (the owner's failure kept as source where there is one);
+ * - `corrupt-record` at `candidate` on any unexpected fault.
+ * Reader failures pass through unchanged.
+ */
+export function createCandidateValidator(owners: CandidateValidatorOwners): CandidateValidator {
+  return {
+    async validate(before, after): Promise<AuthoringResult<readonly ReadVersion[]>> {
+      try {
+        return checked(before, after, owners);
+      } catch (error) {
+        return rejected(error);
+      }
+    },
+  };
 }
 /** Cross-owner references are validated as a whole; a missing participant never becomes a skipped check. */
 class AdmissionFault extends Error {
@@ -161,16 +187,4 @@ function rejected(error: unknown): AuthoringResult<never> {
     'candidate',
     'Candidate ownership validation could not complete',
   );
-}
-/** Mandatory final gate has no write bypass; Authoring owns scope, conditional commit and all recovery decisions. */
-export function createCandidateValidator(owners: CandidateValidatorOwners): CandidateValidator {
-  return {
-    async validate(before, after): Promise<AuthoringResult<readonly ReadVersion[]>> {
-      try {
-        return checked(before, after, owners);
-      } catch (error) {
-        return rejected(error);
-      }
-    },
-  };
 }

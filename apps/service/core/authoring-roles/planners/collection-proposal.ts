@@ -1,3 +1,8 @@
+/*
+ * The collection planner the diagram planners share: proposes one collection write and, on a
+ * create, Library's catalog membership in the same Authoring transaction. Pure over the injected
+ * owners. Authoring owns scope, preconditions, commit and retry.
+ */
 import type {
   AuthoringResult,
   Collection,
@@ -22,6 +27,15 @@ export interface CollectionProposalOwners {
   readonly library: Pick<LibraryRules, 'planMembership'>;
   readonly workspace: WorkspaceReader;
   readonly resources: ResourceSelector;
+}
+
+/**
+ * Binds the collection planner. `propose` fails with `invariant-violation` at `catalog` when
+ * Library refuses the new membership (source kept), or `invalid-input` at `proposal` when the
+ * proposal exceeds Authoring's limits. Reader and selector failures pass through unchanged.
+ */
+export function createCollectionPlanner(owners: CollectionProposalOwners): CollectionPlanner {
+  return { propose: (snapshot, collection) => propose(snapshot, collection, owners) };
 }
 /** A create includes catalog membership in the same proposed Authoring transaction as its canonical collection. */
 function propose(
@@ -100,8 +114,4 @@ function checked(
       'Collection proposal exceeds the authoring contract',
     );
   return { ok: true, value: result.data };
-}
-/** Bind canonical Model proposals to Library membership; Authoring alone checks scope, preconditions and commits. */
-export function createCollectionPlanner(owners: CollectionProposalOwners): CollectionPlanner {
-  return { propose: (snapshot, collection) => propose(snapshot, collection, owners) };
 }

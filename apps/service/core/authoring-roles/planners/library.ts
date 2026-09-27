@@ -1,3 +1,8 @@
+/*
+ * Authoring's `library` planner role: Library plans a batch of catalog organisation changes and
+ * the planner proposes the one catalog write. Organisation changes never rewrite diagrams. Pure
+ * over the injected owners. Authoring owns scope, commit and retry.
+ */
 import type {
   AuthoringResult,
   IntentPlanner,
@@ -15,6 +20,19 @@ import { authoringFailure } from '../../../contract/errors.js';
 export interface LibraryPlannerOwners {
   readonly library: Pick<LibraryRules, 'planOrganisation'>;
   readonly workspace: WorkspaceReader;
+}
+
+/**
+ * Binds the `library` planner. `plan` fails with `invalid-input` at `intent` (not a change),
+ * `library` (bad envelope) or `catalog` (proposal over Authoring's limits), and with
+ * `invariant-violation` at `catalog` when Library rejects the batch (source kept) or no catalog
+ * exists. Reader failures pass through unchanged.
+ */
+export function createLibraryPlanner(owners: LibraryPlannerOwners): IntentPlanner {
+  return {
+    id: plannerId.parse('library'),
+    plan: async (request, snapshot) => propose(request, snapshot, owners),
+  };
 }
 /** Organisation commands are interpreted only by Library; the host cannot write an arbitrary organisation record. */
 function propose(
@@ -74,11 +92,4 @@ function checkedProposal(
   if (!parsed.success)
     return authoringFailure('invalid-input', 'catalog', 'Library proposal could not be admitted');
   return { ok: true, value: parsed.data };
-}
-/** Authoring alone admits and commits the Library-owned candidate through the usual receipt/history transaction. */
-export function createLibraryPlanner(owners: LibraryPlannerOwners): IntentPlanner {
-  return {
-    id: plannerId.parse('library'),
-    plan: async (request, snapshot) => propose(request, snapshot, owners),
-  };
 }
