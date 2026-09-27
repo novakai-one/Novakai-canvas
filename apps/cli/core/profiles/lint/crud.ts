@@ -1,7 +1,7 @@
 /*
- * Entities and ownership rules of the build-spec profile: shown entities must be entity nodes
- * carrying an invariant, and ownership must show one CRUD table with the fixed columns and
- * exactly one row per entity. Each rule returns its findings.
+ * Ownership rules of the build-spec profile: the ownership section shows one note holding exactly
+ * one CRUD table, with the fixed columns and one five-cell `<entity-id>-row` row per entity.
+ * Pure; the findings are returned.
  */
 import type {
   ProfileDeclarationIndex,
@@ -10,78 +10,16 @@ import type {
 import {
   descendants,
   field,
-  fieldFinding,
-  findingAt,
   id,
-  sectionById,
   shown,
   text,
   type Declaration,
   type SyntaxValue,
 } from './declarations.js';
-
-/** Entity findings first, then the CRUD table findings of the ownership section. */
-export function lintEntitiesAndCrud(indexed: ProfileDeclarationIndex): ProfileFinding[] {
-  const entities = sectionById(indexed.sections, 'entities');
-  const ownership = sectionById(indexed.sections, 'ownership');
-  if (entities === undefined || ownership === undefined) return [];
-  return [
-    ...entityFindings(shown(entities), indexed.nodes, entities),
-    ...crudFindings(indexed, ownership, shown(entities)),
-  ];
-}
-
-/** Each shown entity must resolve to an entity node with an invariant. */
-function entityFindings(
-  entityIds: readonly string[],
-  nodes: readonly Declaration[],
-  section: Declaration,
-): ProfileFinding[] {
-  return entityIds.flatMap((entityId) =>
-    entityFinding(
-      nodes.find((node) => id(node) === entityId),
-      entityId,
-      section,
-    ),
-  );
-}
-
-/** A missing or wrongly-kinded entity is reported at the section; a missing invariant at the node. */
-function entityFinding(
-  entity: Declaration | undefined,
-  entityId: string,
-  section: Declaration,
-): ProfileFinding[] {
-  if (!isEntityNode(entity))
-    return [
-      findingAt(section, `section @entities show @${entityId}`, 'Entities must show entity nodes.'),
-    ];
-  return invariantFinding(entity, entityId);
-}
-
-/** The declaration exists and its kind field is 'entity'. */
-function isEntityNode(entity: Declaration | undefined): entity is Declaration {
-  return entity !== undefined && text(entity, 'kind') === 'entity';
-}
-
-/** An entity without an invariant text child is reported. */
-function invariantFinding(
-  entity: Declaration,
-  entityId: string,
-): ProfileFinding[] {
-  return entity.children.some((child) => child.kind === 'text')
-    ? []
-    : [
-        findingAt(
-          entity,
-          `node @${entityId}`,
-          'Entity must contain at least one invariant text child.',
-        ),
-      ];
-}
+import { fieldFinding, findingAt } from './findings.js';
 
 /** The ownership note must hold exactly one CRUD table; its columns and rows are checked. */
-function crudFindings(
+export function crudFindings(
   indexed: ProfileDeclarationIndex,
   ownership: Declaration,
   entityIds: readonly string[],

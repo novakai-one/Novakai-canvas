@@ -6,16 +6,9 @@ import type {
   ProfileDeclarationIndex,
   ProfileFinding,
 } from '../../../contract/records/profiles.js';
-import {
-  collectAppendices,
-  findingAt,
-  id,
-  ids,
-  shown,
-  text,
-  type Appendix,
-  type Declaration,
-} from './declarations.js';
+import { collectAppendices, type Appendix } from './appendix-ids.js';
+import { id, ids, shown, text, type Declaration } from './declarations.js';
+import { findingAt } from './findings.js';
 
 /** The content findings of every appendix section, in document order. */
 export function lintAppendices(indexed: ProfileDeclarationIndex): ProfileFinding[] {

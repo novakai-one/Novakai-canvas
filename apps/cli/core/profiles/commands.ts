@@ -1,11 +1,16 @@
-import { buildSpecProfile, scaffoldBuildSpec } from './build-spec/starter.js';
+/*
+ * The build-spec@1 profile commands: describe, scaffold and lint. Local only; they never reach the
+ * service or a workspace. Failures are returned as values; the caller prints them.
+ */
+import { buildSpecProfile } from './build-spec/descriptor.js';
+import { scaffoldBuildSpec } from './build-spec/starter.js';
+import { displayDescriptor, findingLine } from './format.js';
 import { lintBuildSpec } from './lint/lint.js';
 import type { Command } from '../../contract/records/command.js';
 import type { SemanticInputs } from '../../contract/ports/runtime.js';
 import type { RequestFiles } from '../../contract/ports/runtime.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
-import type { ProfileFinding } from '../../contract/records/profiles.js';
 
 export interface ProfileDependencies {
   readonly files: Pick<RequestFiles, 'source' | 'output'>;
@@ -23,30 +28,6 @@ function validText(
   if (value === undefined || value.trim() === '')
     return failure('invalid-arguments', `Scaffold requires --${label}.`);
   return { ok: true, value };
-}
-
-function findingLine(finding: ProfileFinding): string {
-  return `PROFILE ${finding.path} ${finding.span.start.line}:${finding.span.start.column} ${finding.message}`;
-}
-
-function displayDescriptor(): string {
-  return [
-    `${buildSpecProfile.id} — ${buildSpecProfile.description}`,
-    '',
-    'Commands:',
-    ...Object.values(buildSpecProfile.commands).map((command) => `  ${command}`),
-    '',
-    'Required logical documents:',
-    ...buildSpecProfile.slots.map(
-      (slot) => `  ${slot.order}. ${slot.id} (${slot.modes.join('|')}) — ${slot.description}`,
-    ),
-    `  5.N appendix (${buildSpecProfile.appendix.modes.join('|')}) — ${buildSpecProfile.appendix.description}`,
-    '',
-    'Structural conventions:',
-    ...buildSpecProfile.conventions.map((convention) => `  ${convention}`),
-    '',
-    ...buildSpecProfile.notes.map((note) => `Note: ${note}`),
-  ].join('\n');
 }
 
 export async function executeProfile(

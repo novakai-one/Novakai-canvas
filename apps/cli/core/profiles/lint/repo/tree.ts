@@ -1,7 +1,7 @@
 /*
- * Repo-section rules of the build-spec profile: exactly one shown root, parent wires with shown
- * endpoints, and every shown object reachable from the root through those wires. Each rule
- * returns its findings.
+ * Repo tree rules of the build-spec profile: exactly one shown root, and parent wires that are
+ * connected and have shown endpoints. Reachability from the root is checked in reachability.ts.
+ * Pure; each rule returns its findings.
  */
 import type {
   ProfileDeclarationIndex,
@@ -9,8 +9,6 @@ import type {
 } from '../../../../contract/records/profiles.js';
 import {
   field,
-  fieldFinding,
-  findingAt,
   id,
   ids,
   reference,
@@ -19,12 +17,8 @@ import {
   text,
   type Declaration,
 } from '../declarations.js';
-
-/** A parent edge: a wire's source and target object ids. */
-type ParentEdge = {
-  readonly source: string;
-  readonly target: string;
-};
+import { fieldFinding, findingAt } from '../findings.js';
+import { reachabilityFindings } from './reachability.js';
 
 /** Root, wire and reachability findings for the repo tree section. */
 export function lintRepo(indexed: ProfileDeclarationIndex): ProfileFinding[] {
@@ -165,84 +159,4 @@ function endpointHidden(
   return (
     source !== undefined && target !== undefined && (!shownIds.has(source) || !shownIds.has(target))
   );
-}
-
-/** Every shown object must be reachable from the root through parent wires. */
-function reachabilityFindings(
-  section: Declaration,
-  rootId: string | undefined,
-  parentWires: readonly Declaration[],
-  shownIds: ReadonlySet<string>,
-): ProfileFinding[] {
-  if (rootId === undefined) return [];
-  const reachable = reachableObjects(rootId, childrenByParentOf(parentWires));
-  return [...shownIds].flatMap((objectId) => unreachableFinding(section, objectId, reachable));
-}
-
-/** A shown object outside the reachable set is reported. */
-function unreachableFinding(
-  section: Declaration,
-  objectId: string,
-  reachable: ReadonlySet<string>,
-): ProfileFinding[] {
-  return reachable.has(objectId)
-    ? []
-    : [
-        findingAt(
-          section,
-          `section @repo show @${objectId}`,
-          'Every shown repo object must be connected to the declared root by parent wires.',
-        ),
-      ];
-}
-
-/** The parent edges of the fully-specified wires. */
-function childrenByParentOf(wires: readonly Declaration[]): ReadonlyMap<string, readonly string[]> {
-  const edges = wires.flatMap((wire) => {
-    const edge = parentEdge(wire);
-    return edge === undefined ? [] : [edge];
-  });
-  return groupBySource(edges);
-}
-
-/** A wire's edge, when it carries an id, a source and a target. */
-function parentEdge(wire: Declaration): ParentEdge | undefined {
-  const wireId = id(wire);
-  const source = reference(field(wire, 'source'))?.id;
-  const target = reference(field(wire, 'target'))?.id;
-  return wireId === undefined || source === undefined || target === undefined
-    ? undefined
-    : { source, target };
-}
-
-/** Targets grouped under their source. */
-function groupBySource(edges: readonly ParentEdge[]): ReadonlyMap<string, readonly string[]> {
-  const byParent = new Map<string, string[]>();
-  for (const edge of edges) {
-    byParent.set(edge.source, [...(byParent.get(edge.source) ?? []), edge.target]);
-  }
-  return byParent;
-}
-
-/** The objects reachable from the root, breadth-first over parent wires. */
-function reachableObjects(
-  rootId: string,
-  childrenByParent: ReadonlyMap<string, readonly string[]>,
-): ReadonlySet<string> {
-  const reachable = new Set<string>([rootId]);
-  const queue = [...(childrenByParent.get(rootId) ?? [])];
-  while (queue.length > 0) visitReachable(queue, reachable, childrenByParent);
-  return reachable;
-}
-
-/** Dequeue one object; when new, mark it reachable and enqueue its children. */
-function visitReachable(
-  queue: string[],
-  reachable: Set<string>,
-  childrenByParent: ReadonlyMap<string, readonly string[]>,
-): void {
-  const current = queue.shift();
-  if (current === undefined || reachable.has(current)) return;
-  reachable.add(current);
-  queue.push(...(childrenByParent.get(current) ?? []));
 }

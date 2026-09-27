@@ -1,30 +1,15 @@
 /*
- * Section rules of the build-spec profile: unique ids, required slots present with their mode,
- * required sections in increasing order, and appendix ids that number, mode and order correctly.
- * Each rule returns its findings; nothing is pushed into shared state.
+ * Appendix sequence rules of the build-spec profile: at least one appendix exists, and in numeric
+ * order the appendices number, mode and order correctly after the ownership section. Pure; the
+ * findings are returned.
  */
 import type {
   ProfileDeclarationIndex,
   ProfileFinding,
 } from '../../../../contract/records/profiles.js';
-import { buildSpecProfile } from '../../build-spec/starter.js';
-import {
-  collectAppendices,
-  fieldFinding,
-  findingAt,
-  id,
-  order,
-  sectionById,
-  text,
-  type Appendix,
-  type Declaration,
-} from '../declarations.js';
-
-/** A required slot whose section is present. */
-type RequiredSection = {
-  readonly slot: (typeof buildSpecProfile.slots)[number];
-  readonly section: Declaration;
-};
+import { collectAppendices, type Appendix } from '../appendix-ids.js';
+import { order, sectionById, text, type Declaration } from '../declarations.js';
+import { fieldFinding, findingAt } from '../findings.js';
 
 /** The sequential appendix-check state: numbers seen and the running order anchor. */
 type AppendixSequence = {
@@ -34,139 +19,8 @@ type AppendixSequence = {
   readonly findings: ProfileFinding[];
 };
 
-const reserved = new Map(buildSpecProfile.slots.map((slot) => [slot.id.slice(1), slot]));
-
-/** Identity, presence, order and appendix-shape findings for the section list. */
-export function lintSections(indexed: ProfileDeclarationIndex): ProfileFinding[] {
-  return [
-    ...lintSectionIdentity(indexed),
-    ...lintRequiredSections(indexed),
-    ...lintRequiredOrder(indexed),
-    ...lintAppendixShape(indexed),
-  ];
-}
-
-/** Duplicate-id and reserved-mode findings, tracked across the section list. */
-function lintSectionIdentity(indexed: ProfileDeclarationIndex): ProfileFinding[] {
-  const seen = new Map<string, Declaration>();
-  const findings: ProfileFinding[] = [];
-  for (const section of indexed.sections) {
-    findings.push(...identifySection(seen, section));
-  }
-  return findings;
-}
-
-/** One section's identity findings, remembering its id for the sections after it. */
-function identifySection(
-  seen: Map<string, Declaration>,
-  section: Declaration,
-): ProfileFinding[] {
-  const sectionId = id(section);
-  if (sectionId === undefined) return [];
-  const findings = [
-    ...duplicateFinding(seen, section, sectionId),
-    ...reservedModeFinding(section, sectionId),
-  ];
-  seen.set(sectionId, section);
-  return findings;
-}
-
-/** A section id already seen is a duplicate. */
-function duplicateFinding(
-  seen: ReadonlyMap<string, Declaration>,
-  section: Declaration,
-  sectionId: string,
-): ProfileFinding[] {
-  return seen.has(sectionId)
-    ? [fieldFinding(section, 'id', `section @${sectionId}`, 'Section ID is duplicated.')]
-    : [];
-}
-
-/** A required slot's section must use one of the slot's modes. */
-function reservedModeFinding(
-  section: Declaration,
-  sectionId: string,
-): ProfileFinding[] {
-  const slot = reserved.get(sectionId);
-  const mode = text(section, 'mode');
-  return slot !== undefined && mode !== undefined && !slot.modes.includes(mode)
-    ? [
-        fieldFinding(
-          section,
-          'mode',
-          `section @${sectionId}`,
-          `Required slot must use mode ${slot.modes.join(' or ')}.`,
-        ),
-      ]
-    : [];
-}
-
-/** Every required slot must be present and carry its first mode. */
-function lintRequiredSections(indexed: ProfileDeclarationIndex): ProfileFinding[] {
-  return buildSpecProfile.slots.flatMap((slot) => requiredSectionFinding(slot, indexed));
-}
-
-/** The missing or wrong-mode finding for one required slot. */
-function requiredSectionFinding(
-  slot: (typeof buildSpecProfile.slots)[number],
-  indexed: ProfileDeclarationIndex,
-): ProfileFinding[] {
-  const section = sectionById(indexed.sections, slot.id.slice(1));
-  if (section === undefined)
-    return [
-      findingAt(indexed.declaration, `section ${slot.id}`, `Missing required ${slot.id} section.`),
-    ];
-  return text(section, 'mode') === slot.modes[0]
-    ? []
-    : [fieldFinding(section, 'mode', `section ${slot.id}`, `Expected mode ${slot.modes[0]}.`)];
-}
-
-/** Consecutive required sections must carry increasing order fields. */
-function lintRequiredOrder(indexed: ProfileDeclarationIndex): ProfileFinding[] {
-  const required = presentRequired(indexed);
-  return required
-    .slice(1)
-    .flatMap((current, index) => requiredOrderFinding(required[index], current));
-}
-
-/** The required slots whose sections exist, in slot order. */
-function presentRequired(indexed: ProfileDeclarationIndex): RequiredSection[] {
-  return buildSpecProfile.slots.flatMap((slot) => {
-    const section = sectionById(indexed.sections, slot.id.slice(1));
-    return section === undefined ? [] : [{ slot, section }];
-  });
-}
-
-/** A required section must order after the previous required section. */
-function requiredOrderFinding(
-  previous: RequiredSection | undefined,
-  current: RequiredSection,
-): ProfileFinding[] {
-  if (previous === undefined) return [];
-  return orderIncreases(previous.section, current.section)
-    ? []
-    : [
-        fieldFinding(
-          current.section,
-          'order',
-          `section ${current.slot.id}`,
-          `Required section order must increase after ${previous.slot.id}; extra sections may appear anywhere.`,
-        ),
-      ];
-}
-
-/** Both orders exist and the current one is larger. */
-function orderIncreases(
-  previous: Declaration,
-  current: Declaration,
-): boolean {
-  const previousOrder = order(previous);
-  const currentOrder = order(current);
-  return previousOrder !== undefined && currentOrder !== undefined && currentOrder > previousOrder;
-}
-
 /** Appendix presence findings, then the sequential number, mode and order findings. */
-function lintAppendixShape(indexed: ProfileDeclarationIndex): ProfileFinding[] {
+export function lintAppendixShape(indexed: ProfileDeclarationIndex): ProfileFinding[] {
   const appendices = collectAppendices(indexed.sections);
   return [
     ...appendixPresenceFinding(appendices.length, indexed.declaration),

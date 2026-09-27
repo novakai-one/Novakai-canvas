@@ -1,18 +1,24 @@
 /*
  * The build-spec structural lint entry point: index the source, run the five rule groups —
  * sections, repo tree, modules, entities/CRUD, appendix content — and summarise. The rules live
- * in this folder; each returns its findings and this file only orders and counts them.
+ * in this folder; each returns its findings. This file orders and counts them, and runs the
+ * entities/CRUD rules only when both of their sections exist. Pure.
  */
 import type {
   ProfileDeclarationIndex,
+  ProfileFinding,
   ProfileLintResult,
   ProfileSource,
 } from '../../../contract/records/profiles.js';
-import { buildSpecProfile } from '../build-spec/starter.js';
-import { lintSections } from './sections/appendix-sequence.js';
+import { buildSpecProfile } from '../build-spec/descriptor.js';
+import { sectionById, shown } from './declarations.js';
+import { lintSectionIdentity } from './sections/identity.js';
+import { lintRequiredOrder, lintRequiredSections } from './sections/required.js';
+import { lintAppendixShape } from './sections/appendix-sequence.js';
 import { lintRepo } from './repo/tree.js';
 import { lintModules } from './modules.js';
-import { lintEntitiesAndCrud } from './crud.js';
+import { entityFindings } from './entities.js';
+import { crudFindings } from './crud.js';
 import { lintAppendices } from './appendices.js';
 
 /**
@@ -61,6 +67,27 @@ function index(source: ProfileSource): ProfileDeclarationIndex | null {
     nodes: declaration.children.filter((child) => child.kind === 'node'),
     wires: declaration.children.filter((child) => child.kind === 'wire'),
   };
+}
+
+/** Identity, presence, order and appendix-shape findings for the section list. */
+function lintSections(indexed: ProfileDeclarationIndex): ProfileFinding[] {
+  return [
+    ...lintSectionIdentity(indexed),
+    ...lintRequiredSections(indexed),
+    ...lintRequiredOrder(indexed),
+    ...lintAppendixShape(indexed),
+  ];
+}
+
+/** Entity findings first, then the CRUD table findings of the ownership section. */
+function lintEntitiesAndCrud(indexed: ProfileDeclarationIndex): ProfileFinding[] {
+  const entities = sectionById(indexed.sections, 'entities');
+  const ownership = sectionById(indexed.sections, 'ownership');
+  if (entities === undefined || ownership === undefined) return [];
+  return [
+    ...entityFindings(shown(entities), indexed.nodes, entities),
+    ...crudFindings(indexed, ownership, shown(entities)),
+  ];
 }
 
 /** The pass/fail summary line. */

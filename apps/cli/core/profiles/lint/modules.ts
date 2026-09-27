@@ -6,7 +6,8 @@ import type {
   ProfileDeclarationIndex,
   ProfileFinding,
 } from '../../../contract/records/profiles.js';
-import { findingAt, id, sectionById, shown, text, type Declaration } from './declarations.js';
+import { id, sectionById, shown, text, type Declaration } from './declarations.js';
+import { findingAt } from './findings.js';
 
 /** Every shown modules entry must be a canonical module or interface shown by the repo tree. */
 export function lintModules(indexed: ProfileDeclarationIndex): ProfileFinding[] {
