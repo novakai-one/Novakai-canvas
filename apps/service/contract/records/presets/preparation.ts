@@ -20,7 +20,10 @@ export const restoreInput = z.strictObject({ digest: z.string(), base64: z.strin
 export type RestoreInput = z.infer<typeof restoreInput>;
 /** A recipe instantiation request: the recipe pin (Templates checks it) and the target namespace. */
 export const instantiateInput = z.strictObject({ pin: z.unknown(), namespace: z.string() });
-/** A retained admission read as named fields, so a recipe's canonical source can replace its own. */
+/**
+ * A preset admission read as named fields, so one field can be replaced: a recipe's source
+ * (resource commands) or a theme's raw block (theme admission).
+ */
 export const admissionFields = z.record(z.string(), z.json());
 /** Prepared content is immutable host data; Authoring repeats preparation and owns commit/replay. */
 export const presetCommand = z.strictObject({

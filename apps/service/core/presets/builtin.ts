@@ -51,26 +51,36 @@ export function prepareBuiltinPresets(
   }
 }
 
+/** A colour scheme with one bundled theme. */
+type Scheme = 'light' | 'dark';
+
 /**
- * Admits one bundled theme (`paper` for light, `ink` for dark) at version 1.1.0; Templates
- * computes its content hash. Returns the candidate catalog. Throws `PresetFault` when Design
- * System or Templates rejects the input, or a shipped font is missing.
+ * The bundled theme for each scheme: Paper for light, Ink for dark. Every scheme has a theme
+ * (checked by the type).
+ */
+const bundledThemes: Readonly<Record<Scheme, { readonly id: string; readonly title: string }>> =
+  Object.freeze({ light: { id: 'paper', title: 'Paper' }, dark: { id: 'ink', title: 'Ink' } });
+
+/**
+ * Admits the scheme's bundled theme (see `bundledThemes`) at version 1.1.0; Templates computes
+ * its content hash. Returns the candidate catalog. Throws `PresetFault` when Design System or
+ * Templates rejects the input, or a shipped font is missing.
  */
 function addTheme(
   catalog: Catalog,
-  scheme: 'light' | 'dark',
+  scheme: Scheme,
   sources: BuiltinSources,
   owners: BuiltinPresetOwners,
 ): Catalog {
-  const id = scheme === 'light' ? 'paper' : 'ink';
+  const theme = bundledThemes[scheme];
   const templates = owners.templates(EMPTY_RESOURCES);
   return accepted(
     templates.planAdmission(catalog, {
       schemaVersion: 1,
       kind: 'theme',
-      id,
+      id: theme.id,
       version: '1.1.0',
-      title: id === 'paper' ? 'Paper' : 'Ink',
+      title: theme.title,
       description: 'Bundled diagram theme with pinned fonts.',
       raw: themeInput(sources, scheme, owners),
     }),
@@ -85,7 +95,7 @@ function addTheme(
  */
 function themeInput(
   sources: BuiltinSources,
-  scheme: 'light' | 'dark',
+  scheme: Scheme,
   owners: BuiltinPresetOwners,
 ): unknown {
   const ui = accepted(

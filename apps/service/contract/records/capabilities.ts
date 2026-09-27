@@ -1,4 +1,8 @@
-/** Public capability vocabularies are consumed through declaration-only aliases; host core never reaches private owners. */
+/*
+ * The capability vocabulary service core reads through the contract: type-only aliases of each
+ * capability's public types, so core never imports a capability package. Declarations only; each
+ * capability owns its own failures, and Authoring owns commit and recovery.
+ */
 export type {
   Authoring,
   Snapshot,

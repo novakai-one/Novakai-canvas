@@ -38,10 +38,11 @@ type FontBinding = { readonly alias: string; readonly digest: string };
 /**
  * Prepares one admission. An admission that is not a source-syntax theme is returned unchanged.
  * Fails with `invalid-input` at Templates' path when the base theme cannot be selected
- * (Templates' failure kept as source), `missing-asset` at Assets' path when a font's bytes are
- * not stored (Assets' failure kept as source), `invalid-input` at the font alias when the bytes
- * are not a verified font, and `invalid-input` at `theme` ("Theme preparation failed") for a
- * malformed hex colour, chrome name or admission header.
+ * (Templates' failure kept as source), `missing-asset` at Assets' path for any failure of Assets
+ * to resolve a font digest, such as bytes not stored or a malformed digest (Assets' failure kept
+ * as source), `invalid-input` at the font alias when the bytes are not a verified font, and
+ * `invalid-input` at `theme` ("Theme preparation failed") for any throw: a malformed hex colour,
+ * chrome name or admission header, or a throw from an owner.
  */
 export function prepareTheme(
   admission: Json,
@@ -126,9 +127,10 @@ function withFonts(
 
 /**
  * The approved font pin for one alias, with the family from the Assets descriptor (never a
- * caller-supplied name or an OS fallback). Fails with `missing-asset` at Assets' path when the
- * bytes are not stored (Assets' failure kept as source), and `invalid-input` at the alias when
- * they are not a font with a verified family.
+ * caller-supplied name or an OS fallback). Fails with `missing-asset` at Assets' path for any
+ * failure of Assets to resolve the digest, such as bytes not stored or a malformed digest (Assets'
+ * failure kept as source), and `invalid-input` at the alias when the bytes are not a font with a
+ * verified family. A throw from Assets propagates to `prepareTheme`.
  */
 function font(
   input: FontBinding,
