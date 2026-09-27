@@ -23,6 +23,8 @@ import {
 } from '../../../contract/records/presets/preparation.js';
 import type { ResourceSelector } from '../../../contract/records/planning/planning.js';
 import { json, recordId } from '../../../contract/schemas.js';
+import { presetResources } from '../../presets/resources.js';
+import { presetRecordId } from '../../workspace/records.js';
 import { selectionRequest, storedCatalog } from './catalog.js';
 import { accepted } from './refusal.js';
 
@@ -64,8 +66,8 @@ export function prepare(
     admission: normalizedAdmission(admission, preset),
     record: json.parse(preset),
     pin: plan.pin,
-    key: { kind: 'preset', id: recordId.parse(`preset:${plan.pin.digest}`) },
-    resources: preset.kind === 'theme' ? preset.payload.fonts : preset.payload.assets,
+    key: { kind: 'preset', id: recordId.parse(presetRecordId(plan.pin.digest)) },
+    resources: presetResources(preset),
     reads: snapshot.records
       .filter((item) => ['preset', 'workspace'].includes(item.key.kind))
       .map((item) => ({ key: item.key, version: item.version })),

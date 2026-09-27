@@ -16,6 +16,7 @@ import type { PreparationInput } from '../../../contract/records/presets/prepara
 import { presetAdmission } from '../../../contract/records/planning/commands.js';
 import { requestSchema } from '../../../contract/schemas.js';
 import { EMPTY_RESOURCES } from '../../../contract/ports/capabilities.js';
+import { liveRecords } from '../../workspace/records.js';
 import { accepted } from './refusal.js';
 
 /** The owner catalog reads go through. */
@@ -33,9 +34,7 @@ export function storedCatalog(
   owners: CatalogOwners,
 ): Catalog {
   const templates = unboundTemplates(owners);
-  const records = snapshot.records
-    .filter((item) => item.key.kind === 'preset' && !item.deleted)
-    .map((item) => item.value);
+  const records = liveRecords(snapshot, 'preset').map((item) => item.value);
   return accepted(templates.readCatalog(records));
 }
 

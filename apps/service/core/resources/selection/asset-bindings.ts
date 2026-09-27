@@ -11,6 +11,7 @@ import type {
   Snapshot,
 } from '../../../contract/records/capabilities.js';
 import { authoringDigest } from '../../../contract/schemas.js';
+import { liveRecord } from '../../workspace/records.js';
 import type { Declared } from './intent.js';
 import type { Themes } from './themes.js';
 import {
@@ -47,15 +48,17 @@ export function boundAssets(
   return byId([...previous, ...bound]);
 }
 
-/** Earlier bindings belong to one collection; the same alias in another collection never leaks in. */
+/**
+ * Earlier bindings belong to one collection; the same alias in another collection never leaks in.
+ * None for a new collection (`null`) or one with no live record.
+ */
 function priorAssets(
   id: string | null,
   snapshot: Snapshot,
   model: BindingModel,
 ): readonly AssetBinding[] {
-  const record = snapshot.records.find(
-    (item) => item.key.kind === 'collection' && item.key.id === id && !item.deleted,
-  );
+  if (id === null) return [];
+  const record = liveRecord(snapshot, 'collection', id);
   if (!record) return [];
   return accepted(model.validate(record.value)).assets;
 }

@@ -19,8 +19,7 @@ import type {
   ResourceSelector,
   CollectionPlanner,
 } from '../../../contract/records/planning/planning.js';
-import { proposalSchema } from '../../../contract/schemas.js';
-import { authoringFailure } from '../../../contract/errors.js';
+import { checkedProposal, ownerRejected } from './change-payload.js';
 
 /** What the collection planner uses; compose passes Library from ServiceCapabilities. */
 export interface CollectionProposalOwners {
@@ -85,14 +84,7 @@ function proposal(
     ],
     inventory,
   });
-  if (!organisation.ok)
-    return authoringFailure(
-      'invariant-violation',
-      'catalog',
-      'The owning capability rejected this input',
-      [],
-      organisation.error,
-    );
+  if (!organisation.ok) return ownerRejected('invariant-violation', 'catalog', organisation.error);
   return checked(
     [
       write,
@@ -115,17 +107,9 @@ function checked(
   writes: readonly unknown[],
   collection: string,
 ): AuthoringResult<Proposal> {
-  const result = proposalSchema.safeParse({
-    writes,
-    reads: [],
-    diff: { collection },
-    warnings: [],
-  });
-  if (!result.success)
-    return authoringFailure(
-      'invalid-input',
-      'proposal',
-      'Collection proposal exceeds the authoring contract',
-    );
-  return { ok: true, value: result.data };
+  return checkedProposal(
+    { writes, reads: [], diff: { collection }, warnings: [] },
+    'proposal',
+    'Collection proposal exceeds the authoring contract',
+  );
 }

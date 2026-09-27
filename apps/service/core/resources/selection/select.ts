@@ -19,6 +19,7 @@ import type {
   ResourceSelection,
 } from '../../../contract/records/planning/planning.js';
 import { json } from '../../../contract/schemas.js';
+import { liveRecords } from '../../workspace/records.js';
 import { boundAssets } from './asset-bindings.js';
 import { collectionResources } from './collection-check.js';
 import { coverage, presetReads } from './coverage.js';
@@ -89,10 +90,6 @@ function storedPresets(
   owners: ResourceOwners,
 ): Catalog {
   return accepted(
-    owners.templates.readCatalog(
-      snapshot.records
-        .filter((item) => item.key.kind === 'preset' && !item.deleted)
-        .map((item) => item.value),
-    ),
+    owners.templates.readCatalog(liveRecords(snapshot, 'preset').map((item) => item.value)),
   );
 }

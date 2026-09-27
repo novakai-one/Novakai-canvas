@@ -19,6 +19,7 @@ import type {
 } from '../../contract/records/workspace/contents.js';
 import { authoringFailure, success } from '../../contract/errors.js';
 import { projectCollection } from './collection-projection.js';
+import { liveRecords } from './records.js';
 
 /** The capability checks the reader runs; compose passes them from ServiceCapabilities. */
 export interface WorkspaceReaderOwners {
@@ -46,15 +47,13 @@ function read(
   snapshot: Snapshot,
   owners: WorkspaceReaderOwners,
 ): AuthoringResult<WorkspaceContents> {
-  const live = snapshot.records.filter((record) => !record.deleted);
-  const collections = live
-    .filter((record) => record.key.kind === 'collection')
-    .reduce<AuthoringResult<readonly Collection[]>>(
-      (checked, record) => collection(checked, record, owners.model),
-      success([]),
-    );
+  const records = liveRecords(snapshot, 'collection');
+  const collections = records.reduce<AuthoringResult<readonly Collection[]>>(
+    (checked, record) => collection(checked, record, owners.model),
+    success([]),
+  );
   if (!collections.ok) return collections;
-  return complete(live, collections.value, owners);
+  return complete(snapshot, collections.value, owners);
 }
 
 /**
@@ -96,18 +95,18 @@ function checkedCollection(
  * catalogs is `invariant-violation` at `catalog`.
  */
 function complete(
-  live: readonly StoredRecord[],
+  snapshot: Snapshot,
   collections: readonly Collection[],
   owners: WorkspaceReaderOwners,
 ): AuthoringResult<WorkspaceContents> {
-  const catalogs = live.filter((record) => record.key.kind === 'catalog');
+  const catalogs = liveRecords(snapshot, 'catalog');
   if (catalogs.length !== 1)
     return authoringFailure(
       'invariant-violation',
       'catalog',
       'Workspace requires exactly one catalog',
     );
-  return checkedLibrary(catalogs[0]?.value, live, collections, owners);
+  return checkedLibrary(catalogs[0]?.value, snapshot, collections, owners);
 }
 
 /**
@@ -117,7 +116,7 @@ function complete(
  */
 function checkedLibrary(
   catalog: unknown,
-  live: readonly StoredRecord[],
+  snapshot: Snapshot,
   collections: readonly Collection[],
   owners: WorkspaceReaderOwners,
 ): AuthoringResult<WorkspaceContents> {
@@ -134,7 +133,7 @@ function checkedLibrary(
       [],
       library.error,
     );
-  return checkedPresets(live, collections, library.value, owners.templates);
+  return checkedPresets(snapshot, collections, library.value, owners.templates);
 }
 
 /**
@@ -142,13 +141,13 @@ function checkedLibrary(
  * rejection is `invariant-violation` at `presets`, Templates' message and failure kept.
  */
 function checkedPresets(
-  live: readonly StoredRecord[],
+  snapshot: Snapshot,
   collections: readonly Collection[],
   library: LibrarySnapshot,
   templates: WorkspaceReaderOwners['templates'],
 ): AuthoringResult<WorkspaceContents> {
   const presets = templates.readCatalog(
-    live.filter((record) => record.key.kind === 'preset').map((record) => record.value),
+    liveRecords(snapshot, 'preset').map((record) => record.value),
   );
   if (!presets.ok)
     return authoringFailure(

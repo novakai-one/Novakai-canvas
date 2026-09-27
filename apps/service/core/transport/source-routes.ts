@@ -5,9 +5,10 @@
  * reaches the HTTP server's `receive` (routes.ts).
  */
 import type { ApiCall, ApiRouter, WireOutcome } from '../../contract/records/transport/protocol.js';
-import type { Scope } from '../../contract/records/capabilities.js';
+import type { Scope, Snapshot, StoredRecord } from '../../contract/records/capabilities.js';
 import type { WorkspaceSession } from '../../contract/types.js';
 import { failure, success, type Result } from '../../contract/errors.js';
+import { liveRecord } from '../workspace/records.js';
 import { sourceScope } from './source-scope.js';
 
 /** A Language route, as `METHOD path`. */
@@ -54,8 +55,9 @@ async function source(
 
 /**
  * Reads the live collection named by `?id` and prints it without reinterpreting its shape;
- * Language validates it. Fails with `not-found` at `collection` when it is absent or deleted.
- * Authoring's read failures and the readout's `invalid-input` at `source` pass through.
+ * Language validates it. Fails with `not-found` at `collection` when `?id` is missing or the
+ * collection is absent or deleted. Authoring's read failures and the readout's `invalid-input`
+ * at `source` pass through.
  */
 async function readSourceRecord(
   call: ApiCall,
@@ -64,9 +66,16 @@ async function readSourceRecord(
 ): Promise<WireOutcome> {
   const snapshot = await owners.session.read();
   if (!snapshot.ok) return snapshot;
-  const record = snapshot.value.records.find(
-    (item) => item.key.kind === 'collection' && item.key.id === call.query.id && !item.deleted,
-  );
+  const record = sourceRecord(snapshot.value, call.query.id);
   if (!record) return failure('not-found', 'collection', 'Collection was not found');
   return owners.source.print(record.value, scope);
+}
+
+/** The live collection record for `?id`; `undefined` when `?id` is missing or none is live. */
+function sourceRecord(
+  snapshot: Snapshot,
+  id: string | undefined,
+): StoredRecord | undefined {
+  if (id === undefined) return undefined;
+  return liveRecord(snapshot, 'collection', id);
 }

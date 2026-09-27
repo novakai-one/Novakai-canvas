@@ -14,6 +14,9 @@ import type { Installation } from '../../../contract/records/workspace/installat
 import { initializeCommand } from '../../../contract/records/planning/commands.js';
 import { plannerId, proposalSchema, requestSchema } from '../../../contract/schemas.js';
 import { authoringFailure } from '../../../contract/errors.js';
+import { MAIN_CATALOG_ID, METADATA_RECORD_ID, presetRecordId } from '../../workspace/records.js';
+import { presetResources } from '../../presets/resources.js';
+import { changePayload } from './change-payload.js';
 
 /**
  * Binds the private `bootstrap` planner to trusted installation data; HTTP never exposes it.
@@ -62,13 +65,9 @@ function plan(
   request: Request,
   installation: Installation,
 ): AuthoringResult<Proposal> {
-  if (request.intent.kind !== 'change')
-    return authoringFailure(
-      'invalid-input',
-      'bootstrap',
-      'Initialization requires a change request',
-    );
-  if (!initializeCommand.safeParse(request.intent.payload).success)
+  const input = changePayload(request, 'bootstrap', 'Initialization requires a change request');
+  if (!input.ok) return input;
+  if (!initializeCommand.safeParse(input.value).success)
     return authoringFailure('invalid-input', 'bootstrap', 'Invalid initialization command');
   return { ok: true, value: proposal(installation) };
 }
@@ -86,7 +85,7 @@ function proposal(installation: Installation): Proposal {
     writes: [
       {
         kind: 'put',
-        key: { kind: 'workspace', id: 'metadata' },
+        key: { kind: 'workspace', id: METADATA_RECORD_ID },
         value: {
           schemaVersion: 1,
           id: installation.workspace,
@@ -97,8 +96,8 @@ function proposal(installation: Installation): Proposal {
       },
       {
         kind: 'put',
-        key: { kind: 'catalog', id: 'main' },
-        value: { schemaVersion: 1, id: 'main', revision: 0, folders: [], entries: [] },
+        key: { kind: 'catalog', id: MAIN_CATALOG_ID },
+        value: { schemaVersion: 1, id: MAIN_CATALOG_ID, revision: 0, folders: [], entries: [] },
         resources: [],
       },
       ...installation.presets.map(presetWrite),
@@ -110,8 +109,8 @@ function proposal(installation: Installation): Proposal {
 function presetWrite(preset: Preset): unknown {
   return {
     kind: 'put',
-    key: { kind: 'preset', id: `preset:${preset.digest}` },
+    key: { kind: 'preset', id: presetRecordId(preset.digest) },
     value: preset,
-    resources: preset.kind === 'theme' ? preset.payload.fonts : preset.payload.assets,
+    resources: presetResources(preset),
   };
 }

@@ -33,7 +33,8 @@ import {
   installationRequest,
 } from '../../core/authoring-roles/planners/bootstrap.js';
 import { createCollectionPlanner } from '../../core/authoring-roles/planners/collection-proposal.js';
-import { createDiagramPlanners } from '../../core/authoring-roles/planners/dsl.js';
+import { createDslPlanner } from '../../core/authoring-roles/planners/dsl.js';
+import { createModelPlanner } from '../../core/authoring-roles/planners/model.js';
 import { createLibraryPlanner } from '../../core/authoring-roles/planners/library.js';
 import { createPresetPlanner } from '../../core/authoring-roles/planners/preset.js';
 import { prepareTheme } from '../../core/presets/theme-admission.js';
@@ -102,7 +103,8 @@ export async function wireWorkspace(
     createInstallationPlanner(initial),
     createPresetPlanner(resourceCommands),
     createLibraryPlanner({ library, workspace: views }),
-    ...createDiagramPlanners({ model, language, workspace: views, resources, collections }),
+    createDslPlanner({ language, workspace: views, resources, collections }),
+    createModelPlanner({ model, workspace: views, collections }),
   ];
   const validation = createCandidateValidator({
     workspace: views,

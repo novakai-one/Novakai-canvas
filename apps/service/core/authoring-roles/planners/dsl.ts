@@ -1,7 +1,7 @@
 /*
- * Authoring's two diagram planner roles: `dsl` lowers source text through Language, `model`
- * plans a human change batch through Model. Both hand the new collection to the collection
- * planner. Pure over the injected owners. Authoring owns scope, commit and retry.
+ * Authoring's `dsl` planner role: lowers DSL source text through Language on the stored
+ * collection and hands the new collection to the collection planner. Pure over the injected
+ * owners. Authoring owns scope, commit and retry.
  */
 import type {
   AuthoringResult,
@@ -12,21 +12,20 @@ import type {
   Request,
   Snapshot,
 } from '../../../contract/records/capabilities.js';
-import type { ModelRules } from '../../../contract/ports/capabilities.js';
 import type { WorkspaceReader } from '../../../contract/records/workspace/contents.js';
 import type {
   CollectionPlanner,
   ResourceSelection,
   ResourceSelector,
 } from '../../../contract/records/planning/planning.js';
-import type { DslCommand, ModelCommand } from '../../../contract/records/planning/commands.js';
-import { dslCommand, modelCommand } from '../../../contract/records/planning/commands.js';
+import type { DslCommand } from '../../../contract/records/planning/commands.js';
+import { dslCommand } from '../../../contract/records/planning/commands.js';
 import { plannerId } from '../../../contract/schemas.js';
 import { authoringFailure } from '../../../contract/errors.js';
+import { changePayload, ownerRejected } from './change-payload.js';
 
-/** What the diagram planners use; compose passes Model and Language from ServiceCapabilities. */
-export interface DiagramPlannerOwners {
-  readonly model: Pick<ModelRules, 'plan'>;
+/** What the `dsl` planner uses; compose passes Language from ServiceCapabilities. */
+export interface DslPlannerOwners {
   readonly language: Pick<Language, 'parse' | 'lower'>;
   readonly workspace: Pick<WorkspaceReader, 'read'>;
   readonly resources: Pick<ResourceSelector, 'select'>;
@@ -34,35 +33,16 @@ export interface DiagramPlannerOwners {
 }
 
 /**
- * Binds the `dsl` and `model` planners; HTTP credential policy restricts agents to `dsl`. Both
- * fail with `invalid-input` at `intent` for a non-change request. `dsl` also fails with
- * `invalid-input` at `dsl` (bad envelope) or `source` (Language parse, source kept),
- * `revision-conflict` at `pins`, or `invariant-violation` at `source` (Language lower, source
- * kept). `model` also fails with `invalid-input` at `model` or `invariant-violation` at the
- * collection ID (Model plan, source kept). Reader, selector and collection planner failures pass
- * through unchanged.
+ * Binds the `dsl` planner, which humans and agents may both address. `plan` fails with `invalid-input` at `intent` (not a change), `dsl` (bad envelope) or `source` (Language
+ * parse, source kept), `revision-conflict` at `pins`, or `invariant-violation` at `source`
+ * (Language lower, source kept). Reader, selector and collection planner failures pass through
+ * unchanged.
  */
-export function createDiagramPlanners(owners: DiagramPlannerOwners): readonly IntentPlanner[] {
-  return [
-    {
-      id: plannerId.parse('dsl'),
-      plan: async (request, snapshot, pins) => lower(request, snapshot, pins, owners),
-    },
-    {
-      id: plannerId.parse('model'),
-      plan: async (request, snapshot) => model(request, snapshot, owners),
-    },
-  ];
-}
-
-/**
- * The request's change payload. Fails with `invalid-input` at `intent` for an undo or redo;
- * Authoring runs those itself, so no planner reads them.
- */
-function payload(request: Request): AuthoringResult<Json> {
-  if (request.intent.kind !== 'change')
-    return authoringFailure('invalid-input', 'intent', 'Expected a diagram change');
-  return { ok: true, value: request.intent.payload };
+export function createDslPlanner(owners: DslPlannerOwners): IntentPlanner {
+  return {
+    id: plannerId.parse('dsl'),
+    plan: async (request, snapshot, pins) => lower(request, snapshot, pins, owners),
+  };
 }
 
 /**
@@ -73,9 +53,9 @@ function lower(
   request: Request,
   snapshot: Snapshot,
   pins: Json,
-  owners: DiagramPlannerOwners,
+  owners: DslPlannerOwners,
 ): AuthoringResult<Proposal> {
-  const input = payload(request);
+  const input = changePayload(request, 'intent', 'Expected a diagram change');
   if (!input.ok) return input;
   return lowerSource(input.value, request, snapshot, pins, owners);
 }
@@ -90,7 +70,7 @@ function lowerSource(
   request: Request,
   snapshot: Snapshot,
   pins: Json,
-  owners: DiagramPlannerOwners,
+  owners: DslPlannerOwners,
 ): AuthoringResult<Proposal> {
   const command = dslCommand.safeParse(input);
   if (!command.success)
@@ -114,7 +94,7 @@ function compile(
   snapshot: Snapshot,
   pins: Json,
   selected: ResourceSelection,
-  owners: DiagramPlannerOwners,
+  owners: DslPlannerOwners,
 ): AuthoringResult<Proposal> {
   if (JSON.stringify(pins) !== JSON.stringify(selected.pins))
     return authoringFailure(
@@ -123,14 +103,7 @@ function compile(
       'Resource selection differs from the admitted lease',
     );
   const parsed = owners.language.parse(command.source);
-  if (!parsed.ok)
-    return authoringFailure(
-      'invalid-input',
-      'source',
-      'The owning capability rejected this input',
-      [],
-      parsed.error,
-    );
+  if (!parsed.ok) return ownerRejected('invalid-input', 'source', parsed.error);
   return compileCollection(command, parsed.value.collection, snapshot, selected, owners);
 }
 
@@ -145,7 +118,7 @@ function compileCollection(
   id: string,
   snapshot: Snapshot,
   selected: ResourceSelection,
-  owners: DiagramPlannerOwners,
+  owners: DslPlannerOwners,
 ): AuthoringResult<Proposal> {
   const view = owners.workspace.read(snapshot);
   if (!view.ok) return view;
@@ -155,60 +128,6 @@ function compileCollection(
     snapshot: original,
     resources: selected.resources,
   });
-  if (!intent.ok)
-    return authoringFailure(
-      'invariant-violation',
-      'source',
-      'The owning capability rejected this input',
-      [],
-      intent.error,
-    );
+  if (!intent.ok) return ownerRejected('invariant-violation', 'source', intent.error);
   return owners.collections.propose(snapshot, intent.value.collection);
-}
-
-/**
- * The `model` planner: decodes the change batch, then plans it (see `modelCollection`). Fails
- * with `invalid-input` at `intent` when the request is not a change, and at `model` when the
- * payload lacks a collection or change batch.
- */
-function model(
-  request: Request,
-  snapshot: Snapshot,
-  owners: DiagramPlannerOwners,
-): AuthoringResult<Proposal> {
-  const input = payload(request);
-  if (!input.ok) return input;
-  const command = modelCommand.safeParse(input.value);
-  if (!command.success)
-    return authoringFailure(
-      'invalid-input',
-      'model',
-      'Human changes require a collection and change batch',
-    );
-  return modelCollection(command.data, snapshot, owners);
-}
-
-/**
- * Plans the batch on the stored collection through Model and hands the result to the collection
- * planner. Fails with `invariant-violation` at the collection ID when Model refuses the batch
- * (Model's failure kept as source). Reader and collection planner failures pass through unchanged.
- */
-function modelCollection(
-  command: ModelCommand,
-  snapshot: Snapshot,
-  owners: DiagramPlannerOwners,
-): AuthoringResult<Proposal> {
-  const view = owners.workspace.read(snapshot);
-  if (!view.ok) return view;
-  const original = view.value.collections.find((item) => item.id === command.collection);
-  const planned = owners.model.plan(original, command.changes);
-  if (!planned.ok)
-    return authoringFailure(
-      'invariant-violation',
-      command.collection,
-      'The owning capability rejected this input',
-      [],
-      planned.error,
-    );
-  return owners.collections.propose(snapshot, planned.value.candidate);
 }

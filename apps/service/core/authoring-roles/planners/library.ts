@@ -13,8 +13,10 @@ import type {
 import type { LibraryRules } from '../../../contract/ports/capabilities.js';
 import type { WorkspaceReader } from '../../../contract/records/workspace/contents.js';
 import { libraryCommand } from '../../../contract/records/planning/commands.js';
-import { plannerId, proposalSchema } from '../../../contract/schemas.js';
+import { plannerId } from '../../../contract/schemas.js';
 import { authoringFailure } from '../../../contract/errors.js';
+import { liveRecords } from '../../workspace/records.js';
+import { changePayload, checkedProposal, ownerRejected } from './change-payload.js';
 
 /** What the library planner uses; compose passes Library from ServiceCapabilities. */
 export interface LibraryPlannerOwners {
@@ -45,9 +47,9 @@ function propose(
   snapshot: Snapshot,
   owners: LibraryPlannerOwners,
 ): AuthoringResult<Proposal> {
-  if (request.intent.kind !== 'change')
-    return authoringFailure('invalid-input', 'intent', 'Expected a library change');
-  const command = libraryCommand.safeParse(request.intent.payload);
+  const input = changePayload(request, 'intent', 'Expected a library change');
+  if (!input.ok) return input;
+  const command = libraryCommand.safeParse(input.value);
   if (!command.success)
     return authoringFailure(
       'invalid-input',
@@ -59,7 +61,7 @@ function propose(
 
 /**
  * Plans the batch on the stored catalog through Library, then proposes the result (see
- * `checkedProposal`). Fails with `invariant-violation` at `catalog` when Library refuses the
+ * `catalogProposal`). Fails with `invariant-violation` at `catalog` when Library refuses the
  * batch (Library's failure kept as source). Reader failures pass through unchanged.
  */
 function planOrganisationChange(
@@ -70,15 +72,8 @@ function planOrganisationChange(
   const current = owners.workspace.read(snapshot);
   if (!current.ok) return current;
   const planned = owners.library.planOrganisation({ snapshot: current.value.library, changes });
-  if (!planned.ok)
-    return authoringFailure(
-      'invariant-violation',
-      'catalog',
-      'The owning capability rejected this input',
-      [],
-      planned.error,
-    );
-  return checkedProposal(planned.value.candidate, snapshot);
+  if (!planned.ok) return ownerRejected('invariant-violation', 'catalog', planned.error);
+  return catalogProposal(planned.value.candidate, snapshot);
 }
 
 /**
@@ -87,25 +82,23 @@ function planOrganisationChange(
  * `invariant-violation` at `catalog` when no catalog is stored, and `invalid-input` at `catalog`
  * when the proposal exceeds Authoring's limits.
  */
-function checkedProposal(
+function catalogProposal(
   organisation: unknown,
   snapshot: Snapshot,
 ): AuthoringResult<Proposal> {
-  const catalogs = snapshot.records.filter(
-    (record) => record.key.kind === 'catalog' && !record.deleted,
-  );
-  const current = catalogs[0];
+  const current = liveRecords(snapshot, 'catalog')[0];
   if (current === undefined)
     return authoringFailure('invariant-violation', 'catalog', 'A library catalog is required');
-  const parsed = proposalSchema.safeParse({
-    writes: [{ kind: 'put', key: current.key, value: organisation, resources: [] }],
-    reads: snapshot.records
-      .filter((record) => ['collection', 'catalog'].includes(record.key.kind))
-      .map((record) => ({ key: record.key, version: record.version })),
-    diff: { kind: 'library-organisation' },
-    warnings: [],
-  });
-  if (!parsed.success)
-    return authoringFailure('invalid-input', 'catalog', 'Library proposal could not be admitted');
-  return { ok: true, value: parsed.data };
+  return checkedProposal(
+    {
+      writes: [{ kind: 'put', key: current.key, value: organisation, resources: [] }],
+      reads: snapshot.records
+        .filter((record) => ['collection', 'catalog'].includes(record.key.kind))
+        .map((record) => ({ key: record.key, version: record.version })),
+      diff: { kind: 'library-organisation' },
+      warnings: [],
+    },
+    'catalog',
+    'Library proposal could not be admitted',
+  );
 }

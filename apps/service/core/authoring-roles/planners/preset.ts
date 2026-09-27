@@ -18,8 +18,10 @@ import type {
   ResourceDiagnostic,
 } from '../../../contract/records/presets/preparation.js';
 import { workspaceMetadata } from '../../../contract/records/workspace/metadata.js';
-import { plannerId, proposalSchema } from '../../../contract/schemas.js';
+import { plannerId } from '../../../contract/schemas.js';
 import { authoringFailure } from '../../../contract/errors.js';
+import { liveRecord, METADATA_RECORD_ID } from '../../workspace/records.js';
+import { changePayload, checkedProposal } from './change-payload.js';
 
 /**
  * Binds the `preset` planner. `plan` fails with `invalid-input` at `preset` (not a change, or
@@ -45,9 +47,9 @@ function plan(
   snapshot: Snapshot,
   owner: Pick<ResourceCommands, 'preparePreset'>,
 ): AuthoringResult<Proposal> {
-  if (request.intent.kind !== 'change')
-    return authoringFailure('invalid-input', 'preset', 'Expected a preset change');
-  const command = presetCommand.safeParse(request.intent.payload);
+  const input = changePayload(request, 'preset', 'Expected a preset change');
+  if (!input.ok) return input;
+  const command = presetCommand.safeParse(input.value);
   if (!command.success)
     return authoringFailure('invalid-input', 'preset', 'Expected an exact prepared preset');
   return reprepare(request, snapshot, owner, command.data);
@@ -55,7 +57,7 @@ function plan(
 
 /**
  * Repeats the preparation on Authoring's snapshot, then compares it with the command (see
- * `compared`). A failed preparation answers its own diagnostic (see `ownerRejected`).
+ * `compared`). A failed preparation answers its own diagnostic (see `preparationRejected`).
  */
 function reprepare(
   request: Request,
@@ -67,7 +69,7 @@ function reprepare(
     { admission: command.admission, assets: request.assets },
     snapshot,
   );
-  if (!prepared.ok) return ownerRejected(prepared.error);
+  if (!prepared.ok) return preparationRejected(prepared.error);
   return compared(command, prepared.value, snapshot);
 }
 
@@ -75,7 +77,7 @@ function reprepare(
  * The preparation's diagnostic as an Authoring failure. Path, message, recovery and source are
  * kept. The code is kept when Authoring has it too, otherwise it becomes `invalid-input`.
  */
-function ownerRejected<T>(owner: ResourceDiagnostic): AuthoringResult<T> {
+function preparationRejected<T>(owner: ResourceDiagnostic): AuthoringResult<T> {
   const code = authoringCodes[owner.code] ?? 'invalid-input';
   return {
     ok: false,
@@ -115,11 +117,8 @@ function compared(
     JSON.stringify([prepared.pin, prepared.key, prepared.resources]);
   if (!same)
     return authoringFailure('revision-conflict', 'preset', 'Prepared preset content changed');
-  const existing = snapshot.records.find(
-    (item) => item.key.kind === 'preset' && item.key.id === prepared.key.id && !item.deleted,
-  );
-  if (existing)
-    return proposal({
+  if (liveRecord(snapshot, 'preset', prepared.key.id))
+    return presetProposal({
       reads: prepared.reads,
       writes: [],
       diff: { preset: prepared.pin },
@@ -138,15 +137,13 @@ function insertion(
   prepared: PresetPreparation,
   snapshot: Snapshot,
 ): AuthoringResult<Proposal> {
-  const metadata = snapshot.records.find(
-    (item) => item.key.kind === 'workspace' && item.key.id === 'metadata' && !item.deleted,
-  );
+  const metadata = liveRecord(snapshot, 'workspace', METADATA_RECORD_ID);
   if (!metadata)
     return authoringFailure('corrupt-record', 'metadata', 'Workspace metadata is missing');
   const parsed = workspaceMetadata.safeParse(metadata.value);
   if (!parsed.success)
     return authoringFailure('corrupt-record', 'metadata', 'Workspace metadata is invalid');
-  return proposal({
+  return presetProposal({
     reads: prepared.reads,
     writes: [
       { kind: 'put', key: prepared.key, value: prepared.record, resources: prepared.resources },
@@ -166,13 +163,6 @@ function insertion(
  * Checks the proposal against Authoring's schema. Fails with `invalid-input` at
  * `preset.proposal` when it exceeds Authoring's limits.
  */
-function proposal(input: unknown): AuthoringResult<Proposal> {
-  const parsed = proposalSchema.safeParse(input);
-  if (!parsed.success)
-    return authoringFailure(
-      'invalid-input',
-      'preset.proposal',
-      'Prepared preset exceeds proposal limits',
-    );
-  return { ok: true, value: parsed.data };
+function presetProposal(input: unknown): AuthoringResult<Proposal> {
+  return checkedProposal(input, 'preset.proposal', 'Prepared preset exceeds proposal limits');
 }
