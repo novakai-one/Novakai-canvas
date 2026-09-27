@@ -54,8 +54,8 @@ type SidePanels = Pick<PanelController, 'restore' | 'open' | 'selectTab'>;
 /**
  * The workspace controller. Native adapters receive narrow roles; every human mutation uses
  * captured Authoring preconditions. Cannot fail. `nextFolderId` parses `folder-<random>` with
- * Library's schema and would throw only if that grammar stopped accepting it (plan B1 moves ID
- * minting to a checked ID source).
+ * Library's schema and would throw only if that grammar stopped accepting it (plan B3a wires
+ * `IdSource.folderId`, which checks with `safeParse`).
  */
 export function composeWorkspace(parts: WorkspaceParts): WorkspaceController {
   const { element, client, retention, random } = parts;
