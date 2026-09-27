@@ -64,8 +64,8 @@ export async function wireWorkspace(
   ] = await Promise.all([
     import('../../adapters/storage/authoring-store.js'),
     import('../../adapters/builtins/preset-codecs.js'),
-    import('../../adapters/resources/resource-selection.js'),
-    import('../../adapters/resources/resource-leases.js'),
+    import('../../core/resources/selection/select.js'),
+    import('../../core/authoring-roles/resource-leases.js'),
     import('../../adapters/planning/collection-plans.js'),
     import('../../adapters/planning/library-planner.js'),
     import('../../adapters/planning/diagram-planners.js'),
@@ -75,7 +75,7 @@ export async function wireWorkspace(
     import('../../adapters/rendering/collection-renderer.js'),
     import('../../adapters/planning/installation-planner.js'),
     import('../../adapters/notifications/change-channel.js'),
-    import('../../adapters/resources/resource-commands.js'),
+    import('../../core/resources/commands/commands.js'),
     import('../../adapters/planning/preset-planner.js'),
     import('../../adapters/rendering/theme-preparation.js'),
   ]);

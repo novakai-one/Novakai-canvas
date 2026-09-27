@@ -2,7 +2,7 @@
  * Resource selection: the theme and asset bindings one request may use, and whether a collection's
  * pins still match the stored presets and bytes. Pure reads; Authoring owns commit and recovery.
  */
-import type { FailureSource } from '../../contract/records/transport/failure-source.js';
+import type { FailureSource } from '../../../contract/records/transport/failure-source.js';
 import { z } from 'zod';
 import { validate } from '@novakai/canvas-model';
 import type { Collection } from '@novakai/canvas-model';
@@ -10,17 +10,17 @@ import { digest, failure } from '@novakai/canvas-authoring';
 import type { Request, Snapshot, Result, Digest } from '@novakai/canvas-authoring';
 import type { Catalog, Preset, ThemePreset } from '@novakai/canvas-templates';
 import type { ResolvedResources, ResourceRequest } from '@novakai/canvas-language';
-import type { ResourceOwners } from '../../contract/records/planning/resources.js';
+import type { ResourceOwners } from '../../../contract/records/planning/resources.js';
 import type {
   ResourceSelector,
   ResourceSelection,
-} from '../../contract/records/planning/planning.js';
-import type { WorkspaceContents } from '../../contract/records/workspace/contents.js';
+} from '../../../contract/records/planning/planning.js';
+import type { WorkspaceContents } from '../../../contract/records/workspace/contents.js';
 import {
   dslCommand,
   modelCommand,
   presetAdmission,
-} from '../../contract/records/planning/commands.js';
+} from '../../../contract/records/planning/commands.js';
 /** Model digests carry this prefix; Assets and Authoring digests do not. */
 const PIN_PREFIX = 'sha256:';
 /** A preset change names its admission; only the admission header is read here. */
