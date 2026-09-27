@@ -11,6 +11,8 @@ Owns the header, collection chooser, inspector/settings panels, panel visibility
 | Add panel behavior | `core/creation/` |
 | Default panel arrangement | `../../resources/ui/panels.default.json` |
 | Feature and renderer registration | `contract/compose.ts` |
+| Workspace controller assembly | `contract/compose/workspace.ts` |
+| Request builders and input decoders | `adapters/edge/request-builders.ts`, `adapters/edge/workspace-decoders.ts` |
 | Shared controls, styles and tokens | `../../capability/design-system/` |
 
 Build the served browser assets with `pnpm --dir apps/web exec vite build`. The local service serves that build; source edits require a rebuild when using the service directly.

@@ -1,6 +1,6 @@
 /*
  * Workspace decoders seam: checks untrusted server and browser-stored input with the owners'
- * schemas. Declarations only; `adapters/edge/workspace-inputs.ts` implements it. Every method
+ * schemas. Declarations only; `adapters/edge/workspace-decoders.ts` implements it. Every method
  * answers a `Result` and never throws; the caller that read the input owns recovery.
  */
 import type { Result } from '../errors.js';

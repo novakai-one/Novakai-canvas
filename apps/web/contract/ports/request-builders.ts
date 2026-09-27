@@ -1,6 +1,6 @@
 /*
  * Request builders seam: builds Authoring requests, and the DSL text a source request carries,
- * from a base the caller captured. Declarations only; `adapters/edge/workspace-inputs.ts`
+ * from a base the caller captured. Declarations only; `adapters/edge/request-builders.ts`
  * implements it with Authoring's request schema and Language's printer. Nothing is sent here:
  * builders answer a `Result` and never throw, and the caller that sends owns recovery.
  */
