@@ -10,7 +10,13 @@ import type { WorkspaceSession } from '../types.js';
 import type { Result } from '../errors.js';
 import type { Request } from '../records/capabilities.js';
 import type { CommittedChange } from './notifications.js';
-import type { Caller, HeaderLists, HttpMetadata } from '../records/transport/http.js';
+import type { AgentToken, Generation, SessionToken } from '../brands.js';
+import type {
+  Caller,
+  HeaderLists,
+  HttpMetadata,
+  LoopbackAddress,
+} from '../records/transport/http.js';
 import type {
   AdmittedMutation,
   ApiCall,
@@ -26,19 +32,18 @@ import type {
 } from '../records/transport/server.js';
 
 /**
- * One server's loopback address and secrets. The host keeps the tokens and supplies `equal`, a
- * constant-time comparison of untrusted text with a secret.
+ * One server's loopback address and secrets, minted by adapters/credentials. The host keeps the
+ * tokens and supplies `equal`, a constant-time comparison of untrusted text with a secret.
  */
 export interface HttpSecurity {
-  readonly host: string;
-  readonly origin: string;
-  readonly browserSession: string;
-  readonly agentToken: string;
-  readonly generation: string;
+  readonly address: LoopbackAddress;
+  readonly browserSession: SessionToken;
+  readonly agentToken: AgentToken;
+  readonly generation: Generation;
   /** Whether untrusted text equals a secret, compared in constant time. Never fails. */
   equal(
-    left: string,
-    right: string,
+    untrusted: string,
+    secret: string,
   ): boolean;
 }
 
@@ -79,7 +84,7 @@ export interface ApiRouter {
 export interface CommandAdmission {
   readonly caller: Caller;
   readonly metadata: HttpMetadata;
-  readonly generation: string;
+  readonly generation: Generation;
   readonly ingress: Pick<HttpAdmission, 'mutation'>;
 }
 
@@ -119,7 +124,7 @@ export interface TransportPolicy {
   /** The versioned JSON body of an outcome. */
   envelope(
     outcome: WireOutcome,
-    generation: string,
+    generation: Generation,
   ): TransportResponse;
   /** Whether a web app request may be served, and the session cookie a navigation receives. */
   browserAccess(metadata: HttpMetadata): Result<BrowserGrant>;
@@ -130,10 +135,10 @@ export interface TransportPolicy {
 /** The text of each server-sent event frame. */
 export interface EventFrames {
   /** The first frame on every connection. Cannot fail. */
-  connected(generation: string): string;
+  connected(generation: Generation): string;
   /** The frame sent after each commit, carrying the committed change. Cannot fail. */
   committed(
-    generation: string,
+    generation: Generation,
     change: CommittedChange,
   ): string;
   /** A comment line that holds an idle connection open. */
@@ -148,7 +153,7 @@ export interface StaticFiles {
 
 /** What the HTTP server is started with; compose/serve.ts binds each member once. */
 export interface ServerBindings {
-  readonly security: Pick<HttpSecurity, 'origin' | 'generation'>;
+  readonly security: Pick<HttpSecurity, 'address' | 'generation'>;
   readonly admission: Pick<HttpAdmission, 'authenticate'>;
   readonly router: ApiRouter;
   readonly policy: TransportPolicy;

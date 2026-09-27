@@ -10,6 +10,7 @@ Composes all capabilities: owns sessions, rendering and inspection jobs, resourc
 | `contract/index.ts`                            | The only import surface for web and cli                                                                                                   |
 | `contract/api.ts`                              | The one core function consumers call (`projectCollection`)                                                                                |
 | `contract/errors.ts`, `types.ts`, `schemas.ts` | Service failure codes and `Result`; the `WorkspaceSession` type; capability schemas core parses with                                      |
+| `contract/brands.ts`                           | Typed IDs: capability brand types, service brands (generation, session and agent tokens, port, host path), `sha256:` pinned ⇄ bare digest |
 | `contract/records/`                            | Data (see note below): capability types, then a folder per topic (`transport`, `rendering`, `planning`, `presets`, `workspace`, `export`) |
 | `contract/ports/`                              | Seams: capabilities, storage, rendering, notifications, transport, export, workspace, headless                                            |
 | `contract/compose/`                            | Wiring only: builds capabilities once, binds core to adapters, starts the server and the worker                                           |

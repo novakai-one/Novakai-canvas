@@ -10,6 +10,7 @@ import type {
   Snapshot,
   StoredRecord,
 } from '../../contract/records/capabilities.js';
+import type { AssetDigest } from '../../contract/brands.js';
 
 /** A record kind Authoring stores. */
 export type RecordKind = RecordKey['kind'];
@@ -48,6 +49,6 @@ export function presetRecordId(digest: Preset['digest']): `preset:${string}` {
 }
 
 /** The ID of an asset-admission record (kind `asset-admission`): `asset:<digest>`. Never fails. */
-export function assetRecordId(digest: string): `asset:${string}` {
+export function assetRecordId(digest: AssetDigest): `asset:${string}` {
   return `asset:${digest}`;
 }

@@ -6,6 +6,7 @@
  * corrects it and prepares again; Authoring owns commit.
  */
 import { presetDigest } from '../../contract/schemas.js';
+import { bareDigest } from '../../contract/brands.js';
 import type {
   Language,
   LanguageResult,
@@ -93,9 +94,9 @@ function recipePayload(
     languageVersion: 1,
     source,
     family,
-    assets: intent.collection.assets.map((item) => presetDigest.parse(item.digest.slice(7))),
+    assets: intent.collection.assets.map((item) => presetDigest.parse(bareDigest(item.digest))),
     themes: [
-      brandedThemePin({ id: theme.id, version: theme.version, digest: theme.digest.slice(7) }),
+      brandedThemePin({ id: theme.id, version: theme.version, digest: bareDigest(theme.digest) }),
     ],
   });
 }

@@ -10,6 +10,7 @@ import type { ResourceCommands, WorkspaceReader } from '../../contract/ports/wor
 import type { CollectionRenderer } from '../../contract/ports/rendering.js';
 import type { ChangeChannel } from '../../contract/ports/notifications.js';
 import type { RouteOutcome } from '../../contract/records/transport/protocol.js';
+import type { WorkspaceId } from '../../contract/brands.js';
 import { failure } from '../../contract/errors.js';
 import { renderCollection } from '../rendering/collection.js';
 import { inspectCollection } from '../rendering/inspection.js';
@@ -18,7 +19,7 @@ import { commitThenRead } from './applied-commit.js';
 
 /** Lifecycles are already open when wiring this facade; construction starts no I/O and grants no alternative commit path. */
 export interface SessionOwners {
-  readonly workspace: string;
+  readonly workspace: WorkspaceId;
   readonly installation: BuiltinResources;
   readonly resources: ResourceCommands;
   readonly views: WorkspaceReader;

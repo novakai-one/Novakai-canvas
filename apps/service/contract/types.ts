@@ -12,9 +12,10 @@ import type { InspectionReport } from './records/rendering/inspection.js';
 import type { Result } from './errors.js';
 import type { RouteOutcome } from './records/transport/protocol.js';
 import type { AppliedCommit } from './records/workspace/session.js';
+import type { CollectionId, WorkspaceId } from './brands.js';
 /** Session transport authenticates each caller before forwarding the explicit Authoring envelope. */
 export interface WorkspaceSession {
-  readonly workspace: string;
+  readonly workspace: WorkspaceId;
   readonly installation: BuiltinResources;
   readonly resources: ResourceCommands;
   read(): Promise<AuthoringResult<Snapshot>>;
@@ -31,11 +32,11 @@ export interface WorkspaceSession {
   ): Promise<AuthoringResult<AppliedCommit>>;
   receipt(request: unknown): Promise<AuthoringResult<Receipt | null>>;
   render(
-    collection: string,
+    collection: CollectionId,
     signal: AbortSignal,
   ): Promise<Result<RenderDocument>>;
   inspect(
-    collection: string,
+    collection: CollectionId,
     signal: AbortSignal,
   ): Promise<Result<InspectionReport>>;
   exportArtifact(

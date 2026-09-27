@@ -7,6 +7,7 @@
 import type { OperationSource } from './failure-source.js';
 import { operationSource } from './failure-source.js';
 import { z } from 'zod';
+import { generation } from '../../brands.js';
 import type { Result } from '../../errors.js';
 import type { Caller, HttpMetadata } from './http.js';
 import type { Request } from '../capabilities.js';
@@ -14,7 +15,7 @@ import type { StaticFile } from './server.js';
 /** A transport generation prevents a retained request from silently targeting a restarted/restored owner set. */
 export const mutationEnvelope = z.strictObject({
   version: z.literal(1),
-  generation: z.string().min(1).max(128),
+  generation,
   request: z.unknown(),
   preview: z.boolean().default(false),
   options: z.unknown().default({}),
@@ -39,7 +40,7 @@ export interface ApiCall {
 /** HTTP consumers decode this envelope before handing success values to their respective capability readers. */
 export const responseEnvelope = z.strictObject({
   version: z.literal(1),
-  generation: z.string().min(1).max(128),
+  generation,
   outcome: z.discriminatedUnion('ok', [
     z.strictObject({ ok: z.literal(true), value: z.unknown() }),
     z.strictObject({

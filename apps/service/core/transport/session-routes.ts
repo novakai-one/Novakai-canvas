@@ -1,8 +1,9 @@
 /*
  * The session routes: workspace, history, installation and identity reads, render, inspect,
- * receipt and export, each forwarded to the session facade. Pure over the injected session; no
- * route writes storage. Authoring owns commit and receipt recovery; a refused export body is the
- * caller's to correct. A throw reaches the HTTP server's `receive` (routes.ts).
+ * receipt and export, each forwarded to the session facade. Render and inspect parse `?id` as a
+ * Model collection ID first. Pure over the injected session; no route writes storage. Authoring
+ * owns commit and receipt recovery; a refused export body is the caller's to correct. A throw
+ * reaches the HTTP server's `receive` (routes.ts).
  */
 import type {
   ApiCall,
@@ -12,6 +13,9 @@ import type {
 import type { ApiRouter } from '../../contract/ports/transport.js';
 import type { WorkspaceSession } from '../../contract/types.js';
 import { success } from '../../contract/errors.js';
+import type { CollectionId } from '../../contract/brands.js';
+import { collectionId } from '../../contract/schemas.js';
+import { missingCollection } from '../rendering/collection.js';
 import { historyVersionsOnly } from '../session/history-versions.js';
 import { jsonBody } from './json-body.js';
 
@@ -45,8 +49,9 @@ export interface SessionRouteOwners {
 type RouteSession = SessionRouteOwners['session'];
 
 /**
- * The frozen session route table. `workspace` and `export` fail as their handlers below; every
- * other route passes the session's outcome through (`installation` and `identity` cannot fail).
+ * The frozen session route table. `workspace`, `render`, `inspect` and `export` fail as their
+ * handlers below; every other route passes the session's outcome through (`installation` and
+ * `identity` cannot fail).
  */
 export function sessionRoutes(
   owners: SessionRouteOwners,
@@ -58,8 +63,8 @@ export function sessionRoutes(
     'GET /api/v1/installation': async () =>
       success({ fonts: session.installation.fonts, tokens: session.installation.tokens }),
     'GET /api/v1/identity': async () => success({ workspace: session.workspace }),
-    'GET /api/v1/render': (call) => session.render(collectionQuery(call), call.signal),
-    'GET /api/v1/inspect': (call) => session.inspect(collectionQuery(call), call.signal),
+    'GET /api/v1/render': (call) => withCollection(call, (id) => session.render(id, call.signal)),
+    'GET /api/v1/inspect': (call) => withCollection(call, (id) => session.inspect(id, call.signal)),
     'GET /api/v1/receipt': (call) => session.receipt(call.query.id),
     'POST /api/v1/export': (call) => exportArtifact(call, session),
   });
@@ -91,7 +96,17 @@ async function exportArtifact(
   return session.exportArtifact(input.value, call.signal);
 }
 
-/** The `?id` collection; empty when absent, which render and inspect answer with `not-found`. */
-function collectionQuery(call: ApiCall): string {
-  return call.query.id ?? '';
+/**
+ * Runs `step` on the `?id` collection. Fails with `not-found` at the query text when it is not a
+ * Model collection ID (an absent `?id` reads as empty text), the same answer as a missing
+ * collection (`missingCollection`); otherwise `step`'s outcome passes through.
+ */
+async function withCollection(
+  call: ApiCall,
+  step: (id: CollectionId) => Promise<WireOutcome>,
+): Promise<WireOutcome> {
+  const text = call.query.id ?? '';
+  const id = collectionId.safeParse(text);
+  if (!id.success) return missingCollection(text);
+  return step(id.data);
 }

@@ -21,6 +21,7 @@ import {
 } from '../../contract/schemas.js';
 import type { Result } from '../../contract/errors.js';
 import { authoringFailure, success } from '../../contract/errors.js';
+import { bareDigest } from '../../contract/brands.js';
 import type { RenderResourceOwners } from '../../contract/ports/headless.js';
 import type { WorkspaceContents } from '../../contract/records/workspace/contents.js';
 import type { RenderingJob } from '../../contract/records/rendering/job.js';
@@ -64,7 +65,7 @@ function create(
       kind: 'theme',
       id: collection.theme.id,
       version: collection.theme.version,
-      digest: collection.theme.digest.slice(7),
+      digest: bareDigest(collection.theme.digest),
     }),
   );
   if (preset.kind !== 'theme') throw new RenderResourceFault('Collection does not select a theme');
@@ -93,7 +94,7 @@ function create(
     wasmResource: owners.wasmResource,
     assets: collection.assets
       .filter((item) => item.mediaType.startsWith('image/'))
-      .map((item) => asset(item.digest.slice(7), owners)),
+      .map((item) => asset(bareDigest(item.digest), owners)),
     options: layoutOptions.parse({
       gap: { compact: style.gap * 3, normal: style.gap * 8, roomy: style.gap * 12 },
       padding: style.padding * 2,

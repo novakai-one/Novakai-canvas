@@ -6,6 +6,7 @@ import type { InspectionReport } from '../../contract/records/rendering/inspecti
 import type { RenderDocument } from '../../contract/records/rendering/job.js';
 import type { Diagnostic, Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
+import type { CollectionId } from '../../contract/brands.js';
 import { renderCollection, type CollectionReads } from './collection.js';
 /**
  * Renders one committed collection and reports its quality. A render refused as `invalid-input` is
@@ -14,7 +15,7 @@ import { renderCollection, type CollectionReads } from './collection.js';
  * renderer's own failures.
  */
 export async function inspectCollection(
-  id: string,
+  id: CollectionId,
   signal: AbortSignal,
   reads: CollectionReads,
 ): Promise<Result<InspectionReport>> {

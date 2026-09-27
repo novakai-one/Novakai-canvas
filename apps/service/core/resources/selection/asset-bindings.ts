@@ -12,6 +12,7 @@ import type {
   Snapshot,
 } from '../../../contract/records/capabilities.js';
 import { authoringDigest } from '../../../contract/schemas.js';
+import { bareDigest, isPinnedDigest, pinnedDigest } from '../../../contract/brands.js';
 import {
   assetBindings,
   type AssetBinding,
@@ -21,7 +22,6 @@ import {
 import { liveRecord } from '../../workspace/records.js';
 import type { Declared } from './intent.js';
 import type { Themes } from './themes.js';
-import { PIN_PREFIX, bare, prefixed } from './digests.js';
 import { ResourceFault, accepted } from './refusal.js';
 
 /** The owners asset binding reads: Assets for the bytes' media type, Model for the check. */
@@ -74,8 +74,8 @@ function priorAssets(
 /** Asset declarations whose source is a `sha256:` pin supply their bytes by digest. */
 function pinnedUploads(requests: readonly ResourceRequest[]): readonly Upload[] {
   return requests
-    .filter((item) => item.kind !== 'theme' && item.source.startsWith(PIN_PREFIX))
-    .map((item) => ({ alias: item.alias, digest: authoringDigest.parse(bare(item.source)) }));
+    .filter((item) => item.kind !== 'theme' && isPinnedDigest(item.source))
+    .map((item) => ({ alias: item.alias, digest: authoringDigest.parse(bareDigest(item.source)) }));
 }
 
 /** Model checks an asset binding against one actual admitted theme. */
@@ -96,7 +96,7 @@ function suppliedAsset(
   const metadata = requests.find((item) => item.alias === upload.alias && item.kind !== 'theme');
   if (metadata) return newAsset(upload, metadata, theme, owners);
   const existing = previous.find(
-    (item) => item.id === upload.alias && item.digest === prefixed(upload.digest),
+    (item) => item.id === upload.alias && item.digest === pinnedDigest(upload.digest),
   );
   if (!existing) throw new ResourceFault(`Missing authored asset metadata: ${upload.alias}`);
   return existing;
@@ -115,7 +115,7 @@ function newAsset(
   const blob = accepted(owners.assets.resolve(upload.digest));
   const draft = {
     id: upload.alias,
-    digest: prefixed(upload.digest),
+    digest: pinnedDigest(upload.digest),
     mediaType: blob.descriptor.mediaType,
     alt: metadata.alt ?? upload.alias,
     ...optionalMetadata(metadata),

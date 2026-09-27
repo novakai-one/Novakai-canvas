@@ -3,12 +3,13 @@
  * candidate validation and leases compare. Declarations only; core/resources/selection builds it
  * and Authoring owns commit and retry.
  */
-import type { Digest, Json, ReadVersion, ResolvedResources } from '../capabilities.js';
+import type { Json, ReadVersion, ResolvedResources } from '../capabilities.js';
+import type { AuthoringDigest } from '../../brands.js';
 
 /** Immutable alias resolution is repeated against the same snapshot, then compared with Authoring's admitted pins. */
 export interface ResourceSelection {
   readonly resources: ResolvedResources;
   readonly pins: Json;
-  readonly covered: readonly Digest[];
+  readonly covered: readonly AuthoringDigest[];
   readonly reads: readonly ReadVersion[];
 }

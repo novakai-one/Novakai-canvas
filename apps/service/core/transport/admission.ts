@@ -8,7 +8,8 @@
 import type { Caller, HttpMetadata } from '../../contract/records/transport/http.js';
 import type { HttpAdmission, HttpSecurity } from '../../contract/ports/transport.js';
 import { browserCookieName } from '../../contract/records/transport/http.js';
-import type { PlannerId, Request } from '../../contract/records/capabilities.js';
+import type { Request } from '../../contract/records/capabilities.js';
+import type { PlannerId } from '../../contract/brands.js';
 import { plannerId, requestSchema } from '../../contract/schemas.js';
 import { failure, success, type Result } from '../../contract/errors.js';
 
@@ -39,7 +40,7 @@ const NAVIGATION_SITES: readonly string[] = Object.freeze(['none', 'same-origin'
  */
 export function createAdmission(security: HttpSecurity): HttpAdmission {
   return {
-    cookieName: sessionCookieName(security.host),
+    cookieName: sessionCookieName(security.address.host),
     bootstrap: (metadata) => bootstrap(metadata, security),
     authenticate: (metadata) => authenticate(metadata, security),
     mutation: admitMutation,
@@ -76,7 +77,7 @@ function admitHost(
   metadata: HttpMetadata,
   security: HttpSecurity,
 ): Result<void> {
-  if (metadata.host !== security.host)
+  if (metadata.host !== security.address.host)
     return failure('unauthorized', 'host', 'Open the configured loopback address');
   return success(undefined);
 }
@@ -126,7 +127,7 @@ function browserCaller(
   const allowed =
     metadata.site === 'same-origin' &&
     trustedOrigin(metadata, security) &&
-    security.equal(sessionCookie(metadata.cookie, security.host), security.browserSession);
+    security.equal(sessionCookie(metadata.cookie, security.address.host), security.browserSession);
   if (!allowed)
     return failure('unauthorized', 'session', 'Reload this workspace from its loopback address');
   return success(BROWSER_CALLER);
@@ -137,7 +138,7 @@ function trustedOrigin(
   metadata: HttpMetadata,
   security: HttpSecurity,
 ): boolean {
-  return metadata.origin === '' || metadata.origin === security.origin;
+  return metadata.origin === '' || metadata.origin === security.address.origin;
 }
 
 /**

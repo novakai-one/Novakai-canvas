@@ -8,14 +8,15 @@ import type { Assets, Result as AssetResult } from '@novakai/canvas-assets';
 import type { Persistence, Result as StorageResult } from '@novakai/canvas-persistence';
 import type { Catalog } from '@novakai/canvas-templates';
 import type { Result } from '../../errors.js';
+import type { HostPath, Timestamp, WorkspaceId } from '../../brands.js';
 /** Host-selected absolute locations never originate in diagram DSL or browser-authored content. */
 export interface WorkspaceOptions {
-  readonly directory: string;
-  readonly workspace: string;
+  readonly directory: HostPath;
+  readonly workspace: WorkspaceId;
   readonly title: string;
-  readonly resourceRoot: string;
-  readonly tokenRoot: string;
-  readonly createdAt: number;
+  readonly resourceRoot: HostPath;
+  readonly tokenRoot: HostPath;
+  readonly createdAt: Timestamp;
 }
 /** Trusted startup input is fixed before registering its private planner; request payloads cannot replace these records. */
 export type Installation = Pick<WorkspaceOptions, 'workspace' | 'title' | 'createdAt'> & {
@@ -27,7 +28,7 @@ export interface NativeFactories {
   assets(root: string): AssetResult<Assets>;
   storage(
     location: string,
-    workspace: string,
+    workspace: WorkspaceId,
   ): StorageResult<Persistence>;
 }
 export interface NativeWorkspace {

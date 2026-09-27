@@ -7,6 +7,7 @@
 import type { DiagramProducer } from '../ports/rendering.js';
 import type { Result } from '../errors.js';
 import { failure, success } from '../errors.js';
+import type { HostPath } from '../brands.js';
 import { produce } from '../../core/rendering/produce.js';
 
 /** How long one render job, or one worker start-up, may take before it fails `unavailable`. */
@@ -41,6 +42,6 @@ export async function createDiagramProducer(): Promise<Result<DiagramProducer>> 
 }
 
 /** The libavoid wasm path every render job carries, under `resourceRoot`. Never fails. */
-export function libavoidWasm(resourceRoot: string): string {
+export function libavoidWasm(resourceRoot: HostPath): string {
   return `${resourceRoot}/${LIBAVOID_WASM}`;
 }

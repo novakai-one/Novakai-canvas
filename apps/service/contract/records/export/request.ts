@@ -1,12 +1,10 @@
 /*
- * The export request the service boundary parses: identity, format, scope and scale. Plain zod
- * replicating the service's own grammar. Declarations only; core/export/request.ts reads it, and
- * a refused request is the caller's to correct and resend.
+ * The export request the service boundary parses: identity, format, scope and scale. The
+ * collection and section IDs use Model's ID schemas. Declarations only; core/export/request.ts
+ * reads it, and a refused request is the caller's to correct and resend.
  */
 import { z } from 'zod';
-
-/** Collection and section ids share one identifier grammar at the export boundary. */
-const identifier = z.string().regex(/^[A-Za-z][A-Za-z0-9_-]*$/);
+import { collectionId, sectionId } from '../../schemas.js';
 
 /**
  * What to export: identity, format and scope. A failure here is an unsupported request.
@@ -15,13 +13,13 @@ const identifier = z.string().regex(/^[A-Za-z][A-Za-z0-9_-]*$/);
  */
 export const exportSelection = z.object({
   identity: z.object({
-    collectionId: identifier,
+    collectionId,
     revision: z.number().nonnegative().refine(Number.isInteger),
   }),
   format: z.enum(['dsl', 'svg', 'png', 'markdown']),
   scope: z.union([
     z.object({ kind: z.literal('all') }),
-    z.object({ kind: z.literal('section'), id: identifier }),
+    z.object({ kind: z.literal('section'), id: sectionId }),
   ]),
 });
 

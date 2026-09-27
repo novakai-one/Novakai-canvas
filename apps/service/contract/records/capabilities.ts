@@ -26,9 +26,6 @@ export type {
   ResourceLease,
   Cancellation,
   Notifications,
-  WorkspaceId,
-  PlannerId,
-  Digest,
   Json,
 } from '@novakai/canvas-authoring';
 export type { Collection, Change } from '@novakai/canvas-model';
@@ -83,4 +80,5 @@ export type {
   Result as ExportResult,
   Snapshot as ExportSnapshot,
   SnapshotLease,
+  SnapshotReader as ExportSnapshotReader,
 } from '@novakai/canvas-export';

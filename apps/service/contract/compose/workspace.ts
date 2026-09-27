@@ -10,6 +10,7 @@ import type { ResourceCommands, ResourceSelector, WorkspaceReader } from '../por
 import type { ServiceCapabilities } from '../ports/capabilities.js';
 import type { CollectionRenderer, DiagramProducer, RenderJobs } from '../ports/rendering.js';
 import { EMPTY_RESOURCES } from '../ports/capabilities.js';
+import type { HostPath } from '../brands.js';
 import { createWorkspaceReader } from '../../core/workspace/reader.js';
 import { createResourceSelector } from '../../core/resources/selection/select.js';
 import { createResourceCommands } from '../../core/resources/commands/commands.js';
@@ -23,7 +24,7 @@ import { libavoidWasm } from './producer.js';
 export interface WorkspaceRoleInputs {
   readonly assets: Pick<Assets, 'stage' | 'resolve' | 'reserve' | 'acquire'>;
   readonly installation: Pick<BuiltinResources, 'presets' | 'tokens'>;
-  readonly resourceRoot: string;
+  readonly resourceRoot: HostPath;
   readonly capabilities: Pick<
     ServiceCapabilities,
     'model' | 'library' | 'language' | 'system' | 'templates'

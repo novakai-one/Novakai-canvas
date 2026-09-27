@@ -6,18 +6,19 @@
  * request's receipt.
  */
 import type { Result } from '../../errors.js';
+import type { Generation, HostPath, LoopbackPort } from '../../brands.js';
 
 /** Server-owned paths and port are explicit startup inputs, never request parameters. */
 export interface ServerOptions {
-  readonly port: number;
-  readonly webRoot: string;
-  readonly credentialFile: string;
+  readonly port: LoopbackPort;
+  readonly webRoot: HostPath;
+  readonly credentialFile: HostPath;
 }
 
 /** A listening server: its loopback URL, its transport generation and its shutdown. */
 export interface LocalServer {
   readonly url: string;
-  readonly generation: string;
+  readonly generation: Generation;
   close(): Promise<Result<void>>;
 }
 

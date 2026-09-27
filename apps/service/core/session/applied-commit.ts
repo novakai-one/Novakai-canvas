@@ -6,6 +6,7 @@
 import type { Authoring, AuthoringResult } from '../../contract/records/capabilities.js';
 import type { AppliedCommit } from '../../contract/records/workspace/session.js';
 import { authoringFailure } from '../../contract/errors.js';
+import type { WorkspaceId } from '../../contract/brands.js';
 import { historyVersionsOnly } from './history-versions.js';
 
 /**
@@ -16,7 +17,7 @@ import { historyVersionsOnly } from './history-versions.js';
  */
 export async function commitThenRead(
   authoring: Authoring,
-  workspace: string,
+  workspace: WorkspaceId,
   request: unknown,
   options: unknown,
 ): Promise<AuthoringResult<AppliedCommit>> {

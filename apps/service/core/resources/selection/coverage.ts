@@ -5,14 +5,14 @@
  */
 import type {
   Catalog,
-  Digest,
   Request,
   ResolvedResources,
   Snapshot,
 } from '../../../contract/records/capabilities.js';
+import { bareDigest, type AuthoringDigest } from '../../../contract/brands.js';
 import type { ResourceSelection } from '../../../contract/records/planning/selection.js';
 import { authoringDigest } from '../../../contract/schemas.js';
-import { bare, sortedDigests } from './digests.js';
+import { sortedDigests } from './digests.js';
 import { themePresets } from './themes.js';
 
 /**
@@ -24,13 +24,13 @@ export function coverage(
   snapshot: Snapshot,
   catalog: Catalog,
   bound: ResolvedResources['assets'],
-): readonly Digest[] {
+): readonly AuthoringDigest[] {
   const held = sortedDigests([
     ...snapshot.records.flatMap((item) => item.resources),
     ...request.assets.map((item) => item.digest),
     ...themePresets(catalog).flatMap((item) => item.payload.fonts),
   ]);
-  const bytes = Object.values(bound).map((item) => authoringDigest.parse(bare(item.digest)));
+  const bytes = Object.values(bound).map((item) => authoringDigest.parse(bareDigest(item.digest)));
   return [...new Set([...held, ...bytes])];
 }
 

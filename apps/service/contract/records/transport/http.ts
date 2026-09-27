@@ -1,9 +1,23 @@
 /*
- * The HTTP ingress vocabulary: the authenticated caller, the raw and read request headers, the
- * body limit and the browser cookie name. Declarations and two fixed constants (body limit,
- * cookie name); the security secrets and the admission port are in ports/transport.ts. A refused
- * request is the caller's to correct and resend; Authoring owns commit and receipt recovery.
+ * The HTTP ingress vocabulary: the loopback address, the authenticated caller, the raw and read
+ * request headers, the body limit and the browser cookie name. Declarations and three fixed
+ * constants (loopback IP, body limit, cookie name); the security secrets and the admission port
+ * are in ports/transport.ts. A refused request is the caller's to correct and resend; Authoring
+ * owns commit and receipt recovery.
  */
+
+/** The only IPv4 address the server binds; its clients connect to it. */
+export const loopbackIp = '127.0.0.1';
+
+/**
+ * One server's loopback address, built by adapters/credentials from the port. `host` is the exact
+ * Host header admission accepts (`127.0.0.1:<port>`); `origin` is `http://` plus `host`.
+ */
+export interface LoopbackAddress {
+  readonly host: string;
+  readonly origin: string;
+}
+
 /** Transport identities are minted by credential admission; submitted authorship cannot choose privileges. */
 export interface Caller {
   readonly id: string;

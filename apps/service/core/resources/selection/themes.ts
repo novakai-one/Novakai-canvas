@@ -12,9 +12,9 @@ import type {
   Templates,
   ThemePreset,
 } from '../../../contract/records/capabilities.js';
+import { pinnedDigest } from '../../../contract/brands.js';
 import { themeBinding, type BindingModel, type ThemeBinding } from '../../presets/theme-binding.js';
 import type { Intent } from './intent.js';
-import { prefixed } from './digests.js';
 import { ResourceFault, accepted } from './refusal.js';
 
 /** The owners theme binding reads: Templates picks the latest version, Model checks each binding. */
@@ -38,7 +38,7 @@ export function availableThemes(
   const exact = records.map(
     (item) =>
       [
-        `${item.id}@${item.version}#${prefixed(item.digest)}`,
+        `${item.id}@${item.version}#${pinnedDigest(item.digest)}`,
         accepted(themeBinding(item, owners.model)),
       ] as const,
   );

@@ -17,6 +17,7 @@ import type {
 import type { ExportFailure } from '../../contract/records/export/snapshot.js';
 import type { LeaseRead } from '../../contract/ports/export.js';
 import type { RenderDocument } from '../../contract/records/rendering/job.js';
+import { bareDigest } from '../../contract/brands.js';
 import { exportRejection } from './faults.js';
 
 /** Every retained resource: the theme preset, then collection assets, then document fonts. */
@@ -89,7 +90,7 @@ function assetResources(
 ): ExportResult<readonly Resource[]> {
   return resourceList(
     collection.assets.map((item) =>
-      resourceFromBlob(read(item.digest.slice(7), `resources.${item.id}`), 'asset', {
+      resourceFromBlob(read(bareDigest(item.digest), `resources.${item.id}`), 'asset', {
         alt: item.alt,
       }),
     ),

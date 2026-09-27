@@ -7,13 +7,13 @@
 import type {
   Assets,
   Collection,
-  Digest,
   LoweredIntent,
   Templates,
 } from '../../../contract/records/capabilities.js';
+import { bareDigest, type AuthoringDigest } from '../../../contract/brands.js';
 import type { WorkspaceContents } from '../../../contract/records/workspace/contents.js';
 import type { AssetBinding } from '../../presets/theme-binding.js';
-import { bare, sortedDigests } from './digests.js';
+import { sortedDigests } from './digests.js';
 import { ResourceFault, accepted } from './refusal.js';
 
 /** The owners the check reads: Templates for the pinned theme, Assets for the stored bytes. */
@@ -32,13 +32,13 @@ export function collectionResources(
   collection: Collection,
   view: WorkspaceContents,
   owners: CollectionOwners,
-): readonly Digest[] {
+): readonly AuthoringDigest[] {
   const theme = accepted(
     owners.templates.read(view.presets, {
       kind: 'theme',
       id: collection.theme.id,
       version: collection.theme.version,
-      digest: bare(collection.theme.digest),
+      digest: bareDigest(collection.theme.digest),
     }),
   );
   if (theme.kind !== 'theme') throw new ResourceFault('Collection pin does not identify a theme');
@@ -46,7 +46,7 @@ export function collectionResources(
   checkMediaTypes(collection.assets, owners);
   return sortedDigests([
     ...theme.payload.fonts,
-    ...collection.assets.map((item) => bare(item.digest)),
+    ...collection.assets.map((item) => bareDigest(item.digest)),
   ]);
 }
 
@@ -65,7 +65,7 @@ function checkMediaTypes(
   owners: CollectionOwners,
 ): void {
   bindings.forEach((item) => {
-    const blob = accepted(owners.assets.resolve(bare(item.digest)));
+    const blob = accepted(owners.assets.resolve(bareDigest(item.digest)));
     if (blob.descriptor.mediaType !== item.mediaType)
       throw new ResourceFault(`Asset media type differs: ${item.id}`);
   });

@@ -9,6 +9,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { ServerBindings } from '../../contract/ports/transport.js';
 import type { Caller, HttpMetadata } from '../../contract/records/transport/http.js';
+import { loopbackIp } from '../../contract/records/transport/http.js';
 import type { RouteOutcome, WireOutcome } from '../../contract/records/transport/protocol.js';
 import type {
   LocalServer,
@@ -19,8 +20,6 @@ import type {
 import { eventStreamHeaders, isolationHeaders } from '../../contract/records/transport/server.js';
 import { failure, success, type Result } from '../../contract/errors.js';
 
-/** The only address the server binds. */
-const LOOPBACK_HOST = '127.0.0.1';
 /** Socket limits: the largest request head (bytes); how long a request and its head may take (ms). */
 const SOCKET_LIMITS = Object.freeze({
   maxHeaderSize: 16384,
@@ -74,10 +73,10 @@ export function startHttpServer(
     server.once('error', () =>
       resolve(failure('unavailable', 'server', 'Configured loopback port could not be opened')),
     );
-    server.listen(options.port, LOOPBACK_HOST, () =>
+    server.listen(options.port, loopbackIp, () =>
       resolve(
         success({
-          url: bindings.security.origin,
+          url: bindings.security.address.origin,
           generation: bindings.security.generation,
           close: () => close(server),
         }),
@@ -121,7 +120,7 @@ async function route(
   bindings: ServerBindings,
 ): Promise<void> {
   const metadata = bindings.policy.head(request.method, request.headersDistinct);
-  const url = new URL(request.url ?? '/', bindings.security.origin);
+  const url = new URL(request.url ?? '/', bindings.security.address.origin);
   const exchange: Exchange = { request, response, signal, metadata, url, bindings };
   await HANDLERS[bindings.policy.kind(metadata.method, url.pathname)](exchange);
 }

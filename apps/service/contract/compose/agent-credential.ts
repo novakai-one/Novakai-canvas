@@ -5,6 +5,7 @@
  * service (which creates it) and retries.
  */
 import type { Result } from '../errors.js';
+import type { AgentToken } from '../brands.js';
 
 /**
  * Reads the agent token from the credential file at `path`. Browser consumers use their HttpOnly
@@ -12,7 +13,7 @@ import type { Result } from '../errors.js';
  * not a regular file, readable by others, too large or malformed. A failed adapter import rejects;
  * the CLI entry (`apps/cli/cli/main.ts`) reports it and exits 1.
  */
-export async function readAgentCredential(path: string): Promise<Result<string>> {
+export async function readAgentCredential(path: string): Promise<Result<AgentToken>> {
   const credentials = await import('../../adapters/credentials/local-credentials.js');
   return credentials.readAgentCredential(path);
 }

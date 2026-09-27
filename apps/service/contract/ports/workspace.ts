@@ -9,12 +9,12 @@ import type {
   AssetResult,
   AuthoringResult,
   Collection,
-  Digest,
   Proposal,
   Request,
   Snapshot,
   StoredBlob,
 } from '../records/capabilities.js';
+import type { AuthoringDigest } from '../brands.js';
 import type { WorkspaceContents } from '../records/workspace/contents.js';
 import type { ResourceSelection } from '../records/planning/selection.js';
 import type { PresetPreparation, ResourceResult } from '../records/presets/preparation.js';
@@ -45,7 +45,7 @@ export interface ResourceSelector {
   forCollection(
     collection: Collection,
     workspace: WorkspaceContents,
-  ): AuthoringResult<readonly Digest[]>;
+  ): AuthoringResult<readonly AuthoringDigest[]>;
 }
 
 /** Proposes one collection write against one snapshot. */

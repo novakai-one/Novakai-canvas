@@ -5,6 +5,7 @@
  */
 import type { TransportResponse, WireOutcome } from '../../contract/records/transport/protocol.js';
 import type { HttpStatus } from '../../contract/records/transport/server.js';
+import type { Generation } from '../../contract/brands.js';
 
 /** A status for a refused outcome. */
 type FailureStatus = Exclude<HttpStatus, 200>;
@@ -40,7 +41,7 @@ export function httpStatus(outcome: WireOutcome): HttpStatus {
  */
 export function transportResponse(
   outcome: WireOutcome,
-  generation: string,
+  generation: Generation,
 ): TransportResponse {
   return { version: 1, generation, outcome: wireValue(outcome) };
 }

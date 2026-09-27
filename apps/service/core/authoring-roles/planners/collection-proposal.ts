@@ -6,10 +6,10 @@
 import type {
   AuthoringResult,
   Collection,
-  Digest,
   Proposal,
   Snapshot,
 } from '../../../contract/records/capabilities.js';
+import type { AuthoringDigest } from '../../../contract/brands.js';
 import type { LibraryRules } from '../../../contract/ports/capabilities.js';
 import type { WorkspaceContents } from '../../../contract/records/workspace/contents.js';
 import type {
@@ -60,7 +60,7 @@ function propose(
 function proposal(
   collection: Collection,
   view: WorkspaceContents,
-  resources: readonly Digest[],
+  resources: readonly AuthoringDigest[],
   owners: CollectionProposalOwners,
 ): AuthoringResult<Proposal> {
   const write = {

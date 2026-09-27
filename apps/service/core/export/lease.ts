@@ -20,8 +20,11 @@ import type {
 } from '../../contract/records/capabilities.js';
 import type { CollectionRenderer } from '../../contract/ports/rendering.js';
 import type { ResourceSelector, WorkspaceReader } from '../../contract/ports/workspace.js';
-import type { ExportRequest } from '../../contract/records/export/request.js';
-import type { SelectedCollection } from '../../contract/records/export/snapshot.js';
+import type {
+  SelectedCollection,
+  SnapshotIdentity,
+} from '../../contract/records/export/snapshot.js';
+import type { WorkspaceId } from '../../contract/brands.js';
 import { cancelledExport, exportRejection, releaseOutcome, settledFailure } from './faults.js';
 import {
   exportSnapshot,
@@ -32,7 +35,7 @@ import {
 
 /** The owners one snapshot lease reads, leases and renders through. */
 export interface LeaseOwners {
-  readonly workspace: string;
+  readonly workspace: WorkspaceId;
   readonly assets: Pick<Assets, 'acquire'>;
   readonly views: Pick<WorkspaceReader, 'read'>;
   readonly resources: Pick<ResourceSelector, 'forCollection'>;
@@ -56,7 +59,7 @@ export interface LeaseOwners {
  * A failed release after a failure nests `cleanup-failed` at `export.release` under `cleanup`.
  */
 export async function acquireSnapshot(
-  identity: ExportRequest['identity'],
+  identity: SnapshotIdentity,
   owners: LeaseOwners,
   signal: AbortSignal,
 ): Promise<ExportResult<SnapshotLease>> {

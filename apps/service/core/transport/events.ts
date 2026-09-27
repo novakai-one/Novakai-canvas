@@ -5,6 +5,7 @@
  */
 import type { EventFrames } from '../../contract/ports/transport.js';
 import type { CommittedChange } from '../../contract/ports/notifications.js';
+import type { Generation } from '../../contract/brands.js';
 
 /** The frame names the change stream sends. */
 type EventName = 'connected' | 'committed';
@@ -20,13 +21,13 @@ export const eventFrames: EventFrames = Object.freeze({
 });
 
 /** The first frame on every connection. */
-function connected(generation: string): string {
+function connected(generation: Generation): string {
   return frame('connected', { version: 1, generation });
 }
 
 /** The frame sent after each commit, carrying the committed change. */
 function committed(
-  generation: string,
+  generation: Generation,
   change: CommittedChange,
 ): string {
   return frame('committed', { version: 1, generation, change });

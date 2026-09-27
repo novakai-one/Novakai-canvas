@@ -11,6 +11,7 @@ import type {
 } from '../../contract/records/transport/protocol.js';
 import type { ApiRouter, CommandDecoder, HttpAdmission } from '../../contract/ports/transport.js';
 import type { WorkspaceSession } from '../../contract/types.js';
+import type { Generation } from '../../contract/brands.js';
 
 /** A mutation route, as `METHOD path`. */
 export type MutationRouteKey = 'POST /api/v1/authoring/preview' | 'POST /api/v1/authoring/apply';
@@ -18,7 +19,7 @@ export type MutationRouteKey = 'POST /api/v1/authoring/preview' | 'POST /api/v1/
 /** The owners the mutation routes forward to. `generation` is the current transport generation. */
 export interface MutationRouteOwners {
   readonly session: Pick<WorkspaceSession, 'prepare' | 'apply'>;
-  readonly generation: string;
+  readonly generation: Generation;
   readonly admission: Pick<HttpAdmission, 'mutation'>;
   readonly decoder: CommandDecoder;
 }

@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { digest, plan, stage, validate } from '@novakai/canvas-model';
 import { createLanguage, type LoweredIntent } from '@novakai/canvas-language';
 import {
+  hostPath,
   prepareInstallation,
   type BuiltinResources,
   type RenderingJob,
@@ -117,8 +118,8 @@ export async function environment(
 ): Promise<Environment> {
   const installation = accepted(
     await prepareInstallation(
-      join(options.root, 'resources'),
-      join(options.root, 'capability/design-system'),
+      hostPath.parse(join(options.root, 'resources')),
+      hostPath.parse(join(options.root, 'capability/design-system')),
       assets,
     ),
   );

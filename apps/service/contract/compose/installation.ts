@@ -8,13 +8,14 @@ import type { Assets } from '@novakai/canvas-assets';
 import type { BuiltinResources } from '../records/presets/builtins.js';
 import type { Result } from '../errors.js';
 import { failure } from '../errors.js';
+import type { HostPath } from '../brands.js';
 import { prepareBuiltinPresets } from '../../core/presets/builtin.js';
 import { createServiceCapabilities } from './capabilities.js';
 
 /** Resource/provider startup failures leave the existing workspace untouched; caller repairs the installation and retries. */
 export async function prepareInstallation(
-  resourceRoot: string,
-  tokenRoot: string,
+  resourceRoot: HostPath,
+  tokenRoot: HostPath,
   assets: Pick<Assets, 'stage' | 'resolve'>,
 ): Promise<Result<BuiltinResources>> {
   try {
@@ -30,8 +31,8 @@ export async function prepareInstallation(
 
 /** Read and prepare shipped resources through their real owners; caller submits returned preset bindings through Authoring. */
 async function prepareInstallationInputs(
-  resourceRoot: string,
-  tokenRoot: string,
+  resourceRoot: HostPath,
+  tokenRoot: HostPath,
   assets: Pick<Assets, 'stage' | 'resolve'>,
 ): Promise<Result<BuiltinResources>> {
   const files = await createTokenFileBindings(tokenRoot);
