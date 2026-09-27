@@ -1,6 +1,6 @@
 import type { DiagramObject, ContentBlock } from '../../contract/records/owners.js';
 import type { ObjectDraft, ObjectEdit } from '../../contract/records/inspector.js';
-import type { CollectionId } from '../../contract/brands.js';
+import type { CollectionId, ObjectId } from '../../contract/brands.js';
 /** Readable form data is derived from retained intentions. Only Model/Authoring may admit its final validity. */
 export function editedObject(draft: ObjectDraft): DiagramObject {
   return draft.edits.reduce(applyEdit, draft.object);
@@ -149,7 +149,7 @@ const contentDefaults: Readonly<
 /** A collection and object pair names one form regardless of which diagram appearance selected it. */
 export function objectDraftKey(
   collection: CollectionId,
-  object: string,
+  object: ObjectId,
 ): string {
   return JSON.stringify([collection, object]);
 }

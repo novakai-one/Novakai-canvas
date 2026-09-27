@@ -101,7 +101,7 @@ const legacyDraftRecord = z.object({
   ...draftFields,
   base: snapshotSchema,
   collection: z.object({ id: collectionId }),
-  object: z.object({ id: z.string() }),
+  object: z.object({ id: objectId }),
 });
 /** A tagged draft (schema version 1): a captured collection base and plain IDs. */
 const currentDraftRecord = z.strictObject({
@@ -110,7 +110,7 @@ const currentDraftRecord = z.strictObject({
   ...draftFields,
   base: capturedCollectionBaseSchema,
   collection: collectionId,
-  object: z.string(),
+  object: objectId,
 });
 /** A stored draft in one shape: plain IDs, and either kind of base. */
 type RecoveryRecord = Omit<

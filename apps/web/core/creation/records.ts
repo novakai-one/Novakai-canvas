@@ -1,10 +1,9 @@
 /*
  * The Model changes an add sends, and the Add-form checks before them. A diagram needs an open
  * collection and a name. An object or group needs an existing diagram in the open collection, or in
- * the collection its capture was made on. A new object needs a name, a reused one must exist and
- * must not already be in the diagram, and a chosen group must be a Model group ID. A group needs
- * a name, and an unlocked diagram when it may move to fit. Pure; the session captures, mints IDs
- * and sends.
+ * the collection its capture was made on. A new object needs a name, and a reused one must exist
+ * and must not already be in the diagram. A group needs a name, and an unlocked diagram when it may
+ * move to fit. Pure; the session captures, takes IDs from the ID source and sends.
  */
 import { diagnostic, type Result } from '../../contract/errors.js';
 import type {
@@ -21,7 +20,7 @@ import type {
   Snapshot,
 } from '../../contract/records/owners.js';
 import type { ActiveDiagram } from '../../contract/records/active-diagram.js';
-import type { IdGrammar } from '../editing/connection/types.js';
+import type { GroupId, ObjectId, SectionId } from '../../contract/brands.js';
 import { groupCreationChanges, groupDraftProblem } from '../editing/group-creation.js';
 import { capturedElsewhere, type CreationCapture } from './captures.js';
 
@@ -51,7 +50,7 @@ export function capturedIn<Id>(
 
 /** The new diagram: an empty grid placed after the collection's existing diagrams. */
 export function diagramChanges(
-  capture: CreationCapture<Section['id']>,
+  capture: CreationCapture<SectionId>,
   draft: AddDiagramDraft,
 ): readonly Change[] {
   return [{ op: 'create', target: 'sections', value: diagramSection(capture, draft) }];
@@ -61,7 +60,7 @@ export function diagramChanges(
 export function creationContext(
   active: ActiveDiagram | null,
   capture: CreationCapture<unknown> | null,
-  section: string,
+  section: SectionId | null,
 ): Result<CreationContext> {
   if (active === null) return creationFailure('Open a collection first.');
   return capturedContext(active, capture, section);
@@ -71,19 +70,18 @@ export function creationContext(
 export function objectChanges(
   context: CreationContext,
   draft: AddObjectDraft,
-  id: DiagramObject['id'],
-  groups: IdGrammar<Group['id']>,
+  id: ObjectId,
 ): Result<readonly Change[]> {
   const object = creationObject(context.active.document.collection.objects, draft, id);
   if (!object.ok) return object;
-  return shownObject(context.section, object.value, draft, groups);
+  return shownObject(context.section, object.value, draft);
 }
 
 /** The diagram with the new group, and room made for it when the draft allows. */
 export function groupChanges(
   section: Section,
   draft: AddGroupDraft,
-  id: Group['id'],
+  id: GroupId,
 ): Result<readonly Change[]> {
   const problem = groupDraftProblem(draft, section);
   if (problem !== null) return creationFailure(problem);
@@ -116,7 +114,7 @@ function foreignDraft(): Extract<Result<never>, { ok: false }> {
 
 /** An empty grid diagram, ordered after the captured collection's diagrams. */
 function diagramSection(
-  capture: CreationCapture<Section['id']>,
+  capture: CreationCapture<SectionId>,
   draft: AddDiagramDraft,
 ): Section {
   return {
@@ -136,7 +134,7 @@ function diagramSection(
 function capturedContext(
   active: ActiveDiagram,
   capture: CreationCapture<unknown> | null,
-  section: string,
+  section: SectionId | null,
 ): Result<CreationContext> {
   if (capture === null) return contextIn(active, section);
   return capturedElsewhere(capture, active)
@@ -157,10 +155,10 @@ function asCaptured(
   };
 }
 
-/** The named diagram in this collection. */
+/** The named diagram in this collection; none named is refused like a missing one. */
 function contextIn(
   active: ActiveDiagram,
-  section: string,
+  section: SectionId | null,
 ): Result<CreationContext> {
   const found = active.document.collection.sections.find((item) => item.id === section);
   if (found === undefined) return creationFailure('Choose an existing diagram.');
@@ -171,7 +169,7 @@ function contextIn(
 function creationObject(
   objects: readonly DiagramObject[],
   draft: AddObjectDraft,
-  id: DiagramObject['id'],
+  id: ObjectId,
 ): Result<DiagramObject> {
   if (draft.reuseObject !== null) return existingObject(objects, draft.reuseObject);
   const label = draft.label.trim();
@@ -182,7 +180,7 @@ function creationObject(
 /** The object to reuse, which must exist. */
 function existingObject(
   objects: readonly DiagramObject[],
-  id: string,
+  id: ObjectId,
 ): Result<DiagramObject> {
   const object = objects.find((item) => item.id === id);
   return object === undefined
@@ -192,7 +190,7 @@ function existingObject(
 
 /** A new neutral, medium object with no content. */
 function newObject(
-  id: DiagramObject['id'],
+  id: ObjectId,
   kind: AddObjectDraft['kind'],
   label: string,
 ): DiagramObject {
@@ -215,45 +213,20 @@ function shownObject(
   section: Section,
   object: DiagramObject,
   draft: AddObjectDraft,
-  groups: IdGrammar<Group['id']>,
 ): Result<readonly Change[]> {
   if (section.appearances.some((appearance) => appearance.object === object.id))
     return creationFailure('That object is already in this diagram.');
-  return groupedObject(section, object, draft, groups);
-}
-
-/** The appearance in the draft's group; a group outside Model's ID grammar is refused. */
-function groupedObject(
-  section: Section,
-  object: DiagramObject,
-  draft: AddObjectDraft,
-  groups: IdGrammar<Group['id']>,
-): Result<readonly Change[]> {
-  const group = draftGroup(draft.group, groups);
-  if (!group.ok) return group;
   const shown = {
     ...section,
-    appearances: [...section.appearances, appearanceFor(object.id, group.value)],
+    appearances: [...section.appearances, appearanceFor(object.id, draft.group)],
   };
   return { ok: true, value: objectRecords(object, draft.reuseObject, shown) };
 }
 
-/** The draft's group as a Model group ID; null when the object joins no group. */
-function draftGroup(
-  group: string | null,
-  groups: IdGrammar<Group['id']>,
-): Result<Group['id'] | null> {
-  if (group === null) return { ok: true, value: null };
-  const parsed = groups.safeParse(group);
-  return parsed.success
-    ? { ok: true, value: parsed.data }
-    : creationFailure('Choose an existing group.');
-}
-
 /** A full-detail appearance, in the group when there is one. */
 function appearanceFor(
-  object: DiagramObject['id'],
-  group: Group['id'] | null,
+  object: ObjectId,
+  group: GroupId | null,
 ): Appearance {
   return group === null ? { object, detail: 'full' } : { object, detail: 'full', group };
 }
@@ -261,7 +234,7 @@ function appearanceFor(
 /** A new object is created before the diagram showing it is replaced; a reused one is not. */
 function objectRecords(
   object: DiagramObject,
-  reuseObject: string | null,
+  reuseObject: ObjectId | null,
   section: Section,
 ): readonly Change[] {
   const appearance: Change = { op: 'replace', target: 'sections', value: section };
@@ -274,7 +247,7 @@ function objectRecords(
 function groupRecord(
   section: Section,
   draft: AddGroupDraft,
-  id: Group['id'],
+  id: GroupId,
 ): Group {
   return {
     id,

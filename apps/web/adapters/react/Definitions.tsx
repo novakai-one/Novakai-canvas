@@ -1,10 +1,11 @@
 /*
  * The Definitions panel: the open collection's shared definitions, one card each, with the name,
  * the expression editor, Model's canonical text, the usages and the draft buttons. Core builds
- * the panel view; this adapter draws it and forwards edits to the retained definition session.
- * Session calls return a Result; a failure is also published as the session's `problem`, which
- * the panel shows in its alert, so the returned Results are not read here. A usage click
- * dispatches a canvas select event; if the canvas refuses it, nothing happens.
+ * the panel view; this adapter draws it and forwards edits to the retained definition session,
+ * which also makes a new definition's ID. Session calls return a Result; a failure is also
+ * published as the session's `problem`, which the panel shows in its alert, so the returned
+ * Results are not read here. A usage click dispatches a canvas select event; if the canvas refuses
+ * it, nothing happens.
  */
 import { useSyncExternalStore } from 'react';
 import type { ComponentType, ReactElement } from 'react';
@@ -21,10 +22,8 @@ import type {
 } from '../../contract/records/definitions.js';
 import {
   applyLabel,
-  definitionDraftId,
   failureSummary,
   formatFailure,
-  newDefinition,
   rootPath,
   usageSelection,
 } from '../../contract/api.js';
@@ -52,12 +51,7 @@ export function createDefinitionsEditor({
         </header>
         <Button
           label="New definition"
-          onClick={() =>
-            session.create(
-              panel.selection,
-              newDefinition(definitionDraftId(`definition-${crypto.randomUUID()}`)),
-            )
-          }
+          onClick={() => session.create(panel.selection)}
           disabled={panel.blocked}
         />
         {panel.entries.map((entry) => (

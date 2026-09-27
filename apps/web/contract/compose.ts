@@ -45,6 +45,7 @@ import { createWorkspaceShell } from '../adapters/react/WorkspaceShell.js';
 import { createProblemBar, StatusBar } from '../adapters/react/ShellAlerts.js';
 import { createShellHooks } from '../adapters/react/shell-hooks.js';
 import { mountWorkspace, observeWorkspaceWidth } from '../adapters/edge/browser-host.js';
+import { createIdSource } from '../adapters/edge/ids.js';
 import type { Result } from './errors.js';
 import {
   canvasFailure,
@@ -122,6 +123,7 @@ async function mount(
     { id: 'results', Content: createLibraryResults(design) },
   ]);
   const ThemeSelector = createThemeSelector(design, preferences, themes);
+  const ids = createIdSource(globals.random);
   // `panels` and `runtime` are declared below; these closures read them only after mount returns.
   const sections = featureSections({
     design,
@@ -133,7 +135,7 @@ async function mount(
       getSnapshot: () => panels.getSnapshot(),
       setInterfaceVisibility: (control, visible) => panels.setInterfaceVisibility(control, visible),
     },
-    random: globals.random,
+    ids,
   });
   const sizing = panelSizing(element);
   const panels: PanelController = createPanelController({
@@ -150,6 +152,7 @@ async function mount(
     panels,
     retention,
     navigation: createWorkspaceNavigation(globals.window.location, globals.window.history),
+    ids,
     random: globals.random,
     now: globals.now,
   });

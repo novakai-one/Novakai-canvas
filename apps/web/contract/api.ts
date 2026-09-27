@@ -1,11 +1,8 @@
 /*
  * Web core's public surface: adapters reach core only through these re-exports, so core files can
- * move without adapter edits. One function of its own, `definitionDraftId`, which throws Zod's
- * `ZodError` for text outside Model's ID grammar. Nothing catches that throw: its one caller, the
- * Definitions panel, passes `definition-<UUID>`, which always fits. Pure; no state.
+ * move without adapter edits. Re-exports only: nothing is declared here, nothing throws, and there
+ * is no state to recover.
  */
-import { definitionId, type DefinitionId } from '@novakai/canvas-model';
-
 export { planCanvasEdit } from '../core/editing/plan.js';
 export { mapResults } from '../core/editing/results.js';
 
@@ -68,10 +65,6 @@ export { formatFailure, failureSummary, plainMessage } from '../core/output/diag
 export { buildMoveReview, chooseMoveOption } from '../core/editing/movement.js';
 export { palette, planPaletteDrop, type PaletteDrop } from '../core/editing/palette-drop.js';
 
-/** Brands a new definition ID. Throws `ZodError` for text outside Model's ID grammar; no caller catches it. */
-export function definitionDraftId(value: string): DefinitionId {
-  return definitionId.parse(value);
-}
 export { buildDefinitionsPanel, newDefinition, applyLabel } from '../core/definitions/panel.js';
 export type { DefinitionModel } from '../core/definitions/panel.js';
 export { usageSelection } from '../core/definitions/usages.js';
@@ -112,6 +105,7 @@ export {
 export { encodeDefinitionDrafts } from '../core/definitions/draft-record.js';
 
 export { buildCreationPanel } from '../core/creation/panel.js';
+export { listedId } from '../core/creation/targets.js';
 export { groupDraftProblem, groupCreationChanges } from '../core/editing/group-creation.js';
 export {
   buildConnectionDraft,

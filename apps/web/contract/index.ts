@@ -20,4 +20,4 @@ export type {
 } from './records/movement.js';
 
 export { groupCreationChanges, groupDraftProblem } from './api.js';
-export { plainMessage, definitionDraftId, planPaletteDrop } from './api.js';
+export { plainMessage, planPaletteDrop } from './api.js';

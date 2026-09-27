@@ -3,27 +3,21 @@
  * snapshot, collection and generation it is added against; the request built from them is kept, so
  * a retry resends the same body. While any capture holds a request, every form is locked. A
  * confirmed or dismissed request releases its capture, and so does a refused or unsent one; an
- * uncertain one keeps it, so a retry cannot add the item twice. Pure; the session mints the IDs,
- * builds the requests and publishes.
+ * uncertain one keeps it, so a retry cannot add the item twice. Pure; the session passes in the
+ * ID source, builds the requests and publishes.
  */
 import type { CreationKind } from '../../contract/records/creation.js';
-import type {
-  Collection,
-  DiagramObject,
-  Group,
-  Request,
-  Section,
-  Snapshot,
-} from '../../contract/records/owners.js';
+import type { Collection, Request, Snapshot } from '../../contract/records/owners.js';
 import type { Submission } from '../../contract/records/submission.js';
 import type { ActiveDiagram } from '../../contract/records/active-diagram.js';
-import type { TransportGeneration } from '../../contract/brands.js';
+import type { GroupId, ObjectId, SectionId, TransportGeneration } from '../../contract/brands.js';
+import type { Result } from '../../contract/errors.js';
 
 /** The ID type each form adds. */
 export interface CaptureIdMap {
-  readonly diagram: Section['id'];
-  readonly object: DiagramObject['id'];
-  readonly group: Group['id'];
+  readonly diagram: SectionId;
+  readonly object: ObjectId;
+  readonly group: GroupId;
 }
 
 /** One form's capture: the new ID, what it is added against, and its request once built. */
@@ -40,8 +34,11 @@ export type CreationCaptures = {
   readonly [K in CreationKind]: CreationCapture<CaptureIdMap[K]> | null;
 };
 
-/** Mints each form's new ID; called only when that form's capture is made. */
-export type CaptureIds = { readonly [K in CreationKind]: () => CaptureIdMap[K] };
+/**
+ * Each form's new ID from the ID source; called only when that form's capture is made. Fails with
+ * `id-unavailable`.
+ */
+export type CaptureIds = { readonly [K in CreationKind]: () => Result<CaptureIdMap[K]> };
 
 /** The Add forms in the order they are checked. */
 export const creationKinds: readonly CreationKind[] = ['diagram', 'object', 'group'];
@@ -49,14 +46,21 @@ export const creationKinds: readonly CreationKind[] = ['diagram', 'object', 'gro
 /** No form captured. */
 export const noCaptures: CreationCaptures = { diagram: null, object: null, group: null };
 
-/** The form's capture, made from the open diagram the first time; `mint` runs only then. */
+/**
+ * The form's capture, made from the open diagram the first time; `mint` runs only then. Fails with
+ * `mint`'s `id-unavailable`, and nothing is captured.
+ */
 export function captureFor<K extends CreationKind>(
   captures: CreationCaptures,
   kind: K,
   active: ActiveDiagram,
-  mint: () => CaptureIdMap[K],
-): CreationCapture<CaptureIdMap[K]> {
-  return captures[kind] ?? freshCapture(active, mint());
+  mint: CaptureIds[K],
+): Result<CreationCapture<CaptureIdMap[K]>> {
+  const held = captures[kind];
+  if (held !== null) return { ok: true, value: held };
+  const id = mint();
+  if (!id.ok) return id;
+  return { ok: true, value: freshCapture(active, id.value) };
 }
 
 /** The captures holding this capture for its form. */

@@ -6,18 +6,22 @@
 import type {
   Definition,
   Collection,
-  DefinitionId,
   DefinitionUsage,
-  DescendantId,
-  ObjectId,
   Result as ModelResult,
   TypeExpression,
 } from '@novakai/canvas-model';
 import type { Snapshot, Receipt, Request, CanvasEvent, NodeTarget } from './owners.js';
 import type { EditingBase } from './editor-recovery.js';
-import type { TransportGeneration, WorkspaceId } from '../brands.js';
+import type {
+  DefinitionId,
+  DescendantId,
+  ObjectId,
+  TransportGeneration,
+  WorkspaceId,
+} from '../brands.js';
 import type { Diagnostic, Result } from '../errors.js';
 import type { DraftRetention } from '../ports/draft-retention.js';
+import type { IdSource } from '../ports/ids.js';
 
 export type { Definition, DefinitionId, DefinitionUsage, TypeExpression };
 
@@ -117,10 +121,8 @@ export interface DefinitionSession {
   getSnapshot(): DefinitionState;
   subscribe(listener: () => void): () => void;
   restore(workspace: WorkspaceId): Result<void>;
-  create(
-    selection: DefinitionSelection,
-    definition: Definition,
-  ): Result<void>;
+  /** Drafts a new definition with a fresh ID; fails with `id-unavailable` and drafts nothing. */
+  create(selection: DefinitionSelection): Result<void>;
   edit(
     selection: DefinitionSelection,
     definition: Definition,
@@ -150,6 +152,8 @@ export type DefinitionFactory = (
 
 export interface DefinitionBindings {
   readonly retention: Pick<DraftRetention, 'read' | 'write'>;
+  /** New definition IDs for `create`. */
+  readonly ids: Pick<IdSource, 'definitionId'>;
   read(input: unknown): Result<readonly DefinitionDraft[]>;
   apply(draft: DefinitionDraft): Promise<Result<Receipt>>;
   report(error: Diagnostic): void;

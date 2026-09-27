@@ -1,13 +1,7 @@
-import type {
-  Collection,
-  DiagramObject,
-  ObjectKind,
-  DescendantId,
-  TypeUse,
-} from '@novakai/canvas-model';
+import type { Collection, DiagramObject, ObjectKind, TypeUse } from '@novakai/canvas-model';
 import type { Snapshot, Receipt } from './owners.js';
 import type { EditingBase } from './editor-recovery.js';
-import type { TransportGeneration, WorkspaceId } from '../brands.js';
+import type { DescendantId, TransportGeneration, WorkspaceId } from '../brands.js';
 import type { Result, Diagnostic } from '../errors.js';
 import type { DraftRetention } from '../ports/draft-retention.js';
 /** UI edit commands retain incomplete text without pretending it is an admitted Model record. */

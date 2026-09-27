@@ -1,3 +1,9 @@
+/*
+ * The object inspector: the selected object's label, role, size and content blocks, drawn from its
+ * retained draft when it has one. Edits, Apply and Discard go to the inspector session, which owns
+ * draft recovery. A new content block's ID comes from the ID source; when none can be made the
+ * failure is reported and the draft is unchanged.
+ */
 import { failureSummary, formatFailure } from '../../contract/api.js';
 import { useSyncExternalStore } from 'react';
 import type { ReactElement, ComponentType } from 'react';
@@ -5,7 +11,8 @@ import type { FeatureProps, DesignSlots } from '../../contract/react-types.js';
 import type { ContentEditorProps } from '../../contract/inspector-react.js';
 import type { ObjectEdit } from '../../contract/records/inspector.js';
 import { selectedObject, objectDraftKey, editedObject } from '../../contract/api.js';
-import type { DescendantId } from '@novakai/canvas-model';
+import type { DescendantId } from '../../contract/brands.js';
+import type { Result } from '../../contract/errors.js';
 import styles from './ObjectEditor.module.css';
 /** Stable composition keeps content-row components and inspector lifetime independent of panel placement. */
 export function createObjectEditor({
@@ -15,7 +22,8 @@ export function createObjectEditor({
   nextContentId,
 }: Pick<DesignSlots, 'Button' | 'Field'> & {
   readonly Content: ComponentType<ContentEditorProps>;
-  nextContentId(): DescendantId;
+  /** A new content block ID; `id-unavailable` is reported and the draft is kept as it is. */
+  nextContentId(): Result<DescendantId>;
 }): ComponentType<FeatureProps> {
   /** A selection change reads another form; it never discards the previously edited object's draft. */
   function ObjectEditor({ controller, view }: FeatureProps): ReactElement {
@@ -33,6 +41,12 @@ export function createObjectEditor({
     const object = draft ? editedObject(draft) : selected.object;
     const edit = (command: ObjectEdit): void => {
       inspector.edit(selected, command);
+    };
+    /** Adds a content block with a new ID; `id-unavailable` is reported and nothing is added. */
+    const addContent = (content: ContentKind): void => {
+      const id = nextContentId();
+      if (!id.ok) return controller.report(id.error);
+      edit({ kind: 'add-content', id: id.value, content });
     };
     return (
       <div className={styles.editor}>
@@ -78,11 +92,7 @@ export function createObjectEditor({
         ))}
         <div className={styles.choices}>
           {additions(object.kind).map((content) => (
-            <Button
-              key={content}
-              label={`Add ${content}`}
-              onClick={() => edit({ kind: 'add-content', id: nextContentId(), content })}
-            />
+            <Button key={content} label={`Add ${content}`} onClick={() => addContent(content)} />
           ))}
         </div>
         {forms.problem && (
@@ -120,10 +130,10 @@ export function createObjectEditor({
   return ObjectEditor;
 }
 const sizes = ['small', 'medium', 'large'] as const;
+/** A kind of content block the editor can add. */
+type ContentKind = Extract<ObjectEdit, { kind: 'add-content' }>['content'];
 /** Offered content follows the visible notation; the final owner still checks compatibility. */
-function additions(
-  kind: string,
-): readonly Extract<ObjectEdit, { kind: 'add-content' }>['content'][] {
+function additions(kind: string): readonly ContentKind[] {
   if (kind === 'entity') return ['field', 'text'];
   if (['module', 'interface', 'function'].includes(kind)) return ['member', 'signature', 'text'];
   return ['text'];

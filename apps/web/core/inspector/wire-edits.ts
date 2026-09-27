@@ -1,11 +1,11 @@
 import type { Change, Relationship, WireAppearance } from '../../contract/records/owners.js';
 import type { WireDraft, WireEdit, EditedWire } from '../../contract/records/wire-editor.js';
-import type { CollectionId } from '../../contract/brands.js';
+import type { CollectionId, RelationshipId, SectionId } from '../../contract/brands.js';
 /** Shared relationship plus local section identify a wire form without parsing generated scene IDs. */
 export function wireDraftKey(
   collection: CollectionId,
-  section: string,
-  relationship: string,
+  section: SectionId,
+  relationship: RelationshipId,
 ): string {
   return JSON.stringify([collection, section, relationship]);
 }

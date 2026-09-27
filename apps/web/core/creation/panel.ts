@@ -2,6 +2,7 @@
  * The Add panel view: the problem line and one view per form, built from the panel's local drafts
  * and the open collection. Each form gets its submit label and lock, and the request a submit
  * sends. The Object and Group forms are null when the collection has no diagram that takes adds.
+ * Pure and derived each render; nothing to recover.
  */
 import type {
   AddDiagramDraft,
@@ -16,14 +17,9 @@ import type {
 } from '../../contract/records/creation.js';
 import type { DiagramObject, Section } from '../../contract/records/owners.js';
 import type { WorkspaceView } from '../../contract/records/workspace.js';
+import type { ObjectId } from '../../contract/brands.js';
 import { shownProblem } from './problem.js';
-import {
-  addableSections,
-  presentObjects,
-  reuseChoices,
-  sectionById,
-  selectedSection,
-} from './targets.js';
+import { addableSections, presentObjects, reuseChoices, selectedSection } from './targets.js';
 
 /** The problem line and one view per form, from the local drafts and the open collection. */
 export function buildCreationPanel(
@@ -57,19 +53,18 @@ function objectForm(
   sections: readonly Section[],
   objects: readonly DiagramObject[],
 ): ObjectFormView | null {
-  if (sections.length === 0) return null;
   const draft = drafts.object;
-  const section = selectedSection(draft.section, sections);
-  const target = sectionById(sections, section);
+  const target = selectedSection(draft.section, sections);
+  if (target === null) return null;
   const present = presentObjects(target);
   const duplicate = isDuplicate(draft, present);
   return {
     draft,
     busy: drafts.busy,
     sections,
-    section,
+    section: target.id,
     reuse: reuseChoices(objects, present),
-    groups: target?.groups ?? [],
+    groups: target.groups,
     newModule: draft.reuseObject === null,
     duplicate,
     submit: submitView(
@@ -78,7 +73,7 @@ function objectForm(
       objectActionLabel(draft),
       duplicate || objectDisabled(drafts.busy, draft),
     ),
-    request: { ...draft, section },
+    request: { ...draft, section: target.id },
   };
 }
 
@@ -87,17 +82,17 @@ function groupForm(
   drafts: CreationDrafts,
   sections: readonly Section[],
 ): GroupFormView | null {
-  if (sections.length === 0) return null;
   const draft = drafts.group;
-  const section = selectedSection(draft.section, sections);
+  const target = selectedSection(draft.section, sections);
+  if (target === null) return null;
   return {
     draft,
     busy: drafts.busy,
     sections,
-    section,
+    section: target.id,
     findRoom: draft.findRoom ?? false,
     submit: submitView(drafts, 'group', 'Add group', drafts.busy || blank(draft.title)),
-    request: { ...draft, section },
+    request: { ...draft, section: target.id },
   };
 }
 
@@ -114,7 +109,7 @@ function submitView(
 /** Whether the draft reuses an object the target diagram already shows. */
 function isDuplicate(
   draft: AddObjectDraft,
-  present: ReadonlySet<string>,
+  present: ReadonlySet<ObjectId>,
 ): boolean {
   return draft.reuseObject !== null && present.has(draft.reuseObject);
 }

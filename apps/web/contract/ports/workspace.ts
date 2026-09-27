@@ -68,7 +68,7 @@ export interface WorkspaceBindings {
   readonly wires: WireEditorFactory;
   readonly library: LibraryFactory;
   readonly panels: Pick<PanelController, 'open' | 'restore'>;
-  /** New collection IDs; a failure is reported and nothing is sent. */
-  readonly ids: Pick<IdSource, 'collectionId'>;
+  /** New collection IDs and Add-form IDs; a failure is reported and nothing is sent. */
+  readonly ids: Pick<IdSource, 'collectionId' | 'sectionId' | 'objectId' | 'groupId'>;
   nextId(): string;
 }

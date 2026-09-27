@@ -30,6 +30,7 @@ export type {
   PlacementIntent,
   RegroupIntent,
   RouteIntent,
+  DropTarget,
   Target,
   NodeTarget,
   CanvasEvent,

@@ -80,10 +80,10 @@ function emptyDiagramDraft(): AddDiagramDraft {
 
 /** An empty Object form. */
 function emptyObjectDraft(): AddObjectDraft {
-  return { section: '', label: '', kind: 'module', reuseObject: null, group: null };
+  return { section: null, label: '', kind: 'module', reuseObject: null, group: null };
 }
 
 /** An empty Group form. */
 function emptyGroupDraft(): AddGroupDraft {
-  return { section: '', title: '' };
+  return { section: null, title: '' };
 }

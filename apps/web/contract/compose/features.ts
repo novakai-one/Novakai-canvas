@@ -2,7 +2,7 @@
  * Declarative feature registration: the side-panel sections each tab offers, and the panel
  * definitions that give each section its default placement. Feature components do not import
  * each other; adding a feature registers its renderer and default ID placement here. Pure
- * assembly: no I/O and no page globals; composition hands in the random text for new content IDs.
+ * assembly: no I/O and no page globals; composition hands in the ID source for new content IDs.
  */
 import { createElement, type ComponentType, type ReactElement } from 'react';
 import type { FeatureProps, ThemeSelectorProps } from '../react-types.js';
@@ -11,8 +11,8 @@ import type { PreferenceController } from '../records/preferences.js';
 import type { PanelController } from '../panel-types.js';
 import type { PanelSectionDefinition } from '../records/panels.js';
 import type { RegisteredSection } from '../../adapters/react/WorkspaceSidePanel.js';
+import type { IdSource } from '../ports/ids.js';
 import type { ReactBindings as DesignBindings } from '@novakai/canvas-design-system';
-import { descendantId } from '@novakai/canvas-model';
 import panelDefaults from '../../../../resources/ui/panels.default.json' with { type: 'json' };
 import { createAddTools } from '../../adapters/react/AddTools.js';
 import { createAddForms } from '../../adapters/react/AddForms.js';
@@ -41,14 +41,13 @@ export interface FeatureParts {
     PanelController,
     'subscribe' | 'getSnapshot' | 'setInterfaceVisibility'
   >;
-  /** Fresh random text (a UUID) for new content IDs. Plan B3b replaces it with `IdSource`. */
-  readonly random: () => string;
+  /** New content block IDs for the object inspector. */
+  readonly ids: Pick<IdSource, 'descendantId'>;
 }
 
 /**
  * Concrete side-panel registration is declarative; individual feature components do not import
- * each other. A new content ID is parsed from `random`; the parse throws only if that text is not
- * a valid ID, which a UUID always is.
+ * each other. Cannot fail: a content ID the ID source cannot make is reported by the inspector.
  */
 export function featureSections({
   design,
@@ -56,7 +55,7 @@ export function featureSections({
   ThemeSelector,
   Browser,
   roadVisibility,
-  random,
+  ids,
 }: FeatureParts): readonly RegisteredSection[] {
   function LibrarySection(props: FeatureProps): ReactElement {
     return createElement(Browser, { controller: props.controller, view: props.view });
@@ -104,7 +103,7 @@ export function featureSections({
       Content: createObjectEditor({
         ...design,
         Content: createContentEditor({ ...design, Engineering: createEngineeringFields(design) }),
-        nextContentId: () => descendantId.parse(`content-${random()}`),
+        nextContentId: ids.descendantId,
       }),
     },
   ];

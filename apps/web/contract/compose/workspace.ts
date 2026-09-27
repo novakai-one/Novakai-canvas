@@ -2,8 +2,8 @@
  * The workspace controller assembly: the Canvas and Language owners, the decoders and request
  * builders, every editor session factory and the submission session, joined into one workspace
  * session. Called once by compose.ts before rendering, which supplies every browser handle (draft
- * storage, navigation, clock, random text), so nothing here reads a browser global. The session
- * it returns owns recovery.
+ * storage, navigation, clock, random text) and the ID source, so nothing here reads a browser
+ * global. The session it returns owns recovery.
  */
 import { createCanvas } from '@novakai/canvas-canvas';
 import { createLanguage } from '@novakai/canvas-language';
@@ -24,11 +24,11 @@ import { createSubmissionReaders } from '../../adapters/readers/submission-reade
 import { createWorkspaceController } from '../../adapters/sessions/workspace-session.js';
 import { viewport } from '../../adapters/edge/browser-host.js';
 import { previewModuleRoutes } from '../../adapters/readers/route-preview.js';
-import { createIdSource } from '../../adapters/edge/ids.js';
 import { planCanvasEdit, chooseMoveOption } from '../api.js';
 import type { ServiceClient } from '../ports/client.js';
 import type { DraftRetention } from '../ports/draft-retention.js';
 import type { WorkspaceNavigation } from '../ports/navigation.js';
+import type { IdSource } from '../ports/ids.js';
 import type { WorkspaceBindings } from '../ports/workspace.js';
 import type { PanelController } from '../panel-types.js';
 import type { WorkspaceController } from '../records/workspace.js';
@@ -43,7 +43,9 @@ export interface WorkspaceParts {
   readonly panels: SidePanels;
   readonly retention: DraftRetention;
   readonly navigation: WorkspaceNavigation;
-  /** Fresh random text (a UUID) for request, collection and folder IDs. */
+  /** The one ID source: collection, folder, diagram, object, group and definition IDs. */
+  readonly ids: IdSource;
+  /** Fresh random text (a UUID) for request IDs until they come from `ids` (plan B4). */
   readonly random: () => string;
   /** The current time in epoch milliseconds, for Library visits. */
   readonly now: () => VisitTime;
@@ -54,12 +56,11 @@ type SidePanels = Pick<PanelController, 'restore' | 'open' | 'selectTab'>;
 
 /**
  * The workspace controller. Native adapters receive narrow roles; every human mutation uses
- * captured Authoring preconditions. Cannot fail: collection and folder IDs come from the ID
- * source, which answers `id-unavailable` instead of throwing.
+ * captured Authoring preconditions. Cannot fail: new IDs come from the ID source, which answers
+ * `id-unavailable` instead of throwing.
  */
 export function composeWorkspace(parts: WorkspaceParts): WorkspaceController {
-  const { element, client, retention, random } = parts;
-  const ids = createIdSource(random);
+  const { element, client, retention, ids, random } = parts;
   const canvas = createCanvas({ sceneAdmission: createSceneAdmission() });
   const language = createLanguage({ reader: { validate }, planner: { plan }, stage: { stage } });
   const inputs = { ...createWorkspaceDecoders(readDiagram), ...createRequestBuilders(language) };
@@ -80,7 +81,7 @@ export function composeWorkspace(parts: WorkspaceParts): WorkspaceController {
     inspector: (callbacks) =>
       createInspectorSession({ retention, read: readInspectorDrafts, ...callbacks }),
     definitions: (callbacks) =>
-      createDefinitionSession({ retention, read: readDefinitionDrafts, ...callbacks }),
+      createDefinitionSession({ retention, read: readDefinitionDrafts, ids, ...callbacks }),
     source: (callbacks) =>
       createSourceController({
         inputs,

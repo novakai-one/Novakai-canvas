@@ -1,7 +1,7 @@
 /*
  * The three Add forms: Diagram, Object and Group. Each form draws the view it is given and
- * forwards draft edits, cancel and submit to the panel; it keeps no state. The fields arrive as
- * slots from composition.
+ * forwards draft edits, cancel and submit to the panel; it keeps no state. A reuse or group select
+ * forwards only a listed item's ID, or none. The fields arrive as slots from composition.
  */
 import type { FormEvent, ReactElement } from 'react';
 import type {
@@ -17,6 +17,7 @@ import type {
   GroupFormView,
   ObjectFormView,
 } from '../../contract/records/creation.js';
+import { listedId } from '../../contract/api.js';
 import styles from './AddTools.module.css';
 
 /** The Diagram, Object and Group forms, drawn with the design's Field and the Add fields. */
@@ -80,7 +81,9 @@ export function createAddForms({
                 {...field}
                 disabled={busy}
                 value={draft.reuseObject ?? ''}
-                onChange={(event) => onDraft({ ...draft, reuseObject: event.target.value || null })}
+                onChange={(event) =>
+                  onDraft({ ...draft, reuseObject: listedId(form.reuse, event.target.value) })
+                }
               >
                 <option value="">Create a new module</option>
                 {form.reuse.map((choice) => (
@@ -99,7 +102,9 @@ export function createAddForms({
                 {...field}
                 disabled={busy}
                 value={draft.group ?? ''}
-                onChange={(event) => onDraft({ ...draft, group: event.target.value || null })}
+                onChange={(event) =>
+                  onDraft({ ...draft, group: listedId(form.groups, event.target.value) })
+                }
               >
                 <option value="">No group</option>
                 {form.groups.map((item) => (

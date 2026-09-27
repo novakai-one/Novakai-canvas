@@ -8,7 +8,9 @@ import {
   collectionId,
   objectId,
   descendantId,
+  relationshipId,
   relationshipKind,
+  sectionId,
   validate,
 } from '@novakai/canvas-model';
 import { snapshotSchema } from '@novakai/canvas-authoring';
@@ -62,8 +64,8 @@ const legacyRecord = z.object({
   ...draftFields,
   base: snapshotSchema,
   collection: z.object({ id: collectionId }),
-  section: z.object({ id: z.string() }),
-  relationship: z.object({ id: z.string() }),
+  section: z.object({ id: sectionId }),
+  relationship: z.object({ id: relationshipId }),
 });
 /** A tagged draft (schema version 1): a captured collection base and plain IDs. */
 const currentRecord = z.strictObject({
@@ -72,8 +74,8 @@ const currentRecord = z.strictObject({
   ...draftFields,
   base: capturedCollectionBaseSchema,
   collection: collectionId,
-  section: z.string(),
-  relationship: z.string(),
+  section: sectionId,
+  relationship: relationshipId,
 });
 /** A stored draft in one shape: plain IDs, and either kind of base. */
 type RecoveryRecord = Omit<z.infer<typeof currentRecord>, 'kind' | 'schemaVersion' | 'base'> & {

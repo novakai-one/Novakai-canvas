@@ -3,12 +3,12 @@
  * Core decides each change (core/definitions, through the contract). This file keeps the state,
  * calls storage and the Apply binding, and publishes in a fixed order.
  *
- * Per key: an edit saves a draft; Apply locks the key; the workspace session saves the request on
- * the draft (bindRequest); a receipt removes the draft (confirmed); a refusal clears the request
- * (released). Recovery: Authoring owns the request journal. After a reload, restore locks every
- * draft that holds a request until the workspace session settles that request: confirmed on its
- * receipt, released on a refusal. Methods that return nothing report failures through
- * bindings.report and state.problem.
+ * create takes the new definition's ID from the ID source. Per key: an edit saves a draft; Apply
+ * locks the key; the workspace session saves the request on the draft (bindRequest); a receipt
+ * removes the draft (confirmed); a refusal clears the request (released). Recovery: Authoring owns
+ * the request journal. After a reload, restore locks every draft that holds a request until the
+ * workspace session settles that request: confirmed on its receipt, released on a refusal. Methods
+ * that return nothing report failures through bindings.report and state.problem.
  *
  * restore forgets the workspace before it reads. After a failed restore the old drafts stay and
  * edits are refused. With no workspace there is no storage key, so discard, Apply and
@@ -28,6 +28,7 @@ import type { WorkspaceScope } from '../../contract/records/workspace-scope.js';
 import type {
   DefinitionBindings,
   DefinitionDraft,
+  DefinitionSelection,
   DefinitionSession,
   DefinitionState,
 } from '../../contract/records/definitions.js';
@@ -37,6 +38,7 @@ import {
   discardedDrafts,
   editedDrafts,
   encodeDefinitionDrafts,
+  newDefinition,
   restoredState,
   settledRequest,
   unlocked,
@@ -110,6 +112,15 @@ export function createDefinitionSession(bindings: DefinitionBindings): Definitio
     publish(restored.value);
     return { ok: true, value: undefined };
   }
+  /**
+   * Drafts a new definition with an ID from the ID source. Fails with `id-unavailable` (reported,
+   * drafts unchanged) or as {@link retain} does.
+   */
+  function create(selection: DefinitionSelection): Result<void> {
+    const id = bindings.ids.definitionId();
+    if (!id.ok) return reject(id.error);
+    return retain({ operation: 'create', selection, definition: newDefinition(id.value) });
+  }
   /** Create, edit and remove keep one draft per definition; a refused edit becomes the problem. */
   function retain(edit: DefinitionEdit): Result<void> {
     const drafts = editedDrafts(state, scope, edit);
@@ -174,7 +185,7 @@ export function createDefinitionSession(bindings: DefinitionBindings): Definitio
       return () => listeners.delete(listener);
     },
     restore,
-    create: (selection, definition) => retain({ operation: 'create', selection, definition }),
+    create,
     edit: (selection, definition, literalDraft, editedPath) =>
       retain({ operation: 'replace', selection, definition, literalDraft, editedPath }),
     remove: (selection, definition) => retain({ operation: 'remove', selection, definition }),

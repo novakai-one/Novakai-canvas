@@ -3,8 +3,9 @@
  * panel view Web core builds from them for the React adapter. The draft shapes are persisted
  * session state; the view types are derived each render and never stored.
  */
-import type { ObjectId, ObjectKind } from '@novakai/canvas-model';
+import type { ObjectKind } from '@novakai/canvas-model';
 import type { Group, Section } from './owners.js';
+import type { GroupId, ObjectId, SectionId } from '../brands.js';
 
 /** A retained, typed draft for the small set of authoring actions exposed by Add. */
 export interface AddDiagramDraft {
@@ -12,19 +13,25 @@ export interface AddDiagramDraft {
   readonly mode: 'grid';
 }
 
-/** New objects and reused appearances share one explicit request shape. */
+/**
+ * New objects and reused appearances share one explicit request shape. `section` is null until a
+ * diagram is chosen; `reuseObject` is null for a new module, `group` for no group.
+ */
 export interface AddObjectDraft {
-  readonly section: string;
+  readonly section: SectionId | null;
   readonly label: string;
   readonly kind: ObjectKind;
-  readonly reuseObject: string | null;
-  readonly group: string | null;
+  readonly reuseObject: ObjectId | null;
+  readonly group: GroupId | null;
 }
 
-/** A new group in one diagram; `findRoom` lets that diagram move and resize to fit it. */
+/**
+ * A new group in one diagram; `findRoom` lets that diagram move and resize to fit it. `section` is
+ * null until a diagram is chosen.
+ */
 export interface AddGroupDraft {
   readonly findRoom?: boolean;
-  readonly section: string;
+  readonly section: SectionId | null;
   readonly title: string;
 }
 
@@ -69,7 +76,7 @@ export interface ReuseChoice {
 /** The Object form over its target diagram. `newModule` is false while an object is reused. */
 export interface ObjectFormView extends FormView<AddObjectDraft> {
   readonly sections: readonly Section[];
-  readonly section: string;
+  readonly section: SectionId;
   readonly reuse: readonly ReuseChoice[];
   readonly groups: readonly Group[];
   readonly newModule: boolean;
@@ -79,7 +86,7 @@ export interface ObjectFormView extends FormView<AddObjectDraft> {
 /** The Group form over its target diagram. */
 export interface GroupFormView extends FormView<AddGroupDraft> {
   readonly sections: readonly Section[];
-  readonly section: string;
+  readonly section: SectionId;
   readonly findRoom: boolean;
 }
 

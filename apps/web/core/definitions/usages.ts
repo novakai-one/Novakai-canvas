@@ -12,6 +12,7 @@ import type {
   UsageView,
 } from '../../contract/records/definitions.js';
 import type { NodeTarget, Scene } from '../../contract/records/owners.js';
+import type { ObjectId } from '../../contract/brands.js';
 
 /** The uses to list, each looked up on the canvas once; a Model failure lists none. */
 export function usageView(
@@ -54,7 +55,7 @@ function usageItem(
 /** The first node in scene order that shows the object; null when no node does. */
 function nodeTarget(
   scene: Scene,
-  objectId: string,
+  objectId: ObjectId,
 ): NodeTarget | null {
   const found = scene.sections
     .flatMap((section) => section.nodes.map((node) => ({ section: section.id, node })))

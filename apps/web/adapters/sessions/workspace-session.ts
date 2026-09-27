@@ -147,13 +147,7 @@ import {
   type RenderMode,
   type RenderTicket,
 } from '../../contract/api.js';
-import {
-  connectionPolicy,
-  groupDraftId,
-  groupGrammar,
-  objectDraftId,
-  sectionDraftId,
-} from '../../contract/workspace-model.js';
+import { connectionPolicy } from '../../contract/workspace-model.js';
 
 /** A render in flight: its ticket, the token that decides delivery, and the transport abort. */
 interface RenderRequest extends RenderTicket {
@@ -200,11 +194,11 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   let connectionCapture: ConnectionCapture | null = null;
   let historyRead = 0;
   let creationCaptures: CreationCaptures = noCaptures;
-  /** Each Add form's new ID, minted once when its capture is made and branded by Model's ID grammar. */
+  /** Each Add form's new ID from the ID source, taken once when its capture is made. */
   const creationIds: CaptureIds = {
-    diagram: () => sectionDraftId(`section-${bindings.nextId()}`),
-    object: () => objectDraftId(`object-${bindings.nextId()}`),
-    group: () => groupDraftId(`group-${bindings.nextId()}`),
+    diagram: bindings.ids.sectionId,
+    object: bindings.ids.objectId,
+    group: bindings.ids.groupId,
   };
   let removeHistoryKeys = (): void => undefined;
   const inspector = bindings.inspector({ apply: applyObject, report });
@@ -1121,7 +1115,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   async function addDiagram(draft: AddDiagramDraft): Promise<Result<Receipt>> {
     const target = diagramTarget(state.active, state.snapshot, draft);
     if (!target.ok) return retainCreationFailure(target);
-    const captured = capturedIn(captureCreation('diagram', target.value), target.value);
+    const captured = capturedDiagram(target.value);
     if (!captured.ok) return retainCreationFailure(captured);
     update({
       creation: { ...state.creation, diagram: draft, problem: null, busy: true, adding: 'diagram' },
@@ -1132,29 +1126,46 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   }
   /** New objects are created once; reuse only adds a section-local appearance of the same ID. */
   async function addObject(draft: AddObjectDraft): Promise<Result<Receipt>> {
-    const context = creationContext(state.active, creationCaptures.object, draft.section);
-    if (!context.ok) return retainCreationFailure(context);
-    const capture = captureCreation('object', context.value.active);
+    const target = capturedContext('object', draft.section);
+    if (!target.ok) return retainCreationFailure(target);
     update({
       creation: { ...state.creation, object: draft, problem: null, busy: true, adding: 'object' },
     });
-    const changes = objectChanges(context.value, draft, capture.id, groupGrammar);
+    const changes = objectChanges(target.value, draft, target.value.capture.id);
     if (!changes.ok) return retainCreationFailure(changes);
-    const result = await submitCreation('object', capture, changes.value);
+    const result = await submitCreation('object', target.value.capture, changes.value);
     return finishCreation(result, 'object');
   }
   /** A group draft is checked before the form turns busy, so a refused draft never shows as adding. */
   async function addGroup(draft: AddGroupDraft): Promise<Result<Receipt>> {
-    const context = creationContext(state.active, creationCaptures.group, draft.section);
-    if (!context.ok) return retainCreationFailure(context);
-    const capture = captureCreation('group', context.value.active);
-    const changes = groupChanges(context.value.section, draft, capture.id);
+    const target = capturedContext('group', draft.section);
+    if (!target.ok) return retainCreationFailure(target);
+    const changes = groupChanges(target.value.section, draft, target.value.capture.id);
     if (!changes.ok) return retainCreationFailure(changes);
     update({
       creation: { ...state.creation, group: draft, problem: null, busy: true, adding: 'group' },
     });
-    const result = await submitCreation('group', capture, changes.value);
+    const result = await submitCreation('group', target.value.capture, changes.value);
     return finishCreation(result, 'group');
+  }
+  /** The Diagram form's capture while it belongs to the open collection. Fails with
+   * `id-unavailable` or `invalid-creation`. */
+  function capturedDiagram(active: ActiveDiagram) {
+    const capture = captureCreation('diagram', active);
+    if (!capture.ok) return capture;
+    return capturedIn(capture.value, active);
+  }
+  /** The diagram an object or group goes to, with the form's capture there. Fails with
+   * `invalid-creation` or `id-unavailable`. */
+  function capturedContext<K extends 'object' | 'group'>(
+    kind: K,
+    section: AddObjectDraft['section'],
+  ) {
+    const context = creationContext(state.active, creationCaptures[kind], section);
+    if (!context.ok) return context;
+    const capture = captureCreation(kind, context.value.active);
+    if (!capture.ok) return capture;
+    return { ok: true as const, value: { ...context.value, capture: capture.value } };
   }
   /** The first submit builds the request and keeps it on the capture; a retry resends that same body. */
   async function submitCreation(
@@ -1316,18 +1327,21 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   function clearDismissedCreationView(): void {
     update({ creation: { ...state.creation, problem: null, busy: false } });
   }
-  /** The first edit of a form captures it against the open diagram; with nothing open there is nothing to capture. */
+  /** The first edit of a form captures it against the open diagram; with nothing open there is
+   * nothing to capture. A capture with no ID is not kept; the submit tries again and shows the
+   * failure on the form. */
   function captureDraft(kind: CreationKind): void {
     const activeDiagram = state.active;
     if (activeDiagram !== null) captureCreation(kind, activeDiagram);
   }
-  /** The form's capture, kept for later edits and submits; its ID is minted only when first made. */
+  /** The form's capture, kept for later edits and submits; its ID is taken only when first made.
+   * Fails with the ID source's `id-unavailable`, and nothing is kept. */
   function captureCreation<K extends CreationKind>(
     kind: K,
     activeDiagram: ActiveDiagram,
   ) {
     const capture = captureFor(creationCaptures, kind, activeDiagram, creationIds[kind]);
-    creationCaptures = holding(creationCaptures, kind, capture);
+    if (capture.ok) creationCaptures = holding(creationCaptures, kind, capture.value);
     return capture;
   }
   /** Add forms belong to one collection: a newly opened one starts with empty forms and no error.
