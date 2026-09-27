@@ -48,6 +48,7 @@ export type {
   ThemePreset,
   RecipePayload,
   ThemePayload,
+  Pin as PresetPin,
   Result as TemplatesResult,
 } from '@novakai/canvas-templates';
 export type {

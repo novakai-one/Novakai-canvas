@@ -17,7 +17,7 @@ import type { PresetCodecs } from '../../contract/records/presets/codecs.js';
 import { themeInput, type ThemeInput } from '../../contract/records/presets/theme-input.js';
 import { success } from '../../contract/errors.js';
 import { guarded, rejected } from './codec-refusal.js';
-import { brandedThemePin } from './theme-pin.js';
+import { brandedThemePin } from './branded-pin.js';
 
 /** What the theme codec reads: Design System to resolve a theme, and the token sources. */
 export interface ThemeCodecContext {

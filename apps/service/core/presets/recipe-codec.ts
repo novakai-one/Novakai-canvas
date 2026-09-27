@@ -17,7 +17,7 @@ import type {
 import type { PresetCodecs } from '../../contract/records/presets/codecs.js';
 import { success } from '../../contract/errors.js';
 import { guarded, rejected } from './codec-refusal.js';
-import { brandedThemePin } from './theme-pin.js';
+import { brandedThemePin } from './branded-pin.js';
 
 /** What the recipe codec reads: Language to lower, print and expand, and the bound resources. */
 export interface RecipeCodecContext {
@@ -30,8 +30,8 @@ export interface RecipeCodecContext {
  * Binds the recipe codec to one context. `inspect` never throws: a throw inside it becomes
  * `invalid-input` at `preset` ("Preset provider returned invalid identity or token data").
  * `inspect` and `expand` fail with `invalid-input` at `preset` when Language rejects the source
- * (Language's failure kept as source). A throw inside `expand` passes through Templates to the
- * resource commands' `guarded` (resources/commands/refusal.ts).
+ * (Language's failure kept as source). A throw inside `expand` becomes Templates'
+ * `provider-failed` at `$` (Templates runs every call inside `protect`).
  */
 export function createRecipeCodec(context: RecipeCodecContext): PresetCodecs['recipe'] {
   return {
