@@ -47,8 +47,5 @@ export type ThemeConfig = z.infer<typeof themeConfig>;
 /** One source-syntax token override: a hex colour, a number, or a pixel dimension. */
 export type ThemeOverride = ThemeConfig['raw']['overrides'][string];
 
-/** A theme config's `raw` block read as named fields, so one field can be projected. */
-export const rawFields = z.record(z.string(), z.unknown());
-
 /** Source-syntax colour: `#rrggbb` or `#rrggbbaa`, either case. */
 export const hexColour = z.string().regex(/^#[a-fA-F0-9]{6}([a-fA-F0-9]{2})?$/);

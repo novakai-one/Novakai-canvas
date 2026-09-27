@@ -12,7 +12,7 @@ import { requestSchema } from '../../../contract/schemas.js';
 import { isPinnedDigest } from '../../../contract/brands.js';
 import type { ThemeBinding } from '../../presets/theme-binding.js';
 import { formatThemePin, type ThemePinText } from '../../presets/theme-pin.js';
-import { PreparationFault, accepted } from './refusal.js';
+import { INPUT_RECOVERY, PreparationFault, accepted } from './refusal.js';
 
 /** The owner freezing selects through. */
 export interface FreezeOwners {
@@ -52,7 +52,7 @@ const UNPINNED_THEME: ResourceDiagnostic = Object.freeze({
   code: 'invalid-input',
   path: 'themePins',
   message: 'Selected theme digest is not pinned',
-  recovery: 'Correct the named resource preparation input and prepare again.',
+  recovery: INPUT_RECOVERY,
 });
 
 /**

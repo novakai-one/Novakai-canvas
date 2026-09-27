@@ -10,6 +10,9 @@ import type {
   ResourceResult,
 } from '../../../contract/records/presets/preparation.js';
 
+/** The recovery of every refusal that names a malformed resource preparation input. */
+export const INPUT_RECOVERY = 'Correct the named resource preparation input and prepare again.';
+
 /** Owner diagnostics cross this boundary unchanged; unexpected provider faults become typed invalid-input outcomes. */
 export class PreparationFault extends Error {
   /** Value-returning helpers retain the complete typed owner failure for the public Result boundary. */
@@ -52,6 +55,6 @@ function preparationDiagnostic(error: unknown): ResourceDiagnostic {
     code: 'invalid-input',
     path: 'resources',
     message: 'Resource preparation input is invalid',
-    recovery: 'Correct the named resource preparation input and prepare again.',
+    recovery: INPUT_RECOVERY,
   };
 }
