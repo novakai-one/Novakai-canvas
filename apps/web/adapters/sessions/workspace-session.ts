@@ -9,6 +9,7 @@ import type {
   CreationKind,
 } from '../../contract/records/creation.js';
 import type { ConnectionDraft, ConnectionEdit } from '../../contract/records/connection.js';
+import type { MoveOption, MoveReview } from '../../contract/records/movement.js';
 import {
   compatibleWires,
   descendantId,
@@ -34,6 +35,7 @@ import type {
   CanvasEffect,
   RenderDocument,
   EditIntent,
+  PlacementIntent,
   TransportResponse,
 } from '../../contract/records/owners.js';
 import type { Diagnostic, Result } from '../../contract/errors.js';
@@ -70,7 +72,6 @@ import {
   choosePlan,
   choosingPatch,
   closedSwitchPatch,
-  diagramCurrent,
   gonePatch,
   staleSnapshot,
   editingStatus,
@@ -111,6 +112,28 @@ import {
   settledCaptures,
   settledCreation,
   withRequest,
+  alreadySaving,
+  applicable,
+  awaitingChoice,
+  currentChoice,
+  failedPhase,
+  heldFor,
+  heldMovement,
+  inPhase,
+  moveSubmissionBlocked,
+  movementActive,
+  offeredOption,
+  operationBusy,
+  optionPreviewRefused,
+  previewGone,
+  previewRefused,
+  recoveryPhase,
+  requestedIn,
+  reviewableMovement,
+  reviewOutcome,
+  savingRequest,
+  sendingMove,
+  withOption,
   type CaptureIds,
   type CollectionDraft,
   type ConnectionCapture,
@@ -120,6 +143,8 @@ import {
   type CreationCaptures,
   type HistorySlot,
   type LatestSnapshot,
+  type MovementHeld,
+  type MovementSlot,
   type RenderMode,
   type RenderTicket,
 } from '../../contract/api.js';
@@ -185,13 +210,8 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   let snapshotRead = 0;
   let restoredWorkspace: string | null = null;
   let historyGate: HistorySlot = historyIdle;
-  let movementCapture: {
-    active: ActiveDiagram;
-    intent: Extract<EditIntent, { kind: 'placement' }>;
-    review: import('../../contract/records/movement.js').MoveReview;
-    workspace: string;
-  } | null = null;
-  let movementApplying = false;
+  /** The held movement review; its phase says whether it is being applied. */
+  let movementSlot: MovementSlot = null;
   let connectionCapture: ConnectionCapture | null = null;
   let historyRead = 0;
   let creationCaptures: CreationCaptures = noCaptures;
@@ -242,7 +262,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
       ...(connection === undefined ? {} : { connection }),
     });
     updateMutationAvailability();
-    if (movementCapture?.intent.id !== undefined) updateMovementRecovery(movementCapture.intent.id);
+    if (movementSlot !== null) updateMovementRecovery(movementSlot.capture.intent.id);
   }
   function pendingConnectionView(pending: readonly Submission[]): ConnectionDraft | undefined {
     const capture = connectionCapture;
@@ -587,7 +607,8 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     active.session.dispatch({
       kind: 'mutation-available',
       value: mutationAvailable(active, state.generation, {
-        movement: movementCapture !== null || movementApplying,
+        // A review is applied only while held, so a held review alone holds edits.
+        movement: movementSlot !== null,
         history: historyBlocked(),
       }),
     });
@@ -620,45 +641,13 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     if (item.kind === 'edit-intent') void editCanvas(item.intent);
   }
 
-  function supportsMoveReview(
-    document: RenderDocument,
-    intent: Extract<EditIntent, { kind: 'placement' }>,
-  ): boolean {
-    if (
-      intent.entries.some(
-        (entry) => entry.placement.width !== undefined || entry.placement.height !== undefined,
-      )
-    )
-      return false;
-    const moduleTargets = intent.entries.filter((entry) =>
-      entry.target.kind === 'section'
-        ? document.projection.sections.some(
-            (section) => section.id === entry.target.id && section.mode === 'modules',
-          )
-        : entry.target.kind === 'node' &&
-          document.projection.sections.some(
-            (section) =>
-              section.id === ('section' in entry.target ? entry.target.section : '') &&
-              section.mode === 'modules',
-          ),
-    );
-    return moduleTargets.length > 0;
-  }
-  function movementOption(
-    review: import('../../contract/records/movement.js').MoveReview,
-  ): import('../../contract/records/movement.js').MoveOption | undefined {
-    return review.options.find((item) => item.kind === 'expand' || item.kind === 'rearrange');
-  }
-  function movementBaseError(
-    review: import('../../contract/records/movement.js').MoveReview,
-  ): Diagnostic {
-    return {
-      code: 'unsupported-edit',
-      message:
-        review.reason ?? 'This movement has no valid move-only option; keep the draft for review.',
-      recovery: 'Adjust the position or use the inspector.',
-      owner: 'workspace',
-    };
+  /** Publishes the held review, or its absence, with any other view change. */
+  function showMovement(
+    next: MovementSlot,
+    patch: Partial<WorkspaceView> = {},
+  ): void {
+    movementSlot = next;
+    update({ movementReview: next?.shown ?? null, ...patch });
   }
   async function handleMovementReview(
     active: ActiveDiagram,
@@ -673,34 +662,31 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     intent: Extract<EditIntent, { kind: 'placement' }>,
     moveReview: NonNullable<WorkspaceBindings['moveReview']>,
   ): Promise<boolean> {
-    if (!canReviewMovement(active.document, intent)) return false;
+    if (!reviewableMovement(active.document, intent)) return false;
     const reviewed = moveReview(active.document, intent, active.session.getSnapshot().stamp);
     if (!reviewed.ok) return rejectMovement(active, intent, reviewed.error);
     return handleReviewedMovement(active, intent, reviewed.value);
   }
+  /** Model's review decides; the session discards, holds, sends or refuses the gesture. */
   function handleReviewedMovement(
     active: ActiveDiagram,
     intent: Extract<EditIntent, { kind: 'placement' }>,
-    review: import('../../contract/records/movement.js').MoveReview,
+    review: MoveReview,
   ): boolean {
-    // Nothing changed (e.g. dropped back in place): the node returns quietly.
-    if (review.options.length === 0 && review.reason !== undefined) {
-      active.session.dispatch({ kind: 'discard', id: intent.id });
-      return true;
+    const outcome = reviewOutcome(review);
+    switch (outcome.kind) {
+      case 'discard':
+        // Nothing changed (e.g. dropped back in place): the node returns quietly.
+        active.session.dispatch({ kind: 'discard', id: intent.id });
+        return true;
+      case 'retain':
+        return retainMovementReview(active, intent, review, outcome.option);
+      case 'submit':
+        void submitFeasibleCanvas(active, intent, outcome.option.changes, outcome.option.preview);
+        return true;
+      case 'reject':
+        return rejectMovement(active, intent, outcome.error);
     }
-    const option = movementOption(review);
-    if (option !== undefined) return retainMovementReview(active, intent, review, option);
-    const selected = review.options[0];
-    if (review.options.length !== 1 || selected === undefined)
-      return rejectMovement(active, intent, movementBaseError(review));
-    void submitFeasibleCanvas(active, intent, selected.changes, selected.preview);
-    return true;
-  }
-  function canReviewMovement(
-    document: RenderDocument,
-    intent: Extract<EditIntent, { kind: 'placement' }>,
-  ): boolean {
-    return bindings.moveReview !== undefined && supportsMoveReview(document, intent);
   }
   function rejectMovement(
     active: ActiveDiagram,
@@ -711,41 +697,31 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     report(error);
     return true;
   }
+  /** Held before the scene shows its preview, so a gesture arriving meanwhile is refused. */
   function retainMovementReview(
     active: ActiveDiagram,
     intent: Extract<EditIntent, { kind: 'placement' }>,
-    review: import('../../contract/records/movement.js').MoveReview,
-    option: import('../../contract/records/movement.js').MoveOption,
+    review: MoveReview,
+    option: MoveOption,
   ): boolean {
-    movementCapture = { active, intent, review, workspace: state.snapshot?.workspace ?? '' };
+    const capture = { active, intent, review, workspace: state.snapshot?.workspace ?? '' };
+    const held = heldMovement(capture, option.id);
+    movementSlot = held;
     const accepted = active.session.dispatch({
       kind: 'preview-routes',
       id: intent.id,
       ...option.preview,
     });
     if (!accepted.ok || accepted.value.state.routePreview?.gesture !== intent.id) {
-      movementCapture = null;
-      return rejectMovement(active, intent, {
-        code: 'invalid-edit',
-        message: 'The movement preview could not be accepted.',
-        recovery: 'Keep the draft and try the gesture again.',
-        owner: 'workspace',
-      });
+      movementSlot = null;
+      return rejectMovement(active, intent, previewRefused());
     }
-    update({
-      movementReview: { review, optionId: option.id, phase: 'review', document: active.document },
-      status: 'Review movement options',
-    });
+    showMovement(held, { status: 'Review movement options' });
     updateMutationAvailability();
     return true;
   }
   function rejectWhileMovementActive(intent: EditIntent): void {
-    const error = {
-      code: 'pending-request',
-      message: 'Review or cancel the current movement before starting another.',
-      recovery: 'Apply or cancel the retained movement review.',
-      owner: 'workspace' as const,
-    };
+    const error = movementActive();
     if (intent.kind === 'placement' && state.active !== null)
       state.active.session.dispatch({ kind: 'reject', id: intent.id, message: error.message });
     report(error);
@@ -763,7 +739,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   }
   /** A busy client retains subsequent gestures as recoverable drafts; no second browser request is submitted concurrently. */
   async function editCanvas(intent: EditIntent): Promise<void> {
-    if (movementCapture !== null) {
+    if (movementSlot !== null) {
       rejectWhileMovementActive(intent);
       return;
     }
@@ -837,11 +813,9 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     return { ok: false, error: preview.error };
   }
   function rejectMovementPreview(intentId: string): void {
-    if (movementCapture?.intent.id !== intentId) return;
-    movementApplying = false;
-    update({
-      movementReview: state.movementReview ? { ...state.movementReview, phase: 'rejected' } : null,
-    });
+    const held = heldFor(movementSlot, intentId);
+    if (held === null) return;
+    showMovement(inPhase(held, 'rejected'));
     updateMutationAvailability();
   }
   function retainInitialPreview(
@@ -852,55 +826,33 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   ): void {
     if (preview !== null) publishPreview(active, intent, preview, start);
   }
+  /** A send that may still land keeps the review uncertain; otherwise it settles. */
   function updateFailedMovement(
-    intent: EditIntent,
+    held: MovementHeld,
     active: ActiveDiagram,
     preview: GeometryPreview | null,
     start: number,
   ): void {
-    if (intent.kind !== 'placement') return;
+    const { intent } = held.capture;
     const retained = state.pending.find((item) => item.request.request === intent.id);
-    if (isPendingMovement(retained)) {
-      retainUncertainMovementReview(intent.id);
-      return;
-    }
-    settleFailedMovement(intent, active, preview, start, retained?.state === 'rejected');
+    if (savingRequest(retained)) return retainUncertainMovement(held);
+    settleFailedMovement(held, active, preview, start, retained?.state === 'rejected');
   }
-  function isPendingMovement(item: Submission | undefined): boolean {
-    return item?.state === 'uncertain' || item?.state === 'sending';
-  }
-  function retainUncertainMovementReview(requestId: string): void {
-    update({
-      movementReview: state.movementReview
-        ? { ...state.movementReview, phase: 'uncertain', requestId }
-        : null,
-    });
-  }
+  /** The scene is asked to restore the preview; a refused request or a lost preview leaves it refused. */
   function settleFailedMovement(
-    intent: Extract<EditIntent, { kind: 'placement' }>,
+    held: MovementHeld,
     active: ActiveDiagram,
     preview: GeometryPreview | null,
     start: number,
     rejected: boolean,
   ): void {
-    movementApplying = false;
-    const phase = failedMovementPhase(active, intent, preview, start, rejected);
-    update({ movementReview: state.movementReview ? { ...state.movementReview, phase } : null });
+    const restored = restoreMovementPreview(active, held.capture.intent, preview, start);
+    showMovement(inPhase(held, failedPhase(rejected, restored)));
     updateMutationAvailability();
-  }
-  function failedMovementPhase(
-    active: ActiveDiagram,
-    intent: Extract<EditIntent, { kind: 'placement' }>,
-    preview: GeometryPreview | null,
-    start: number,
-    rejected: boolean,
-  ): 'rejected' | 'review' {
-    const restored = restoreMovementPreview(active, intent, preview, start);
-    return rejected || !restored ? 'rejected' : 'review';
   }
   function restoreMovementPreview(
     active: ActiveDiagram,
-    intent: Extract<EditIntent, { kind: 'placement' }>,
+    intent: PlacementIntent,
     preview: GeometryPreview | null,
     start: number,
   ): boolean {
@@ -924,6 +876,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     updateMovementAfterSubmission(result, intent, active, preview.value, start);
     return result;
   }
+  /** A failed send updates the review only while it is still held for this gesture. */
   function updateMovementAfterSubmission(
     result: Result<Receipt>,
     intent: EditIntent,
@@ -931,9 +884,9 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     preview: GeometryPreview | null,
     start: number,
   ): void {
-    if (intent.kind !== 'placement') return;
-    if (result.ok || movementCapture?.intent.id !== intent.id) return;
-    updateFailedMovement(intent, active, preview, start);
+    const held = heldFor(movementSlot, intent.id);
+    if (result.ok || held === null) return;
+    updateFailedMovement(held, active, preview, start);
   }
   /** Measure only inspected routes accepted by the Canvas gesture currently awaiting confirmation. */
   function publishPreview(
@@ -1010,40 +963,23 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     error: Diagnostic,
     gesture: string,
   ): void {
+    const held = heldFor(movementSlot, gesture);
     const retained = state.pending.find((item) => item.request.request === gesture);
-    if (isUncertainMovement(gesture, retained)) return retainUncertainMovement(gesture);
-    clearMovementApplying(gesture);
+    if (held !== null && savingRequest(retained)) return retainUncertainMovement(held);
     rejectGesture(gesture, error.message);
-    settleGestureFailure(gesture, retained?.state === 'rejected');
+    settleGestureFailure(held, retained?.state === 'rejected');
   }
-  function isUncertainMovement(
-    gesture: string,
-    retained: Submission | undefined,
-  ): boolean {
-    return movementCapture?.intent.id === gesture && isPendingMovement(retained);
-  }
-  function clearMovementApplying(gesture: string): void {
-    if (movementCapture?.intent.id === gesture) movementApplying = false;
-  }
+  /** The held review returns to review, or stays refused when the request was refused. */
   function settleGestureFailure(
-    gesture: string,
+    held: MovementHeld | null,
     rejected: boolean,
   ): void {
-    if (movementCapture?.intent.id !== gesture) return;
-    const phase = gestureFailurePhase(rejected);
-    update({ movementReview: state.movementReview ? { ...state.movementReview, phase } : null });
+    if (held === null) return;
+    showMovement(inPhase(held, rejected ? 'rejected' : 'review'));
     updateMutationAvailability();
   }
-  function gestureFailurePhase(rejected: boolean): 'rejected' | 'review' {
-    return rejected ? 'rejected' : 'review';
-  }
-  function retainUncertainMovement(gesture: string): void {
-    movementApplying = true;
-    update({
-      movementReview: state.movementReview
-        ? { ...state.movementReview, phase: 'uncertain', requestId: gesture }
-        : null,
-    });
+  function retainUncertainMovement(held: MovementHeld): void {
+    showMovement(requestedIn(held, 'uncertain'));
   }
   function rejectGesture(
     gesture: string,
@@ -1079,14 +1015,9 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     update({ connection: null });
   }
   function clearConfirmedMovement(gesture: string | null): void {
-    if (movementCapture === null || submissionGestureMatches(gesture) === false) return;
-    movementCapture = null;
-    movementApplying = false;
-    update({ movementReview: null });
+    if (heldFor(movementSlot, gesture) === null) return;
+    showMovement(null);
     updateMutationAvailability();
-  }
-  function submissionGestureMatches(gesture: string | null): boolean {
-    return gesture === movementCapture?.intent.id;
   }
   function finishConfirmedSubmission(
     submission: Submission,
@@ -1557,25 +1488,17 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     settleConfirmedCreation(id);
   }
   function updateMovementRecovery(requestId: string): void {
-    if (movementCapture?.intent.id !== requestId || state.movementReview === null) return;
-    const pending = state.pending.find((item) => item.request.request === requestId);
-    applyMovementRecoveryPhase(requestId, pending);
+    const held = heldFor(movementSlot, requestId);
+    if (held !== null) recoverMovement(held);
   }
-  function applyMovementRecoveryPhase(
-    requestId: string,
-    pending: Submission | undefined,
-  ): void {
-    if (pending?.state === 'rejected') return retainRejectedMovement(requestId);
-    if (isPendingMovement(pending)) retainUncertainMovement(requestId);
-  }
-  function retainRejectedMovement(requestId: string): void {
-    movementApplying = false;
-    update({
-      movementReview: state.movementReview
-        ? { ...state.movementReview, phase: 'rejected', requestId }
-        : null,
-    });
-    updateMutationAvailability();
+  /** The journal moves the held review; a refusal releases edits again. */
+  function recoverMovement(held: MovementHeld): void {
+    const { intent } = held.capture;
+    const pending = state.pending.find((item) => item.request.request === intent.id);
+    const phase = recoveryPhase(pending);
+    if (phase === null) return;
+    showMovement(requestedIn(held, phase));
+    if (phase === 'rejected') updateMutationAvailability();
   }
   /** Status reads never change navigation; stale responses cannot replace newer status. */
   async function refreshHistory(): Promise<void> {
@@ -1663,207 +1586,98 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   function releaseHistory(): void {
     if (historyReady(historyGate, state, rendering === null)) setHistoryGate(historyIdle);
   }
-  /** The catalogue lists the diagram at the revision it shows. */
-  function currentDiagram(active: ActiveDiagram): boolean {
-    return diagramCurrent(state.collections, active);
-  }
   function chooseMoveOption(optionId: string): void {
-    const capture = movementCapture;
-    if (!canChooseMovementOption(capture)) return;
-    if (!applyMovementOption(capture, optionId)) return;
-    updateChosenMovementOption(optionId);
+    const held = awaitingChoice(movementSlot);
+    if (held !== null) showMoveOption(held, optionId);
   }
-  function updateChosenMovementOption(optionId: string): void {
-    update({ movementReview: state.movementReview ? { ...state.movementReview, optionId } : null });
-  }
-  function applyMovementOption(
-    capture: NonNullable<typeof movementCapture>,
+  /** The scene previews an offered option before the review shows it. */
+  function showMoveOption(
+    held: MovementHeld,
     optionId: string,
-  ): boolean {
-    const option = capture.review.options.find((item) => item.id === optionId);
-    if (option === undefined) return false;
-    return acceptMovementOptionPreview(capture, option);
-  }
-  function canChooseMovementOption(
-    capture: typeof movementCapture,
-  ): capture is NonNullable<typeof movementCapture> {
-    const phase = state.movementReview?.phase;
-    return capture !== null && !movementApplying && (phase === 'review' || phase === 'rejected');
+  ): void {
+    const option = offeredOption(held, optionId);
+    if (option === null || !acceptMovementOptionPreview(held, option)) return;
+    showMovement(withOption(held, optionId));
   }
   function acceptMovementOptionPreview(
-    capture: NonNullable<typeof movementCapture>,
-    option: NonNullable<typeof movementCapture>['review']['options'][number],
+    held: MovementHeld,
+    option: MoveOption,
   ): boolean {
-    const accepted = capture.active.session.dispatch({
+    const { active, intent } = held.capture;
+    const accepted = active.session.dispatch({
       kind: 'preview-routes',
-      id: capture.intent.id,
+      id: intent.id,
       ...option.preview,
     });
-    if (accepted.ok && accepted.value.state.routePreview?.gesture === capture.intent.id)
-      return true;
-    report({
-      code: 'invalid-edit',
-      message: 'The selected movement preview could not be accepted.',
-      recovery: 'Keep the current preview or cancel the draft.',
-      owner: 'workspace',
-    });
+    if (accepted.ok && accepted.value.state.routePreview?.gesture === intent.id) return true;
+    report(optionPreviewRefused());
     return false;
   }
 
   async function applyMove(optionId: string): Promise<void> {
     const prepared = prepareMovementApplication(optionId);
     if (prepared === null) return;
-    const { capture, currentStamp } = prepared;
-    const selected = resolveMovementSelection(capture, optionId, currentStamp);
-    if (selected === undefined || !hasCurrentMovementPreview(capture)) return;
-    movementApplying = true;
-    update({
-      movementReview: {
-        review: capture.review,
-        optionId,
-        phase: 'sending',
-        requestId: capture.intent.id,
-        document: capture.active.document,
-      },
-      status: 'Saving…',
-    });
+    const { held, option } = prepared;
+    showMovement(sendingMove(held, optionId), { status: 'Saving…' });
     updateMutationAvailability();
-    await submitFeasibleCanvas(capture.active, capture.intent, selected.changes, selected.preview);
+    await submitFeasibleCanvas(
+      held.capture.active,
+      held.capture.intent,
+      option.changes,
+      option.preview,
+    );
   }
+  /** The review and its option when the shown option may be sent now; each refusal is reported. */
   function prepareMovementApplication(optionId: string): {
-    capture: NonNullable<typeof movementCapture>;
-    currentStamp: ReturnType<ActiveDiagram['session']['getSnapshot']>['stamp'];
+    held: MovementHeld;
+    option: MoveOption;
   } | null {
-    const capture = movementCapture;
-    if (!canApplyMovement(capture, optionId)) return null;
-    if (movementSubmissionBlocked()) {
-      reportMovementSubmissionBlocked();
-      return null;
-    }
-    return { capture, currentStamp: capture.active.session.getSnapshot().stamp };
+    const held = applicable(movementSlot, optionId);
+    if (held === null || reportMovementSubmissionBlocked()) return null;
+    return currentMovementApplication(held, optionId);
   }
-  function canApplyMovement(
-    capture: typeof movementCapture,
+  /** The chosen option while it is current and the scene still shows its preview. */
+  function currentMovementApplication(
+    held: MovementHeld,
     optionId: string,
-  ): capture is NonNullable<typeof movementCapture> {
-    return (
-      capture !== null &&
-      !movementApplying &&
-      state.movementReview?.optionId === optionId &&
-      state.movementReview.phase === 'review'
-    );
+  ): { held: MovementHeld; option: MoveOption } | null {
+    const option = selectedMovementOption(held, optionId);
+    if (option === null || !hasCurrentMovementPreview(held)) return null;
+    return { held, option };
   }
-  function movementSubmissionBlocked(): boolean {
-    return (
-      state.pending.some((item) => item.state !== 'rejected') ||
-      historyBlocked() ||
-      state.history?.busy === true
-    );
+  /** A request or undo/redo holds the move back; the draft stays. */
+  function reportMovementSubmissionBlocked(): boolean {
+    if (!moveSubmissionBlocked(state, historyGate)) return false;
+    report(operationBusy());
+    return true;
   }
-  function reportMovementSubmissionBlocked(): void {
-    report({
-      code: 'pending-request',
-      message: 'Wait for the current operation to finish',
-      recovery: 'Your movement draft is retained.',
-      owner: 'workspace',
-    });
-  }
-  function isCurrentMovementChoice(
-    capture: NonNullable<typeof movementCapture>,
-    chosen: ReturnType<NonNullable<WorkspaceBindings['chooseMoveOption']>>,
-    selected: Extract<typeof chosen, { ok: true }>['value'] | undefined,
-    currentStamp: ReturnType<ActiveDiagram['session']['getSnapshot']>['stamp'],
-  ): selected is NonNullable<typeof selected> {
-    if (movementChoiceMatches(capture, chosen, selected, currentStamp)) return true;
-    reportMovementChoiceError(chosen);
-    return false;
-  }
-  function movementChoiceMatches(
-    capture: NonNullable<typeof movementCapture>,
-    chosen: ReturnType<NonNullable<WorkspaceBindings['chooseMoveOption']>>,
-    selected: Extract<typeof chosen, { ok: true }>['value'] | undefined,
-    currentStamp: ReturnType<ActiveDiagram['session']['getSnapshot']>['stamp'],
-  ): boolean {
-    return [
-      chosen.ok,
-      selected !== undefined,
-      capture.active === state.active,
-      capture.active.generation === state.generation,
-      currentDiagram(capture.active),
-      state.snapshot?.workspace === capture.workspace,
-      currentStamp.revision === capture.review.stamp.revision,
-      currentStamp.inputKey === capture.review.stamp.inputKey,
-      currentStamp.generation === capture.review.stamp.generation,
-    ].every(Boolean);
-  }
-  function reportMovementChoiceError(
-    chosen: ReturnType<NonNullable<WorkspaceBindings['chooseMoveOption']>>,
-  ): void {
-    report(
-      chosen.ok
-        ? {
-            code: 'stale-gesture',
-            message: 'This movement review is stale; the draft was retained.',
-            recovery: 'Reload the diagram before applying it.',
-            owner: 'workspace',
-          }
-        : chosen.error,
-    );
-  }
-  function resolveMovementSelection(
-    capture: NonNullable<typeof movementCapture>,
+  /** The chosen option while the review still matches the diagram, workspace and scene. */
+  function selectedMovementOption(
+    held: MovementHeld,
     optionId: string,
-    currentStamp: ReturnType<ActiveDiagram['session']['getSnapshot']>['stamp'],
-  ):
-    | NonNullable<
-        Extract<
-          ReturnType<NonNullable<WorkspaceBindings['chooseMoveOption']>>,
-          { ok: true }
-        >['value']
-      >
-    | undefined {
+  ): MoveOption | null {
+    const { active, review } = held.capture;
+    const stamp = active.session.getSnapshot().stamp;
     const chosen =
-      bindings.chooseMoveOption?.(capture.review, optionId, currentStamp) ??
-      chooseReviewedMoveOption(capture.review, optionId, currentStamp);
-    if (chosen === undefined) return undefined;
-    const selected = selectedMovementChoice(chosen);
-    return isCurrentMovementChoice(capture, chosen, selected, currentStamp) ? selected : undefined;
+      bindings.chooseMoveOption?.(review, optionId, stamp) ??
+      chooseReviewedMoveOption(review, optionId, stamp);
+    const current = currentChoice(held.capture, chosen, state, stamp);
+    if (current.ok) return current.value;
+    report(current.error);
+    return null;
   }
-  function selectedMovementChoice(
-    chosen: ReturnType<NonNullable<WorkspaceBindings['chooseMoveOption']>>,
-  ): Extract<typeof chosen, { ok: true }>['value'] | undefined {
-    return chosen.ok ? chosen.value : undefined;
-  }
-  function hasCurrentMovementPreview(capture: NonNullable<typeof movementCapture>): boolean {
-    if (capture.active.session.getSnapshot().routePreview?.gesture === capture.intent.id)
-      return true;
-    report({
-      code: 'invalid-edit',
-      message: 'The inspected movement preview is no longer displayed.',
-      recovery: 'Restore the preview or cancel this retained draft.',
-      owner: 'workspace',
-    });
+  function hasCurrentMovementPreview(held: MovementHeld): boolean {
+    const { active, intent } = held.capture;
+    if (active.session.getSnapshot().routePreview?.gesture === intent.id) return true;
+    report(previewGone());
     return false;
   }
+  /** Only a review awaiting a choice may be cancelled; one being sent waits for its receipt. */
   function cancelMove(): void {
-    const capture = movementCapture;
-    if (
-      capture === null ||
-      movementApplying ||
-      (state.movementReview?.phase !== 'review' && state.movementReview?.phase !== 'rejected')
-    ) {
-      report({
-        code: 'pending-request',
-        message: 'This movement is already being saved; wait for confirmation before cancelling.',
-        recovery: 'Check the retained request for its receipt.',
-        owner: 'workspace',
-      });
-      return;
-    }
-    capture.active.session.dispatch({ kind: 'discard', id: capture.intent.id });
-    movementCapture = null;
-    movementApplying = false;
-    update({ movementReview: null, status: 'Movement cancelled', problem: null });
+    const held = awaitingChoice(movementSlot);
+    if (held === null) return report(alreadySaving());
+    held.capture.active.session.dispatch({ kind: 'discard', id: held.capture.intent.id });
+    showMovement(null, { status: 'Movement cancelled', problem: null });
     updateMutationAvailability();
   }
   async function exportArtifact(input: unknown): Promise<Result<BinaryResponse>> {
