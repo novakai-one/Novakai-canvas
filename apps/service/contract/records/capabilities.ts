@@ -58,6 +58,7 @@ export type {
   ChromeName,
 } from '@novakai/canvas-design-system';
 export type {
+  Admission,
   Assets,
   WriteLease,
   ReadLease,

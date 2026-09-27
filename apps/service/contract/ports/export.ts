@@ -14,6 +14,10 @@ import type { RouteOutcome } from '../records/transport/protocol.js';
  * it lazily, on the first PNG request.
  */
 export interface Rasterizer {
+  /**
+   * Initializes the rasterizer once; later calls share that outcome. Fails with `unavailable` at
+   * `export.png`.
+   */
   prepare(): Promise<Result<void>>;
 }
 
@@ -22,6 +26,11 @@ export type LeaseRead = (digest: unknown, path: string) => AssetResult<StoredBlo
 
 /** The export route: unknown input in, a file or a typed failure out. */
 export interface ExportHandler {
+  /**
+   * Answers one export file. Fails with `invalid-input` for a refused request or an Export
+   * refusal, `cancelled` when the request is cancelled (Export's diagnostic kept as source), and
+   * `unavailable` at `export.png` when the rasterizer cannot start.
+   */
   invoke(
     input: unknown,
     signal: AbortSignal,

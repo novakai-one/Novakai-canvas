@@ -1,6 +1,6 @@
 /*
- * The workspace export route, bound to Presentation's bindings for the installation fonts. The PNG
- * runtime starts lazily, on the first PNG request. Every export only reads, through a leased
+ * The workspace export route, bound to Presentation's bindings for the installation fonts. The
+ * rasterizer starts lazily, on the first PNG request. Every export only reads, through a leased
  * snapshot; the caller owns the retry.
  */
 import { createReactBindings } from '@novakai/canvas-presentation';
@@ -13,7 +13,7 @@ import type { ServiceCapabilities } from '../ports/capabilities.js';
 import type { Result } from '../errors.js';
 import { failure, success } from '../errors.js';
 import { createExportRoute } from '../../core/export/route.js';
-import { createPngRuntime } from '../../adapters/raster/png-runtime.js';
+import { createRasterizer } from '../../adapters/raster/png-runtime.js';
 import type { WorkspaceRoles } from './workspace.js';
 
 /** What the export route reads through, besides Authoring. */
@@ -51,7 +51,7 @@ export async function wireExport(
       views,
       resources,
       renderer,
-      png: createPngRuntime(),
+      rasterizer: createRasterizer(),
       authoring,
     }),
   );

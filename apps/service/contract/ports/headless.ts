@@ -4,10 +4,15 @@
  * core consumers, because this declaration cannot import core. Declarations only;
  * compose/headless.ts binds the functions, and the CLI owns retry once dependencies are restored.
  */
-import type { Assets, AuthoringResult, Catalog, Json } from '../records/capabilities.js';
-import type { DesignSystem } from '@novakai/canvas-design-system';
-import type { LoweredIntent } from '@novakai/canvas-language';
-import type { Templates } from '@novakai/canvas-templates';
+import type {
+  Assets,
+  AuthoringResult,
+  Catalog,
+  DesignSystem,
+  Json,
+  LoweredIntent,
+  Templates,
+} from '../records/capabilities.js';
 import type { PresetCodecs, PresetContext } from '../records/presets/codecs.js';
 import type { DiagramProducer, RenderJobs } from './rendering.js';
 
@@ -34,14 +39,24 @@ export interface FontBinding {
 
 /** What headless export binds (compose/headless.ts). */
 export interface HeadlessBindings {
+  /** Binds the recipe and theme codecs to one preset context. Never fails. */
   readonly createPresetCodecs: (context: PresetContext) => PresetCodecs;
-  /** core/presets/theme-admission.ts `prepareTheme`. */
+  /**
+   * core/presets/theme-admission.ts `prepareTheme`: a source-syntax theme admission with its fonts
+   * verified. Fails with `invalid-input` when the base theme cannot be selected, a font is not a
+   * verified font or the theme is malformed, and `missing-asset` when Assets cannot resolve a font.
+   */
   readonly prepareTheme: (
     admission: Json,
     catalog: Catalog,
     bindings: readonly FontBinding[],
     owners: ThemeAdmissionOwners,
   ) => AuthoringResult<Json>;
+  /** Binds render-job building to the given owners (see `RenderJobs.create`). Never fails. */
   readonly createRenderJobs: (owners: RenderResourceOwners) => RenderJobs;
+  /**
+   * Measures, lays out and routes one job in this realm. Fails with `invalid-input` at `render`
+   * when an owner rejects the input, or `unavailable` at `render` when the native runtime fails.
+   */
   readonly produceDiagram: DiagramProducer['produce'];
 }

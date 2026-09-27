@@ -35,6 +35,7 @@ export interface HttpSecurity {
   readonly browserSession: string;
   readonly agentToken: string;
   readonly generation: string;
+  /** Whether untrusted text equals a secret, compared in constant time. Never fails. */
   equal(
     left: string,
     right: string,
@@ -46,9 +47,22 @@ export interface HttpSecurity {
  * credential, while the persisted agent credential stays local.
  */
 export interface HttpAdmission {
+  /** The browser session cookie name for this host. */
   readonly cookieName: string;
+  /**
+   * Whether a request may receive the browser credential: only a direct, top-level navigation.
+   * Fails with `unauthorized` at `host` or `navigation`.
+   */
   bootstrap(metadata: HttpMetadata): Result<void>;
+  /**
+   * The caller a request speaks for. Fails with `unauthorized` at `host`, `session` or
+   * `credential`.
+   */
   authenticate(metadata: HttpMetadata): Result<Caller>;
+  /**
+   * The input as an Authoring request this caller may submit. Fails with `invalid-input` at
+   * `request`, or `unauthorized` at `actor` or `intent.planner`.
+   */
   mutation(
     input: unknown,
     caller: Caller,
@@ -57,6 +71,7 @@ export interface HttpAdmission {
 
 /** Answers one authenticated API call. */
 export interface ApiRouter {
+  /** Runs the handler of `METHOD path`. Fails with `not-found` at `route` when none matches. */
   invoke(call: ApiCall): Promise<RouteOutcome>;
 }
 
@@ -70,6 +85,10 @@ export interface CommandAdmission {
 
 /** Decodes a mutation body into an admitted Authoring request. */
 export interface CommandDecoder {
+  /**
+   * Fails with `invalid-input` at `content-type` or `body` for a malformed envelope, `conflict` at
+   * `generation` for another transport generation, and otherwise as `HttpAdmission.mutation`.
+   */
   read(
     body: string,
     context: CommandAdmission,
@@ -110,16 +129,20 @@ export interface TransportPolicy {
 
 /** The text of each server-sent event frame. */
 export interface EventFrames {
+  /** The first frame on every connection. Cannot fail. */
   connected(generation: string): string;
+  /** The frame sent after each commit, carrying the committed change. Cannot fail. */
   committed(
     generation: string,
     change: CommittedChange,
   ): string;
+  /** A comment line that holds an idle connection open. */
   readonly keepalive: string;
 }
 
 /** The built web app, read from one root chosen at startup. */
 export interface StaticFiles {
+  /** The file at one URL path. Fails with `not-found` at `file`; never rejects. */
   read(path: string): Promise<Result<StaticFile>>;
 }
 

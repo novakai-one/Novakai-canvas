@@ -10,7 +10,7 @@ Composes all capabilities: owns sessions, rendering and inspection jobs, resourc
 | `contract/index.ts`                            | The only import surface for web and cli                                                                                                   |
 | `contract/api.ts`                              | The one core function consumers call (`projectCollection`)                                                                                |
 | `contract/errors.ts`, `types.ts`, `schemas.ts` | Service failure codes and `Result`; the `WorkspaceSession` type; capability schemas core parses with                                      |
-| `contract/records/`                            | Data only: capability type vocabulary, then one folder per topic (`transport`, `rendering`, `planning`, `presets`, `workspace`, `export`) |
+| `contract/records/`                            | Data (see note below): capability types, then a folder per topic (`transport`, `rendering`, `planning`, `presets`, `workspace`, `export`) |
 | `contract/ports/`                              | Seams: capabilities, storage, rendering, notifications, transport, export, workspace, headless                                            |
 | `contract/compose/`                            | Wiring only: builds capabilities once, binds core to adapters, starts the server and the worker                                           |
 | `core/session/`                                | Session facade, lifetime, startup policy, apply-then-read                                                                                 |
@@ -22,5 +22,7 @@ Composes all capabilities: owns sessions, rendering and inspection jobs, resourc
 | `core/export/`                                 | Export request, lease, snapshot, resources, text and file answers                                                                         |
 | `core/transport/`                              | HTTP policy: admission, routes, request reading, status, envelopes, events                                                                |
 | `adapters/`                                    | Real I/O, one leaf per medium: `http`, `credentials`, `render-worker`, `raster`, `files`, `storage`, `notifications`                      |
+
+Records that also carry methods: `NativeFactories` and `NativeWorkspace` (startup handles, `records/workspace/startup.ts`), `LocalServer` (server handle, `records/transport/server.ts`), `PresetContext` and `PresetCodecs` (codec shapes, `records/presets/codecs.ts`).
 
 An owner bag (the capabilities one core module reads) lives beside that module. The CLI-facing bags live in `contract/ports/headless.ts`.

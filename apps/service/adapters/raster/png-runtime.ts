@@ -1,7 +1,7 @@
 /*
- * The PNG runtime adapter: compiles the resvg WebAssembly module installed with the service and
+ * The rasterizer adapter: compiles the resvg WebAssembly module installed with the service and
  * initializes Export's rasterizer with it. The first preparation's promise is kept and shared by
- * every later PNG request — a failed preparation included — for the life of the runtime.
+ * every later PNG request — a failed preparation included — for the life of the rasterizer.
  */
 import { createRequire } from 'node:module';
 import { readFile } from 'node:fs/promises';
@@ -9,8 +9,8 @@ import { initializeRaster } from '@novakai/canvas-export';
 import { failure, type Result } from '../../contract/errors.js';
 import type { Rasterizer } from '../../contract/ports/export.js';
 
-/** A runtime that initializes the rasterizer on the first `prepare` and shares that outcome. */
-export function createPngRuntime(): Rasterizer {
+/** A rasterizer that initializes on the first `prepare` and shares that outcome. */
+export function createRasterizer(): Rasterizer {
   let prepared: Promise<Result<void>> | null = null;
   return {
     prepare: () => {

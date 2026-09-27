@@ -1,8 +1,10 @@
 /*
  * The render worker's wire: the job envelope the worker decodes, the render envelope a reply's
  * value is checked against, and the result envelope that carries it. Declarations only; the
- * worker adapters decode with them, and each capability checks its own payload. A refused reply
- * keeps the caller's last accepted scene.
+ * worker adapters decode with all three, and apps/web parses `renderEnvelope` through the public
+ * index. Each capability checks its own payload. A refused reply keeps the caller's last accepted
+ * scene. Web's bundle also carries the worker-only `resultEnvelope` and `diagnostic` (+225 bytes),
+ * so moving `diagnostic` to `z.enum(errorCodes)` later adds `errorCodes` to web's bundle too.
  */
 import { z } from 'zod';
 import { failureSource } from '../transport/failure-source.js';

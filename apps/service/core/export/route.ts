@@ -22,13 +22,13 @@ import { exportDsl, exportMarkdown, type TextOwners } from './text.js';
 export interface ExportRouteOwners extends TextOwners, DocumentOwners {
   readonly export: Pick<ExportRules, 'compose' | 'formatMarkdown'>;
   readonly presentation: PresentationBindings;
-  readonly png: Rasterizer;
+  readonly rasterizer: Rasterizer;
 }
 
 /**
  * The export route of one workspace; starts no I/O. `invoke` answers one file, or fails with
  * `invalid-input` for a refused request (see `readExportRequest`) or a DSL scope other than the
- * whole collection (at `scope`), `unavailable` at `export.png` when the PNG runtime cannot start,
+ * whole collection (at `scope`), `unavailable` at `export.png` when the rasterizer cannot start,
  * and otherwise as `exportRouteFailure`: an Export refusal is `cancelled` or `invalid-input`,
  * with Export's diagnostic kept as source. Every export only reads; the caller owns the retry.
  */
@@ -70,8 +70,8 @@ async function dispatchExport(
 }
 
 /**
- * PNG first needs its runtime; an unavailable runtime refuses before any owner is read. Fails with
- * `unavailable` at `export.png` (see `prepareFormat`), or as `encodeNative`.
+ * PNG first needs the rasterizer; an unavailable rasterizer refuses before any owner is read.
+ * Fails with `unavailable` at `export.png` (see `prepareFormat`), or as `encodeNative`.
  */
 async function nativeExport(
   request: ExportRequest,
@@ -84,14 +84,14 @@ async function nativeExport(
 }
 
 /**
- * The PNG runtime for PNG; every other format needs nothing. Fails with `unavailable` at
- * `export.png` when the PNG runtime cannot start.
+ * The rasterizer for PNG; every other format needs nothing. Fails with `unavailable` at
+ * `export.png` when the rasterizer cannot start.
  */
 async function prepareFormat(
   format: ExportRequest['format'],
   owners: ExportRouteOwners,
 ): Promise<Result<void>> {
-  return format === 'png' ? owners.png.prepare() : { ok: true, value: undefined };
+  return format === 'png' ? owners.rasterizer.prepare() : { ok: true, value: undefined };
 }
 
 /**
