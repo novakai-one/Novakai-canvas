@@ -1,6 +1,7 @@
 /*
- * Appendix sections read from their IDs: `@flow-51` is a flow appendix numbered 51. Pure; read by
- * the appendix sequence and appendix content rules.
+ * Appendix sections read from their IDs: `@flow-51` is a flow appendix numbered 51. Pure. Owns the
+ * `Appendix` type. Its own file because two rule files read it: sections/appendix-sequence.ts
+ * (numbering, mode, order) and appendices.ts (content).
  */
 import { id, type Declaration } from './declarations.js';
 

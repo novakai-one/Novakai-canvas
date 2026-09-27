@@ -48,7 +48,10 @@ function duplicateFinding(
     : [];
 }
 
-/** A required slot's section must use one of the slot's modes. */
+/**
+ * A required slot's section must use one of the slot's modes. Known overlap: for a present slot
+ * with a wrong mode, `requiredSectionFinding` (required.ts) reports the same span again.
+ */
 function reservedModeFinding(
   section: Declaration,
   sectionId: string,

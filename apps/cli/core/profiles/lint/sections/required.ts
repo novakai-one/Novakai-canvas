@@ -22,7 +22,10 @@ export function lintRequiredSections(indexed: ProfileDeclarationIndex): ProfileF
   return buildSpecProfile.slots.flatMap((slot) => requiredSectionFinding(slot, indexed));
 }
 
-/** The missing or wrong-mode finding for one required slot. */
+/**
+ * The missing or wrong-mode finding for one required slot. Known overlap: a wrong (not absent)
+ * mode is also reported by `reservedModeFinding` (identity.ts) at the same span.
+ */
 function requiredSectionFinding(
   slot: (typeof buildSpecProfile.slots)[number],
   indexed: ProfileDeclarationIndex,
