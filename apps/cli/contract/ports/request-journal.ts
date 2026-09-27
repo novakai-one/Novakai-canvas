@@ -11,10 +11,13 @@ import type { JournalRecord, RetainedRequest } from '../records/retained-request
 export interface RequestJournal {
   /**
    * Retains `retained` durably before anything is sent. Saving the same request again succeeds.
-   * Fails with `retention-unavailable` (nothing was sent) or `request-reused` (the ID is
-   * retained for a different request).
+   * Fails with `retention-unavailable`, `journal-corrupt` (the ID's retained file is damaged) or
+   * `request-reused` (the ID is retained for a different request). Nothing was sent on failure.
    */
   save(retained: RetainedRequest): Promise<Result<void, LocalFailure>>;
-  /** The retained request and its byte backups. Fails with `request-unavailable`. */
+  /**
+   * The retained request and its byte backups. Fails with `request-unavailable` (missing or
+   * unreadable) or `journal-corrupt` (the file is not a journal record).
+   */
   read(request: RequestId): Promise<Result<JournalRecord, LocalFailure>>;
 }

@@ -28,8 +28,10 @@ import type { FailureSource, OperationSource } from './records/foreign.js';
  *
  * Request journal:
  * - `retention-unavailable`: the request could not be retained. Nothing was sent.
- * - `request-unavailable`: the retained request cannot be read.
+ * - `request-unavailable`: the retained request file is missing or cannot be read.
  * - `request-reused`: the request ID is already retained for a different request.
+ * - `journal-corrupt`: the request ID's retained file reads, but is not JSON or not a journal
+ *   record. Nothing is sent; check the ID's receipt before authoring again under a new ID.
  *
  * Resources (`location` names the declaration; printed before the message):
  * - `absolute-path`: the resource path is absolute.
@@ -73,6 +75,7 @@ export type LocalCode =
   | 'retention-unavailable'
   | 'request-unavailable'
   | 'request-reused'
+  | 'journal-corrupt'
   | 'absolute-path'
   | 'path-escape'
   | 'unsupported-media'

@@ -22,8 +22,9 @@ export interface RetryDependencies extends SubmitDependencies {
 
 /**
  * Replay checks for a completed receipt first. A restarted host receives the identical Authoring
- * request under its new transport generation. Fails with `request-unavailable`, as the receipt
- * lookup does, with `invalid-response` for a receipt of another request, or as `submit` does.
+ * request under its new transport generation. Fails as the journal read does
+ * (`request-unavailable`, `journal-corrupt`), as the receipt lookup does, with `invalid-response`
+ * for a receipt of another request, or as `submit` does.
  */
 export async function retry(
   request: RequestId,
