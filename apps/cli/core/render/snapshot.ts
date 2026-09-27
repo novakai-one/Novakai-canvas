@@ -1,8 +1,8 @@
 /*
  * Render resource retention: the export snapshot retains every asset, font and preset
  * byte-for-byte, and Export may inspect only what the snapshot already retained. Pure; the
- * asset resolve port is injected. Model checked every asset pin; Assets refuses anything else with
- * its own failure. Theme pins live in contract/render.js.
+ * asset resolve port is injected. Model checked every asset pin; a digest that is not one ends the
+ * render with `invalid-asset-pin`. Theme pins live in contract/render.js.
  */
 import type {
   Assets,
@@ -12,8 +12,12 @@ import type {
   Resource,
   Resources,
 } from '../../contract/records/foreign.js';
+import type { AssetDigest } from '../../contract/brands.js';
 import { assetOfPin } from '../resources/digests.js';
-import { accepted } from './faults.js';
+import { RenderAbort, accepted } from './faults.js';
+
+/** One asset a collection declares. */
+type CollectionAsset = Collection['assets'][number];
 
 /** Every byte the exact export snapshot needs: collection assets, document fonts, catalog presets. */
 export function retainedResources(
@@ -24,7 +28,7 @@ export function retainedResources(
 ): readonly Resource[] {
   return [
     ...collection.assets.map((asset): Resource => {
-      const blob = accepted(resolve(assetOfPin(asset.digest)));
+      const blob = accepted(resolve(pinnedAsset(asset)));
       return {
         kind: 'asset',
         digest: blob.descriptor.digest,
@@ -48,6 +52,17 @@ export function retainedResources(
       metadata: {},
     })),
   ];
+}
+
+/**
+ * The Assets digest `asset` pins. Throws RenderAbort `invalid-asset-pin` when its digest is not
+ * Model's `sha256:` pin; the render entry point converts it to `render-failed`.
+ */
+function pinnedAsset(asset: CollectionAsset): AssetDigest {
+  const digest = assetOfPin(asset.digest);
+  if (digest === undefined)
+    throw new RenderAbort({ code: 'invalid-asset-pin', asset: asset.id, digest: asset.digest });
+  return digest;
 }
 
 /** Export may inspect only the exact resources already admitted for the immutable snapshot. */

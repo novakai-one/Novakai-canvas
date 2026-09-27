@@ -1,10 +1,12 @@
 /*
  * `recipe admit` and `recipe instantiate` argument values: the recipe header from
  * --id --version --family --title, and the expansion request from `ID@VERSION#sha256:DIGEST` plus
- * --namespace. Pure; every brand comes from Templates' own schemas. Fails with
- * `invalid-arguments`; nothing was read or sent, so the caller corrects the named argument.
+ * --namespace. Pure; every brand comes from Templates' own schemas, and the `sha256:` pin converts
+ * through core/resources/digests. Fails with `invalid-arguments`; nothing was read or sent, so the
+ * caller corrects the named argument.
  */
-import { presetDigest, presetId, version } from '../../contract/brands.js';
+import { presetId, version } from '../../contract/brands.js';
+import type { PresetDigest } from '../../contract/brands.js';
 import { recipeFamily } from '../../contract/schemas.js';
 import type { RecipeHeader } from '../../contract/records/command.js';
 import type { ExpansionRequest } from '../../contract/records/foreign.js';
@@ -13,6 +15,7 @@ import { failure, success } from '../../contract/errors.js';
 import { checked } from '../shared/checks.js';
 import type { Parser } from '../shared/checks.js';
 import { joined } from '../shared/results.js';
+import { presetOfPin } from '../resources/digests.js';
 import type { CommandFlags } from './flags.js';
 
 /** Missing, empty or unknown-family recipe flags. */
@@ -22,8 +25,8 @@ const headerRequired = 'recipe admit requires --id --version --family --title';
 const instantiateUsage =
   'Use recipe instantiate ID@VERSION#sha256:DIGEST --namespace ID --out FILE';
 
-/** `ID@VERSION#sha256:DIGEST`: the text form of a recipe pin. */
-const pinText = /^([^@]+)@([^#]+)#sha256:([a-f0-9]{64})$/;
+/** `ID@VERSION#PIN`: the text form of a recipe pin; PIN is Model's `sha256:DIGEST` pin. */
+const pinText = /^([^@]+)@([^#]+)#(.+)$/;
 
 /** The four header flags as given, each non-empty. */
 interface HeaderText {
@@ -54,9 +57,9 @@ export function expansion(
 ): Result<ExpansionRequest> {
   const parts = pinText.exec(pin);
   if (parts === null || namespace === undefined) return invalidArguments(instantiateUsage);
-  const [, id, release, digest] = parts;
+  const [, id, release, pinned = ''] = parts;
   return joined(
-    recipePin(id, release, digest),
+    recipePin(id, release, pinned),
     usage(presetId, namespace),
     (checkedPin, space) => ({
       pin: checkedPin,
@@ -98,7 +101,7 @@ function header(text: HeaderText): Result<RecipeHeader> {
 function recipePin(
   id: string | undefined,
   release: string | undefined,
-  digest: string | undefined,
+  pinned: string,
 ): Result<ExpansionRequest['pin']> {
   const named = joined(
     usage(presetId, id),
@@ -108,11 +111,18 @@ function recipePin(
       version: checkedVersion,
     }),
   );
-  return joined(named, usage(presetDigest, digest), (fields, checkedDigest) => ({
+  return joined(named, pinnedPreset(pinned), (fields, checkedDigest) => ({
     kind: 'recipe',
     ...fields,
     digest: checkedDigest,
   }));
+}
+
+/** The Templates digest a recipe pin's `sha256:` text names; any other text prints the usage line. */
+function pinnedPreset(pinned: string): Result<PresetDigest> {
+  const digest = presetOfPin(pinned);
+  if (digest === undefined) return invalidArguments(instantiateUsage);
+  return success(digest);
 }
 
 /** One header value; `malformed` names the flag. */

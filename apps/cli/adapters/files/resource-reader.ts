@@ -68,13 +68,13 @@ async function readLocated(
 }
 
 /** Add the declaration's place in `file` without replacing the failure's code, message or recovery. */
-function located<T>(
+function located(
   file: FilePath,
   request: ResourceRequest,
   error: LocalFailure,
-): Result<T, LocalFailure> {
+): Result<never, LocalFailure> {
   const { line, column } = request.span.start;
-  return { ok: false, error: { ...error, location: { file, line, column, alias: request.alias } } };
+  return failure({ ...error, location: { file, line, column, alias: request.alias } });
 }
 
 /** A path is admitted only beneath the real source directory; absolute and symlink escapes are explicit outcomes. */

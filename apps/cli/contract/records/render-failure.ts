@@ -5,7 +5,7 @@
  * and call nativeFault; the caller corrects the named input or resource and runs render:png again.
  */
 import type { CliFailure } from '../errors.js';
-import type { FailureSource } from './foreign.js';
+import type { Collection, FailureSource } from './foreign.js';
 import {
   filePath,
   type CollectionName,
@@ -28,6 +28,8 @@ export interface NativeDetail {
  *   collection; `matches` counts the shipped matches.
  * - `collection-required`: a theme override was asked for a source that is not a collection.
  * - `collection-title-required`: a theme override was asked for a collection without a title.
+ * - `invalid-asset-pin`: a collection asset's digest is not Model's `sha256:` pin. Model
+ *   validation refuses such a collection first, so no unchecked digest reaches Assets.
  * - `provider-failed`: a filesystem, temp-directory or wasm step threw; the native evidence is kept.
  */
 export type RenderFault =
@@ -43,6 +45,12 @@ export type RenderFault =
     }
   | { readonly code: 'collection-required' }
   | { readonly code: 'collection-title-required' }
+  | {
+      readonly code: 'invalid-asset-pin';
+      readonly asset: Collection['assets'][number]['id'];
+      /** The digest text as the collection gives it. */
+      readonly digest: string;
+    }
   | {
       readonly code: 'provider-failed';
       /** The native error's message. Human context only. */
