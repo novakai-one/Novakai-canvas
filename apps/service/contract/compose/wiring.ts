@@ -22,6 +22,9 @@ import { authoringFailure, failure, success } from '../errors.js';
 import { createWorkspaceSession } from '../../core/session/facade.js';
 import { createSessionLifetime } from '../../core/session/lifetime.js';
 import { createWorkspaceReader } from '../../core/workspace/reader.js';
+import { createResourceSelector } from '../../core/resources/selection/select.js';
+import { createResourceCommands } from '../../core/resources/commands/commands.js';
+import { createResourceAdmission } from '../../core/authoring-roles/resource-leases.js';
 import { createWorkspaceExporter } from '../../adapters/workspace/export.js';
 import { createPngRuntime } from '../../adapters/raster/png-runtime.js';
 import { cacheRenders } from '../../adapters/rendering/render-cache.js';
@@ -47,8 +50,6 @@ export async function wireWorkspace(
   const [
     storeModule,
     codecModule,
-    resourceModule,
-    leaseModule,
     collectionModule,
     libraryModule,
     plannerModule,
@@ -58,14 +59,11 @@ export async function wireWorkspace(
     rendererModule,
     installationModule,
     channelModule,
-    resourceCommandsModule,
     presetPlannerModule,
     themePreparationModule,
   ] = await Promise.all([
     import('../../adapters/storage/authoring-store.js'),
     import('../../adapters/builtins/preset-codecs.js'),
-    import('../../core/resources/selection/select.js'),
-    import('../../core/authoring-roles/resource-leases.js'),
     import('../../adapters/planning/collection-plans.js'),
     import('../../adapters/planning/library-planner.js'),
     import('../../adapters/planning/diagram-planners.js'),
@@ -75,7 +73,6 @@ export async function wireWorkspace(
     import('../../adapters/rendering/collection-renderer.js'),
     import('../../adapters/planning/installation-planner.js'),
     import('../../adapters/notifications/change-channel.js'),
-    import('../../core/resources/commands/commands.js'),
     import('../../adapters/planning/preset-planner.js'),
     import('../../adapters/rendering/theme-preparation.js'),
   ]);
@@ -86,13 +83,14 @@ export async function wireWorkspace(
   const { language, system, model, library } = capabilities;
   const templates = capabilities.templates(EMPTY_RESOURCES);
   const views = createWorkspaceReader({ model, library, templates });
-  const resources = resourceModule.createResourceSelector({
+  const resources = createResourceSelector({
+    model,
     assets: native.assets,
     templates,
     language,
     installation: installation.presets,
   });
-  const resourceCommands = resourceCommandsModule.createResourceCommands({
+  const resourceCommands = createResourceCommands({
     assets: native.assets,
     selector: resources,
     language,
@@ -137,7 +135,7 @@ export async function wireWorkspace(
     store: storeModule.createAuthoringStore(native.storage),
     planners,
     validation,
-    resources: leaseModule.createResourceAdmission(resources, native.assets),
+    resources: createResourceAdmission(resources, native.assets),
     changes,
     feasibility: { workspace: views, jobs, producer },
   };

@@ -1,38 +1,58 @@
 /*
  * Resource selection: the theme and asset bindings one request may use, and whether a collection's
- * pins still match the stored presets and bytes. Pure reads; Authoring owns commit and recovery.
+ * pins still match the stored presets and bytes. Pure over the injected owners; Authoring owns
+ * commit and recovery.
  */
 import type { FailureSource } from '../../../contract/records/transport/failure-source.js';
-import { z } from 'zod';
-import { validate } from '@novakai/canvas-model';
-import type { Collection } from '@novakai/canvas-model';
-import { digest, failure } from '@novakai/canvas-authoring';
-import type { Request, Snapshot, Result, Digest } from '@novakai/canvas-authoring';
-import type { Catalog, Preset, ThemePreset } from '@novakai/canvas-templates';
-import type { ResolvedResources, ResourceRequest } from '@novakai/canvas-language';
-import type { ResourceOwners } from '../../../contract/records/planning/resources.js';
+import type {
+  Assets,
+  AuthoringResult,
+  Catalog,
+  Collection,
+  Digest,
+  Language,
+  LoweredIntent,
+  Preset,
+  Request,
+  ResolvedResources,
+  ResourceRequest,
+  Snapshot,
+  Templates,
+  ThemePreset,
+} from '../../../contract/records/capabilities.js';
+import type { ModelRules } from '../../../contract/ports/capabilities.js';
 import type {
   ResourceSelector,
   ResourceSelection,
 } from '../../../contract/records/planning/planning.js';
 import type { WorkspaceContents } from '../../../contract/records/workspace/contents.js';
+import type { DslCommand, PresetAdmission } from '../../../contract/records/planning/commands.js';
 import {
   dslCommand,
   modelCommand,
-  presetAdmission,
+  presetChange,
 } from '../../../contract/records/planning/commands.js';
+import { authoringDigest, json } from '../../../contract/schemas.js';
+import { authoringFailure } from '../../../contract/errors.js';
+
+/** The owners selection reads through; compose passes them from ServiceCapabilities and the workspace. */
+export interface ResourceOwners {
+  readonly model: Pick<ModelRules, 'validate'>;
+  readonly assets: Pick<Assets, 'resolve'>;
+  readonly templates: Pick<Templates<LoweredIntent>, 'readCatalog' | 'read'>;
+  readonly language: Pick<Language, 'parse'>;
+  /** The fixed installation presets a bootstrap request reads. */
+  readonly installation: Catalog;
+}
 /** Model digests carry this prefix; Assets and Authoring digests do not. */
 const PIN_PREFIX = 'sha256:';
-/** A preset change names its admission; only the admission header is read here. */
-const presetChange = z.looseObject({ admission: presetAdmission });
 type ThemeBinding = Collection['theme'];
 type AssetBinding = Collection['assets'][number];
 type Themes = ResolvedResources['themes'];
 type Upload = Request['assets'][number];
-type PresetAdmission = z.infer<typeof presetAdmission>;
 /** The request payload, decoded once. Only DSL, model and preset changes are read. */
 type Intent =
-  | { readonly planner: 'dsl'; readonly command: z.infer<typeof dslCommand> }
+  | { readonly planner: 'dsl'; readonly command: DslCommand }
   | { readonly planner: 'model'; readonly collection: string }
   | { readonly planner: 'preset'; readonly admission: PresetAdmission }
   | { readonly planner: 'other' };
@@ -66,7 +86,7 @@ class ResourceFault extends Error {
   }
 }
 /** Runs one selection and returns any refusal as Authoring's typed failure, before a lease or write exists. */
-function guarded<T>(operation: () => T): Result<T> {
+function guarded<T>(operation: () => T): AuthoringResult<T> {
   try {
     return { ok: true, value: operation() };
   } catch (error) {
@@ -74,13 +94,13 @@ function guarded<T>(operation: () => T): Result<T> {
   }
 }
 /** A selection refusal asks for a resource fix; any other throw is a decode failure and leaks no native message. */
-function rejected(error: unknown): Result<never> {
+function rejected(error: unknown): AuthoringResult<never> {
   if (error instanceof ResourceFault)
-    return failure('missing-asset', 'resources', error.message, [], error.source);
-  return failure('invalid-input', 'resources', 'Resource request could not be decoded');
+    return authoringFailure('missing-asset', 'resources', error.message, [], error.source);
+  return authoringFailure('invalid-input', 'resources', 'Resource request could not be decoded');
 }
 /** Returns the owner's value, or refuses with the owner's failure. Nothing missing is replaced by a default. */
-function accepted<T>(result: Result<T, FailureSource>): T {
+function accepted<T>(result: AuthoringResult<T, FailureSource>): T {
   if (!result.ok)
     throw new ResourceFault('The owning capability rejected this input', result.error);
   return result.value;
@@ -103,7 +123,7 @@ function select(
   };
   return {
     resources,
-    pins: z.json().parse({ resources }),
+    pins: json.parse({ resources }),
     covered: coverage(request, snapshot, catalog, resources.assets),
     reads: presetReads(snapshot),
   };
@@ -138,7 +158,8 @@ function themes(
 ): Themes {
   const records = themePresets(catalog);
   const exact = records.map(
-    (item) => [`${item.id}@${item.version}#${prefixed(item.digest)}`, binding(item)] as const,
+    (item) =>
+      [`${item.id}@${item.version}#${prefixed(item.digest)}`, binding(item, owners.model)] as const,
   );
   const aliases = unique(records.map((item) => item.id)).map(
     (id) => [id, latestBinding(catalog, id, owners)] as const,
@@ -155,10 +176,13 @@ function latestBinding(
   id: string,
   owners: ResourceOwners,
 ): ThemeBinding {
-  return binding(accepted(owners.templates.read(catalog, { kind: 'theme', id })));
+  return binding(accepted(owners.templates.read(catalog, { kind: 'theme', id })), owners.model);
 }
 /** A theme preset as Model's checked theme binding. */
-function binding(preset: Preset): ThemeBinding {
+function binding(
+  preset: Preset,
+  model: ResourceOwners['model'],
+): ThemeBinding {
   if (preset.kind !== 'theme') throw new ResourceFault('Selected preset is not a theme');
   const theme = {
     id: preset.id,
@@ -166,12 +190,15 @@ function binding(preset: Preset): ThemeBinding {
     digest: prefixed(preset.digest),
     roles: preset.payload.roles,
   };
-  return validBinding({ title: 'Resource binding', theme }).theme;
+  return validBinding({ title: 'Resource binding', theme }, model).theme;
 }
 /** Model checks the bindings inside the smallest possible collection, so this file never copies Model's rules. */
-function validBinding(fields: Readonly<Record<string, unknown>>): Collection {
+function validBinding(
+  fields: Readonly<Record<string, unknown>>,
+  model: ResourceOwners['model'],
+): Collection {
   const base = { schemaVersion: 1, id: 'binding', revision: 0, arrangement: { algorithm: 'grid' } };
-  return accepted(validate({ ...base, ...fields }));
+  return accepted(model.validate({ ...base, ...fields }));
 }
 /** Checks a resource-carrying payload against its planner's envelope; undo, redo and other planners are not read. */
 function decodeIntent(request: Request): Intent {
@@ -244,7 +271,7 @@ function assets(
   owners: ResourceOwners,
 ): ResolvedResources['assets'] {
   if (declared.kind === 'theme-admission') return {};
-  const previous = priorAssets(declared.collection, snapshot);
+  const previous = priorAssets(declared.collection, snapshot, owners.model);
   const supplied = [...pinnedUploads(declared.requests), ...request.assets];
   if (supplied.length === 0) return byId(previous);
   const theme = firstTheme(resolvedThemes);
@@ -257,18 +284,19 @@ function assets(
 function priorAssets(
   id: string | null,
   snapshot: Snapshot,
+  model: ResourceOwners['model'],
 ): readonly AssetBinding[] {
   const record = snapshot.records.find(
     (item) => item.key.kind === 'collection' && item.key.id === id && !item.deleted,
   );
   if (!record) return [];
-  return accepted(validate(record.value)).assets;
+  return accepted(model.validate(record.value)).assets;
 }
 /** Asset declarations whose source is a `sha256:` pin supply their bytes by digest. */
 function pinnedUploads(requests: readonly ResourceRequest[]): readonly Upload[] {
   return requests
     .filter((item) => item.kind !== 'theme' && item.source.startsWith(PIN_PREFIX))
-    .map((item) => ({ alias: item.alias, digest: digest.parse(bare(item.source)) }));
+    .map((item) => ({ alias: item.alias, digest: authoringDigest.parse(bare(item.source)) }));
 }
 /** Model checks an asset binding against one actual admitted theme. */
 function firstTheme(themes: Themes): ThemeBinding {
@@ -307,7 +335,8 @@ function newAsset(
     alt: metadata.alt ?? upload.alias,
     ...optionalMetadata(metadata),
   };
-  const validated = validBinding({ title: 'Asset binding', theme, assets: [asset] }).assets[0];
+  const validated = validBinding({ title: 'Asset binding', theme, assets: [asset] }, owners.model)
+    .assets[0];
   if (!validated) throw new ResourceFault('Asset binding is missing after owner validation');
   return validated;
 }
@@ -331,7 +360,7 @@ function coverage(
     ...request.assets.map((item) => item.digest),
     ...themePresets(catalog).flatMap((item) => item.payload.fonts),
   ]);
-  const bytes = Object.values(bound).map((item) => digest.parse(bare(item.digest)));
+  const bytes = Object.values(bound).map((item) => authoringDigest.parse(bare(item.digest)));
   return unique([...held, ...bytes]);
 }
 /** Every preset record, deleted ones included, is a read dependency of the selection. */
@@ -385,7 +414,7 @@ function checkMediaTypes(
 function sortedDigests(values: readonly string[]): readonly Digest[] {
   return unique(values)
     .toSorted()
-    .map((value) => digest.parse(value));
+    .map((value) => authoringDigest.parse(value));
 }
 /** Distinct values, each at its first position. */
 function unique<T>(values: readonly T[]): readonly T[] {

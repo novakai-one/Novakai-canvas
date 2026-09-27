@@ -1,23 +1,76 @@
-import type { ValidationError as LanguageError } from '@novakai/canvas-language';
-import { z } from 'zod';
-import { requestSchema, recordId } from '@novakai/canvas-authoring';
-import type { Request, Snapshot } from '@novakai/canvas-authoring';
-import type { WriteLease } from '@novakai/canvas-assets';
-import type { Catalog, Preset } from '@novakai/canvas-templates';
+/*
+ * Resource commands: byte staging, lookup and restore through Assets, and the snapshot-bound preset
+ * preparation, theme-pin freezing and recipe instantiation the session exposes. Pure over the
+ * injected owners; Assets owns byte recovery, Authoring owns the canonical write and receipt.
+ */
 import type {
-  ResourceCommands,
-  PresetOwners,
+  Assets,
+  Catalog,
+  Json,
+  Language,
+  LanguageError,
+  LoweredIntent,
+  Preset,
+  Request,
+  ResolvedResources,
+  Snapshot,
+  Templates,
+  WriteLease,
+} from '../../../contract/records/capabilities.js';
+import type {
+  PreparationInput,
   PresetPreparation,
+  ResourceCommands,
   ResourceDiagnostic,
   ResourceResult,
+  RestoreInput,
 } from '../../../contract/records/presets/preparation.js';
+import {
+  admissionFields,
+  instantiateInput,
+  preparationInput,
+  restoreInput,
+} from '../../../contract/records/presets/preparation.js';
+import type { ResourceSelector } from '../../../contract/records/planning/planning.js';
 import { dslCommand, presetAdmission } from '../../../contract/records/planning/commands.js';
+import { json, recordId, requestSchema } from '../../../contract/schemas.js';
 import { EMPTY_RESOURCES } from '../../../contract/ports/capabilities.js';
-const input = z.strictObject({
-  admission: z.json(),
-  assets: z.array(z.strictObject({ alias: z.string(), digest: z.string() })).default([]),
-});
-const restored = z.strictObject({ digest: z.string(), base64: z.string() });
+
+/** The owners resource commands work through; compose passes them from ServiceCapabilities and the workspace. */
+export interface PresetOwners {
+  readonly selector: ResourceSelector;
+  readonly language: Pick<Language, 'print'>;
+  readonly assets: Pick<Assets, 'stage' | 'resolve' | 'reserve'>;
+  /** Normalises a theme admission against the catalog and the uploaded font bindings. */
+  normalize(
+    admission: Json,
+    catalog: Catalog,
+    assets: readonly { readonly alias: string; readonly digest: string }[],
+  ): ResourceResult<Json>;
+  /** Templates bound to one call's resolved resources. */
+  templates(
+    resources: ResolvedResources,
+  ): Pick<Templates<LoweredIntent>, 'readCatalog' | 'planAdmission' | 'read' | 'instantiate'>;
+}
+
+/**
+ * Binds resource commands to their owners; Authoring remains the sole canonical write and receipt
+ * gate. `stage`, `blob` and `restore` answer Assets' outcomes (`restore` refuses a malformed body
+ * with `invalid-input` at `restore`). `freeze`, `preparePreset` and `instantiate` keep the owner's
+ * diagnostic; any other fault is `invalid-input` at `resources` (`language` for an unprintable
+ * recipe, `preset.kind` for a non-recipe pin). Starts no I/O.
+ */
+export function createResourceCommands(owners: PresetOwners): ResourceCommands {
+  return {
+    stage: (input) => owners.assets.stage(input),
+    blob: (input) => owners.assets.resolve(input),
+    restore: (input) => restore(input, owners),
+    freeze: (input, snapshot) => guarded(() => freeze(input, snapshot, owners)),
+    preparePreset: (input, snapshot) => guarded(() => prepare(input, snapshot, owners)),
+    instantiate: (input, snapshot) => guarded(() => instantiate(input, snapshot, owners)),
+  };
+}
+
 /** Owner diagnostics cross this boundary unchanged; unexpected provider faults become typed invalid-input outcomes. */
 class PreparationFault extends Error {
   /** Value-returning helpers retain the complete typed owner failure for the public Result boundary. */
@@ -36,7 +89,7 @@ function accepted<T>(
 }
 /** Build only a semantic selection envelope, never a persistence transaction or canonical binding. */
 function selectionRequest(
-  value: ReturnType<typeof input.parse>,
+  value: PreparationInput,
   snapshot: Snapshot,
 ): Request {
   const header = presetAdmission.parse(value.admission);
@@ -68,11 +121,11 @@ function catalog(
 }
 /** Canonical recipe printing freezes theme aliases and local media declarations before returning a retained admission. */
 function normalizedAdmission(
-  admission: z.infer<ReturnType<typeof z.json>>,
+  admission: PresetPreparation['admission'],
   preset: Preset,
-): z.infer<ReturnType<typeof z.json>> {
+): PresetPreparation['admission'] {
   if (preset.kind !== 'recipe') return admission;
-  const original = z.record(z.string(), z.json()).parse(admission);
+  const original = admissionFields.parse(admission);
   return { ...original, source: preset.payload.source };
 }
 /** Preparation binds codecs to selected resources; no catalog or workspace state is mutated. */
@@ -81,11 +134,9 @@ function prepare(
   snapshot: Snapshot,
   owners: PresetOwners,
 ): PresetPreparation {
-  const value = input.parse(raw);
+  const value = preparationInput.parse(raw);
   const records = catalog(snapshot, owners);
-  const admission = z
-    .json()
-    .parse(accepted(owners.normalize(value.admission, records, value.assets)));
+  const admission = json.parse(accepted(owners.normalize(value.admission, records, value.assets)));
   const selected = accepted(
     owners.selector.select(selectionRequest({ ...value, admission }, snapshot), snapshot),
   );
@@ -94,7 +145,7 @@ function prepare(
   const preset = accepted(templates.read(plan.candidate, plan.pin));
   return {
     admission: normalizedAdmission(admission, preset),
-    record: z.json().parse(preset),
+    record: json.parse(preset),
     pin: plan.pin,
     key: { kind: 'preset', id: recordId.parse(`preset:${plan.pin.digest}`) },
     resources: preset.kind === 'theme' ? preset.payload.fonts : preset.payload.assets,
@@ -132,7 +183,7 @@ function instantiate(
   owners: PresetOwners,
 ): string {
   const records = catalog(snapshot, owners);
-  const request = z.strictObject({ pin: z.unknown(), namespace: z.string() }).parse(raw);
+  const request = instantiateInput.parse(raw);
   const templates = unboundTemplates(owners);
   const preset = accepted(templates.read(records, request.pin));
   if (preset.kind !== 'recipe')
@@ -161,7 +212,7 @@ async function restore(
   raw: unknown,
   owners: PresetOwners,
 ): ReturnType<ResourceCommands['restore']> {
-  const checked = restored.safeParse(raw);
+  const checked = restoreInput.safeParse(raw);
   if (!checked.success)
     return {
       ok: false,
@@ -176,7 +227,7 @@ async function restore(
 }
 /** Reservation failure leaves no lease; a successful reservation always reaches release. */
 async function restoreChecked(
-  checked: z.infer<typeof restored>,
+  checked: RestoreInput,
   owners: PresetOwners,
 ): ReturnType<ResourceCommands['restore']> {
   const lease = owners.assets.reserve([checked.digest]);
@@ -186,7 +237,7 @@ async function restoreChecked(
 /** Stage failure remains primary; release failure is observable only after successful staging. */
 async function restoreReserved(
   lease: WriteLease,
-  checked: z.infer<typeof restored>,
+  checked: RestoreInput,
 ): ReturnType<ResourceCommands['restore']> {
   const staged = await lease.stage(checked.digest, checked.base64);
   const released = lease.release();
@@ -201,18 +252,6 @@ function guarded<T>(operation: () => T): ResourceResult<T> {
     return { ok: false, error: preparationDiagnostic(error) };
   }
 }
-/** Bind byte and snapshot operations only; Authoring remains the sole canonical write and receipt gate. */
-export function createResourceCommands(owners: PresetOwners): ResourceCommands {
-  return {
-    stage: (input) => owners.assets.stage(input),
-    blob: (input) => owners.assets.resolve(input),
-    restore: (input) => restore(input, owners),
-    freeze: (input, snapshot) => guarded(() => freeze(input, snapshot, owners)),
-    preparePreset: (input, snapshot) => guarded(() => prepare(input, snapshot, owners)),
-    instantiate: (input, snapshot) => guarded(() => instantiate(input, snapshot, owners)),
-  };
-}
-
 /** Unexpected schema failures remain distinguishable from owner failures without leaking provider details. */
 function preparationDiagnostic(error: unknown): ResourceDiagnostic {
   if (error instanceof PreparationFault) return error.diagnostic;

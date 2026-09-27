@@ -1,11 +1,27 @@
+/*
+ * Preset preparation records: the request schemas resource commands decode, the prepared preset
+ * the preset planner carries, and the ResourceCommands the session exposes. Declarations only;
+ * Templates and Assets own their failures, Authoring owns commit and replay.
+ */
 import type { FailureSource } from '../transport/failure-source.js';
 import type { Result } from '../../errors.js';
 import { z } from 'zod';
-import type { Assets, Admission, StoredBlob, Result as AssetResult } from '@novakai/canvas-assets';
+import type { Admission, StoredBlob, Result as AssetResult } from '@novakai/canvas-assets';
 import type { Request, Snapshot, ReadVersion, RecordKey } from '@novakai/canvas-authoring';
-import type { Templates, Pin } from '@novakai/canvas-templates';
-import type { Language, LoweredIntent, ResolvedResources } from '@novakai/canvas-language';
-import type { ResourceSelector } from '../planning/planning.js';
+import type { Pin } from '@novakai/canvas-templates';
+/** A preset preparation request: the admission and the uploaded assets it may bind (none by default). */
+export const preparationInput = z.strictObject({
+  admission: z.json(),
+  assets: z.array(z.strictObject({ alias: z.string(), digest: z.string() })).default([]),
+});
+export type PreparationInput = z.infer<typeof preparationInput>;
+/** A byte restore request: the digest and its normalized base64 bytes. */
+export const restoreInput = z.strictObject({ digest: z.string(), base64: z.string() });
+export type RestoreInput = z.infer<typeof restoreInput>;
+/** A recipe instantiation request: the recipe pin (Templates checks it) and the target namespace. */
+export const instantiateInput = z.strictObject({ pin: z.unknown(), namespace: z.string() });
+/** A retained admission read as named fields, so a recipe's canonical source can replace its own. */
+export const admissionFields = z.record(z.string(), z.json());
 /** Prepared content is immutable host data; Authoring repeats preparation and owns commit/replay. */
 export const presetCommand = z.strictObject({
   admission: z.json(),
@@ -60,18 +76,4 @@ export interface ResourceCommands {
     input: unknown,
     snapshot: Snapshot,
   ): ResourceResult<string>;
-}
-/** Codec construction receives normalized resources; no mutable alias registry survives a call. */
-export interface PresetOwners {
-  readonly selector: ResourceSelector;
-  readonly language: Pick<Language, 'print'>;
-  readonly assets: Pick<Assets, 'stage' | 'resolve' | 'reserve'>;
-  normalize(
-    admission: import('@novakai/canvas-authoring').Json,
-    catalog: import('@novakai/canvas-templates').Catalog,
-    assets: readonly { readonly alias: string; readonly digest: string }[],
-  ): ResourceResult<import('@novakai/canvas-authoring').Json>;
-  templates(
-    resources: ResolvedResources,
-  ): Pick<Templates<LoweredIntent>, 'readCatalog' | 'planAdmission' | 'read' | 'instantiate'>;
 }

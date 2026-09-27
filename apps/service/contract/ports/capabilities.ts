@@ -1,9 +1,10 @@
 /*
  * The capability seam: the capability behaviour service rules may call. Core cannot import a
  * capability package, so compose/capabilities.ts builds ServiceCapabilities and compose passes
- * slices of it on. Today builtin preset preparation and the workspace reader take slices; core
- * modules in later PRs take `Pick<ServiceCapabilities, …>` of what they use. Declarations only,
- * plus the frozen empty resource set; the capabilities own their failures and recovery.
+ * slices of it on. Today builtin preset preparation, the workspace reader and resource selection
+ * take slices; core modules in later PRs take `Pick<ServiceCapabilities, …>` of what they use.
+ * Declarations only, plus the frozen empty resource set; the capabilities own their failures and
+ * recovery.
  */
 import type { DesignSystem } from '@novakai/canvas-design-system';
 import type { composeExport, formatMarkdown } from '@novakai/canvas-export';
