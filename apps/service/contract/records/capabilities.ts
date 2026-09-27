@@ -27,6 +27,7 @@ export type {
   Cancellation,
   Notifications,
   WorkspaceId,
+  PlannerId,
   Digest,
   Json,
 } from '@novakai/canvas-authoring';

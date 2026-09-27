@@ -12,8 +12,8 @@ import type {
   HttpSecurity,
 } from '../../contract/records/transport/http.js';
 import { browserCookieName } from '../../contract/records/transport/http.js';
-import type { Request } from '../../contract/records/capabilities.js';
-import { requestSchema } from '../../contract/schemas.js';
+import type { PlannerId, Request } from '../../contract/records/capabilities.js';
+import { plannerId, requestSchema } from '../../contract/schemas.js';
 import { failure, success, type Result } from '../../contract/errors.js';
 
 /** The identity the browser session cookie grants. */
@@ -25,18 +25,21 @@ const CLI_CALLER: Caller = Object.freeze({ id: 'agent:cli', kind: 'agent' });
  * The public semantic planners each caller may address. Installation stays internal, and the agent
  * credential never grants the raw Model planner, whatever the payload claims.
  */
-const PLANNERS: Readonly<Record<Caller['kind'], readonly string[]>> = Object.freeze({
-  human: Object.freeze(['dsl', 'model', 'library']),
-  agent: Object.freeze(['dsl', 'library', 'preset']),
+const PLANNERS: Readonly<Record<Caller['kind'], readonly PlannerId[]>> = Object.freeze({
+  human: plannerIds('dsl', 'model', 'library'),
+  agent: plannerIds('dsl', 'library', 'preset'),
 });
 
 /** The `Sec-Fetch-Site` values a bootstrap navigation may carry. */
 const NAVIGATION_SITES: readonly string[] = Object.freeze(['none', 'same-origin']);
 
 /**
- * Binds the ingress policy to one server's security. `bootstrap` behaves as `bootstrap`,
- * `authenticate` as `authenticate` and `mutation` as `admitMutation` below; every refusal is safe
- * to correct and resend.
+ * Binds the ingress policy to one server's security. Every refusal is safe to correct and resend.
+ * - `cookieName`: the browser session cookie name for this host.
+ * - `bootstrap`: success for a direct navigation; `unauthorized` at `host` or `navigation`.
+ * - `authenticate`: the caller; `unauthorized` at `host`, `session` or `credential`.
+ * - `mutation`: the admitted request; `invalid-input` at `request`, or `unauthorized` at `actor`
+ *   or `intent.planner`.
  */
 export function createAdmission(security: HttpSecurity): HttpAdmission {
   return {
@@ -227,4 +230,12 @@ function permittedPlanner(
 ): boolean {
   if (request.intent.kind !== 'change') return true;
   return PLANNERS[caller.kind].includes(request.intent.planner);
+}
+
+/**
+ * Brands a fixed list of planner ids with Authoring's `plannerId` and freezes it. Runs once at
+ * module load on the literals above, which are all valid ids.
+ */
+function plannerIds(...ids: readonly string[]): readonly PlannerId[] {
+  return Object.freeze(ids.map((id) => plannerId.parse(id)));
 }

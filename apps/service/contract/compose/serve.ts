@@ -1,52 +1,32 @@
 /*
- * HTTP serving and headless bindings: expose one already-open workspace through authenticated
- * loopback transport; the caller closes transport before draining its workspace. Read-only
- * headless composition shares the service's preset rules, render-job building and the
- * render-worker producer; the CLI owns retry after dependencies are restored.
+ * HTTP serving: expose one already-open workspace through authenticated loopback transport. The
+ * socket, static-file and credential adapters load lazily; admission and the router bind to the
+ * server's security. Every failure is a value; the caller keeps the workspace, closes transport
+ * before draining it, and retries startup.
  */
 import type { WorkspaceSession } from '../types.js';
 import type { LocalServer, ServerOptions } from '../records/transport/server.js';
 import type { Result } from '../errors.js';
 import { failure } from '../errors.js';
-import { createAdmission as createHttpAdmission } from '../../core/transport/admission.js';
+import { createAdmission } from '../../core/transport/admission.js';
 import { readCommand } from '../../core/transport/command.js';
 import { createHttpRouter } from '../../core/transport/routes.js';
-import { createPresetCodecs } from '../../core/presets/codecs.js';
-import { prepareTheme } from '../../core/presets/theme-admission.js';
-import { createRenderJobs } from '../../core/rendering/jobs.js';
 import { createSourceReadout } from '../../core/transport/source-readout.js';
 import { createServiceLanguage } from './capabilities.js';
 
-/** Expose one already-open workspace through authenticated loopback transport. Caller closes transport before draining its workspace. */
+/**
+ * Serves one already-open workspace on the configured loopback port. Fails with `unavailable` at
+ * `credential` when the credential file cannot be created, is unsafe or is malformed,
+ * `unavailable` at `server` when the port cannot be opened, and `unavailable` at `server` ("HTTP
+ * bindings could not initialize") when an adapter cannot load or anything else throws. The
+ * workspace stays open for the caller.
+ */
 export async function serveWorkspace(
   session: WorkspaceSession,
   options: ServerOptions,
 ): Promise<Result<LocalServer>> {
   try {
-    const [credentials, io, files, server] = await Promise.all([
-      import('../../adapters/credentials/local-credentials.js'),
-      import('../../adapters/http/http-io.js'),
-      import('../../adapters/http/static-files.js'),
-      import('../../adapters/http/server.js'),
-    ]);
-    const security = await credentials.createLocalSecurity(options.port, options.credentialFile);
-    if (!security.ok) return security;
-    const admission = createHttpAdmission(security.value);
-    return server.startHttpServer(options, {
-      security: security.value,
-      admission,
-      changes: session,
-      io: io.createHttpIo(),
-      files: files.createStaticFiles(options.webRoot),
-      router: createHttpRouter({
-        session,
-        resources: session.resources,
-        generation: security.value.generation,
-        admission,
-        decoder: { read: readCommand },
-        source: createSourceReadout(createServiceLanguage()),
-      }),
-    });
+    return await startServer(session, options);
   } catch {
     return failure(
       'unavailable',
@@ -56,19 +36,36 @@ export async function serveWorkspace(
   }
 }
 
-/** Local agent bootstrap reads an existing protected credential; browser consumers must use their HttpOnly session instead. */
-export async function readAgentCredential(path: string): Promise<Result<string>> {
-  const credentials = await import('../../adapters/credentials/local-credentials.js');
-  return credentials.readAgentCredential(path);
-}
-
-/** Read-only headless composition shares the preset codecs, theme admission, render jobs and producer. CLI runHeadless catches import failures, reports render-unavailable and owns retry after dependencies are restored. */
-export async function createHeadlessBindings() {
-  const rendering = await import('../../adapters/render-worker/derive.js');
-  return {
-    createPresetCodecs,
-    prepareTheme,
-    createRenderJobs,
-    produceDiagram: rendering.produceDiagram,
-  };
+/**
+ * Loads the adapters, creates this server's security and starts the socket. Fails as
+ * `serveWorkspace` names; throws when an adapter cannot load.
+ */
+async function startServer(
+  session: WorkspaceSession,
+  options: ServerOptions,
+): Promise<Result<LocalServer>> {
+  const [credentials, io, files, server] = await Promise.all([
+    import('../../adapters/credentials/local-credentials.js'),
+    import('../../adapters/http/http-io.js'),
+    import('../../adapters/http/static-files.js'),
+    import('../../adapters/http/server.js'),
+  ]);
+  const security = await credentials.createLocalSecurity(options.port, options.credentialFile);
+  if (!security.ok) return security;
+  const admission = createAdmission(security.value);
+  return server.startHttpServer(options, {
+    security: security.value,
+    admission,
+    changes: session,
+    io: io.createHttpIo(),
+    files: files.createStaticFiles(options.webRoot),
+    router: createHttpRouter({
+      session,
+      resources: session.resources,
+      generation: security.value.generation,
+      admission,
+      decoder: { read: readCommand },
+      source: createSourceReadout(createServiceLanguage()),
+    }),
+  });
 }
