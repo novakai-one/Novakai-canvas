@@ -20,7 +20,7 @@ export interface CollectionReads {
 /**
  * Reads one consistent committed workspace and renders the named collection from it. A failed
  * workspace read or view check is `unavailable` (source kept); a missing collection is
- * `missingCollection`; the renderer's own failures pass through.
+ * `not-found` at the requested ID (`missingCollection`); the renderer's own failures pass through.
  */
 export async function renderCollection(
   id: CollectionId,
@@ -41,7 +41,10 @@ export async function renderCollection(
 export function missingCollection(text: string): Result<never> {
   return failure('not-found', text, 'Collection does not exist');
 }
-/** Missing collection is distinct from an empty collection; the caller retains its current navigation/draft. */
+/**
+ * Renders the collection with this ID from the checked view. A missing collection (distinct from
+ * an empty one) is `not-found` at the requested ID; the renderer's own failures pass through.
+ */
 function renderSelected(
   id: CollectionId,
   signal: AbortSignal,
