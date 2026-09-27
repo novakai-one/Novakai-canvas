@@ -13,7 +13,7 @@ import type {
 } from '../../../contract/records/capabilities.js';
 import type { Intent } from './intent.js';
 import { themeBinding, type BindingModel, type ThemeBinding } from './model-binding.js';
-import { prefixed, unique } from './digests.js';
+import { prefixed } from './digests.js';
 import { ResourceFault, accepted } from './refusal.js';
 
 /** The owners theme binding reads: Templates picks the latest version, Model checks each binding. */
@@ -41,7 +41,7 @@ export function availableThemes(
         themeBinding(item, owners.model),
       ] as const,
   );
-  const aliases = unique(records.map((item) => item.id)).map(
+  const aliases = [...new Set(records.map((item) => item.id))].map(
     (id) => [id, latestBinding(catalog, id, owners)] as const,
   );
   return Object.fromEntries([...exact, ...aliases]);

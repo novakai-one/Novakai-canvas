@@ -2,6 +2,8 @@
  * Digest text as selection handles it: Model pins bytes as `sha256:<hex>`, Assets and Authoring
  * as bare hex. Pure; the one place selection adds or removes the prefix. A malformed digest throws
  * zod's error (select.ts turns it into `invalid-input`), and Authoring owns recovery.
+ * Planned: the service `contract/brands.ts` PR replaces `PIN_PREFIX`, `prefixed` and `bare` with
+ * `pinnedDigest` / `bareDigest`; only `sortedDigests` stays here.
  */
 import type { Digest } from '../../../contract/records/capabilities.js';
 import { authoringDigest } from '../../../contract/schemas.js';
@@ -21,12 +23,5 @@ export function bare(value: string): string {
 
 /** Distinct digests in sorted order, each checked as an Authoring digest (throws zod's error when one is malformed). */
 export function sortedDigests(values: readonly string[]): readonly Digest[] {
-  return unique(values)
-    .toSorted()
-    .map((value) => authoringDigest.parse(value));
-}
-
-/** Distinct values, each at its first position. */
-export function unique<T>(values: readonly T[]): readonly T[] {
-  return [...new Set(values)];
+  return [...new Set(values)].toSorted().map((value) => authoringDigest.parse(value));
 }

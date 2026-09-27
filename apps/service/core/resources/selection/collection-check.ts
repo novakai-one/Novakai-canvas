@@ -1,7 +1,8 @@
 /*
  * Whether a committed collection's pins still match the stored presets and bytes, and which bytes
  * it needs. Pure over Templates and Assets; a mismatch throws ResourceFault (select.ts turns it
- * into `missing-asset`), and Authoring owns recovery.
+ * into `missing-asset`), a malformed digest throws zod's error (`invalid-input`), and Authoring
+ * owns recovery.
  */
 import type {
   Assets,
@@ -24,7 +25,8 @@ export interface CollectionOwners {
 /**
  * A collection's theme pin must name a stored theme; its fonts and asset bytes are returned sorted.
  * Throws ResourceFault when Templates or Assets refuses a pin (owner failure in `source`), when the
- * pin is not a theme, or when the theme roles or an asset's media type differ.
+ * pin is not a theme, or when the theme roles or an asset's media type differ. Throws zod's error
+ * when a font or asset digest is malformed.
  */
 export function collectionResources(
   collection: Collection,

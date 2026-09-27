@@ -3,6 +3,8 @@
  * smallest possible collection, so selection never copies Model's rules. Pure over Model and
  * Assets; a refusal throws ResourceFault (select.ts turns it into `missing-asset`), and Authoring
  * owns recovery.
+ * Planned: the service `core/presets/theme-binding.ts` PR merges this file with the copy in
+ * `core/presets/builtin.ts` ('Resource binding') and deletes this file.
  */
 import type {
   Assets,
