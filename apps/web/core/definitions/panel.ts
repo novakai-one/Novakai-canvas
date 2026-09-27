@@ -15,7 +15,8 @@ import type {
   UsageOutcome,
 } from '../../contract/records/definitions.js';
 import type { Collection } from '../../contract/records/owners.js';
-import type { ActiveDiagram, WorkspaceView } from '../../contract/records/workspace.js';
+import type { WorkspaceView } from '../../contract/records/workspace.js';
+import type { ActiveDiagram } from '../../contract/records/active-diagram.js';
 import { canonicalText, usageView } from './usages.js';
 
 /** Model's answers about one definition, injected by the contract binding. */

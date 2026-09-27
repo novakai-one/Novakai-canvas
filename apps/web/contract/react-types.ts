@@ -1,4 +1,5 @@
-import type { PanelController, PanelTab } from './panel-types.js';
+import type { PanelController } from './panel-types.js';
+import type { PanelTab } from './records/panels.js';
 import type { ComponentType, ReactElement, ReactNode } from 'react';
 import type { ReactBindings as DesignBindings } from '@novakai/canvas-design-system';
 import type { SurfaceProps } from '@novakai/canvas-canvas';

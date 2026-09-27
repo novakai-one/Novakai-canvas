@@ -16,7 +16,7 @@ import type {
 import type { Snapshot, Receipt, Request, CanvasEvent, NodeTarget } from './owners.js';
 import type { EditingBase } from './editor-recovery.js';
 import type { Diagnostic, Result } from '../errors.js';
-import type { DraftRetention } from '../ports/workspace.js';
+import type { DraftRetention } from '../ports/draft-retention.js';
 
 export type { Definition, DefinitionId, DefinitionUsage, TypeExpression };
 

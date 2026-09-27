@@ -1,13 +1,12 @@
+import type { PanelBindings, PanelController } from '../../contract/panel-types.js';
 import type {
-  PanelBindings,
-  PanelController,
   PanelState,
   PanelPreferences,
   PanelId,
   PanelTab,
   InterfaceControl,
   InterfaceVisibility,
-} from '../../contract/panel-types.js';
+} from '../../contract/records/panels.js';
 import {
   defaultPanels,
   panelMode,

@@ -6,7 +6,7 @@
  */
 import type { Result } from '../../../contract/errors.js';
 import type { Request, Section } from '../../../contract/records/owners.js';
-import type { ActiveDiagram } from '../../../contract/records/workspace.js';
+import type { ActiveDiagram } from '../../../contract/records/active-diagram.js';
 import type {
   ConnectionDraft,
   ConnectionEdit,

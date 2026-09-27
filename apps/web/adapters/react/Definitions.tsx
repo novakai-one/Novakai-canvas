@@ -10,7 +10,7 @@ import { useSyncExternalStore } from 'react';
 import type { ComponentType, ReactElement } from 'react';
 import type { FeatureProps } from '../../contract/react-types.js';
 import type { DefinitionsSlots } from '../../contract/definitions-react.js';
-import type { ActiveDiagram } from '../../contract/records/workspace.js';
+import type { ActiveDiagram } from '../../contract/records/active-diagram.js';
 import type { NodeTarget } from '../../contract/records/owners.js';
 import type {
   DefinitionDraft,

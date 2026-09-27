@@ -1,5 +1,6 @@
 import type { Target } from '../../contract/records/owners.js';
-import type { WorkspaceView, ActiveDiagram } from '../../contract/records/workspace.js';
+import type { WorkspaceView } from '../../contract/records/workspace.js';
+import type { ActiveDiagram } from '../../contract/records/active-diagram.js';
 import type { WireSelection } from '../../contract/records/wire-editor.js';
 /** Resolve a selected wire through the projection's canonical identity, never a generated-ID convention. */
 export function selectedWire(

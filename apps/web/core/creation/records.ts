@@ -20,7 +20,7 @@ import type {
   Section,
   Snapshot,
 } from '../../contract/records/owners.js';
-import type { ActiveDiagram } from '../../contract/records/workspace.js';
+import type { ActiveDiagram } from '../../contract/records/active-diagram.js';
 import type { IdGrammar } from '../editing/connection/types.js';
 import { groupCreationChanges, groupDraftProblem } from '../editing/group-creation.js';
 import { capturedElsewhere, type CreationCapture } from './captures.js';

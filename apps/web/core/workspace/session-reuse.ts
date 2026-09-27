@@ -4,7 +4,8 @@
  * contract records; Authoring owns commit and recovery.
  */
 import type { RenderDocument, SessionStore } from '../../contract/records/owners.js';
-import type { ActiveDiagram, WorkspaceView } from '../../contract/records/workspace.js';
+import type { WorkspaceView } from '../../contract/records/workspace.js';
+import type { ActiveDiagram } from '../../contract/records/active-diagram.js';
 
 /** Same-workspace monotonic revisions can update the existing session without losing its camera or selection. */
 export function reusableSession(

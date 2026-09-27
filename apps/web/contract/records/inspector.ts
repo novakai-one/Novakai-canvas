@@ -8,7 +8,7 @@ import type {
 import type { Snapshot, Receipt } from './owners.js';
 import type { EditingBase } from './editor-recovery.js';
 import type { Result, Diagnostic } from '../errors.js';
-import type { DraftRetention } from '../ports/workspace.js';
+import type { DraftRetention } from '../ports/draft-retention.js';
 /** UI edit commands retain incomplete text without pretending it is an admitted Model record. */
 export type ObjectEdit =
   | { readonly kind: 'label' | 'role'; readonly value: string }

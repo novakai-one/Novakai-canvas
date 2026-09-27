@@ -7,7 +7,8 @@
  * reads the editors and publishes.
  */
 import type { Diagnostic } from '../../contract/errors.js';
-import type { ActiveDiagram, WorkspaceView } from '../../contract/records/workspace.js';
+import type { WorkspaceView } from '../../contract/records/workspace.js';
+import type { ActiveDiagram } from '../../contract/records/active-diagram.js';
 
 /** An editor draft as the status reads it: only its collection matters. */
 export interface CollectionDraft {

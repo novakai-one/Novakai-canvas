@@ -9,7 +9,7 @@ import type {
 import type { Snapshot, Receipt } from './owners.js';
 import type { EditingBase } from './editor-recovery.js';
 import type { Diagnostic, Result } from '../errors.js';
-import type { DraftRetention } from '../ports/workspace.js';
+import type { DraftRetention } from '../ports/draft-retention.js';
 /** The semantic relationship is shared; only the selected section owns the route controls. */
 export interface WireSelection {
   readonly base: Snapshot;
@@ -46,6 +46,12 @@ export interface WireDraft extends Omit<WireSelection, 'base'> {
 export interface EditedWire {
   readonly relationship: Relationship;
   readonly wire: WireAppearance;
+}
+/** One endpoint a person can pick in the wire editor; `value` is the endpoint's stable select key. */
+export interface EndpointChoice {
+  readonly value: string;
+  readonly label: string;
+  readonly endpoint: Endpoint;
 }
 export interface WireEditorState {
   readonly drafts: readonly WireDraft[];

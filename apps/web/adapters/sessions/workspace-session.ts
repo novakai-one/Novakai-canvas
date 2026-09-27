@@ -13,11 +13,8 @@ import type { MoveOption, MoveReview } from '../../contract/records/movement.js'
 import type { DefinitionDraft } from '../../contract/records/definitions.js';
 import type { CarriedSnapshot, Submission } from '../../contract/records/submission.js';
 import type { Receipt } from '../../contract/records/owners.js';
-import type {
-  WorkspaceController,
-  WorkspaceView,
-  ActiveDiagram,
-} from '../../contract/records/workspace.js';
+import type { WorkspaceController, WorkspaceView } from '../../contract/records/workspace.js';
+import type { ActiveDiagram } from '../../contract/records/active-diagram.js';
 import type { WorkspaceBindings } from '../../contract/ports/workspace.js';
 import type {
   Request,

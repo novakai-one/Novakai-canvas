@@ -21,11 +21,8 @@ import {
 import type { PaletteDrop, ShellLayout } from '../../contract/api.js';
 import type { Diagnostic } from '../../contract/errors.js';
 import type { ChromeSlots, FeatureProps, WorkspaceProps } from '../../contract/react-types.js';
-import type {
-  ActiveDiagram,
-  WorkspaceController,
-  WorkspaceView,
-} from '../../contract/records/workspace.js';
+import type { WorkspaceController, WorkspaceView } from '../../contract/records/workspace.js';
+import type { ActiveDiagram } from '../../contract/records/active-diagram.js';
 import styles from './WorkspaceShell.module.css';
 
 /** The work surface is the primary content; chrome uses stable injected sections and shared design tokens. */

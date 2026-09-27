@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { requestSchema, receiptSchema } from '@novakai/canvas-authoring';
 import type { AppliedCommit, SubmissionReaders } from '../../contract/records/submission.js';
-import type { WorkspaceInputs } from '../../contract/ports/workspace.js';
+import type { WorkspaceInputs } from '../../contract/ports/workspace-inputs.js';
 import type { Receipt, Request } from '../../contract/records/owners.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';

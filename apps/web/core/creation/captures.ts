@@ -16,7 +16,7 @@ import type {
   Snapshot,
 } from '../../contract/records/owners.js';
 import type { Submission } from '../../contract/records/submission.js';
-import type { ActiveDiagram } from '../../contract/records/workspace.js';
+import type { ActiveDiagram } from '../../contract/records/active-diagram.js';
 
 /** The ID type each form adds. */
 export interface CaptureIdMap {

@@ -1,7 +1,7 @@
 /*
- * Panel state vocabulary: which side panels are open, the saved panel preferences and which
- * interface controls show. Web core reads these records to lay out the shell; `panel-types.ts`
- * re-exports them beside the panel controller and bindings.
+ * Panel state vocabulary: which side panels are open, their tabs, sizes and sections, the saved
+ * panel preferences and which interface controls show. Records only: no behaviour, no I/O. Web
+ * core reads them to lay out the shell; `panel-types.ts` names them in the panel controller.
  */
 
 /** The two side panels. */
@@ -9,6 +9,30 @@ export type PanelId = 'left' | 'right';
 
 /** How the panels sit beside the canvas at the current viewport width. */
 export type PanelMode = 'docked' | 'overlay' | 'sheet';
+
+/** The four panel tabs. */
+export type PanelTab = 'add' | 'browse' | 'inspect' | 'settings';
+
+/** An interface control a person can show or hide. */
+export type InterfaceControl = 'tools' | 'zoom' | 'minimap' | 'outline' | 'roads' | 'labels';
+
+/** Definitions describe trusted features; persisted layout contains only stable IDs and preferences. */
+export interface PanelSectionDefinition {
+  readonly id: string;
+  readonly title: string;
+  readonly defaultSide: PanelId;
+  readonly defaultExpanded: boolean;
+}
+
+/** Breakpoints and per-side widths, resolved from the Design System's variables. */
+export interface PanelSizing {
+  readonly canvasMinimum?: number;
+  readonly medium: number;
+  readonly large: number;
+  readonly sides: Readonly<
+    Record<PanelId, { readonly width: number; readonly minimum: number; readonly maximum: number }>
+  >;
+}
 
 /** Which interface controls show, and whether the whole interface is hidden. */
 export interface InterfaceVisibility {

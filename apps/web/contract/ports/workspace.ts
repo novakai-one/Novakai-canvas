@@ -1,68 +1,30 @@
+/*
+ * Workspace session seams: Canvas session construction and the bindings composition hands the
+ * workspace session. Declarations only; `contract/compose.ts` supplies the adapters.
+ */
+import type { GeometryPreview } from '@novakai/canvas-canvas';
 import type { LibraryFactory } from '../records/library.js';
-import type { OrganisationChange } from '@novakai/canvas-library';
 import type { WireEditorFactory } from '../records/wire-editor.js';
 import type { InspectorFactory } from '../records/inspector.js';
 import type { DefinitionFactory } from '../records/definitions.js';
 import type { SourceFactory } from '../records/source.js';
 import type { WorkspaceNavigation } from './navigation.js';
+import type { WorkspaceInputs } from './workspace-inputs.js';
 import type { PanelController } from '../panel-types.js';
 import type { SubmissionFactory } from '../records/submission.js';
 import type { Result } from '../errors.js';
-import type { EditingBase } from '../records/editor-recovery.js';
 import type {
-  Collection,
-  Snapshot,
-  Request,
   RenderDocument,
   CanvasEffect,
   Canvas,
   SessionStore,
   Change,
+  EditIntent,
+  SceneStamp,
 } from '../records/owners.js';
 import type { ServiceClient } from './client.js';
 import type { EditPlanner } from '../records/editing.js';
 import type { MoveOption, MoveReview } from '../records/movement.js';
-export interface WorkspaceInputs {
-  history(
-    input: unknown,
-    direction: 'undo' | 'redo',
-    id: string,
-  ): Result<Request | null>;
-  snapshot(
-    input: unknown,
-  ): Result<{ readonly snapshot: Snapshot; readonly collections: readonly Collection[] }>;
-  diagram(input: unknown): Result<RenderDocument>;
-  source(collection: Collection): Result<string>;
-  sourceRecovery(input: unknown): Result<{
-    readonly source: string;
-    readonly base: EditingBase;
-    readonly generation: string;
-    readonly collection: string;
-    readonly edit: number;
-  }>;
-  dsl(
-    snapshot: EditingBase,
-    id: string,
-    source: string,
-    mode: 'create' | 'replace',
-    request: string,
-  ): Result<Request>;
-  model(
-    snapshot: EditingBase,
-    collection: string,
-    changes: readonly Change[],
-    request: string,
-  ): Result<Request>;
-  library(
-    snapshot: Snapshot,
-    changes: readonly OrganisationChange[],
-    request: string,
-  ): Result<Request>;
-  newSource(
-    id: string,
-    title: string,
-  ): string;
-}
 /** Canvas session construction is separate from server subscriptions and browser editor state. */
 export interface CanvasSessions {
   readonly canvas: Canvas;
@@ -75,14 +37,6 @@ export interface CanvasSessions {
     document: RenderDocument,
   ): Result<void>;
 }
-export interface DraftRetention {
-  write(
-    key: string,
-    value: unknown,
-  ): Result<void>;
-  read(key: string): Result<unknown>;
-  remove(key: string): Result<void>;
-}
 export interface WorkspaceBindings {
   readonly client: Pick<ServiceClient, 'get' | 'changes'> & Partial<Pick<ServiceClient, 'bytes'>>;
   readonly navigation: WorkspaceNavigation;
@@ -94,19 +48,19 @@ export interface WorkspaceBindings {
   readonly edits: EditPlanner;
   readonly moveReview?: (
     document: RenderDocument,
-    intent: Extract<import('../records/owners.js').EditIntent, { kind: 'placement' }>,
-    stamp: import('../records/owners.js').SceneStamp,
+    intent: Extract<EditIntent, { kind: 'placement' }>,
+    stamp: SceneStamp,
   ) => Result<MoveReview>;
   readonly chooseMoveOption?: (
     review: MoveReview,
     optionId: string,
-    current: import('../records/owners.js').SceneStamp,
+    current: SceneStamp,
   ) => Result<MoveOption>;
   readonly previewRoutes?: (
     document: RenderDocument,
-    intent: import('../records/owners.js').EditIntent,
+    intent: EditIntent,
     changes: readonly Change[],
-  ) => Result<import('@novakai/canvas-canvas').GeometryPreview | null>;
+  ) => Result<GeometryPreview | null>;
   readonly submissions: SubmissionFactory;
   readonly source: SourceFactory;
   readonly inspector: InspectorFactory;

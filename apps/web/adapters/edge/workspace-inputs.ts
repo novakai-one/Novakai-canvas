@@ -4,7 +4,7 @@ import type { Snapshot, Request } from '@novakai/canvas-authoring';
 import { validate } from '@novakai/canvas-model';
 import type { Collection, Change } from '@novakai/canvas-model';
 import type { Language } from '@novakai/canvas-language';
-import type { WorkspaceInputs } from '../../contract/ports/workspace.js';
+import type { WorkspaceInputs } from '../../contract/ports/workspace-inputs.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
 import type {

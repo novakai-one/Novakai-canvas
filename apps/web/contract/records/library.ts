@@ -8,7 +8,7 @@ import type {
 } from '@novakai/canvas-library';
 import type { Snapshot, Collection, Receipt } from './owners.js';
 import type { Result, Diagnostic } from '../errors.js';
-import type { DraftRetention } from '../ports/workspace.js';
+import type { DraftRetention } from '../ports/draft-retention.js';
 /** Browse filters are browser preferences; catalog structure remains Library-owned canonical data. */
 export interface LibraryFilters {
   readonly text: string;

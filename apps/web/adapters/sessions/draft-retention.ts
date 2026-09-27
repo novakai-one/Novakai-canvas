@@ -1,4 +1,4 @@
-import type { DraftRetention } from '../../contract/ports/workspace.js';
+import type { DraftRetention } from '../../contract/ports/draft-retention.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
 /** Browser quota/privacy failure is visible. The runtime refuses a submission whose pending request could not be retained. */

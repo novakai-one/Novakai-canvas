@@ -4,7 +4,7 @@ import type {
   DiagramObject,
   ContentBlock,
 } from '../../contract/records/owners.js';
-import type { EndpointChoice } from '../../contract/wire-react.js';
+import type { EndpointChoice } from '../../contract/records/wire-editor.js';
 /** Option identity survives label changes and does not depend on punctuation inside labels. */
 export function endpointKey(endpoint: Endpoint): string {
   return JSON.stringify([endpoint.object, endpoint.member ?? null]);

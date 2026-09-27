@@ -5,7 +5,9 @@ import type {
   PanelPreferences,
   PanelSizing,
   PanelSectionDefinition,
-} from '../../contract/panel-types.js';
+  PanelTab,
+} from '../../contract/records/panels.js';
+import { sectionsOnSide } from '../panels/preferences.js';
 /** Breakpoint thresholds are injected from Design System's resolved variables, matching CSS without another numeric authority. */
 export function panelMode(
   width: number,
@@ -60,20 +62,13 @@ export function defaultPanels(
     tabs: { left: 'browse', right: 'inspect' },
     workspace,
     sections: {
-      left: defaultsOnSide(definitions, 'left'),
-      right: defaultsOnSide(definitions, 'right'),
+      left: sectionsOnSide(definitions, 'left'),
+      right: sectionsOnSide(definitions, 'right'),
     },
     collapsed: definitions.filter((item) => !item.defaultExpanded).map((item) => item.id),
     hidden: [],
     widths: { left: sizing.sides.left.width, right: sizing.sides.right.width },
   };
-}
-/** Registration order is the default order; every definition has one initial side. */
-function defaultsOnSide(
-  definitions: readonly PanelSectionDefinition[],
-  side: PanelId,
-): readonly string[] {
-  return definitions.filter((item) => item.defaultSide === side).map((item) => item.id);
 }
 
 /** A closed last-used pane does not open itself during a responsive transition. */
@@ -83,8 +78,8 @@ function lastDockedPanel(state: PanelState): PanelId | null {
 }
 
 /** Tab roles are shell-owned; features cannot migrate into a different semantic role. */
-export function panelTabSide(tab: import('../../contract/panel-types.js').PanelTab): PanelId {
-  const sides: Readonly<Record<import('../../contract/panel-types.js').PanelTab, PanelId>> = {
+export function panelTabSide(tab: PanelTab): PanelId {
+  const sides: Readonly<Record<PanelTab, PanelId>> = {
     add: 'left',
     browse: 'left',
     inspect: 'right',

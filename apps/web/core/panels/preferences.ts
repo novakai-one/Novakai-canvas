@@ -3,7 +3,7 @@ import type {
   PanelPreferences,
   PanelSectionDefinition,
   PanelSizing,
-} from '../../contract/panel-types.js';
+} from '../../contract/records/panels.js';
 /** Moving removes the stable ID from both sides first, preventing duplicate sections after repeated moves. */
 export function movePanelSection(
   preferences: PanelPreferences,
@@ -52,8 +52,8 @@ export function reconcilePanelPreferences(
   return {
     ...saved,
     sections: {
-      left: [...left, ...newOnSide(missing, 'left')],
-      right: [...right, ...newOnSide(missing, 'right')],
+      left: [...left, ...sectionsOnSide(missing, 'left')],
+      right: [...right, ...sectionsOnSide(missing, 'right')],
     },
     collapsed: [
       ...new Set([
@@ -68,8 +68,8 @@ export function reconcilePanelPreferences(
     },
   };
 }
-/** New registrations do not overwrite existing user order. */
-function newOnSide(
+/** The IDs of the definitions whose default side is `side`, in registration order. New registrations do not overwrite existing user order. */
+export function sectionsOnSide(
   definitions: readonly PanelSectionDefinition[],
   side: PanelId,
 ): readonly string[] {

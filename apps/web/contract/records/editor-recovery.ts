@@ -12,6 +12,15 @@ export interface CapturedCollectionBase {
 /** Fresh diagrams remain full snapshots; retained editors use the compact alternative. */
 export type EditingBase = Snapshot | CapturedCollectionBase;
 
+/** A stored source draft after its reader checked it; the source editor resumes from it. */
+export interface RecoveredSource {
+  readonly source: string;
+  readonly base: EditingBase;
+  readonly generation: string;
+  readonly collection: string;
+  readonly edit: number;
+}
+
 export interface SourceRecoveryV1 {
   readonly kind: 'source-draft';
   readonly schemaVersion: 1;

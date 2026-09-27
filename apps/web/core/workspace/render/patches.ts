@@ -6,7 +6,8 @@
  */
 import type { Diagnostic } from '../../../contract/errors.js';
 import type { RenderDocument, Snapshot } from '../../../contract/records/owners.js';
-import type { ActiveDiagram, WorkspaceView } from '../../../contract/records/workspace.js';
+import type { WorkspaceView } from '../../../contract/records/workspace.js';
+import type { ActiveDiagram } from '../../../contract/records/active-diagram.js';
 import type { RenderTicket } from './ticket.js';
 
 /** The fields the session publishes in one update. */

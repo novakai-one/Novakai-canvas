@@ -2,12 +2,8 @@ import { useState, useSyncExternalStore } from 'react';
 import { panelVisible } from '../../contract/api.js';
 import type { ComponentType, ReactElement } from 'react';
 import type { ViewMenuProps, DesignSlots } from '../../contract/react-types.js';
-import type {
-  PanelController,
-  InterfaceControl,
-  PanelId,
-  PanelState,
-} from '../../contract/panel-types.js';
+import type { PanelController } from '../../contract/panel-types.js';
+import type { InterfaceControl, PanelId, PanelState } from '../../contract/records/panels.js';
 
 /** View owns temporary interface visibility while the workspace retains diagram and draft state. */
 export function createViewMenu(

@@ -6,7 +6,7 @@
 import type { Diagnostic, Result } from '../errors.js';
 import { failure } from '../errors.js';
 import type { ServiceClient } from '../ports/client.js';
-import type { PanelSizing } from '../panel-types.js';
+import type { PanelSizing } from '../records/panels.js';
 import type { ThemeChoice } from '../records/preferences.js';
 import { installationSchema, type Installation } from '../records/installation.js';
 import type { DesignSystem, Environment } from '@novakai/canvas-design-system';

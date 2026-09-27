@@ -3,7 +3,8 @@ import type { WireEditorSession } from './wire-editor.js';
 import type { InspectorSession } from './inspector.js';
 import type { DefinitionSession } from './definitions.js';
 import type { SourceView } from './source.js';
-import type { Collection, Snapshot, RenderDocument, Canvas, SessionStore } from './owners.js';
+import type { Collection, Snapshot, RenderDocument } from './owners.js';
+import type { ActiveDiagram } from './active-diagram.js';
 import type { Submission } from './submission.js';
 import type { Diagnostic } from '../errors.js';
 import type { MoveReview } from './movement.js';
@@ -12,14 +13,6 @@ import type { ConnectionDraft, ConnectionEdit } from './connection.js';
 import type { Receipt } from './owners.js';
 import type { Result } from '../errors.js';
 import type { BinaryResponse } from '../ports/client.js';
-/** UI owns form drafts and selected collection; committed records are immutable Authoring snapshots. */
-export interface ActiveDiagram {
-  readonly generation: string;
-  readonly base: Snapshot;
-  readonly document: RenderDocument;
-  readonly canvas: Canvas;
-  readonly session: SessionStore;
-}
 export type CollectionSwitch =
   | { readonly phase: 'idle'; readonly activeId: string | null }
   | { readonly phase: 'choosing'; readonly activeId: string | null }

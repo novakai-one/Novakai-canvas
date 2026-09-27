@@ -1,9 +1,10 @@
 import type { Snapshot, Request, Receipt } from './owners.js';
 import type { EditingBase } from './editor-recovery.js';
-import type { ActiveDiagram } from './workspace.js';
+import type { ActiveDiagram } from './active-diagram.js';
 import type { Submission } from './submission.js';
 import type { Result, Diagnostic } from '../errors.js';
-import type { WorkspaceInputs, DraftRetention } from '../ports/workspace.js';
+import type { WorkspaceInputs } from '../ports/workspace-inputs.js';
+import type { DraftRetention } from '../ports/draft-retention.js';
 /** All retained source fields belong to one editor session, independent of rendered diagram updates. */
 export interface SourceView {
   readonly sourceCloseRequested: boolean;

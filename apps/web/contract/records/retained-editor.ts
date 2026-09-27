@@ -1,4 +1,4 @@
-import type { DraftRetention } from '../ports/workspace.js';
+import type { DraftRetention } from '../ports/draft-retention.js';
 import type { Result, Diagnostic } from '../errors.js';
 /** Minimal browser draft identity; domain records and commands stay with the feature. */
 export interface RetainedDraft {

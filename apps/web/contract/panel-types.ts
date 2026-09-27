@@ -1,31 +1,21 @@
+/*
+ * Panel seams: the panel controller React drives and the bindings composition hands it.
+ * Declarations only; `adapters/sessions/panel-session.ts` implements the controller. The panel
+ * records it names live in `records/panels.ts`, so Web core can read them.
+ */
 import type { Result } from './errors.js';
-import type { DraftRetention } from './ports/workspace.js';
-import type { PanelId, PanelPreferences, PanelState } from './records/panels.js';
-/** Panel state records live in records/panels.ts so Web core can read them. */
-export type {
-  InterfaceVisibility,
+import type { DraftRetention } from './ports/draft-retention.js';
+import type {
+  InterfaceControl,
   PanelId,
-  PanelMode,
   PanelPreferences,
+  PanelSectionDefinition,
+  PanelSizing,
   PanelState,
+  PanelTab,
 } from './records/panels.js';
-export type PanelTab = 'add' | 'browse' | 'inspect' | 'settings';
-export type InterfaceControl = 'tools' | 'zoom' | 'minimap' | 'outline' | 'roads' | 'labels';
-/** Definitions describe trusted features; persisted layout contains only stable IDs and preferences. */
-export interface PanelSectionDefinition {
-  readonly id: string;
-  readonly title: string;
-  readonly defaultSide: PanelId;
-  readonly defaultExpanded: boolean;
-}
-export interface PanelSizing {
-  readonly canvasMinimum?: number;
-  readonly medium: number;
-  readonly large: number;
-  readonly sides: Readonly<
-    Record<PanelId, { readonly width: number; readonly minimum: number; readonly maximum: number }>
-  >;
-}
+
+/** The shell's panel store: React reads its state and sends every panel change through it. */
 export interface PanelController {
   getSnapshot(): PanelState;
   subscribe(listener: () => void): () => void;
@@ -62,6 +52,7 @@ export interface PanelController {
   hideInterface(): void;
   revealInterface(): void;
 }
+/** What composition hands the panel store: section definitions, sizing, storage and the problem report. */
 export interface PanelBindings {
   readonly definitions: readonly PanelSectionDefinition[];
   readonly sizing: PanelSizing;

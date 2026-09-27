@@ -1,7 +1,7 @@
 import type { Request, Receipt, Snapshot, Collection } from './owners.js';
 import type { Result, Diagnostic } from '../errors.js';
 import type { ServiceClient } from '../ports/client.js';
-import type { DraftRetention } from '../ports/workspace.js';
+import type { DraftRetention } from '../ports/draft-retention.js';
 
 /** Immutable intent is retained before transmission; uncertain recovery always uses this exact request ID and body. */
 export interface Submission {

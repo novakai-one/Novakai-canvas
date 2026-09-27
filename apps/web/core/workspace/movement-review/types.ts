@@ -6,7 +6,8 @@
  */
 import type { MoveReview } from '../../../contract/records/movement.js';
 import type { PlacementIntent } from '../../../contract/records/owners.js';
-import type { ActiveDiagram, MovementReviewState } from '../../../contract/records/workspace.js';
+import type { MovementReviewState } from '../../../contract/records/workspace.js';
+import type { ActiveDiagram } from '../../../contract/records/active-diagram.js';
 
 /** The gesture under review: its diagram, intent, Model's review and the workspace it was made in. */
 export interface MovementCapture {

@@ -6,7 +6,7 @@ import type {
   ScopeInstaller,
   ScopeLease,
 } from '@novakai/canvas-design-system';
-import type { DraftRetention } from '../ports/workspace.js';
+import type { DraftRetention } from '../ports/draft-retention.js';
 import type { Result, Diagnostic } from '../errors.js';
 /** Personal preferences are browser-local. Collection styling remains part of the authored diagram. */
 export interface PreferenceView {

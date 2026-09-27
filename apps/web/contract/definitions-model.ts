@@ -6,7 +6,8 @@
 import { definitionDisplay, definitionUsages, primitiveType } from '@novakai/canvas-model';
 import { buildDefinitionsPanel, type DefinitionModel } from './api.js';
 import type { DefinitionsPanel, DefinitionState, PrimitiveName } from './records/definitions.js';
-import type { ActiveDiagram, WorkspaceView } from './records/workspace.js';
+import type { WorkspaceView } from './records/workspace.js';
+import type { ActiveDiagram } from './records/active-diagram.js';
 
 /** The primitive names a definition may use, in Model's order. */
 export const primitiveNames: readonly PrimitiveName[] = primitiveType.options;
