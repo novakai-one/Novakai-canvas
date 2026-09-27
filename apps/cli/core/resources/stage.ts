@@ -1,9 +1,17 @@
+/*
+ * Resource staging for authoring and preset admission: read each declared font or image, stage it
+ * with Assets (or keep its pinned digest), back up the normalised bytes, then freeze the aliases
+ * into the Authoring request. Uses injected ports only. A failure stops before any Authoring
+ * request is sent; staged bytes left behind are collectable Assets orphans.
+ */
 import type { CliDependencies, RequestDraft } from '../../contract/ports/runtime.js';
 import type { ByteBackup, LocalInput } from '../../contract/records/resources.js';
 import type { Command } from '../../contract/records/command.js';
 import type { Result } from '../../contract/errors.js';
+import { combined } from '../shared/results.js';
+
 /** This resource flow consumes only byte I/O plus the four semantic decoders it invokes. */
-interface ResourceDependencies {
+export interface ResourceDependencies {
   readonly transport: CliDependencies['transport'];
   readonly resourceFiles: CliDependencies['resourceFiles'];
   readonly semantic: Pick<
@@ -85,25 +93,6 @@ async function freezeDraft(
     value: { ...draft, request: checked.value, backups: values.map((item) => item.backup) },
   };
 }
-/** Restage exact normalized bytes before admission; receipt reconciliation has already established no commit exists. */
-export async function restoreResources(
-  draft: RequestDraft,
-  dependencies: Pick<ResourceDependencies, 'transport'>,
-): Promise<Result<void>> {
-  return restoreBackups(draft.backups ?? [], dependencies);
-}
-/** Restore failures stop before canonical admission, while successful backups remain safe to replay. */
-async function restoreBackups(
-  backups: readonly ByteBackup[],
-  dependencies: Pick<ResourceDependencies, 'transport'>,
-): Promise<Result<void>> {
-  const result = combined(
-    await Promise.all(backups.map((backup) => resourceCall('restore', backup, dependencies))),
-  );
-  if (!result.ok) return result;
-  return { ok: true, value: undefined };
-}
-
 /** Stage a semantic declaration list; a failed member prevents any canonical request submission. */
 export async function stageResources(
   file: string,
@@ -118,10 +107,4 @@ export async function stageResources(
   const checked = combined(inputs);
   if (!checked.ok) return checked;
   return combined(await Promise.all(checked.value.map((item) => stage(item, dependencies))));
-}
-/** Preserve the first typed failure without inventing successful values for rejected members. */
-function combined<T>(results: readonly Result<T>[]): Result<readonly T[]> {
-  const failed = results.find((item) => !item.ok);
-  if (failed) return failed;
-  return { ok: true, value: results.filter((item) => item.ok).map((item) => item.value) };
 }

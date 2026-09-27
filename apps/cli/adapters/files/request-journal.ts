@@ -1,4 +1,9 @@
-import { readFile, mkdir, open, writeFile } from 'node:fs/promises';
+/*
+ * The retained-request journal: one JSON file per request ID under the workspace `requests`
+ * directory, created exclusively and fsynced before anything is sent. Filesystem I/O; each failure
+ * is returned as a value. The journal is the CLI's recovery record for `receipt` then `retry`.
+ */
+import { readFile, mkdir, open } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { requestSchema, requestId } from '@novakai/canvas-authoring';
 import { byteBackup } from '../../contract/records/resources.js';
@@ -6,21 +11,16 @@ import { z } from 'zod';
 import type { RequestFiles, RequestDraft } from '../../contract/ports/runtime.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
+
+/** One journal file: the generation it was sent under, the Authoring request and its byte backups. */
 const retained = z.strictObject({
   generation: z.string(),
   request: requestSchema,
   backups: z.array(byteBackup).optional(),
 });
-/** A bounded UTF-8 file is decoded strictly; unreadable inputs fail before any service request. */
-async function source(path: string): Promise<Result<string>> {
-  try {
-    const bytes = await readFile(path);
-    if (bytes.byteLength > 16 * 1024 * 1024)
-      return failure('source-too-large', 'DSL source exceeds 16 MiB');
-    return { ok: true, value: new TextDecoder('utf-8', { fatal: true }).decode(bytes) };
-  } catch {
-    return failure('source-unavailable', `Cannot read UTF-8 source: ${path}`);
-  }
+/** Bind one local request directory; each operation reports its own I/O failure and recovery. */
+export function createRequestJournal(root: string): Pick<RequestFiles, 'save' | 'read'> {
+  return { save: (draft) => save(root, draft), read: (id) => read(root, id) };
 }
 /** Request IDs are owner-validated before they are used as filenames, excluding path separators and traversal. */
 function location(
@@ -88,20 +88,4 @@ async function read(
       'Retained request could not be read; inspect its receipt before submitting another',
     );
   }
-}
-/** --out is an explicit destination. Writing source output never changes canonical service data. */
-async function output(
-  path: string,
-  text: string,
-): Promise<Result<void>> {
-  try {
-    await writeFile(path, text, 'utf8');
-    return { ok: true, value: undefined };
-  } catch {
-    return failure('output-unavailable', `Cannot write output: ${path}`);
-  }
-}
-/** Bind one local request directory; each operation reports its own I/O failure and recovery. */
-export function createRequestFiles(root: string): RequestFiles {
-  return { source, save: (draft) => save(root, draft), read: (id) => read(root, id), output };
 }

@@ -6,7 +6,8 @@ import { validate, plan, stage } from '@novakai/canvas-model';
 import { readArguments } from '../adapters/inputs/arguments.js';
 import { createPresetInputs } from '../adapters/inputs/preset-inputs.js';
 import { createResourceFiles } from '../adapters/files/resource-reader.js';
-import { createRequestFiles } from '../adapters/files/request-journal.js';
+import { createLocalFiles } from '../adapters/files/local-files.js';
+import { createRequestJournal } from '../adapters/files/request-journal.js';
 import { createTransport } from '../adapters/service-http/transport.js';
 import { createSemanticInputs } from '../adapters/inputs/semantic-inputs.js';
 import { executeCommand, executeProfile, isProfileCommand, readThemeConfig, usage } from './api.js';
@@ -43,7 +44,10 @@ async function run(options: import('./records/command.js').CliOptions): Promise<
   return executeCommand(options.command, {
     transport: transport.value,
     resourceFiles: createResourceFiles(),
-    files: createRequestFiles(resolve(options.workspaceDirectory, 'requests')),
+    files: {
+      ...createLocalFiles(),
+      ...createRequestJournal(resolve(options.workspaceDirectory, 'requests')),
+    },
     semantic,
     presets: createPresetInputs(semantic, readThemeConfig),
     nextRequestId: randomUUID,
@@ -63,10 +67,7 @@ async function runProfile(
 ): Promise<Result<string>> {
   const language = createLanguage({ reader: { validate }, planner: { plan }, stage: { stage } });
   const semantic = createSemanticInputs(language);
-  return executeProfile(options.command, {
-    files: createRequestFiles(resolve(options.workspaceDirectory, 'requests')),
-    semantic,
-  });
+  return executeProfile(options.command, { files: createLocalFiles(), semantic });
 }
 
 /** Headless export binds the same theme grammar and service owners without starting an HTTP server. */

@@ -1,25 +1,19 @@
+/*
+ * Command routing: run the one flow each command names, then return its text or write the text to
+ * the --out file. Uses injected ports only. Failures are returned as values; `cli/canvas.ts` prints
+ * them and sets the exit code.
+ */
 import { usage } from './help.js';
 import type { Command, CommandName } from '../../contract/records/command.js';
 import type { CliDependencies } from '../../contract/ports/runtime.js';
 import type { Result } from '../../contract/errors.js';
-import { admitPreset, instantiateRecipe } from '../presets/admit.js';
-import { author, retry } from '../authoring/submit.js';
+import { admitPreset } from '../presets/admit.js';
+import { instantiateRecipe } from '../presets/instantiate.js';
+import { author } from '../authoring/submit.js';
+import { retry } from '../authoring/reconcile.js';
 import { executeProfile } from '../profiles/commands.js';
-/** Read failures preserve the service diagnostic; successful payloads still pass their owner-specific readout. */
-async function query(
-  path: string,
-  format: (input: unknown) => Result<string>,
-  dependencies: CliDependencies,
-): Promise<Result<string>> {
-  const result = await dependencies.transport.get(path);
-  if (!result.ok) return result;
-  if (!result.value.outcome.ok) return result.value.outcome;
-  return format(result.value.outcome.value);
-}
-/** Read-only grammar inspection is JSON output, never a requirement to author diagram JSON. */
-function describe(value: unknown): Result<string> {
-  return { ok: true, value: JSON.stringify(value, null, 2) };
-}
+import { describe, query, sourcePath } from '../reads/queries.js';
+
 /** Commands share stable transport/files/semantic roles; retry and apply replay the retained envelope after receipt lookup. */
 export async function execute(
   command: Command,
@@ -66,12 +60,6 @@ export async function execute(
   return output(command.output, outcome.value, dependencies);
 }
 
-function sourcePath(command: Command): string {
-  const query = new URLSearchParams({ id: command.target });
-  if (command.scope?.kind === 'section') query.set('section', command.scope.id);
-  if (command.scope?.kind === 'object') query.set('object', command.scope.id);
-  return `/api/v1/source?${query.toString()}`;
-}
 /** Source files are only written at the explicit --out path; stdout remains the default. */
 async function output(
   path: string | null,

@@ -1,9 +1,14 @@
+/*
+ * `theme admit` and `recipe admit`: parse the preset file, stage its resource bytes, prepare the
+ * preset through the service, then submit one retained Authoring request. Uses injected ports only.
+ * Authoring owns the commit; the retained request file is the recovery record for `retry`.
+ */
 import type { Command } from '../../contract/records/command.js';
 import type { CliDependencies } from '../../contract/ports/runtime.js';
 import type { Result } from '../../contract/errors.js';
-import { failure } from '../../contract/errors.js';
 import { resourceCall, stageResources } from '../resources/stage.js';
 import { submit } from '../authoring/submit.js';
+
 /** All bytes and exact preset content are retained before the sole canonical Authoring apply gate. */
 export async function admitPreset(
   command: Command,
@@ -94,21 +99,4 @@ async function retainRequest(
   );
   if (!request.ok) return request;
   return submit({ generation, request: request.value, backups }, false, dependencies);
-}
-/** Recipe expansion is read-only and returns ordinary pinned DSL; execute owns explicit --out file output. */
-export async function instantiateRecipe(
-  command: Command,
-  dependencies: CliDependencies,
-): Promise<Result<string>> {
-  const request = dependencies.presets.expansion(command.target, command.preset?.namespace ?? '');
-  if (!request.ok) return request;
-  const result = await resourceCall('instantiate', request.value, dependencies);
-  if (!result.ok) return result;
-  return expandedSource(result.value);
-}
-/** Expansion output is semantic text, never unchecked structured authoring input. */
-function expandedSource(value: unknown): Result<string> {
-  if (typeof value !== 'string')
-    return failure('invalid-response', 'Recipe expansion did not return editable DSL');
-  return { ok: true, value };
 }
