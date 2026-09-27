@@ -2039,7 +2039,11 @@ capability/layout/{core, contract/records} C (P2b: 7 cycle reports) · capabilit
 
 ### 13.3 Order
 
-One stack, in this order: P1 · P2a · P2b · P3 · P4 · P5 · P6 · P7 · P8 · B1 · ER1 · B2a · B2b · B3a · B3b · B4 · B5 · B6a · B6b · M1 … M28 · (M28b) · M29 … M34 · ER2 · ER3.
+One stack, in this order (lead's revision, 27 Sep): P1 · P2a · P3 · P4 · P5 · P6 · P7 · P8 · **SYNC** · P2b · B1 · ER1 · B2a · B2b · B3a · B3b · B4 · B5 · B6a · B6b · M1 … M28 · (M28b) · M29 … M34 · ER2 · ER3 · **OB1 … OB3**.
+
+- **SYNC** (merge only, no new code): merges the finished `apps/service` and `apps/cli` re-engineering stacks into this stack, so P2b, B1, B2b and ER1 edit service and cli files in their new homes. The body lists the already-reviewed PRs it brings in.
+- **P2b moves after SYNC** because it edits `apps/service/contract/records/*`, which the service stack re-homes.
+- **OB1 … OB3** (owner brands, §16 Q1 decided yes): brand workspace sequence (Authoring), collection revision (Model), Canvas target ID and scene key, Library cursor and visit time in their owning capabilities; the web picks them up with no web edits.
 
 ### 13.4 Definition of done (the story canvas shows the same table)
 
@@ -2108,13 +2112,13 @@ Each was checked in the code at `5571c7e`.
 
 ---
 
-## 16. Open decisions for Chris
+## 16. Decisions (were open; decided by the lead, 27 Sep)
 
-| # | Question | Default if no answer |
+| # | Question | Decision |
 |---|---|---|
-| Q1 | Owner brands for values that are named aliases today: workspace sequence (Authoring), collection revision (Model), Canvas target ID and scene key, Library cursor and visit time. About 2–3 PRs in authoring, persistence, service, cli, model, canvas, library | Keep the named aliases. A later owner brand reaches the web with no web edits |
-| Q2 | The score gate (> 144/160 on changed files) cannot pass for `workspace-session.ts` and the temporary bridge while they are being removed (SRP 0). Exempt them? | Exempt both until M34. Instead: `wc -l workspace-session.ts` drops in every wire PR, and the bridge stays within its budget (§8.5) |
-| Q3 | Decision 1 says choices follow a move "rejected by the server". This plan offers them only for `constraint-conflict`; the 7 other refusal codes snap back (revision-conflict: the diagram changed; the rest: the move itself is invalid) | Offer choices only for `constraint-conflict` |
+| Q1 | Owner brands for values that are named aliases today (workspace sequence, collection revision, Canvas target ID and scene key, Library cursor and visit time) | **Yes — brand them in their owning capabilities.** Chris's rule: no bare string/number for identities or domain values. Scheduled last as OB1–OB3, after ER3, so they do not collide with the service/cli stacks. |
+| Q2 | Score gate for `workspace-session.ts` and the temporary bridge while they are being removed | **Exempt both until M34.** Instead `wc -l workspace-session.ts` must drop in every wire PR, and the bridge stays within its §8.5 budget. |
+| Q3 | Choices after a server refusal: which refusal codes | **`constraint-conflict` only.** The other 7 codes snap back. |
 
 Decided by default, no question needed:
 - Run M28b (Canvas change) only if the M28 drive shows the Canvas drops the preview.
