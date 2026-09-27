@@ -24,7 +24,7 @@ export async function serveWorkspace(
       import('../../adapters/credentials/local-credentials.js'),
       import('../../adapters/http/request-reader.js'),
       import('../../adapters/http/http-router.js'),
-      import('../../adapters/rendering/language-readout.js'),
+      import('../../core/transport/source-readout.js'),
       import('../../adapters/http/http-io.js'),
       import('../../adapters/http/static-files.js'),
       import('../../adapters/http/server.js'),
@@ -65,7 +65,7 @@ export async function readAgentCredential(path: string): Promise<Result<string>>
 /** Read-only headless composition shares the preset codecs, theme admission, render jobs and producer. CLI runHeadless catches import failures, reports render-unavailable and owns retry after dependencies are restored. */
 export async function createHeadlessBindings() {
   const [jobs, rendering] = await Promise.all([
-    import('../../adapters/rendering/render-jobs.js'),
+    import('../../core/rendering/jobs.js'),
     import('../../adapters/render-worker/derive.js'),
   ]);
   return {

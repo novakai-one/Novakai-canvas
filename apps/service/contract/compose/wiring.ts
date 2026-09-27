@@ -38,7 +38,7 @@ import { createPresetPlanner } from '../../core/authoring-roles/planners/preset.
 import { prepareTheme } from '../../core/presets/theme-admission.js';
 import { createWorkspaceExporter } from '../../adapters/workspace/export.js';
 import { createPngRuntime } from '../../adapters/raster/png-runtime.js';
-import { cacheRenders } from '../../adapters/rendering/render-cache.js';
+import { cacheRenders } from '../../core/rendering/cache.js';
 import { createServiceCapabilities } from './capabilities.js';
 
 /** The workspace after wiring: the session facade, its validator, and the startup requests. */
@@ -59,8 +59,8 @@ export async function wireWorkspace(
   const producer = cacheRenders(worker);
   const [storeModule, jobModule, rendererModule, channelModule] = await Promise.all([
     import('../../adapters/storage/authoring-store.js'),
-    import('../../adapters/rendering/render-jobs.js'),
-    import('../../adapters/rendering/collection-renderer.js'),
+    import('../../core/rendering/jobs.js'),
+    import('../../core/rendering/renderer.js'),
     import('../../adapters/notifications/change-channel.js'),
   ]);
   const capabilities = createServiceCapabilities(installation.tokens);
