@@ -3,14 +3,12 @@
  * real owners. Startup failures leave the existing workspace untouched; the caller repairs the
  * installation and retries.
  */
-import { createTokenFileBindings, composeDesignSystem } from '@novakai/canvas-design-system';
-import { composeTemplates } from '@novakai/canvas-templates';
-import { createLanguage } from '@novakai/canvas-language';
-import { validate, plan, stage } from '@novakai/canvas-model';
+import { createTokenFileBindings } from '@novakai/canvas-design-system';
 import type { Assets } from '@novakai/canvas-assets';
 import type { BuiltinResources } from '../records/presets/builtins.js';
 import type { Result } from '../errors.js';
 import { failure } from '../errors.js';
+import { createServiceCapabilities } from './capabilities.js';
 
 /** Resource/provider startup failures leave the existing workspace untouched; caller repairs the installation and retries. */
 export async function prepareInstallation(
@@ -44,14 +42,6 @@ async function prepareInstallationInputs(
   ]);
   const sources = await loader.loadBuiltinSources(resourceRoot, assets, files.value);
   if (!sources.ok) return sources;
-  const context = {
-    system: composeDesignSystem(),
-    sources: sources.value.tokens,
-    language: createLanguage({ reader: { validate }, planner: { plan }, stage: { stage } }),
-    resources: { themes: {}, assets: {} },
-  };
-  return builtins.prepareBuiltinPresets(sources.value, {
-    context,
-    templates: (context) => composeTemplates(codecs.createPresetCodecs(context)),
-  });
+  const capabilities = createServiceCapabilities(sources.value.tokens, codecs.createPresetCodecs);
+  return builtins.prepareBuiltinPresets(sources.value, capabilities);
 }

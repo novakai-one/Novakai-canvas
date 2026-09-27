@@ -4,13 +4,12 @@
  * headless composition shares service adapters; the CLI owns retry after dependencies are
  * restored.
  */
-import { createLanguage } from '@novakai/canvas-language';
-import { validate, plan, stage } from '@novakai/canvas-model';
 import type { WorkspaceSession } from '../types.js';
 import type { LocalServer, ServerOptions } from '../records/transport/server.js';
 import type { Result } from '../errors.js';
 import { failure } from '../errors.js';
 import { createHttpAdmission, readCommand } from '../api.js';
+import { createServiceLanguage } from './capabilities.js';
 
 /** Expose one already-open workspace through authenticated loopback transport. Caller closes transport before draining its workspace. */
 export async function serveWorkspace(
@@ -30,7 +29,6 @@ export async function serveWorkspace(
     const security = await credentials.createLocalSecurity(options.port, options.credentialFile);
     if (!security.ok) return security;
     const admission = createHttpAdmission(security.value, { read: requests.readAuthoringRequest });
-    const language = createLanguage({ reader: { validate }, planner: { plan }, stage: { stage } });
     return server.startHttpServer(options, {
       security: security.value,
       admission,
@@ -42,7 +40,7 @@ export async function serveWorkspace(
         generation: security.value.generation,
         admission,
         decoder: { read: readCommand },
-        source: source.createSourceReadout(language),
+        source: source.createSourceReadout(createServiceLanguage()),
         exporter: session.exportArtifact,
       }),
     });

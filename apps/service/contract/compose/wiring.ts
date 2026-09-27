@@ -4,29 +4,27 @@
  * cancellation binds through Authoring and the actual feasibility workers; no global
  * current-request variable is used.
  */
-import { composeAuthoring, failure as authoringFailure } from '@novakai/canvas-authoring';
+import { composeAuthoring } from '@novakai/canvas-authoring';
 import type {
   Authoring,
   CandidateValidator,
   Request,
   Result as AuthoringResult,
 } from '@novakai/canvas-authoring';
-import { composeDesignSystem } from '@novakai/canvas-design-system';
-import { composeTemplates } from '@novakai/canvas-templates';
-import { createLanguage } from '@novakai/canvas-language';
-import { validate, plan, stage } from '@novakai/canvas-model';
 import type { WorkspaceOptions, NativeWorkspace } from '../records/workspace/startup.js';
 import type { AdmissionRuntime } from '../records/workspace/runtime.js';
 import type { BuiltinResources } from '../records/presets/builtins.js';
 import type { WorkspaceSession } from '../types.js';
 import type { DiagramProducer } from '../ports/rendering.js';
+import { EMPTY_RESOURCES } from '../ports/capabilities.js';
 import type { Result } from '../errors.js';
-import { failure } from '../errors.js';
+import { authoringFailure, failure, success } from '../errors.js';
 import { createWorkspaceSession } from '../api.js';
 import { createWorkspaceExporter } from '../../adapters/workspace/export.js';
 import { createPngRuntime } from '../../adapters/raster/png-runtime.js';
 import { cacheRenders } from '../../adapters/rendering/render-cache.js';
 import type { createFeasibility } from '../../adapters/planning/feasibility.js';
+import { createServiceCapabilities } from './capabilities.js';
 
 /** The workspace after wiring: the session facade, its validator, and the startup requests. */
 export interface WiredWorkspace {
@@ -83,15 +81,12 @@ export async function wireWorkspace(
     import('../../adapters/planning/preset-planner.js'),
     import('../../adapters/rendering/theme-preparation.js'),
   ]);
-  const language = createLanguage({ reader: { validate }, planner: { plan }, stage: { stage } });
-  const system = composeDesignSystem();
-  const context = {
-    system,
-    language,
-    sources: installation.tokens,
-    resources: { themes: {}, assets: {} },
-  };
-  const templates = composeTemplates(codecModule.createPresetCodecs(context));
+  const capabilities = createServiceCapabilities(
+    installation.tokens,
+    codecModule.createPresetCodecs,
+  );
+  const { language, system } = capabilities;
+  const templates = capabilities.templates(EMPTY_RESOURCES);
   const views = viewModule.createWorkspaceReader({ templates });
   const resources = resourceModule.createResourceSelector({
     assets: native.assets,
@@ -108,8 +103,7 @@ export async function wireWorkspace(
         assets: native.assets,
         templates,
       }),
-    templates: (resources) =>
-      composeTemplates(codecModule.createPresetCodecs({ ...context, resources })),
+    templates: capabilities.templates,
   });
   const collections = collectionModule.createCollectionPlanner(views, resources);
   const initial = {
@@ -189,15 +183,12 @@ export async function wireWorkspace(
       new AbortController().signal,
       feasibilityModule.createFeasibility,
     ).initializeHistory(options.workspace);
-  return {
-    ok: true,
-    value: {
-      session,
-      validation,
-      adopt,
-      initialize: installationModule.installationRequest(initial),
-    },
-  };
+  return success({
+    session,
+    validation,
+    adopt,
+    initialize: installationModule.installationRequest(initial),
+  });
 }
 
 /** Bind one request's cancellation through Authoring and actual feasibility workers; no global current-request variable is used. */

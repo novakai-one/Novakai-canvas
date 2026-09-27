@@ -8,6 +8,7 @@ import type {
   BuiltinPresetOwners,
 } from '../../contract/records/presets/builtins.js';
 import { failure, type Result } from '../../contract/errors.js';
+import { EMPTY_RESOURCES } from '../../contract/ports/capabilities.js';
 /** Boot admission stops at an owner rejection; service retains the original workspace. */
 class PresetFault extends Error {
   /** Private native/input failures have no invented source; checked owner failures retain theirs. */
@@ -40,7 +41,7 @@ function themeInput(
   owners: BuiltinPresetOwners,
 ): unknown {
   const ui = accepted(
-    owners.context.system.resolve({
+    owners.system.resolve({
       scope: 'ui',
       sources: sources.tokens,
       preferences: {
@@ -63,7 +64,7 @@ function addTheme(
   owners: BuiltinPresetOwners,
 ): Catalog {
   const id = scheme === 'light' ? 'paper' : 'ink';
-  const templates = owners.templates(owners.context);
+  const templates = owners.templates(EMPTY_RESOURCES);
   return accepted(
     templates.planAdmission(catalog, {
       schemaVersion: 1,
@@ -107,7 +108,7 @@ function addRecipe(
     ),
     assets: {},
   };
-  const templates = owners.templates({ ...owners.context, resources });
+  const templates = owners.templates(resources);
   return accepted(
     templates.planAdmission(catalog, {
       schemaVersion: 1,
