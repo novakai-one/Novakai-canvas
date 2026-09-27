@@ -7,14 +7,16 @@
 import { collectionId } from '../../contract/brands.js';
 import type { CollectionId } from '../../contract/brands.js';
 import type { ProfileCommand, Writes } from '../../contract/records/command.js';
-import { lintProfileRequired } from '../../contract/records/arguments.js';
-import type { CommandFlags } from '../../contract/records/arguments.js';
 import type { ProfileId } from '../../contract/records/profiles.js';
 import type { Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 import { checked } from '../shared/checks.js';
 import { joined, mapped, unsupported } from '../shared/results.js';
+import type { CommandFlags } from './flags.js';
 import { profile, sourceFile, writes } from './values.js';
+
+/** `profile lint` without --profile. `parse.ts` reports it with its placement rules. */
+export const lintProfileRequired = 'profile lint requires --profile build-spec@1.';
 
 /** What `profile scaffold` names the starter with, and where it writes it. */
 type Scaffold = { readonly collection: CollectionId; readonly title: string } & Writes;
@@ -68,7 +70,7 @@ function scaffold(flags: CommandFlags): Result<Scaffold> {
 
 /**
  * --profile for lint: required, then known. Fails with `invalid-arguments` or `unknown-profile`.
- * The argument adapter already reported a missing --profile; the check keeps this total.
+ * `parse.ts` already reported a missing --profile; the check keeps this total.
  */
 function lintProfile(text: string | undefined): Result<ProfileId> {
   if (text === undefined)

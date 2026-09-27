@@ -1,18 +1,19 @@
 /*
  * One check per argument value: read scope, change mode, revision, collection ID, request ID, file
- * path and profile. Each mints its brand once, from text the argument adapter passed through.
- * Pure. A rejected value is a failure naming the argument; nothing was read or sent, so the caller
- * corrects it and runs the command again.
+ * path, profile, server and workspace. Each mints its brand once, from flag text as given, and
+ * fills its default. Pure. A rejected value is a failure naming the argument; nothing was read or
+ * sent, so the caller corrects it and runs the command again.
  */
 import {
   collectionId,
   collectionRevision,
   filePath,
+  loopbackOrigin,
   objectId,
   requestId,
   sectionId,
 } from '../../contract/brands.js';
-import type { CollectionId, FilePath, RequestId } from '../../contract/brands.js';
+import type { CollectionId, FilePath, LoopbackOrigin, RequestId } from '../../contract/brands.js';
 import { profileId } from '../../contract/records/profiles.js';
 import type { ProfileId } from '../../contract/records/profiles.js';
 import type {
@@ -21,14 +22,21 @@ import type {
   ReadScope,
   Retains,
   Revises,
+  ServiceOptions,
   Writes,
 } from '../../contract/records/command.js';
-import type { CommandFlags } from '../../contract/records/arguments.js';
 import type { Result } from '../../contract/errors.js';
 import { failure, success, unreadableSource, unwritableOutput } from '../../contract/errors.js';
 import { checked } from '../shared/checks.js';
 import type { Parser } from '../shared/checks.js';
-import { mapped } from '../shared/results.js';
+import { joined, mapped } from '../shared/results.js';
+import type { CommandDefaults, CommandFlags } from './flags.js';
+
+/** The service origin when --server is absent: the local service's default port. */
+const defaultServer = 'http://127.0.0.1:5174';
+
+/** The change mode when --mode is absent. */
+const defaultMode: ChangeMode = 'create';
 
 /** Every change mode, keyed by itself. */
 const changeModes: Readonly<Record<ChangeMode, ChangeMode>> = Object.freeze({
@@ -51,13 +59,13 @@ export function readScope(flags: Pick<CommandFlags, 'section' | 'object'>): Resu
 
 /**
  * The change mode: `create`, `replace` and `patch` are their own mode; any other command checks
- * --mode. Fails with `invalid-mode`.
+ * --mode (`create` when absent). Fails with `invalid-mode`.
  */
 export function changeMode(
   name: CommandName,
-  text: string,
+  flags: Pick<CommandFlags, 'mode'>,
 ): Result<ChangeMode> {
-  const selected = isChangeMode(name) ? name : text;
+  const selected = isChangeMode(name) ? name : modeText(flags);
   if (!isChangeMode(selected))
     return failure({ code: 'invalid-mode', message: 'Mode must be create, replace or patch' });
   return success(selected);
@@ -124,6 +132,48 @@ export function profile(text: string): Result<ProfileId> {
     message: `Unknown profile: ${text}`,
     recovery: 'Use build-spec@1.',
   });
+}
+
+/**
+ * --server (the local service's default port when absent), then --workspace (the executable's
+ * default when absent). Fails with `invalid-server` or `invalid-arguments` (an empty --workspace).
+ * Both fail before the credential is read.
+ */
+export function serviceOptions(
+  flags: Pick<CommandFlags, 'server' | 'workspace'>,
+  defaults: CommandDefaults,
+): Result<ServiceOptions> {
+  const { server = defaultServer, workspace = defaults.workspace } = flags;
+  return joined(origin(server), workspacePath(workspace), (address, directory) => ({
+    server: address,
+    workspace: directory,
+  }));
+}
+
+/**
+ * The origin the agent token may go to: an `http://127.0.0.1` origin, never a remote host. Fails
+ * with `invalid-server`: text that is not a URL first, then a URL that is not a loopback origin.
+ */
+function origin(text: string): Result<LoopbackOrigin> {
+  if (!URL.canParse(text))
+    return failure({ code: 'invalid-server', message: 'Server URL is invalid' });
+  return checked(loopbackOrigin, text, {
+    code: 'invalid-server',
+    message: 'Server must be an IPv4 loopback HTTP origin',
+  });
+}
+
+/** The directory holding the agent credential and the request journal. Fails with `invalid-arguments`. */
+function workspacePath(text: string): Result<FilePath> {
+  return checked(filePath, text, {
+    code: 'invalid-arguments',
+    message: 'Workspace must be a non-empty directory path.',
+  });
+}
+
+/** --mode as given, or the default mode. */
+function modeText(flags: Pick<CommandFlags, 'mode'>): string {
+  return flags.mode ?? defaultMode;
 }
 
 /** A --section or --object ID. Fails with `invalid-arguments`. */

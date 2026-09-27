@@ -1,37 +1,68 @@
 /*
- * `pnpm canvas` argv after the argument adapter: the command word, its operand and the flag
- * values as given. Pure declarations. The adapter checks only which words and flags a command
- * accepts; core checks each value and builds the `ParsedCommand`.
+ * Argv as Node's parser reads it, before any command rule: the flags `pnpm canvas` declares, and
+ * the words, flag values and repeated flags the argv adapter found. Pure declarations. Core's
+ * command grammar (`core/commands/parse.ts`) checks every word and value.
  */
-import type { CommandName, ServiceOptions } from './command.js';
 
-/** Flag values as given. An absent flag is an omitted key; `--mode` defaults to `create`. */
-export interface CommandFlags {
-  readonly mode: string;
-  readonly revision?: string;
-  readonly request?: string;
-  readonly out?: string;
-  readonly id?: string;
-  readonly version?: string;
-  readonly family?: string;
-  readonly title?: string;
-  readonly namespace?: string;
-  readonly profile?: string;
-  readonly section?: string;
-  readonly object?: string;
+/** Every `pnpm canvas` flag. */
+export type CanvasFlag =
+  | 'help'
+  | 'server'
+  | 'workspace'
+  | 'revision'
+  | 'mode'
+  | 'request'
+  | 'out'
+  | 'id'
+  | 'version'
+  | 'family'
+  | 'title'
+  | 'namespace'
+  | 'profile'
+  | 'section'
+  | 'object';
+
+/** How Node parses one flag: a text value or a switch, with an optional one-letter alias. */
+export interface FlagShape {
+  readonly type: 'string' | 'boolean';
+  readonly short?: string;
+}
+
+/** One executable's flags: a missing or extra flag is a type error. */
+export type FlagSpec<F extends string> = Readonly<Record<F, FlagShape>>;
+
+/** `pnpm canvas` flags. Only `--help` (`-h`) is a switch. No flag has a default here; core fills them. */
+export const canvasFlags: FlagSpec<CanvasFlag> = Object.freeze({
+  help: { type: 'boolean', short: 'h' },
+  server: { type: 'string' },
+  workspace: { type: 'string' },
+  revision: { type: 'string' },
+  mode: { type: 'string' },
+  request: { type: 'string' },
+  out: { type: 'string' },
+  id: { type: 'string' },
+  version: { type: 'string' },
+  family: { type: 'string' },
+  title: { type: 'string' },
+  namespace: { type: 'string' },
+  profile: { type: 'string' },
+  section: { type: 'string' },
+  object: { type: 'string' },
+} satisfies FlagSpec<CanvasFlag>);
+
+/** The words and flags Node accepted. */
+export interface RawArguments<F extends string> {
+  /** Every word that is not a flag, in order. */
+  readonly positionals: readonly string[];
+  /** Each flag given, by name: text for a text flag, `true` for a switch. A flag given twice keeps its last value. */
+  readonly values: ReadonlyMap<F, string | boolean>;
+  /** Each flag given more than once, named once. */
+  readonly repeated: readonly F[];
 }
 
 /**
- * `profile lint` without --profile. The argument adapter reports it with its placement rules,
- * before the read scope flags; core reports the same text because `CommandFlags.profile` is optional.
+ * What the argv adapter read. `malformed`: Node refused the argv (an unknown flag, a text flag with
+ * no value, a value on a switch); core reports it as `invalid-arguments`.
  */
-export const lintProfileRequired = 'profile lint requires --profile build-spec@1.';
-
-/** A known command word with the right operand count, and flags placed where they are accepted. */
-export interface CommandArguments {
-  readonly name: CommandName;
-  /** The command's one operand; `''` for `help`, `describe` and `list`, which take none. */
-  readonly operand: string;
-  readonly flags: CommandFlags;
-  readonly options: ServiceOptions;
-}
+export type ArgvReading<F extends string> =
+  { readonly kind: 'read'; readonly arguments: RawArguments<F> } | { readonly kind: 'malformed' };

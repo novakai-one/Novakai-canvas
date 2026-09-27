@@ -6,7 +6,7 @@ export { execute as executeCommand } from '../core/commands/dispatch.js';
 
 export { usage } from '../core/commands/help.js';
 
-export { parseCommand } from '../core/commands/operands.js';
+export { parseCommand } from '../core/commands/parse.js';
 
 export { executeProfile } from '../core/profiles/commands.js';
 

@@ -10,7 +10,7 @@ import { resolve } from 'node:path';
 import { readAgentCredential } from '@novakai/canvas-service';
 import { createLanguage } from '@novakai/canvas-language';
 import { validate, plan, stage } from '@novakai/canvas-model';
-import { readArguments } from '../adapters/inputs/arguments.js';
+import { readArguments } from '../adapters/argv/node-args.js';
 import { createPresetInputs } from '../adapters/inputs/preset-inputs.js';
 import { createResourceReader } from '../adapters/files/resource-reader.js';
 import { createLocalFiles } from '../adapters/files/local-files.js';
@@ -19,6 +19,7 @@ import { createTransport } from '../adapters/service-http/transport.js';
 import { createSemanticInputs } from '../adapters/inputs/semantic-inputs.js';
 import { executeCommand, executeProfile, parseCommand, readThemeSource, usage } from './api.js';
 import type { LocalFailure, Result } from './errors.js';
+import { canvasFlags } from './records/arguments.js';
 import type {
   ParsedCommand,
   ProfileCommand,
@@ -28,7 +29,8 @@ import type {
 import type { RenderReport, RenderRequest } from './records/render.js';
 import type { RenderFailure } from './records/render-failure.js';
 import { failure, rejected, success } from './errors.js';
-import { agentToken, requestId, type AgentToken, type RequestId } from './brands.js';
+import { agentToken, requestId, type AgentToken, type FilePath, type RequestId } from './brands.js';
+
 /** Bind the actual CLI to protected credentials and real HTTP; failed setup cannot submit a diagram mutation. */
 export async function runCli(
   args: readonly string[],
@@ -44,14 +46,12 @@ export async function runCli(
     });
   }
 }
-/** The adapter reads the words and flags; core checks every value; then the command runs. */
+/** Node reads the argv; core's grammar checks every word and value; then the command runs. */
 function parsedRun(
   args: readonly string[],
   defaultWorkspace: string,
 ): Promise<Result<string>> {
-  const words = readArguments(args, defaultWorkspace);
-  if (!words.ok) return Promise.resolve(words);
-  const parsed = parseCommand(words.value);
+  const parsed = parseCommand(readArguments(args, canvasFlags), { workspace: defaultWorkspace });
   if (!parsed.ok) return Promise.resolve(parsed);
   return dispatch(parsed.value);
 }
@@ -63,12 +63,10 @@ async function run(
 ): Promise<Result<string>> {
   const token = await readToken(options.workspace);
   if (!token.ok) return token;
-  const transport = createTransport(options.server, token.value);
-  if (!transport.ok) return transport;
   const language = createLanguage({ reader: { validate }, planner: { plan }, stage: { stage } });
   const semantic = createSemanticInputs(language);
   return executeCommand(command, {
-    transport: transport.value,
+    transport: createTransport(options.server, token.value),
     files: createLocalFiles(),
     journal: createRequestJournal(resolve(options.workspace, 'requests')),
     resources: createResourceReader(),
@@ -82,7 +80,7 @@ async function run(
  * The agent token from the workspace credential. Fails with `credential-unavailable` (the
  * service's reader failed; its record is kept whole) or `invalid-response` (it returned no token).
  */
-async function readToken(workspace: string): Promise<Result<AgentToken>> {
+async function readToken(workspace: FilePath): Promise<Result<AgentToken>> {
   const credential = await readAgentCredential(resolve(workspace, 'agent-credential.json'));
   if (!credential.ok) return rejected('credential-unavailable', credential.error);
   const token = agentToken.safeParse(credential.value);
@@ -101,9 +99,14 @@ function nextRequestId(): RequestId {
 
 /** Local help needs no infrastructure; profile commands bind local ports; service commands bind their real runtime. */
 function dispatch(parsed: ParsedCommand): Promise<Result<string>> {
-  if (parsed.kind === 'help') return Promise.resolve(success(usage));
-  if (parsed.kind === 'profile') return runProfile(parsed.command);
-  return run(parsed.command, parsed.options);
+  switch (parsed.kind) {
+    case 'help':
+      return Promise.resolve(success(usage));
+    case 'profile':
+      return runProfile(parsed.command);
+    case 'service':
+      return run(parsed.command, parsed.options);
+  }
 }
 
 /** Profile discovery/scaffold/lint bind only the Language parser and local files. */

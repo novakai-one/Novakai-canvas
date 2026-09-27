@@ -1,13 +1,13 @@
 /*
  * The parsed `pnpm canvas` command: one union member per command, carrying only the fields that
- * command reads, each already checked and branded. Pure declarations. Core assembles it from the
- * argument adapter's words and flags; compose routes on `ParsedCommand.kind`.
+ * command reads, each already checked and branded. Pure declarations. Core's grammar
+ * (`core/commands/parse.ts`) builds it from argv; compose routes on `ParsedCommand.kind`.
  */
-import { z } from 'zod';
 import type {
   CollectionId,
   CollectionRevision,
   FilePath,
+  LoopbackOrigin,
   ObjectId,
   PresetId,
   RequestId,
@@ -109,12 +109,12 @@ export type AdmitCommand = Extract<
 export type ChangeIntent =
   { readonly mode: 'create' } | ({ readonly mode: 'replace' | 'patch' } & Revises);
 
-/** Where service commands are sent, as given. */
+/** Where service commands are sent. */
 export interface ServiceOptions {
-  /** `--server`. The HTTP transport checks it is an `http://127.0.0.1` origin (`invalid-server`). */
-  readonly server: string;
+  /** `--server`: the service's loopback origin. */
+  readonly server: LoopbackOrigin;
   /** `--workspace`: the directory holding the agent credential and the `requests` journal. */
-  readonly workspace: string;
+  readonly workspace: FilePath;
 }
 
 /** The command and what it needs. Compose binds ports by `kind`; routing is decided once, here. */
@@ -126,28 +126,3 @@ export type ParsedCommand =
       readonly command: ServiceCommand;
       readonly options: ServiceOptions;
     };
-
-/** Every command word, keyed by itself: a missing, extra or misspelt name is a type error. */
-const commandNames = Object.freeze({
-  help: 'help',
-  describe: 'describe',
-  list: 'list',
-  read: 'read',
-  create: 'create',
-  replace: 'replace',
-  patch: 'patch',
-  preview: 'preview',
-  receipt: 'receipt',
-  retry: 'retry',
-  apply: 'apply',
-  inspect: 'inspect',
-  'theme-admit': 'theme-admit',
-  'recipe-admit': 'recipe-admit',
-  'recipe-instantiate': 'recipe-instantiate',
-  'profile-describe': 'profile-describe',
-  'profile-scaffold': 'profile-scaffold',
-  'profile-lint': 'profile-lint',
-} as const satisfies { readonly [Name in CommandName]: Name });
-
-/** A command word the CLI knows; anything else is `invalid-command`. */
-export const commandName = z.enum(commandNames);

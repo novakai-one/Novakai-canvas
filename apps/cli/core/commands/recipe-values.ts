@@ -7,13 +7,13 @@
 import { presetDigest, presetId, version } from '../../contract/brands.js';
 import { recipeFamily } from '../../contract/schemas.js';
 import type { RecipeHeader } from '../../contract/records/command.js';
-import type { CommandFlags } from '../../contract/records/arguments.js';
 import type { ExpansionRequest } from '../../contract/records/foreign.js';
 import type { Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 import { checked } from '../shared/checks.js';
 import type { Parser } from '../shared/checks.js';
 import { joined } from '../shared/results.js';
+import type { CommandFlags } from './flags.js';
 
 /** Missing, empty or unknown-family recipe flags. */
 const headerRequired = 'recipe admit requires --id --version --family --title';

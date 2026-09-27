@@ -13,7 +13,6 @@ import type { LocalFailure, Result } from '../../contract/errors.js';
 import { failure, rejected, success } from '../../contract/errors.js';
 import {
   generation,
-  loopbackOrigin,
   type AgentToken,
   type Generation,
   type LoopbackOrigin,
@@ -26,36 +25,17 @@ const answerTimeoutMs = 35_000;
 type Method = 'GET' | 'POST';
 
 /**
- * Binds the transport to `server`, which must be an `http://127.0.0.1` origin. The token comes
- * from protected local storage and never appears in command output or failure details.
- * Fails with `invalid-server`.
+ * Binds the transport to `server`, an `http://127.0.0.1` origin core checked from --server. The
+ * token comes from protected local storage and never appears in command output or failure details.
  */
 export function createTransport(
-  server: string,
+  server: LoopbackOrigin,
   token: AgentToken,
-): Result<HttpTransport, LocalFailure> {
-  const checked = origin(server);
-  if (!checked.ok) return checked;
-  return success({
-    get: (route, query) => send(checked.value, token, route + search(query), 'GET', undefined),
-    post: (route, body) => send(checked.value, token, route, 'POST', JSON.stringify(body)),
-  });
-}
-/**
- * Mints the origin credentials may go to: the IPv4 loopback origin, never a redirect or a remote
- * host. Fails with `invalid-server`: text that is not a URL first, then a URL that is not a
- * loopback origin.
- */
-function origin(input: string): Result<LoopbackOrigin, LocalFailure> {
-  if (!URL.canParse(input))
-    return failure({ code: 'invalid-server', message: 'Server URL is invalid' });
-  const checked = loopbackOrigin.safeParse(input);
-  if (!checked.success)
-    return failure({
-      code: 'invalid-server',
-      message: 'Server must be an IPv4 loopback HTTP origin',
-    });
-  return success(checked.data);
+): HttpTransport {
+  return {
+    get: (route, query) => send(server, token, route + search(query), 'GET', undefined),
+    post: (route, body) => send(server, token, route, 'POST', JSON.stringify(body)),
+  };
 }
 /** A read route's query string: `?` and the parameters in order, or nothing when there are none. */
 function search(query: RouteQuery | undefined): string {

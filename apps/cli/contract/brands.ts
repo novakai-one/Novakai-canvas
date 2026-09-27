@@ -22,15 +22,16 @@ export type { ChromeName } from '@novakai/canvas-design-system';
 
 /**
  * A local file path: any non-empty text. Node resolves it against the working directory; the
- * resource reader enforces confinement. Minted from a FILE operand (`source-unavailable`) and
- * --out (`output-unavailable`) by core's argument checks, by the render's file adapter, and by
- * render:png's option check.
+ * resource reader enforces confinement. Minted from a FILE operand (`source-unavailable`), --out
+ * (`output-unavailable`) and --workspace (`invalid-arguments`) by core's argument checks, by the
+ * render's file adapter, and by render:png's option check.
  */
 export const filePath = z.string().min(1).brand<'CliFilePath'>();
 
 /**
  * The service origin: `http://127.0.0.1[:port]` only, with no path, query, hash or user info. The
- * agent token is sent nowhere else. Minted by the HTTP transport (`invalid-server`).
+ * agent token is sent nowhere else. Minted from --server by core's argument checks
+ * (`invalid-server`), before the credential is read.
  */
 export const loopbackOrigin = z
   .string()

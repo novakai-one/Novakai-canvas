@@ -1,9 +1,10 @@
 /*
- * `pnpm canvas` command assembly: the adapter's words and flags become one `ParsedCommand`, each
- * command carrying only the checked fields it reads. Pure. Runs after the adapter's placement
+ * `pnpm canvas` command assembly: the grammar's words and flag text become one `ParsedCommand`,
+ * each command carrying only the checked fields it reads. Pure. Runs after `parse.ts`'s placement
  * rules. Order: the read scope, --mode and --revision for every command, then the command's
- * operand, its own flags, --request and --out. A rejected value is a failure naming the argument;
- * nothing was read or sent, so the caller corrects it and runs the command again.
+ * operand, its own flags, --request and --out, then a service command's --server and --workspace.
+ * A rejected value is a failure naming the argument; nothing was read or sent, so the caller
+ * corrects it and runs the command again.
  */
 import type {
   ChangeMode,
@@ -16,11 +17,11 @@ import type {
   ServiceCommand,
   Writes,
 } from '../../contract/records/command.js';
-import type { CommandArguments, CommandFlags } from '../../contract/records/arguments.js';
 import type { FilePath } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
 import { joined, mapped, unsupported } from '../shared/results.js';
+import type { CommandDefaults, CommandFlags, CommandWords } from './flags.js';
 import { profileCommand } from './profile-operands.js';
 import { expansion, recipeHeader } from './recipe-values.js';
 import {
@@ -30,6 +31,7 @@ import {
   request,
   retains,
   revises,
+  serviceOptions,
   sourceFile,
   writes,
 } from './values.js';
@@ -42,14 +44,17 @@ interface SharedFlags {
 }
 
 /**
- * The command the arguments name, with its checked fields. Fails with `invalid-arguments`,
+ * The command the words name, with its checked fields. Fails with `invalid-arguments`,
  * `invalid-mode`, `invalid-revision`, `invalid-request`, `unknown-profile`, `source-unavailable`
- * (an empty FILE) or `output-unavailable` (an empty --out).
+ * (an empty FILE), `output-unavailable` (an empty --out) or `invalid-server`.
  */
-export function parseCommand(input: CommandArguments): Result<ParsedCommand> {
-  const shared = sharedFlags(input.name, input.flags);
+export function assembleCommand(
+  words: CommandWords,
+  defaults: CommandDefaults,
+): Result<ParsedCommand> {
+  const shared = sharedFlags(words.name, words.flags);
   if (!shared.ok) return shared;
-  return routed(input, shared.value);
+  return routed(words, shared.value, defaults);
 }
 
 /** The read scope, then --mode, then --revision. */
@@ -57,7 +62,7 @@ function sharedFlags(
   name: CommandName,
   flags: CommandFlags,
 ): Result<SharedFlags> {
-  const scoped = joined(readScope(flags), changeMode(name, flags.mode), (scope, mode) => ({
+  const scoped = joined(readScope(flags), changeMode(name, flags), (scope, mode) => ({
     scope,
     mode,
   }));
@@ -69,10 +74,11 @@ function sharedFlags(
 
 /** Help, a local profile command, or a service command with its server and workspace. */
 function routed(
-  input: CommandArguments,
+  words: CommandWords,
   shared: SharedFlags,
+  defaults: CommandDefaults,
 ): Result<ParsedCommand> {
-  const { name, operand, flags, options } = input;
+  const { name, operand, flags } = words;
   switch (name) {
     case 'help':
       return success({ kind: 'help' });
@@ -84,11 +90,11 @@ function routed(
         command,
       }));
     default:
-      return mapped(serviceCommand(name, operand, flags, shared), (command) => ({
-        kind: 'service',
-        command,
-        options,
-      }));
+      return joined(
+        serviceCommand(name, operand, flags, shared),
+        serviceOptions(flags, defaults),
+        (command, options) => ({ kind: 'service', command, options }),
+      );
   }
 }
 
