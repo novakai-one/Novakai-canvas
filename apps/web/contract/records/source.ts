@@ -1,5 +1,5 @@
 import type { Snapshot, Request, Receipt } from './owners.js';
-import type { EditingBase } from './editor-recovery.js';
+import type { RecoveredSource } from './editor-recovery.js';
 import type { ActiveDiagram } from './active-diagram.js';
 import type { Submission } from './submission.js';
 import type { TransportGeneration, WorkspaceId } from '../brands.js';
@@ -22,12 +22,12 @@ export interface SourceView {
  * never exists without its generation and collection.
  */
 export type SourceBase = { readonly kind: 'none' } | CapturedSourceBase;
-/** The collection, base and generation the source text belongs to. */
-export interface CapturedSourceBase {
+/** The collection, base and generation the source text belongs to: a recovered draft's own fields. */
+export interface CapturedSourceBase extends Pick<
+  RecoveredSource,
+  'base' | 'generation' | 'collection'
+> {
   readonly kind: 'captured';
-  readonly base: EditingBase;
-  readonly generation: TransportGeneration;
-  readonly collection: string;
 }
 export interface SourceController {
   getSnapshot(): SourceView;

@@ -1,5 +1,10 @@
+/*
+ * Reads stored wire drafts, current and legacy. Pure: checks untrusted storage and never changes
+ * it. One invalid draft fails the whole list; the wire editor session reports it and the stored
+ * data is kept.
+ */
 import { z } from 'zod';
-import { objectId, descendantId, validate } from '@novakai/canvas-model';
+import { objectId, descendantId, relationshipKind, validate } from '@novakai/canvas-model';
 import { snapshotSchema } from '@novakai/canvas-authoring';
 import { transportGeneration } from '@novakai/canvas-service';
 import type { WireDraft, WireEdit } from '../../contract/records/wire-editor.js';
@@ -7,12 +12,10 @@ import type {
   CapturedCollectionBase,
   EditingBase,
 } from '../../contract/records/editor-recovery.js';
-import type { Collection } from '../../contract/records/owners.js';
-import type { StoredRecord } from '../../contract/records/owners.js';
-import type { TransportGeneration } from '../../contract/brands.js';
+import type { Collection, StoredRecord } from '../../contract/records/owners.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
-import { captureCollectionBase, wireDraftKey } from '../../contract/api.js';
+import { captureCollectionBase, mapResults, wireDraftKey } from '../../contract/api.js';
 import {
   capturedCollectionBaseSchema,
   hasRecoveryTag,
@@ -20,20 +23,7 @@ import {
 /** Recovery admits unfinished text, but never arbitrary fields or untyped endpoint identities. */
 const command: z.ZodType<WireEdit> = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.enum(['label', 'guard', 'effect']), value: z.string() }),
-  z.strictObject({
-    kind: z.literal('relationship-kind'),
-    value: z.enum([
-      'flow',
-      'association',
-      'imports',
-      'calls',
-      'implements',
-      'contains',
-      'parent',
-      'reference',
-      'transition',
-    ]),
-  }),
+  z.strictObject({ kind: z.literal('relationship-kind'), value: relationshipKind }),
   z.strictObject({ kind: z.literal('style'), value: z.enum(['solid', 'dashed']) }),
   z.strictObject({
     kind: z.literal('endpoint'),
@@ -54,36 +44,52 @@ const command: z.ZodType<WireEdit> = z.discriminatedUnion('kind', [
   }),
   z.strictObject({ kind: z.literal('automatic-route') }),
 ]);
-const legacyRecord = z.object({
+/** Fields every stored wire draft has, in either shape. */
+const draftFields = {
   key: z.string(),
-  base: snapshotSchema,
   generation: transportGeneration,
+  edits: z.array(command).readonly(),
+};
+/** An untagged draft from before schema version 1: a full snapshot and nested IDs. */
+const legacyRecord = z.object({
+  ...draftFields,
+  base: snapshotSchema,
   collection: z.object({ id: z.string() }),
   section: z.object({ id: z.string() }),
   relationship: z.object({ id: z.string() }),
-  edits: z.array(command).readonly(),
 });
+/** A tagged draft (schema version 1): a captured collection base and plain IDs. */
 const currentRecord = z.strictObject({
   kind: z.literal('wire-draft'),
   schemaVersion: z.literal(1),
-  key: z.string(),
+  ...draftFields,
   base: capturedCollectionBaseSchema,
-  generation: transportGeneration,
   collection: z.string(),
   section: z.string(),
   relationship: z.string(),
-  edits: z.array(command).readonly(),
 });
-interface RecoveryRecord {
-  readonly key: string;
+/** A stored draft in one shape: plain IDs, and either kind of base. */
+type RecoveryRecord = Omit<z.infer<typeof currentRecord>, 'kind' | 'schemaVersion' | 'base'> & {
   readonly base: EditingBase;
-  readonly generation: TransportGeneration;
-  readonly collection: string;
-  readonly section: string;
-  readonly relationship: string;
-  readonly edits: readonly WireEdit[];
+};
+/** A draft whose base is narrowed to the one collection it edits. */
+type CapturedRecord = RecoveryRecord & { readonly base: CapturedCollectionBase };
+
+/**
+ * Reads a stored list of wire drafts, all or none; a malformed entry cannot disappear unnoticed.
+ * Fails with `invalid-wire-draft` when the list is unbounded or any draft is unreadable or does
+ * not match its captured collection, or with the capture's `invalid-recovery` when a draft's base
+ * has no live record of its collection.
+ */
+export function readWireDrafts(input: unknown): Result<readonly WireDraft[]> {
+  const parsed = z.array(z.unknown()).max(1000).safeParse(input);
+  if (!parsed.success) return invalid('Wire forms must be a bounded list');
+  return mapResults(parsed.data, readDraft);
 }
-/** Recover originals from the captured authoritative snapshot; duplicated browser payloads never override them. */
+/**
+ * One stored draft, with its originals recovered from the captured authoritative snapshot;
+ * duplicated browser payloads never override them. Fails as {@link readWireDrafts} says.
+ */
 function readDraft(input: unknown): Result<WireDraft> {
   const value = normalizedRecord(input);
   if (!value.ok) return value;
@@ -92,76 +98,65 @@ function readDraft(input: unknown): Result<WireDraft> {
   if (!captured.ok) return captured;
   return capturedDraft({ ...record, base: captured.value });
 }
+/** A tagged draft is read as current, anything else as legacy. Fails with `invalid-wire-draft`. */
 function normalizedRecord(input: unknown): Result<RecoveryRecord> {
-  const parsed = parseRecord(input);
+  if (hasRecoveryTag(input)) return currentValue(input);
+  return legacyValue(input);
+}
+/** A current draft already has the plain shape. Fails with `invalid-wire-draft`. */
+function currentValue(input: unknown): Result<RecoveryRecord> {
+  const parsed = currentRecord.safeParse(input);
   if (!parsed.success) return invalid('A retained wire form could not be read');
-  return 'kind' in parsed.data ? currentValue(parsed.data) : legacyValue(parsed.data);
+  return { ok: true, value: parsed.data };
 }
-function parseRecord(input: unknown) {
-  return hasRecoveryTag(input) ? currentRecord.safeParse(input) : legacyRecord.safeParse(input);
-}
-function currentValue(input: z.infer<typeof currentRecord>): Result<RecoveryRecord> {
-  return { ok: true, value: input };
-}
-function legacyValue(input: z.infer<typeof legacyRecord>): Result<RecoveryRecord> {
+/** A legacy draft's nested IDs become plain IDs. Fails with `invalid-wire-draft`. */
+function legacyValue(input: unknown): Result<RecoveryRecord> {
+  const parsed = legacyRecord.safeParse(input);
+  if (!parsed.success) return invalid('A retained wire form could not be read');
+  const record = parsed.data;
   return {
     ok: true,
     value: {
-      ...input,
-      collection: input.collection.id,
-      section: input.section.id,
-      relationship: input.relationship.id,
+      ...record,
+      collection: record.collection.id,
+      section: record.section.id,
+      relationship: record.relationship.id,
     },
   };
 }
-/** Model owns the validity of the captured base before any UI command is replayed. */
-function capturedDraft(
-  value: RecoveryRecord & { readonly base: CapturedCollectionBase },
-): Result<WireDraft> {
-  const original = value.base.record;
-  const collection = admitCollection(original, value.collection);
+/** Model owns the validity of the captured base before any UI command is replayed. Fails with `invalid-wire-draft`. */
+function capturedDraft(value: CapturedRecord): Result<WireDraft> {
+  const collection = admitCollection(value.base.record, value.collection);
   if (!collection.ok) return collection;
   return originalWire(value, collection.value);
 }
+/**
+ * The captured record's collection, when Model accepts it and it has the draft's collection ID and
+ * the record's version. Capture has already checked the record is that collection's live record.
+ * Fails with `invalid-wire-draft`.
+ */
 function admitCollection(
   record: StoredRecord,
   id: string,
 ): Result<Collection> {
-  if (!isLiveCollection(record, id))
-    return invalid('The wire form has no valid captured collection');
   const collection = validate(record.value);
   if (!collection.ok) return invalid('The wire form has no valid captured collection');
-  return checkedCollection(collection.value, id, record.version);
+  if (!isVersionOf(collection.value, id, record.version))
+    return invalid('The captured collection identity or revision is invalid');
+  return { ok: true, value: collection.value };
 }
-function checkedCollection(
+/** Whether the collection has ID `id` at revision `version`. */
+function isVersionOf(
   collection: Collection,
   id: string,
   version: number,
-): Result<Collection> {
-  if (!matchesRecord(collection.id, collection.revision, id, version))
-    return invalid('The captured collection identity or revision is invalid');
-  return { ok: true, value: collection };
-}
-function isLiveCollection(
-  record: StoredRecord,
-  id: string,
 ): boolean {
-  if (record.key.kind !== 'collection') return false;
-  if (record.key.id !== id) return false;
-  return !record.deleted;
+  if (collection.id !== id) return false;
+  return collection.revision === version;
 }
-function matchesRecord(
-  id: string,
-  revision: number,
-  expectedId: string,
-  expectedRevision: number,
-): boolean {
-  if (id !== expectedId) return false;
-  return revision === expectedRevision;
-}
-/** Retained identities must resolve within the same section and collection. */
+/** Retained identities must resolve within the same section and collection. Fails with `invalid-wire-draft`. */
 function originalWire(
-  value: RecoveryRecord & { readonly base: CapturedCollectionBase },
+  value: CapturedRecord,
   collection: Collection,
 ): Result<WireDraft> {
   const section = collection.sections.find((item) => item.id === value.section);
@@ -171,9 +166,13 @@ function originalWire(
   const wire = section.wires.find((item) => item.relationship === relationship.id);
   return checkedWire(value, collection, section, relationship, wire);
 }
-/** The generated Canvas target is not needed for recovery: Model submission uses only canonical identity. */
+/**
+ * The draft, when its wire exists and its key is the one its identities rebuild. The generated
+ * Canvas target is not needed: Model submission uses only canonical identity. Fails with
+ * `invalid-wire-draft`.
+ */
 function checkedWire(
-  value: RecoveryRecord & { readonly base: CapturedCollectionBase },
+  value: CapturedRecord,
   collection: Collection,
   section: WireDraft['section'],
   relationship: WireDraft['relationship'],
@@ -197,16 +196,7 @@ function checkedWire(
     },
   };
 }
-/** Corrupt retention remains available for explicit recovery; it is never overwritten by the reader. */
-function invalid(message: string): Result<never> {
+/** `invalid-wire-draft`. Corrupt retention stays for explicit recovery; the reader never overwrites it. */
+function invalid(message: string): Extract<Result<never>, { ok: false }> {
   return failure('invalid-wire-draft', `${message}; stored data was retained`);
-}
-/** Read all forms atomically; a malformed entry cannot disappear unnoticed. */
-export function readWireDrafts(input: unknown): Result<readonly WireDraft[]> {
-  const parsed = z.array(z.unknown()).max(1000).safeParse(input);
-  if (!parsed.success) return invalid('Wire forms must be a bounded list');
-  const results = parsed.data.map(readDraft);
-  const rejected = results.find((result) => !result.ok);
-  if (rejected) return rejected;
-  return { ok: true, value: results.flatMap((result) => (result.ok ? [result.value] : [])) };
 }

@@ -7,6 +7,7 @@
 import { definitionId, type DefinitionId } from '@novakai/canvas-model';
 
 export { planCanvasEdit } from '../core/editing/plan.js';
+export { mapResults } from '../core/editing/results.js';
 
 export {
   blocksSubmission,

@@ -1,3 +1,8 @@
+/*
+ * Reads stored inspector (object) drafts, current and legacy. Pure: checks untrusted storage and
+ * never changes it. One invalid draft fails the whole list; the inspector session reports it and
+ * the stored data is kept.
+ */
 import { z } from 'zod';
 import { descendantId, objectId, definitionId, validate } from '@novakai/canvas-model';
 import { snapshotSchema } from '@novakai/canvas-authoring';
@@ -8,10 +13,9 @@ import type {
   EditingBase,
 } from '../../contract/records/editor-recovery.js';
 import type { StoredRecord } from '../../contract/records/owners.js';
-import type { TransportGeneration } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
-import { captureCollectionBase, objectDraftKey } from '../../contract/api.js';
+import { captureCollectionBase, mapResults, objectDraftKey } from '../../contract/api.js';
 import {
   capturedCollectionBaseSchema,
   hasRecoveryTag,
@@ -77,33 +81,53 @@ const command: z.ZodType<ObjectEdit> = z.discriminatedUnion('kind', [
     content: z.enum(['text', 'field', 'member', 'signature']),
   }),
 ]);
-const legacyDraftRecord = z.object({
+/** Why a stored draft with neither the current nor the legacy shape is refused. */
+const UNREADABLE = 'An inspector draft could not be read; stored data was retained';
+/** Fields every stored object draft has, in either shape. */
+const draftFields = {
   key: z.string(),
-  base: snapshotSchema,
   generation: transportGeneration,
+  edits: z.array(command).readonly(),
+};
+/** An untagged draft from before schema version 1: a full snapshot and nested IDs. */
+const legacyDraftRecord = z.object({
+  ...draftFields,
+  base: snapshotSchema,
   collection: z.object({ id: z.string() }),
   object: z.object({ id: z.string() }),
-  edits: z.array(command).readonly(),
 });
+/** A tagged draft (schema version 1): a captured collection base and plain IDs. */
 const currentDraftRecord = z.strictObject({
   kind: z.literal('object-draft'),
   schemaVersion: z.literal(1),
-  key: z.string(),
+  ...draftFields,
   base: capturedCollectionBaseSchema,
-  generation: transportGeneration,
   collection: z.string(),
   object: z.string(),
-  edits: z.array(command).readonly(),
 });
-interface RecoveryRecord {
-  readonly key: string;
-  readonly base: EditingBase;
-  readonly generation: TransportGeneration;
-  readonly collection: string;
-  readonly object: string;
-  readonly edits: readonly ObjectEdit[];
+/** A stored draft in one shape: plain IDs, and either kind of base. */
+type RecoveryRecord = Omit<
+  z.infer<typeof currentDraftRecord>,
+  'kind' | 'schemaVersion' | 'base'
+> & { readonly base: EditingBase };
+/** A draft whose base is narrowed to the one collection it edits. */
+type CapturedRecord = RecoveryRecord & { readonly base: CapturedCollectionBase };
+
+/**
+ * Reads a stored list of inspector drafts, all or none; malformed records never silently
+ * disappear. Fails with `invalid-inspector-draft` when the list is unbounded or any draft is
+ * unreadable, or with the capture's `invalid-recovery` when a draft's base has no live record of
+ * its collection.
+ */
+export function readInspectorDrafts(input: unknown): Result<readonly ObjectDraft[]> {
+  const parsed = z.array(z.unknown()).max(1000).safeParse(input);
+  if (!parsed.success) return invalid('Stored inspector drafts must be a bounded list');
+  return mapResults(parsed.data, readRecord);
 }
-/** A stored original is recovered from Model's checked collection, never from an untrusted duplicate object payload. */
+/**
+ * One stored draft, with its original recovered from Model's checked collection, never from an
+ * untrusted duplicate object payload. Fails as {@link readInspectorDrafts} says.
+ */
 function readRecord(input: unknown): Result<ObjectDraft> {
   const record = normalizedRecord(input);
   if (!record.ok) return record;
@@ -112,109 +136,76 @@ function readRecord(input: unknown): Result<ObjectDraft> {
   if (!captured.ok) return captured;
   return readCapturedCollection({ ...value, base: captured.value });
 }
+/** A tagged draft is read as current, anything else as legacy. Fails with `invalid-inspector-draft`. */
 function normalizedRecord(input: unknown): Result<RecoveryRecord> {
-  const parsed = parseRecord(input);
-  if (!parsed.success)
-    return failure(
-      'invalid-inspector-draft',
-      'An inspector draft could not be read; stored data was retained',
-    );
-  return 'kind' in parsed.data ? currentRecord(parsed.data) : legacyRecord(parsed.data);
+  if (hasRecoveryTag(input)) return currentRecord(input);
+  return legacyRecord(input);
 }
-function parseRecord(input: unknown) {
-  return hasRecoveryTag(input)
-    ? currentDraftRecord.safeParse(input)
-    : legacyDraftRecord.safeParse(input);
+/** A current draft already has the plain shape. Fails with `invalid-inspector-draft`. */
+function currentRecord(input: unknown): Result<RecoveryRecord> {
+  const parsed = currentDraftRecord.safeParse(input);
+  if (!parsed.success) return invalid(UNREADABLE);
+  return { ok: true, value: parsed.data };
 }
-function currentRecord(input: z.infer<typeof currentDraftRecord>): Result<RecoveryRecord> {
+/** A legacy draft's nested IDs become plain IDs. Fails with `invalid-inspector-draft`. */
+function legacyRecord(input: unknown): Result<RecoveryRecord> {
+  const parsed = legacyDraftRecord.safeParse(input);
+  if (!parsed.success) return invalid(UNREADABLE);
+  const record = parsed.data;
   return {
     ok: true,
-    value: {
-      key: input.key,
-      base: input.base,
-      generation: input.generation,
-      collection: input.collection,
-      object: input.object,
-      edits: input.edits,
-    },
+    value: { ...record, collection: record.collection.id, object: record.object.id },
   };
 }
-function legacyRecord(input: z.infer<typeof legacyDraftRecord>): Result<RecoveryRecord> {
-  return {
-    ok: true,
-    value: {
-      key: input.key,
-      base: input.base,
-      generation: input.generation,
-      collection: input.collection.id,
-      object: input.object.id,
-      edits: input.edits,
-    },
-  };
+/** `invalid-inspector-draft`: the stored draft cannot be used; it stays stored. */
+function invalid(message: string): Extract<Result<never>, { ok: false }> {
+  return failure('invalid-inspector-draft', message);
 }
-/** Recover from the captured authoritative record; duplicated client collection data cannot replace its versioned base. */
-function readCapturedCollection(
-  record: RecoveryRecord & { readonly base: CapturedCollectionBase },
-): Result<ObjectDraft> {
-  const original = record.base.record;
-  const collection = admitCollection(original, record.collection);
+/**
+ * The draft checked against its captured record; duplicated client collection data cannot replace
+ * its versioned base. Fails with `invalid-inspector-draft`.
+ */
+function readCapturedCollection(record: CapturedRecord): Result<ObjectDraft> {
+  const collection = admitCollection(record.base.record, record.collection);
   if (!collection.ok) return collection;
   return readOriginal(record, collection.value);
 }
+/**
+ * The captured record's collection, when Model accepts it and it has the draft's collection ID and
+ * the record's version. Capture has already checked the record is that collection's live record.
+ * Fails with `invalid-inspector-draft`.
+ */
 function admitCollection(
   record: StoredRecord,
   id: string,
 ): Result<ObjectDraft['collection']> {
-  if (!isLiveCollection(record, id))
-    return failure('invalid-inspector-draft', 'The draft base does not contain its collection');
   const collection = validate(record.value);
-  if (!collection.ok)
-    return failure('invalid-inspector-draft', 'The draft base is not a valid collection');
-  return checkedCollection(collection.value, id, record.version);
+  if (!collection.ok) return invalid('The draft base is not a valid collection');
+  if (!isVersionOf(collection.value, id, record.version))
+    return invalid('The draft collection identity or revision is invalid');
+  return { ok: true, value: collection.value };
 }
-function checkedCollection(
+/** Whether the collection has ID `id` at revision `version`. */
+function isVersionOf(
   collection: ObjectDraft['collection'],
   id: string,
   version: number,
-): Result<ObjectDraft['collection']> {
-  if (!matchesRecord(collection.id, collection.revision, id, version))
-    return failure(
-      'invalid-inspector-draft',
-      'The draft collection identity or revision is invalid',
-    );
-  return { ok: true, value: collection };
-}
-function isLiveCollection(
-  record: StoredRecord,
-  id: string,
 ): boolean {
-  if (record.key.kind !== 'collection') return false;
-  if (record.key.id !== id) return false;
-  return !record.deleted;
+  if (collection.id !== id) return false;
+  return collection.revision === version;
 }
-function matchesRecord(
-  id: string,
-  revision: number,
-  expectedId: string,
-  expectedRevision: number,
-): boolean {
-  if (id !== expectedId) return false;
-  return revision === expectedRevision;
-}
-/** Identity is reconstructed from admitted data, preventing a stored key from aliasing another object's draft. */
+/**
+ * The draft with its original object. Identity is rebuilt from admitted data, so a stored key
+ * cannot alias another object's draft. Fails with `invalid-inspector-draft`.
+ */
 function readOriginal(
-  record: RecoveryRecord & { readonly base: CapturedCollectionBase },
+  record: CapturedRecord,
   collection: ObjectDraft['collection'],
 ): Result<ObjectDraft> {
   const object = collection.objects.find((item) => item.id === record.object);
-  if (!object)
-    return failure(
-      'invalid-inspector-draft',
-      'The draft object is absent from its original collection',
-    );
+  if (!object) return invalid('The draft object is absent from its original collection');
   const key = objectDraftKey(collection.id, object.id);
-  if (key !== record.key)
-    return failure('invalid-inspector-draft', 'The draft identity does not match its object');
+  if (key !== record.key) return invalid('The draft identity does not match its object');
   return {
     ok: true,
     value: {
@@ -226,14 +217,4 @@ function readOriginal(
       edits: record.edits,
     },
   };
-}
-/** Each independently checked draft is returned atomically; malformed records never silently disappear. */
-export function readInspectorDrafts(input: unknown): Result<readonly ObjectDraft[]> {
-  const parsed = z.array(z.unknown()).max(1000).safeParse(input);
-  if (!parsed.success)
-    return failure('invalid-inspector-draft', 'Stored inspector drafts must be a bounded list');
-  const results = parsed.data.map(readRecord);
-  const rejected = results.find((result) => !result.ok);
-  if (rejected) return rejected;
-  return { ok: true, value: results.flatMap((result) => (result.ok ? [result.value] : [])) };
 }
