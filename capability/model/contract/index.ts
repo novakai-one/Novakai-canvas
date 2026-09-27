@@ -30,7 +30,15 @@ export {
   sectionId,
   groupId,
 } from './brands.js';
-export type { ObjectId, SectionId, DescendantId, DefinitionId } from './brands.js';
+export type {
+  ObjectId,
+  SectionId,
+  DescendantId,
+  DefinitionId,
+  CollectionId,
+  GroupId,
+  RelationshipId,
+} from './brands.js';
 
 /** The result type and the machine-readable failure codes. Documented in `errors.ts`. */
 export type { Result, DiagnosticCode } from './errors.js';

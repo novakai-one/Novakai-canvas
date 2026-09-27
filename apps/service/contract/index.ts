@@ -1,5 +1,7 @@
 /** Service public boundary. Web and CLI use checked requests; Authoring remains the sole mutation authority. */
 export type { Result, Diagnostic, ErrorCode } from './errors.js';
+export { transportGeneration } from './brands.js';
+export type { TransportGeneration } from './brands.js';
 
 export { runRenderWorker, createDiagramProducer } from './compose.js';
 export type { RenderingJob, RenderDocument } from './records/rendering.js';
