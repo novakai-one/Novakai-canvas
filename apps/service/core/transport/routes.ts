@@ -4,13 +4,13 @@ import type {
   RouteOutcome,
   WireOutcome,
 } from '../../contract/records/transport/protocol.js';
-import type { Snapshot } from '@novakai/canvas-authoring';
+import type { Scope, Snapshot } from '../../contract/records/capabilities.js';
 import type { RouterBindings } from '../../contract/records/transport/server.js';
 import { httpBodyLimit } from '../../contract/records/transport/http.js';
 import { failure } from '../../contract/errors.js';
 import type { Result } from '../../contract/errors.js';
 import type { ResourceCommands } from '../../contract/records/presets/preparation.js';
-import { historyVersionsOnly } from '../../contract/api.js';
+import { historyVersionsOnly } from '../session/history-versions.js';
 type ResourceHandler = (input: unknown) => Promise<WireOutcome>;
 /** Read one current collection without reinterpreting its semantic shape; Language/Presentation validate before their use. */
 async function source(
@@ -25,7 +25,7 @@ async function source(
 async function readSourceRecord(
   call: ApiCall,
   owners: RouterBindings,
-  scope: import('@novakai/canvas-language').Scope,
+  scope: Scope,
 ): Promise<WireOutcome> {
   const snapshot = await owners.session.read();
   if (!snapshot.ok) return snapshot;
@@ -38,7 +38,7 @@ async function readSourceRecord(
 
 function sourceScope(
   query: Readonly<Record<string, string>>,
-): Result<import('@novakai/canvas-language').Scope> {
+): Result<Scope> {
   const section = query.section;
   const object = query.object;
   if (bothScopes(section, object))
@@ -57,7 +57,7 @@ function bothScopes(
 function validSourceScope(
   section: string | undefined,
   selected: string | undefined,
-): Result<import('@novakai/canvas-language').Scope> {
+): Result<Scope> {
   const duplicate = duplicateScopeError(section, selected);
   if (duplicate !== undefined) return duplicate;
   return sourceScopeValue(section, selected);
@@ -66,7 +66,7 @@ function validSourceScope(
 function duplicateScopeError(
   section: string | undefined,
   selected: string | undefined,
-): Result<import('@novakai/canvas-language').Scope> | undefined {
+): Result<Scope> | undefined {
   return hasDuplicateScopeValue(section) || hasDuplicateScopeValue(selected)
     ? failure('invalid-input', 'scope', 'Each read scope query may be provided only once')
     : undefined;
@@ -79,7 +79,7 @@ function hasDuplicateScopeValue(value: string | undefined): boolean {
 function sourceScopeValue(
   section: string | undefined,
   id: string | undefined,
-): Result<import('@novakai/canvas-language').Scope> {
+): Result<Scope> {
   if (id === undefined) return { ok: true, value: { kind: 'all' } };
   if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(id))
     return failure('invalid-input', 'scope', 'Scope IDs must be non-empty canonical IDs');
@@ -89,7 +89,7 @@ function sourceScopeValue(
 function sourceScopeChoice(
   section: string | undefined,
   id: string,
-): Result<import('@novakai/canvas-language').Scope> {
+): Result<Scope> {
   return section === undefined
     ? { ok: true, value: { kind: 'object', id } }
     : { ok: true, value: { kind: 'section', id } };

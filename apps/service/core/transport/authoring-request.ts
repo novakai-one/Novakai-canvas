@@ -1,5 +1,5 @@
-import { requestSchema } from '@novakai/canvas-authoring';
-import type { Request } from '@novakai/canvas-authoring';
+import { requestSchema } from '../../contract/schemas.js';
+import type { Request } from '../../contract/records/capabilities.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
 /** Authoring owns its request vocabulary; transport translates only the invalid-input result. */

@@ -10,6 +10,8 @@ import type { Result } from '../errors.js';
 import { failure } from '../errors.js';
 import { createAdmission as createHttpAdmission } from '../../core/transport/admission.js';
 import { readCommand } from '../../core/transport/command.js';
+import { readAuthoringRequest } from '../../core/transport/authoring-request.js';
+import { createHttpRouter } from '../../core/transport/routes.js';
 import { createPresetCodecs } from '../../core/presets/codecs.js';
 import { prepareTheme } from '../../core/presets/theme-admission.js';
 import { createRenderJobs } from '../../core/rendering/jobs.js';
@@ -22,24 +24,22 @@ export async function serveWorkspace(
   options: ServerOptions,
 ): Promise<Result<LocalServer>> {
   try {
-    const [credentials, requests, router, io, files, server] = await Promise.all([
+    const [credentials, io, files, server] = await Promise.all([
       import('../../adapters/credentials/local-credentials.js'),
-      import('../../adapters/http/request-reader.js'),
-      import('../../adapters/http/http-router.js'),
       import('../../adapters/http/http-io.js'),
       import('../../adapters/http/static-files.js'),
       import('../../adapters/http/server.js'),
     ]);
     const security = await credentials.createLocalSecurity(options.port, options.credentialFile);
     if (!security.ok) return security;
-    const admission = createHttpAdmission(security.value, { read: requests.readAuthoringRequest });
+    const admission = createHttpAdmission(security.value, { read: readAuthoringRequest });
     return server.startHttpServer(options, {
       security: security.value,
       admission,
       changes: session,
       io: io.createHttpIo(),
       files: files.createStaticFiles(options.webRoot),
-      router: router.createHttpRouter({
+      router: createHttpRouter({
         session,
         generation: security.value.generation,
         admission,
