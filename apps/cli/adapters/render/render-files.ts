@@ -1,8 +1,9 @@
 /*
  * The headless render's file I/O, bound to one repo root, output directory and format: list the
  * shipped `.theme` and `.canvas` files under resources/, read UTF-8 text, name a recipe family's
- * shipped source, create the output directory and write section files. Not pure. Every failure is
- * a `provider-failed` value carrying the OS path, code and syscall.
+ * shipped source, create the output directory and write section files. Read paths and the output
+ * directory are resolved against the working directory. Not pure. Every failure is a
+ * `provider-failed` value carrying the OS path, code and syscall.
  */
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -16,8 +17,12 @@ import type { Result } from '../../contract/errors.js';
 /** Where one render reads shipped files and writes its sections. */
 export type RenderTarget = Pick<RenderRequest, 'root' | 'out' | 'format'>;
 
-/** Build the render file adapter for one render. Raster start-up is bound separately. */
-export function createRenderFiles(target: RenderTarget): Omit<RenderFiles, 'prepareRaster'> {
+/**
+ * Build the render file adapter for one render. The output directory is made absolute once, so the
+ * report names absolute files. Raster start-up is bound separately.
+ */
+export function createRenderFiles(request: RenderTarget): Omit<RenderFiles, 'prepareRaster'> {
+  const target = { ...request, out: absolute(request.out) };
   const resources = join(target.root, 'resources');
   return {
     shippedThemes: () => nativeStep(() => shippedThemes(resources)),
@@ -28,6 +33,11 @@ export function createRenderFiles(target: RenderTarget): Omit<RenderFiles, 'prep
     prepareOutput: () => nativeStep(() => createDirectory(target.out)),
     writeSection: (section, bytes) => nativeStep(() => writeSection(target, section, bytes)),
   };
+}
+
+/** The path resolved against the working directory; never empty. */
+function absolute(path: FilePath): FilePath {
+  return filePath.parse(resolve(path));
 }
 
 /** Run one filesystem step. A throw becomes a `provider-failed` failure value. */
@@ -55,7 +65,7 @@ async function shippedCollections(resources: string): Promise<readonly SourceFil
 
 /** One file's UTF-8 text, with its path resolved against the working directory. */
 async function read(path: FilePath): Promise<SourceFile> {
-  const file = filePath.parse(resolve(path));
+  const file = absolute(path);
   return { source: await readFile(file, 'utf8'), file };
 }
 

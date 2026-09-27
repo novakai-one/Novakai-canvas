@@ -1,7 +1,8 @@
 /*
- * Argv as Node's parser reads it, before any command rule: the flags `pnpm canvas` declares, and
- * the words, flag values and repeated flags the argv adapter found. Pure declarations. Core's
- * command grammar (`core/commands/parse.ts`) checks every word and value.
+ * Argv as Node's parser reads it, before any command rule: the flags `pnpm canvas` and
+ * `pnpm render:png` declare, and the words, flag values and repeated flags the argv adapter found.
+ * Pure declarations. Core's grammars (`core/commands/parse.ts`, `core/render/request.ts`) check
+ * every word and value.
  */
 
 /** Every `pnpm canvas` flag. */
@@ -22,6 +23,9 @@ export type CanvasFlag =
   | 'section'
   | 'object';
 
+/** Every `pnpm render:png` flag. */
+export type RenderFlag = 'collection' | 'theme' | 'theme-file' | 'out' | 'format' | 'labels';
+
 /** How Node parses one flag: a text value or a switch, with an optional one-letter alias. */
 export interface FlagShape {
   readonly type: 'string' | 'boolean';
@@ -31,7 +35,7 @@ export interface FlagShape {
 /** One executable's flags: a missing or extra flag is a type error. */
 export type FlagSpec<F extends string> = Readonly<Record<F, FlagShape>>;
 
-/** A flag that takes text. Frozen, like every shape in `canvasFlags`. */
+/** A flag that takes text. Frozen, like every shape in `canvasFlags` and `renderFlags`. */
 const textFlag: FlagShape = Object.freeze({ type: 'string' });
 
 /** `pnpm canvas` flags. Only `--help` (`-h`) is a switch. No flag has a default here; core fills them. */
@@ -52,6 +56,16 @@ export const canvasFlags: FlagSpec<CanvasFlag> = Object.freeze({
   section: textFlag,
   object: textFlag,
 } satisfies FlagSpec<CanvasFlag>);
+
+/** `pnpm render:png` flags. Only `--labels` is a switch. No flag has a default here; core fills them. */
+export const renderFlags: FlagSpec<RenderFlag> = Object.freeze({
+  collection: textFlag,
+  theme: textFlag,
+  'theme-file': textFlag,
+  out: textFlag,
+  format: textFlag,
+  labels: Object.freeze({ type: 'boolean' }),
+} satisfies FlagSpec<RenderFlag>);
 
 /** The words and flags Node accepted. */
 export interface RawArguments<F extends string> {

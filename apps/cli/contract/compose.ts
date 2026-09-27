@@ -2,8 +2,8 @@
  * Composition root: reads the arguments, then binds the parsed command's family to real
  * infrastructure (agent credential, HTTP transport, Language, local files, request journal,
  * headless render bindings, render file I/O). Not pure: reads files, calls HTTP, mints request
- * IDs. Failures are returned as values; `cli/canvas.ts` prints them and sets the exit code.
- * Recovery after a sent request is `receipt` then `retry`.
+ * IDs. Failures are returned as values; `cli/canvas.ts` and `cli/render.ts` print them and set the
+ * exit code. Recovery after a sent request is `receipt` then `retry`; a render changes nothing.
  */
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
@@ -17,9 +17,16 @@ import { createLocalFiles } from '../adapters/files/local-files.js';
 import { createRequestJournal } from '../adapters/files/request-journal.js';
 import { createTransport } from '../adapters/service-http/transport.js';
 import { createSemanticInputs } from '../adapters/inputs/semantic-inputs.js';
-import { executeCommand, executeProfile, parseCommand, readThemeSource, usage } from './api.js';
-import type { LocalFailure, Result } from './errors.js';
-import { canvasFlags } from './records/arguments.js';
+import {
+  executeCommand,
+  executeProfile,
+  parseCommand,
+  parseRenderRequest,
+  readThemeSource,
+  usage,
+} from './api.js';
+import type { CliFailure, LocalFailure, Result } from './errors.js';
+import { canvasFlags, renderFlags } from './records/arguments.js';
 import type {
   ParsedCommand,
   ProfileCommand,
@@ -46,6 +53,21 @@ export async function runCli(
     });
   }
 }
+
+/**
+ * `pnpm render:png`: Node reads the argv with every `--` dropped (pnpm forwards it), core's render
+ * grammar checks it, then one read-only render runs below `root`. Fails with `invalid-arguments`
+ * before anything is read or made; otherwise as {@link runHeadless}.
+ */
+export async function runRender(
+  args: readonly string[],
+  root: string,
+): Promise<Result<RenderReport, RenderFailure | CliFailure>> {
+  const request = parseRenderRequest(readArguments(args.filter(isNotSeparator), renderFlags), root);
+  if (!request.ok) return request;
+  return runHeadless(request.value);
+}
+
 /** Node reads the argv; core's grammar checks every word and value; then the command runs. */
 function parsedRun(
   args: readonly string[],
@@ -116,12 +138,19 @@ async function runProfile(command: ProfileCommand): Promise<Result<string>> {
   return executeProfile(command, { files: createLocalFiles(), semantic });
 }
 
+/** Whether the argv word is anything but pnpm's `--` separator. */
+function isNotSeparator(arg: string): boolean {
+  return arg !== '--';
+}
+
 /**
  * Headless export binds the same theme grammar and service owners without starting an HTTP
  * server, plus the render's temporary asset store and file I/O. The render adapters are imported
- * lazily, like the headless adapter.
+ * lazily, like the headless adapter. Fails with `render-failed`, or `render-unavailable` when
+ * set-up throws. A temporary-directory failure is not caught: it rejects with the OS error, which
+ * `cli/render.ts` prints.
  */
-export async function runHeadless(
+async function runHeadless(
   request: RenderRequest,
 ): Promise<Result<RenderReport, RenderFailure | LocalFailure>> {
   try {

@@ -24,7 +24,7 @@ export type { ChromeName } from '@novakai/canvas-design-system';
  * A local file path: any non-empty text. Node resolves it against the working directory; the
  * resource reader enforces confinement. Minted from a FILE operand (`source-unavailable`), --out
  * (`output-unavailable`) and --workspace (an empty one becomes `.`) by core's argument checks, by
- * the render's file adapter, and by render:png's option check.
+ * the render's file adapter, and by render:png's argument check (`invalid-arguments`).
  */
 export const filePath = z.string().min(1).brand<'CliFilePath'>();
 
@@ -62,11 +62,14 @@ export const collectionRevision = z
 
 /**
  * render:png's `--collection` text: a recipe ID, a `.canvas` path or a shipped collection ID.
- * Minted by render:png's option check.
+ * Minted by render:png's argument check (`invalid-arguments`).
  */
 export const collectionName = z.string().min(1).brand<'CollectionName'>();
 
-/** render:png's `--theme` text: a theme ID. Minted by render:png's option check. */
+/**
+ * render:png's `--theme` text: a theme ID. Minted by render:png's argument check
+ * (`invalid-arguments`).
+ */
 export const themeName = z.string().min(1).brand<'ThemeName'>();
 
 /** A collection ID that passed Model's `collectionId`. Model exports the schema, not the type. */
