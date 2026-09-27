@@ -11,6 +11,7 @@ async function main(): Promise<void> {
   }
   process.stdout.write(`${result.value}\n`);
 }
+// Last resort only: runCli never rejects, so just a throw while printing reaches this line.
 void main().catch(() => {
   process.stderr.write('CLI failed. Preserve the request ID and check its receipt.\n');
   process.exitCode = 1;
