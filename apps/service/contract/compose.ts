@@ -5,7 +5,7 @@
  * initialize), serve (HTTP), agent-credential (CLI credential read), headless (headless export).
  * Adapters never import siblings or reach another capability's private implementation.
  */
-export { runRenderWorker } from './compose/rendering.js';
+export { runRenderWorker } from './compose/worker.js';
 export { prepareInstallation } from './compose/installation.js';
 export { openWorkspace } from './compose/startup.js';
 export { serveWorkspace } from './compose/serve.js';

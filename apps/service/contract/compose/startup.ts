@@ -15,7 +15,7 @@ import type { WorkspaceSession } from '../types.js';
 import type { Result } from '../errors.js';
 import { failure } from '../errors.js';
 import { prepareInstallation } from './installation.js';
-import { createDiagramProducer } from './rendering.js';
+import { createDiagramProducer } from './worker.js';
 import { wireWorkspace } from './wiring.js';
 import type { WiredWorkspace } from './wiring.js';
 
