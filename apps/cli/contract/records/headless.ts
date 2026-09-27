@@ -1,11 +1,11 @@
 /*
- * The headless render's request, report and failure records, plus the adapter-edge conversion of a
- * thrown native error into `provider-failed` evidence. The schemas and nativeFault are pure;
- * nativeStep runs one native step and returns its failure as a value.
+ * The headless render's request, report and failure records, plus nativeFault: the constructor that
+ * turns a thrown native error into `provider-failed` evidence. All pure. The render adapters catch
+ * their own native throws and call nativeFault.
  */
 import { z } from 'zod';
 import type { Catalog } from '@novakai/canvas-templates';
-import type { Diagnostic, Result } from '../errors.js';
+import type { Diagnostic } from '../errors.js';
 import type { FailureSource } from './failure-source.js';
 /** Filesystem path at the native CLI edge; Node resolves it and resource owners enforce confinement. */
 export const filePath = z.string().min(1).brand<'HeadlessFilePath'>();
@@ -104,15 +104,6 @@ export function nativeFault(error: unknown): ProviderFault {
     message: providerMessage(error),
     detail: nativeDetail(error),
   });
-}
-
-/** Run one native filesystem or wasm step. A throw becomes a `provider-failed` failure value. */
-export async function nativeStep<T>(step: () => Promise<T>): Promise<Result<T, ProviderFault>> {
-  try {
-    return { ok: true, value: await step() };
-  } catch (error) {
-    return { ok: false, error: nativeFault(error) };
-  }
 }
 
 /** The error's message as human context; no machine-readable fields are invented. */

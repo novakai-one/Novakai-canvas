@@ -1,19 +1,16 @@
 /*
  * The headless render boundary: one read-only render runs in a temporary directory — admission,
  * lowering, projection, layout, export — and stored collections are never touched. Pure render
- * rules live in core/render behind contract/api.js and capability wiring in contract/render.js;
- * file I/O, the temporary asset store and raster start-up are injected (adapters/render/). This
- * adapter owns the owner sequence and the RenderFault boundary: accepted() throws,
- * renderHeadless converts the fault to a typed failure, and the temporary directory is always
- * removed.
+ * rules live in core/render behind contract/api.js, capability wiring in contract/render.js and
+ * the Export stage in contract/render-export.js; file I/O, the temporary asset store and raster
+ * start-up are injected (adapters/render/). This adapter owns the owner sequence and the
+ * RenderFault boundary: accepted() throws, renderHeadless converts the fault to a typed failure,
+ * and the temporary directory is always removed.
  */
 import { z } from 'zod';
 import type { Assets } from '@novakai/canvas-assets';
-import type { RenderDocument } from '@novakai/canvas-service';
 import type { Catalog } from '@novakai/canvas-templates';
 import { validate, type Collection } from '@novakai/canvas-model';
-import { createReactBindings } from '@novakai/canvas-presentation';
-import { composeExport, type Snapshot } from '@novakai/canvas-export';
 import {
   filePath,
   headlessFault,
@@ -34,13 +31,12 @@ import {
   assetAttribution,
   evidence,
   renderReport,
-  resourceInspector,
   sourceMatches,
   sourceWithTheme,
 } from '../../contract/api.js';
+import { exportSections } from '../../contract/render-export.js';
 import {
   environment,
-  exportDocuments,
   pinResources,
   renderJob,
   renderSnapshot,
@@ -116,7 +112,7 @@ async function renderEnvironment(
   const job = renderJob(options, owners, env, catalog, collection);
   const document = accepted(await owners.service.produceDiagram(job, new AbortController().signal));
   const snapshot = renderSnapshot(collection, document, catalog, env);
-  const files = await output(options, owners, snapshot, document, env, catalog);
+  const files = await exportSections(options, owners.files, snapshot, document, env, catalog);
   return renderReport(files, collection, document, catalog);
 }
 
@@ -292,66 +288,4 @@ async function overrideSource(
   const selected = await selectedTheme(options, owners, null);
   if (selected === null) return source;
   return { ...source, source: sourceWithTheme(source.source, selected, env.language.parse) };
-}
-
-/** Export acquires one immutable scene and emits every section with filesystem-safe ids. */
-async function output(
-  options: HeadlessOptions,
-  owners: HeadlessOwners,
-  snapshot: Snapshot,
-  document: RenderDocument,
-  env: Environment,
-  catalog: Catalog,
-): Promise<HeadlessReport['files']> {
-  const presentation = accepted(await createReactBindings(document.fonts));
-  const exporter = composeExport({
-    presentation,
-    readerCss: '',
-    allLabels: options.labels === true,
-    snapshots: {
-      acquire: async () => ({
-        ok: true,
-        value: { snapshot, release: async () => ({ ok: true, value: undefined }) },
-      }),
-    },
-    documents: exportDocuments(env.language, catalog, snapshot.collection.assets),
-    resources: resourceInspector(snapshot.resources),
-  });
-  await raster(options, owners);
-  accepted(await owners.files.prepareOutput());
-  return Promise.all(
-    document.scene.sections.map(async (section) =>
-      exportSection(options, owners, exporter, snapshot, section.id),
-    ),
-  );
-}
-
-/** Write one section's artifact to its deterministic file and return the path. */
-async function exportSection(
-  options: HeadlessOptions,
-  owners: HeadlessOwners,
-  exporter: ReturnType<typeof composeExport>,
-  snapshot: Snapshot,
-  sectionId: string,
-): Promise<FilePath> {
-  const artifact = accepted(
-    await exporter.service.exportArtifact({
-      identity: {
-        collectionId: snapshot.collection.id,
-        revision: snapshot.collection.revision,
-      },
-      format: options.format,
-      scope: { kind: 'section', id: sectionId },
-    }),
-  );
-  return accepted(await owners.files.writeSection(sectionId, artifact.bytes));
-}
-
-/** Real raster engine initialization is needed only by PNG requests. */
-async function raster(
-  options: HeadlessOptions,
-  owners: HeadlessOwners,
-): Promise<void> {
-  if (options.format !== 'png') return;
-  accepted(await owners.files.prepareRaster());
 }

@@ -7,22 +7,31 @@ import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { initializeRaster } from '@novakai/canvas-export';
-import { nativeStep, type FilePath } from '../../contract/records/headless.js';
+import { nativeFault, type FilePath, type ProviderFault } from '../../contract/records/headless.js';
 import type { RenderFiles } from '../../contract/ports/render.js';
+import type { Result } from '../../contract/errors.js';
 
 /** Build the raster start-up for one repo root. */
 export function createRaster(root: FilePath): Pick<RenderFiles, 'prepareRaster'> {
   return {
     prepareRaster: async () => {
-      const module = await nativeStep(() => compile(root));
+      const module = await compile(root);
       if (!module.ok) return module;
       return initializeRaster(module.value);
     },
   };
 }
 
-/** Resolve resvg's wasm file from Export's own dependencies and compile it. */
-async function compile(root: FilePath): Promise<WebAssembly.Module> {
-  const require = createRequire(join(root, 'capability/export/package.json'));
-  return WebAssembly.compile(await readFile(require.resolve('@resvg/resvg-wasm/index_bg.wasm')));
+/**
+ * Resolve resvg's wasm file from Export's own dependencies and compile it. A resolve, read or
+ * compile throw becomes `provider-failed`.
+ */
+async function compile(root: FilePath): Promise<Result<WebAssembly.Module, ProviderFault>> {
+  try {
+    const require = createRequire(join(root, 'capability/export/package.json'));
+    const wasm = await readFile(require.resolve('@resvg/resvg-wasm/index_bg.wasm'));
+    return { ok: true, value: await WebAssembly.compile(wasm) };
+  } catch (error) {
+    return { ok: false, error: nativeFault(error) };
+  }
 }

@@ -6,14 +6,17 @@
  */
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import type { SectionId } from '@novakai/canvas-model';
 import {
   filePath,
-  nativeStep,
+  nativeFault,
   type FilePath,
   type HeadlessOptions,
+  type ProviderFault,
   type SourceFile,
 } from '../../contract/records/headless.js';
 import type { RenderFiles } from '../../contract/ports/render.js';
+import type { Result } from '../../contract/errors.js';
 
 /** Where one render reads shipped files and writes its sections. */
 export type RenderTarget = Pick<HeadlessOptions, 'root' | 'out' | 'format'>;
@@ -30,6 +33,15 @@ export function createRenderFiles(target: RenderTarget): Omit<RenderFiles, 'prep
     prepareOutput: () => nativeStep(() => createDirectory(target.out)),
     writeSection: (section, bytes) => nativeStep(() => writeSection(target, section, bytes)),
   };
+}
+
+/** Run one filesystem step. A throw becomes a `provider-failed` failure value. */
+async function nativeStep<T>(step: () => Promise<T>): Promise<Result<T, ProviderFault>> {
+  try {
+    return { ok: true, value: await step() };
+  } catch (error) {
+    return { ok: false, error: nativeFault(error) };
+  }
 }
 
 /** The `.theme` files directly under `resources`, sorted by name. */
@@ -60,7 +72,7 @@ async function createDirectory(path: FilePath): Promise<void> {
 /** Write to `<out>/<section>.<format>`; characters outside `[a-zA-Z0-9_-]` in the ID become `-`. */
 async function writeSection(
   target: RenderTarget,
-  section: string,
+  section: SectionId,
   bytes: Uint8Array,
 ): Promise<FilePath> {
   const file = join(target.out, section.replace(/[^a-zA-Z0-9_-]/g, '-') + '.' + target.format);

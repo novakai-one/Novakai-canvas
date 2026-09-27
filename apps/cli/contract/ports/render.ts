@@ -8,6 +8,7 @@ import type { createHeadlessBindings } from '@novakai/canvas-service';
 import type { AssetError, Assets } from '@novakai/canvas-assets';
 import type { Diagnostic as ExportDiagnostic } from '@novakai/canvas-export';
 import type { Catalog } from '@novakai/canvas-templates';
+import type { SectionId } from '@novakai/canvas-model';
 import type { readThemeConfig } from '../theme-reader.js';
 import type { ResourceFiles } from '../records/resources.js';
 import type { FilePath, ProviderFault, SourceFile } from '../records/headless.js';
@@ -61,7 +62,7 @@ export interface RenderFiles {
   prepareOutput(): Promise<Result<void, ProviderFault>>;
   /** Write one section's bytes to its file in the output directory; returns the path. */
   writeSection(
-    section: string,
+    section: SectionId,
     bytes: Uint8Array,
   ): Promise<Result<FilePath, ProviderFault>>;
 }
