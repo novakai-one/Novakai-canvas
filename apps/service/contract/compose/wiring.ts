@@ -33,7 +33,7 @@ import {
   installationRequest,
 } from '../../core/authoring-roles/planners/bootstrap.js';
 import { createCollectionPlanner } from '../../core/authoring-roles/planners/collection-proposal.js';
-import { createDiagramPlanners } from '../../core/authoring-roles/planners/diagram.js';
+import { createDiagramPlanners } from '../../core/authoring-roles/planners/dsl.js';
 import { createLibraryPlanner } from '../../core/authoring-roles/planners/library.js';
 import { createPresetPlanner } from '../../core/authoring-roles/planners/preset.js';
 import { prepareTheme } from '../../core/presets/theme-admission.js';
