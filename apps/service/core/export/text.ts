@@ -1,12 +1,15 @@
 /*
- * Text exports: canonical DSL and Markdown, printed from a leased snapshot. Each export acquires
- * the lease, prints, releases the lease once, then answers with the file or the failure; a
- * release failure never hides the primary one. A print or format throw escapes unreleased; the
- * HTTP server's `receive` answers it `unavailable` at `request`. Pure over the owners compose
- * injects; the caller owns retry.
+ * Text exports: canonical DSL and Markdown, produced from a leased snapshot. Both formats share
+ * one settle step: acquire the lease, produce the text, release the lease exactly once, then
+ * answer with the file or the failure; a release failure never hides the primary one. A print or
+ * format throw releases the lease first, then continues to the HTTP server's `receive`, which
+ * answers it `unavailable` at `request`. Pure over the owners compose injects; the caller owns
+ * retry. A lease still held when the process dies stops protecting its bytes: Assets' collection
+ * ignores leases whose owner process is gone.
  */
 import { failure } from '../../contract/errors.js';
 import type { RouteOutcome } from '../../contract/records/transport/protocol.js';
+import type { Collection, Language } from '../../contract/records/capabilities.js';
 import type { ExportRules } from '../../contract/ports/capabilities.js';
 import type {
   ExportRequest,
@@ -15,11 +18,12 @@ import type {
 } from '../../contract/records/export/export.js';
 import { cancelledExport, exportRouteFailure, settledFailure } from './faults.js';
 import { dslFile, markdownFile } from './files.js';
-import { exportDocuments, markdownText, type DocumentOwners } from './documents.js';
+import { markdownText, printedSource } from './documents.js';
 import { acquireSnapshot, type LeaseOwners } from './lease.js';
 
 /** The owners text exports lease, print and format through. */
-export interface TextOwners extends DocumentOwners, LeaseOwners {
+export interface TextOwners extends LeaseOwners {
+  readonly language: Pick<Language, 'print'>;
   readonly export: Pick<ExportRules, 'formatMarkdown'>;
 }
 
@@ -37,23 +41,10 @@ export async function exportDsl(
 ): Promise<RouteOutcome> {
   if (request.scope.kind !== 'all')
     return failure('invalid-input', 'scope', 'Canonical DSL export requires the whole collection');
-  const acquired = await acquireSnapshot(request.identity, owners, signal);
-  if (!acquired.ok) return exportRouteFailure(acquired);
-  return settleDsl(request, owners, signal, acquired.value);
-}
-
-/** Print the leased collection, release the lease, then answer with the file or the failure. */
-async function settleDsl(
-  request: ExportRequest,
-  owners: TextOwners,
-  signal: AbortSignal,
-  lease: SnapshotLease,
-): Promise<RouteOutcome> {
-  const primary: ExportResult<string> = signal.aborted
-    ? cancelledExport()
-    : exportDocuments(owners).print(lease.snapshot.collection);
-  const settled = settledFailure(primary, await lease.release());
-  return settled.ok ? dslFile(request.identity, settled.value) : exportRouteFailure(settled);
+  return exportText(request.identity, owners, signal, {
+    produce: (collection) => printedDsl(collection, owners.language, signal),
+    file: (source) => dslFile(request.identity, source),
+  });
 }
 
 /**
@@ -67,19 +58,74 @@ export async function exportMarkdown(
   owners: TextOwners,
   signal: AbortSignal,
 ): Promise<RouteOutcome> {
-  const acquired = await acquireSnapshot(request.identity, owners, signal);
-  if (!acquired.ok) return exportRouteFailure(acquired);
-  return settleMarkdown(request, owners, signal, acquired.value);
+  return exportText(request.identity, owners, signal, {
+    produce: (collection) => markdownText(signal, collection, request.scope, owners.export),
+    file: (source) => markdownFile(request, source),
+  });
 }
 
-/** Format the leased collection, release the lease, then answer with the file or the failure. */
-async function settleMarkdown(
-  request: ExportRequest,
-  owners: TextOwners,
+/** One text format: how the leased collection becomes text, and how that text becomes a file. */
+interface TextFormat {
+  readonly produce: (collection: Collection) => ExportResult<string>;
+  readonly file: (text: string) => RouteOutcome;
+}
+
+/**
+ * Lease the snapshot, produce the text, release the lease, then answer with the file. Fails as
+ * `exportRouteFailure` of `acquireSnapshot`'s refusal, or of `settleText`'s.
+ */
+async function exportText(
+  identity: ExportRequest['identity'],
+  owners: LeaseOwners,
   signal: AbortSignal,
-  lease: SnapshotLease,
+  format: TextFormat,
 ): Promise<RouteOutcome> {
-  const primary = markdownText(signal, lease.snapshot.collection, request.scope, owners.export);
-  const settled = settledFailure(primary, await lease.release());
-  return settled.ok ? markdownFile(request, settled.value) : exportRouteFailure(settled);
+  const acquired = await acquireSnapshot(identity, owners, signal);
+  if (!acquired.ok) return exportRouteFailure(acquired);
+  const settled = await settleText(format, acquired.value);
+  if (!settled.ok) return exportRouteFailure(settled);
+  return format.file(settled.value);
+}
+
+/**
+ * The format's text, with the lease released once afterwards. Fails with the format's own
+ * refusal, or `cleanup-failed` at `export.release` when the release fails (nested under `cleanup`
+ * after a refusal).
+ */
+async function settleText(
+  format: TextFormat,
+  lease: SnapshotLease,
+): Promise<ExportResult<string>> {
+  const primary = await producedText(format, lease);
+  return settledFailure(primary, await lease.release());
+}
+
+/**
+ * The format's text from the leased collection. Fails with the format's own refusal. A throw
+ * releases the lease first, then continues unchanged; that release outcome is not reported, so it
+ * never hides the throw.
+ */
+async function producedText(
+  format: TextFormat,
+  lease: SnapshotLease,
+): Promise<ExportResult<string>> {
+  try {
+    return format.produce(lease.snapshot.collection);
+  } catch (error: unknown) {
+    await lease.release();
+    throw error;
+  }
+}
+
+/**
+ * The canonical DSL of the collection. Fails with `cancelled` at `export` when the request
+ * aborted, and `invalid-input` at `source` when Language cannot print.
+ */
+function printedDsl(
+  collection: Collection,
+  language: Pick<Language, 'print'>,
+  signal: AbortSignal,
+): ExportResult<string> {
+  if (signal.aborted) return cancelledExport();
+  return printedSource(language, collection);
 }

@@ -2,8 +2,8 @@
  * The workspace export route: a read-only projection over one current Authoring snapshot. A
  * checked request is dispatched by format: DSL and Markdown are printed from a leased snapshot
  * (text.ts); SVG and PNG are encoded by Export, which acquires its snapshot through the route's
- * lease (lease.ts). A DSL print or Markdown format throw escapes with the lease unreleased
- * (text.ts). Pure over the owners compose injects; the caller owns retry.
+ * lease (lease.ts). Every path releases its lease once, also when a DSL print or Markdown
+ * format throws (text.ts). Pure over the owners compose injects; the caller owns retry.
  */
 import type { Result } from '../../contract/errors.js';
 import type { RouteOutcome } from '../../contract/records/transport/protocol.js';
@@ -14,12 +14,12 @@ import type { ExportHandler, ExportRequest } from '../../contract/records/export
 import { readExportRequest } from './request.js';
 import { resourceInspector } from './resources.js';
 import { artifactOutcome } from './files.js';
-import { exportDocuments } from './documents.js';
+import { exportDocuments, type DocumentOwners } from './documents.js';
 import { acquireSnapshot } from './lease.js';
 import { exportDsl, exportMarkdown, type TextOwners } from './text.js';
 
-/** Everything one export reads through; `TextOwners` carries the lease and document owners. */
-export interface ExportRouteOwners extends TextOwners {
+/** Everything one export reads through: the text and lease owners, plus Export's documents port. */
+export interface ExportRouteOwners extends TextOwners, DocumentOwners {
   readonly export: Pick<ExportRules, 'compose' | 'formatMarkdown'>;
   readonly presentation: PresentationBindings;
   readonly png: PngRuntime;
@@ -36,7 +36,10 @@ export function createExportRoute(owners: ExportRouteOwners): ExportHandler {
   return { invoke: (input, signal) => invokeExport(input, signal, owners) };
 }
 
-/** A checked request is dispatched by format; a refused one never reaches an owner. */
+/**
+ * A checked request is dispatched by format; a refused one never reaches an owner. Fails as
+ * `readExportRequest` (`invalid-input` at `export` or `export.scale`), or as `dispatchExport`.
+ */
 async function invokeExport(
   input: unknown,
   signal: AbortSignal,
@@ -47,7 +50,10 @@ async function invokeExport(
   return dispatchExport(request.value, owners, signal);
 }
 
-/** DSL and Markdown are printed from a leased snapshot; SVG and PNG are encoded by Export. */
+/**
+ * DSL and Markdown are printed from a leased snapshot; SVG and PNG are encoded by Export. Fails as
+ * `exportDsl`, `exportMarkdown` or `nativeExport`.
+ */
 async function dispatchExport(
   request: ExportRequest,
   owners: ExportRouteOwners,
@@ -63,7 +69,10 @@ async function dispatchExport(
   }
 }
 
-/** PNG first needs its runtime; an unavailable runtime refuses before any owner is read. */
+/**
+ * PNG first needs its runtime; an unavailable runtime refuses before any owner is read. Fails with
+ * `unavailable` at `export.png` (see `prepareFormat`), or as `encodeNative`.
+ */
 async function nativeExport(
   request: ExportRequest,
   owners: ExportRouteOwners,
@@ -74,7 +83,10 @@ async function nativeExport(
   return encodeNative(request, owners, signal);
 }
 
-/** The PNG runtime for PNG; every other format needs nothing. */
+/**
+ * The PNG runtime for PNG; every other format needs nothing. Fails with `unavailable` at
+ * `export.png` when the PNG runtime cannot start.
+ */
 async function prepareFormat(
   format: ExportRequest['format'],
   owners: ExportRouteOwners,
@@ -82,7 +94,11 @@ async function prepareFormat(
   return format === 'png' ? owners.png.prepare() : { ok: true, value: undefined };
 }
 
-/** Export encodes the artifact from a snapshot it acquires through this route. */
+/**
+ * Export encodes the artifact from a snapshot it acquires through this route. Fails as
+ * `exportRouteFailure` of Export's diagnostic: `cancelled` stays `cancelled`, the rest (including
+ * `acquireSnapshot`'s refusals and a provider throw as `encoding-failed`) is `invalid-input`.
+ */
 async function encodeNative(
   request: ExportRequest,
   owners: ExportRouteOwners,

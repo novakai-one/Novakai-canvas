@@ -33,15 +33,24 @@ export function exportDocuments(owners: DocumentOwners): Documents {
         ? checked
         : exportRejection('invalid-input', 'collection', 'Collection is invalid');
     },
-    print: (collection) => {
-      const printed = owners.language.print({ collection, scope: { kind: 'all' } });
-      return printed.ok
-        ? { ok: true, value: printed.value.source }
-        : exportRejection('invalid-input', 'source', 'Collection could not be printed');
-    },
+    print: (collection) => printedSource(owners.language, collection),
     parse: () =>
       exportRejection('invalid-import', 'source', 'Import parsing is not part of browser export'),
   };
+}
+
+/**
+ * Canonical DSL of the whole collection. Fails with `invalid-input` at `source` when Language
+ * cannot print. A throw from Language is not caught.
+ */
+export function printedSource(
+  language: Pick<Language, 'print'>,
+  collection: Collection,
+): ExportResult<string> {
+  const printed = language.print({ collection, scope: { kind: 'all' } });
+  if (!printed.ok)
+    return exportRejection('invalid-input', 'source', 'Collection could not be printed');
+  return { ok: true, value: printed.value.source };
 }
 
 /**
