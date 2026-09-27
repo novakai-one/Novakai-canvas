@@ -1,3 +1,9 @@
+/*
+ * Builds the render job for one collection from one consistent workspace view: the exact pinned
+ * theme, its fonts, the collection's images, the resolved diagram style and the layout options.
+ * Pure over the injected owners (Assets, Templates, Design System); nothing is written. Authoring
+ * owns admission and keeps the prior scene when a job cannot be built.
+ */
 import type { FailureSource } from '../../contract/records/transport/failure-source.js';
 import type {
   AuthoringResult,
@@ -18,50 +24,33 @@ import type { RenderResourceOwners } from '../../contract/records/rendering/reso
 import type { WorkspaceContents } from '../../contract/records/workspace/contents.js';
 import type { RenderingJob } from '../../contract/records/rendering/job.js';
 import type { RenderJobs } from '../../contract/ports/render-jobs.js';
-/** Known owner failures preserve their actionable explanation at the Authoring feasibility boundary. */
-class RenderResourceFault extends Error {
-  /** Expected owner failures keep their evidence through private short-circuiting. */
-  constructor(
-    message: string,
-    readonly source?: FailureSource,
-  ) {
-    super(message);
-  }
+
+/**
+ * Binds job building to the given owners. `create` returns the job for one collection (see
+ * `create` below). It fails with `missing-asset` at `render-resources` when an owner rejects a
+ * resource (the owner's failure kept as source) or the pinned preset is not a theme, and with
+ * `invalid-input` at `render-resources` when anything else throws, such as a resource that does
+ * not fit its Presentation or Layout schema.
+ */
+export function createRenderJobs(owners: RenderResourceOwners): RenderJobs {
+  return {
+    create(collection, view, previous, id): AuthoringResult<RenderingJob> {
+      try {
+        return { ok: true, value: create(collection, view, previous, id, owners) };
+      } catch (error) {
+        return rejected(error);
+      }
+    },
+  };
 }
-/** Render resources are mandatory owner results, never machine-local fallback fonts or blank images. */
-function accepted<T>(result: AuthoringResult<T, FailureSource>): T {
-  if (!result.ok)
-    throw new RenderResourceFault('A render resource owner rejected input', result.error);
-  return result.value;
-}
-/** Read the normalized admitted font bytes and family that both measurement and browser/export must use. */
-function font(
-  digest: string,
-  owners: RenderResourceOwners,
-): FontSource {
-  const blob = accepted(owners.assets.resolve(digest));
-  return fontSource.parse({
-    digest,
-    family: blob.descriptor.fontFamily,
-    mediaType: blob.descriptor.mediaType,
-    base64: blob.base64,
-  });
-}
-/** Image dimensions come from Assets' mechanical admission, never authored pixel hints. */
-function asset(
-  digest: string,
-  owners: RenderResourceOwners,
-): VisualAsset {
-  const blob = accepted(owners.assets.resolve(digest));
-  return visualAsset.parse({
-    digest,
-    mediaType: blob.descriptor.mediaType,
-    base64: blob.base64,
-    width: blob.descriptor.width,
-    height: blob.descriptor.height,
-  });
-}
-/** Convert the exact pinned theme into native measured input; personal UI scope cannot enter this request. */
+
+/**
+ * Builds the job from the collection's exact pinned theme; personal UI scope cannot enter it.
+ * Reads the theme through Templates, each theme font and each image asset through Assets, and
+ * resolves then projects the diagram tokens through Design System. The layout options scale with
+ * the resolved style. Throws `RenderResourceFault` when an owner rejects a resource or the preset
+ * is not a theme, and a schema error when a resource does not fit Presentation or Layout.
+ */
 function create(
   collection: Collection,
   view: WorkspaceContents,
@@ -116,7 +105,71 @@ function create(
     }),
   };
 }
-/** Owner rejection is a correction path; malformed resource output does not escape as a native exception. */
+
+/**
+ * Reads one admitted font: the stored bytes and the family Assets recorded, which measurement and
+ * the browser and export all use. Throws `RenderResourceFault` when Assets cannot resolve the
+ * digest, and a schema error when the result is not a Presentation font source.
+ */
+function font(
+  digest: string,
+  owners: RenderResourceOwners,
+): FontSource {
+  const blob = accepted(owners.assets.resolve(digest));
+  return fontSource.parse({
+    digest,
+    family: blob.descriptor.fontFamily,
+    mediaType: blob.descriptor.mediaType,
+    base64: blob.base64,
+  });
+}
+
+/**
+ * Reads one admitted image. Its dimensions come from Assets' admission, never from authored pixel
+ * hints. Throws `RenderResourceFault` when Assets cannot resolve the digest, and a schema error
+ * when the result is not a Presentation visual asset.
+ */
+function asset(
+  digest: string,
+  owners: RenderResourceOwners,
+): VisualAsset {
+  const blob = accepted(owners.assets.resolve(digest));
+  return visualAsset.parse({
+    digest,
+    mediaType: blob.descriptor.mediaType,
+    base64: blob.base64,
+    width: blob.descriptor.width,
+    height: blob.descriptor.height,
+  });
+}
+
+/**
+ * The owner's value. Render resources are mandatory owner results: there is no machine-local
+ * fallback font or blank image. Throws `RenderResourceFault` with the owner's failure as source
+ * when the owner rejected the input.
+ */
+function accepted<T>(result: AuthoringResult<T, FailureSource>): T {
+  if (!result.ok)
+    throw new RenderResourceFault('A render resource owner rejected input', result.error);
+  return result.value;
+}
+
+/** A render resource the owners refused; the owner's failure is kept when there is one. */
+class RenderResourceFault extends Error {
+  /** A refusal found here (preset is not a theme) has no invented source; owner refusals keep theirs. */
+  constructor(
+    message: string,
+    readonly source?: FailureSource,
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * The failure for a job that could not be built. A `RenderResourceFault` is `missing-asset` at
+ * `render-resources` with its message and source; any other throw is `invalid-input` at
+ * `render-resources`, "Render resources could not be decoded". It never throws itself.
+ */
 function rejected(error: unknown): AuthoringResult<never> {
   if (error instanceof RenderResourceFault)
     return authoringFailure('missing-asset', 'render-resources', error.message, [], error.source);
@@ -125,16 +178,4 @@ function rejected(error: unknown): AuthoringResult<never> {
     'render-resources',
     'Render resources could not be decoded',
   );
-}
-/** Every job is built from one consistent workspace view; Authoring owns admission and keeps the prior scene on failure. */
-export function createRenderJobs(owners: RenderResourceOwners): RenderJobs {
-  return {
-    create(collection, view, previous, id): AuthoringResult<RenderingJob> {
-      try {
-        return { ok: true, value: create(collection, view, previous, id, owners) };
-      } catch (error) {
-        return rejected(error);
-      }
-    },
-  };
 }

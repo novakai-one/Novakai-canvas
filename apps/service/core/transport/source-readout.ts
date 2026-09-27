@@ -1,7 +1,16 @@
+/*
+ * The source readout behind `GET /api/v1/language` and `GET /api/v1/source`: Language's
+ * vocabulary and a collection printed as DSL, so HTTP never learns the diagram syntax. Pure over
+ * the injected Language. The caller keeps its draft on a refused print.
+ */
 import type { Language } from '../../contract/records/capabilities.js';
 import type { RouterBindings } from '../../contract/records/transport/server.js';
 import { failure } from '../../contract/errors.js';
-/** Readout translation keeps language diagnostics readable without teaching HTTP the diagram syntax. */
+/**
+ * Binds the readout to Language. `describe` returns Language's vocabulary. `print` returns the
+ * collection's DSL for the scope (the whole collection when none is given), or fails with
+ * `invalid-input` at `source` when Language refuses (Language's failure kept as source).
+ */
 export function createSourceReadout(
   language: Pick<Language, 'describe' | 'print'>,
 ): RouterBindings['source'] {
