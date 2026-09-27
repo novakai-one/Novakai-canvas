@@ -5,11 +5,11 @@ import type { Collection } from '@novakai/canvas-model';
 import type {
   WorkspaceReader,
   WorkspaceContents,
-} from '../../contract/records/workspace/contents.js';
+} from '../../../contract/records/workspace/contents.js';
 import type {
   ResourceSelector,
   CollectionPlanner,
-} from '../../contract/records/planning/planning.js';
+} from '../../../contract/records/planning/planning.js';
 /** A create includes catalog membership in the same proposed Authoring transaction as its canonical collection. */
 function propose(
   snapshot: Snapshot,

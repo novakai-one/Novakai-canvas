@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { plannerId, proposalSchema, requestSchema, failure } from '@novakai/canvas-authoring';
 import type { IntentPlanner, Proposal, Result, Request } from '@novakai/canvas-authoring';
 import type { Preset } from '@novakai/canvas-templates';
-import type { Installation } from '../../contract/records/workspace/installation.js';
+import type { Installation } from '../../../contract/records/workspace/installation.js';
 const initialize = z.strictObject({ action: z.literal('initialize') });
 /** Templates already admitted this exact immutable preset; Authoring still validates the complete candidate and byte coverage. */
 function presetWrite(preset: Preset): unknown {

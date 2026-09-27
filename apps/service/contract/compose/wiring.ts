@@ -28,7 +28,7 @@ import { createResourceAdmission } from '../../core/authoring-roles/resource-lea
 import { createWorkspaceExporter } from '../../adapters/workspace/export.js';
 import { createPngRuntime } from '../../adapters/raster/png-runtime.js';
 import { cacheRenders } from '../../adapters/rendering/render-cache.js';
-import type { createFeasibility } from '../../adapters/planning/feasibility.js';
+import type { createFeasibility } from '../../core/authoring-roles/feasibility.js';
 import { createServiceCapabilities } from './capabilities.js';
 
 /** The workspace after wiring: the session facade, its validator, and the startup requests. */
@@ -64,16 +64,16 @@ export async function wireWorkspace(
   ] = await Promise.all([
     import('../../adapters/storage/authoring-store.js'),
     import('../../adapters/builtins/preset-codecs.js'),
-    import('../../adapters/planning/collection-plans.js'),
-    import('../../adapters/planning/library-planner.js'),
-    import('../../adapters/planning/diagram-planners.js'),
-    import('../../adapters/planning/candidate-validation.js'),
+    import('../../core/authoring-roles/planners/collection-proposal.js'),
+    import('../../core/authoring-roles/planners/library.js'),
+    import('../../core/authoring-roles/planners/diagram.js'),
+    import('../../core/authoring-roles/validation/candidate.js'),
     import('../../adapters/rendering/render-jobs.js'),
-    import('../../adapters/planning/feasibility.js'),
+    import('../../core/authoring-roles/feasibility.js'),
     import('../../adapters/rendering/collection-renderer.js'),
-    import('../../adapters/planning/installation-planner.js'),
+    import('../../core/authoring-roles/planners/bootstrap.js'),
     import('../../adapters/notifications/change-channel.js'),
-    import('../../adapters/planning/preset-planner.js'),
+    import('../../core/authoring-roles/planners/preset.js'),
     import('../../adapters/rendering/theme-preparation.js'),
   ]);
   const capabilities = createServiceCapabilities(

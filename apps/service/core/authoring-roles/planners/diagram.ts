@@ -8,8 +8,8 @@ import type {
   Proposal,
   Result,
 } from '@novakai/canvas-authoring';
-import { dslCommand, modelCommand } from '../../contract/records/planning/commands.js';
-import type { DiagramPlannerOwners } from '../../contract/records/planning/planning.js';
+import { dslCommand, modelCommand } from '../../../contract/records/planning/commands.js';
+import type { DiagramPlannerOwners } from '../../../contract/records/planning/planning.js';
 /** A planner never interprets an undo/redo payload; Authoring owns those journal-based operations. */
 function payload(request: Request): Result<Json> {
   if (request.intent.kind !== 'change')
@@ -47,7 +47,7 @@ function compile(
   command: { readonly source: string; readonly mode: 'create' | 'replace' | 'patch' },
   snapshot: Snapshot,
   pins: Json,
-  selected: import('../../contract/records/planning/planning.js').ResourceSelection,
+  selected: import('../../../contract/records/planning/planning.js').ResourceSelection,
   owners: DiagramPlannerOwners,
 ): Result<Proposal> {
   if (JSON.stringify(pins) !== JSON.stringify(selected.pins))
@@ -72,7 +72,7 @@ function compileCollection(
   command: { readonly source: string; readonly mode: 'create' | 'replace' | 'patch' },
   id: string,
   snapshot: Snapshot,
-  selected: import('../../contract/records/planning/planning.js').ResourceSelection,
+  selected: import('../../../contract/records/planning/planning.js').ResourceSelection,
   owners: DiagramPlannerOwners,
 ): Result<Proposal> {
   const view = owners.workspace.read(snapshot);

@@ -1,8 +1,8 @@
 import { planOrganisation } from '@novakai/canvas-library';
 import { failure, plannerId, proposalSchema } from '@novakai/canvas-authoring';
 import type { IntentPlanner, Request, Snapshot, Proposal, Result } from '@novakai/canvas-authoring';
-import { libraryCommand } from '../../contract/records/planning/commands.js';
-import type { WorkspaceReader } from '../../contract/records/workspace/contents.js';
+import { libraryCommand } from '../../../contract/records/planning/commands.js';
+import type { WorkspaceReader } from '../../../contract/records/workspace/contents.js';
 /** Organisation commands are interpreted only by Library; the host cannot write an arbitrary organisation record. */
 function propose(
   request: Request,
