@@ -10,17 +10,6 @@ import type {
 } from '../../contract/records/creation.js';
 import type { ConnectionDraft, ConnectionEdit } from '../../contract/records/connection.js';
 import type { MoveOption, MoveReview } from '../../contract/records/movement.js';
-import {
-  compatibleWires,
-  descendantId,
-  genericMemberEndpoints,
-  memberEndpoints,
-  relationshipId,
-  relationshipKind,
-  resolveCallableEndpoint,
-  sourceEndpoints,
-  targetEndpoints,
-} from '@novakai/canvas-model';
 import type { DefinitionDraft } from '../../contract/records/definitions.js';
 import type { Submission } from '../../contract/records/submission.js';
 import type { Receipt } from '../../contract/records/owners.js';
@@ -47,9 +36,11 @@ import {
   supersededRefusal,
   chooseMoveOption as chooseReviewedMoveOption,
   buildConnectionDraft,
+  connectionProblem,
   connectionRequest,
   definitionRequest,
   editedConnection,
+  releasedConnection,
   resolveConnectionSection,
   reviewConnection,
   reusableSession,
@@ -134,10 +125,10 @@ import {
   savingRequest,
   sendingMove,
   withOption,
+  withRequestState,
   type CaptureIds,
   type CollectionDraft,
   type ConnectionCapture,
-  type ConnectionPolicy,
   type ConnectionReview,
   type CreationCapture,
   type CreationCaptures,
@@ -149,24 +140,13 @@ import {
   type RenderTicket,
 } from '../../contract/api.js';
 import {
+  connectionPolicy,
   groupDraftId,
   groupGrammar,
   objectDraftId,
   sectionDraftId,
 } from '../../contract/workspace-model.js';
 
-/** Model's connection policy, read once here; the editing core imports no capability's runtime. */
-const connectionPolicy: ConnectionPolicy = {
-  compatibleWires,
-  allKinds: relationshipKind.options,
-  memberEndpoints,
-  genericMemberEndpoints,
-  sourceEndpoints,
-  targetEndpoints,
-  callable: resolveCallableEndpoint,
-  descendantId,
-  relationshipId,
-};
 /** A render in flight: its ticket, the token that decides delivery, and the transport abort. */
 interface RenderRequest extends RenderTicket {
   readonly token: number;
@@ -264,14 +244,12 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     updateMutationAvailability();
     if (movementSlot !== null) updateMovementRecovery(movementSlot.capture.intent.id);
   }
+  /** The connection draft following its request's journal state; undefined when it has no request there. */
   function pendingConnectionView(pending: readonly Submission[]): ConnectionDraft | undefined {
-    const capture = connectionCapture;
-    if (capture === null || capture.request === null) return undefined;
-    const item = pending.find((entry) => entry.request.request === capture.request?.request);
-    if (item === undefined) return undefined;
-    const draft = { ...capture.draft, requestState: item.state };
-    connectionCapture = { ...capture, draft };
-    return draft;
+    const followedCapture = withRequestState(connectionCapture, pending);
+    if (followedCapture === null) return undefined;
+    connectionCapture = followedCapture;
+    return followedCapture.draft;
   }
   /** Listeners receive a new immutable view; Canvas panning has its own narrower subscription. */
   function update(patch: Partial<WorkspaceView>): void {
@@ -1269,22 +1247,15 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     error: Diagnostic,
   ): Result<Receipt> {
     if (draft !== undefined)
-      update({ connection: { ...draft, problem: error.message }, problem: error });
+      update({ connection: connectionProblem(state.connection, draft, error), problem: error });
     return { ok: false, error };
-  }
-  function connectionErrorView(
-    draft: ConnectionDraft,
-    error: Diagnostic,
-  ): ConnectionDraft {
-    const current = state.connection?.id === draft.id ? state.connection : draft;
-    return { ...current, problem: error.message };
   }
   async function submitConnectionRequest(review: ConnectionReview): Promise<Result<Receipt>> {
     const draft = review.capture.draft;
     const request = connectionRequest(connectionPolicy, bindings, draft, review.label);
     if (!request.ok) {
       update({
-        connection: connectionErrorView(draft, request.error),
+        connection: connectionProblem(state.connection, draft, request.error),
         problem: request.error,
       });
       return request;
@@ -1295,7 +1266,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     const result = await submit(retained, draft.generation, state.sourceEdit, draft.id);
     if (!result.ok)
       update({
-        connection: connectionErrorView(draft, result.error),
+        connection: connectionProblem(state.connection, draft, result.error),
         problem: result.error,
       });
     return result;
@@ -1317,12 +1288,12 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     creationCaptures = dismissed;
     return true;
   }
+  /** Returns the connection that sent this request to editing; false when it did not send it. */
   function releaseConnectionRequest(requestId: string): boolean {
-    const capture = connectionCapture;
-    if (capture === null || capture.request?.request !== requestId) return false;
-    const draft: ConnectionDraft = { ...capture.draft, problem: null, requestState: 'draft' };
-    connectionCapture = { draft, request: null };
-    update({ connection: draft });
+    const releasedCapture = releasedConnection(connectionCapture, requestId);
+    if (releasedCapture === null) return false;
+    connectionCapture = releasedCapture;
+    update({ connection: releasedCapture.draft });
     return true;
   }
   function clearDismissedCreationView(): void {
