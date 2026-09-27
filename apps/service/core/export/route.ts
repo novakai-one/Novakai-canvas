@@ -10,7 +10,7 @@ import type { RouteOutcome } from '../../contract/records/transport/protocol.js'
 import type { PresentationBindings } from '../../contract/records/capabilities.js';
 import type { ExportRules } from '../../contract/ports/capabilities.js';
 import type { PngRuntime } from '../../contract/ports/export.js';
-import type { ExportHandler, ExportRequest } from '../../contract/records/export/export.js';
+import type { ExportHandler, ExportRequest } from '../../contract/records/export/request.js';
 import { readExportRequest } from './request.js';
 import { resourceInspector } from './resources.js';
 import { artifactOutcome } from './files.js';

@@ -11,7 +11,7 @@ import type {
   Documents,
   ExportResult,
   MarkdownScope,
-} from '../../contract/records/export/export.js';
+} from '../../contract/records/export/request.js';
 import { cancelledExport, exportRejection } from './faults.js';
 
 /** The capabilities the documents port reads through. */

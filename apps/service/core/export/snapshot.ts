@@ -14,7 +14,7 @@ import type {
   ExportSnapshot,
   LeaseRead,
   SelectedCollection,
-} from '../../contract/records/export/export.js';
+} from '../../contract/records/export/request.js';
 import { cancelledExport, exportRejection, ownerRejection } from './faults.js';
 import { retainedResources } from './resources.js';
 

@@ -17,7 +17,7 @@ import type { ModelRules } from '../../../contract/ports/capabilities.js';
 import type {
   ResourceSelector,
   ResourceSelection,
-} from '../../../contract/records/planning/planning.js';
+} from '../../../contract/records/planning/selection.js';
 import { json } from '../../../contract/schemas.js';
 import { liveRecords } from '../../workspace/records.js';
 import { boundAssets } from './asset-bindings.js';

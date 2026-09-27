@@ -15,7 +15,7 @@ import type {
   ExportRequest,
   ExportResult,
   SnapshotLease,
-} from '../../contract/records/export/export.js';
+} from '../../contract/records/export/request.js';
 import { cancelledExport, exportRouteFailure, settledFailure } from './faults.js';
 import { dslFile, markdownFile } from './files.js';
 import { markdownText, printedSource } from './documents.js';

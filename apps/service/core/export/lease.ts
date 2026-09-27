@@ -9,7 +9,7 @@
  */
 import type { Assets, Authoring, Snapshot } from '../../contract/records/capabilities.js';
 import type { CollectionRenderer } from '../../contract/ports/collection-renderer.js';
-import type { ResourceSelector } from '../../contract/records/planning/planning.js';
+import type { ResourceSelector } from '../../contract/records/planning/selection.js';
 import type { WorkspaceReader } from '../../contract/records/workspace/contents.js';
 import type {
   AssetResult,
@@ -20,7 +20,7 @@ import type {
   SelectedCollection,
   SnapshotLease,
   StoredBlob,
-} from '../../contract/records/export/export.js';
+} from '../../contract/records/export/request.js';
 import { cancelledExport, exportRejection, releaseOutcome, settledFailure } from './faults.js';
 import {
   exportSnapshot,

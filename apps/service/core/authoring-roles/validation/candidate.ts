@@ -10,7 +10,7 @@ import type {
   ReadVersion,
   Snapshot,
 } from '../../../contract/records/capabilities.js';
-import type { ResourceSelector } from '../../../contract/records/planning/planning.js';
+import type { ResourceSelector } from '../../../contract/records/planning/selection.js';
 import type {
   WorkspaceContents,
   WorkspaceReader,

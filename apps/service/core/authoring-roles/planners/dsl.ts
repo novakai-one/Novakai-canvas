@@ -17,7 +17,7 @@ import type {
   CollectionPlanner,
   ResourceSelection,
   ResourceSelector,
-} from '../../../contract/records/planning/planning.js';
+} from '../../../contract/records/planning/selection.js';
 import type { DslCommand } from '../../../contract/records/planning/commands.js';
 import { dslCommand } from '../../../contract/records/planning/commands.js';
 import { plannerId } from '../../../contract/schemas.js';

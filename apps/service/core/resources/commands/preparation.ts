@@ -21,7 +21,7 @@ import {
   admissionFields,
   preparationInput,
 } from '../../../contract/records/presets/preparation.js';
-import type { ResourceSelector } from '../../../contract/records/planning/planning.js';
+import type { ResourceSelector } from '../../../contract/records/planning/selection.js';
 import { json, recordId } from '../../../contract/schemas.js';
 import { presetResources } from '../../presets/resources.js';
 import { presetRecordId } from '../../workspace/records.js';

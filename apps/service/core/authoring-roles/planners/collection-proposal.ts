@@ -18,7 +18,7 @@ import type {
 import type {
   ResourceSelector,
   CollectionPlanner,
-} from '../../../contract/records/planning/planning.js';
+} from '../../../contract/records/planning/selection.js';
 import { checkedProposal, ownerRejected } from './change-payload.js';
 
 /** What the collection planner uses; compose passes Library from ServiceCapabilities. */

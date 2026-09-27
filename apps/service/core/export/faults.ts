@@ -13,7 +13,7 @@ import type {
   ExportErrorCode,
   ExportFailure,
   ExportResult,
-} from '../../contract/records/export/export.js';
+} from '../../contract/records/export/request.js';
 
 /** An Export refusal carrying the route's one recovery text. */
 export function exportRejection(

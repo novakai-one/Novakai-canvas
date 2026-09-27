@@ -14,7 +14,7 @@ import type {
   Resources,
   StoredBlob,
   ThemePreset,
-} from '../../contract/records/export/export.js';
+} from '../../contract/records/export/request.js';
 import type { Collection } from '../../contract/records/capabilities.js';
 import type { RenderDocument } from '../../contract/records/rendering/job.js';
 import { exportRejection } from './faults.js';

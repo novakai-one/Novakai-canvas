@@ -7,7 +7,7 @@
 import type { Assets } from '@novakai/canvas-assets';
 import type { BuiltinResources } from '../records/presets/builtins.js';
 import type { ResourceCommands } from '../records/presets/preparation.js';
-import type { ResourceSelector } from '../records/planning/planning.js';
+import type { ResourceSelector } from '../records/planning/selection.js';
 import type { WorkspaceReader } from '../records/workspace/contents.js';
 import type { ServiceCapabilities } from '../ports/capabilities.js';
 import type { CollectionRenderer } from '../ports/collection-renderer.js';

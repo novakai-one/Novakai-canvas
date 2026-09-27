@@ -10,7 +10,7 @@ import type {
   ResolvedResources,
   Snapshot,
 } from '../../../contract/records/capabilities.js';
-import type { ResourceSelection } from '../../../contract/records/planning/planning.js';
+import type { ResourceSelection } from '../../../contract/records/planning/selection.js';
 import { authoringDigest } from '../../../contract/schemas.js';
 import { bare, sortedDigests } from './digests.js';
 import { themePresets } from './themes.js';

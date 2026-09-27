@@ -11,7 +11,7 @@ import type {
   ResourceLease,
   Snapshot,
 } from '../../contract/records/capabilities.js';
-import type { ResourceSelector } from '../../contract/records/planning/planning.js';
+import type { ResourceSelector } from '../../contract/records/planning/selection.js';
 import { authoringFailure } from '../../contract/errors.js';
 
 /**

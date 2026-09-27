@@ -9,7 +9,7 @@ import type {
   Artifact,
   ExportRequest,
   ExportResult,
-} from '../../contract/records/export/export.js';
+} from '../../contract/records/export/request.js';
 import { exportRouteFailure } from './faults.js';
 
 /** The artifact as a download, or its failure as the route failure. */

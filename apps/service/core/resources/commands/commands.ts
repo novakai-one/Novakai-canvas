@@ -18,7 +18,7 @@ import type {
   ResourceCommands,
   ResourceResult,
 } from '../../../contract/records/presets/preparation.js';
-import type { ResourceSelector } from '../../../contract/records/planning/planning.js';
+import type { ResourceSelector } from '../../../contract/records/planning/selection.js';
 import { freeze } from './freeze.js';
 import { instantiate } from './instantiate.js';
 import { prepare } from './preparation.js';

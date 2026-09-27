@@ -6,7 +6,7 @@
 import type { Authoring } from '@novakai/canvas-authoring';
 import type { NativeWorkspace, WorkspaceOptions } from '../records/workspace/startup.js';
 import type { BuiltinResources } from '../records/presets/builtins.js';
-import type { ExportHandler } from '../records/export/export.js';
+import type { ExportHandler } from '../records/export/request.js';
 import type { ChangeChannel } from '../ports/notifications.js';
 import type { WorkspaceSession } from '../types.js';
 import { authoringFailure } from '../errors.js';
