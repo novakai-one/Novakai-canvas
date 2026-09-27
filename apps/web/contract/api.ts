@@ -1,7 +1,8 @@
 /*
  * Web core's public surface: adapters reach core only through these re-exports, so core files can
- * move without adapter edits. One function of its own, `definitionDraftId`, which throws only for
- * text outside Model's ID grammar. Pure; no state, nothing to recover.
+ * move without adapter edits. One function of its own, `definitionDraftId`, which throws Zod's
+ * `ZodError` for text outside Model's ID grammar. Nothing catches that throw: its one caller, the
+ * Definitions panel, passes `definition-<UUID>`, which always fits. Pure; no state.
  */
 import { definitionId, type DefinitionId } from '@novakai/canvas-model';
 
@@ -51,7 +52,7 @@ export { formatFailure, failureSummary, plainMessage } from '../core/output/diag
 export { buildMoveReview, chooseMoveOption } from '../core/editing/movement.js';
 export { palette, planPaletteDrop, type PaletteDrop } from '../core/editing/palette-drop.js';
 
-/** Brands a new definition ID; `parse` throws only for text outside Model's ID grammar. */
+/** Brands a new definition ID. Throws `ZodError` for text outside Model's ID grammar; no caller catches it. */
 export function definitionDraftId(value: string): DefinitionId {
   return definitionId.parse(value);
 }
