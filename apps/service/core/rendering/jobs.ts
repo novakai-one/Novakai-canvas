@@ -19,6 +19,7 @@ import {
   resolvedStyle,
   layoutOptions,
 } from '../../contract/schemas.js';
+import type { Result } from '../../contract/errors.js';
 import { authoringFailure, success } from '../../contract/errors.js';
 import type { RenderResourceOwners } from '../../contract/records/rendering/resources.js';
 import type { WorkspaceContents } from '../../contract/records/workspace/contents.js';
@@ -148,7 +149,7 @@ function asset(
  * fallback font or blank image. Throws `RenderResourceFault` with the owner's failure as source
  * when the owner rejected the input.
  */
-function accepted<T>(result: AuthoringResult<T, FailureSource>): T {
+function accepted<T>(result: Result<T, FailureSource>): T {
   if (!result.ok)
     throw new RenderResourceFault('A render resource owner rejected input', result.error);
   return result.value;

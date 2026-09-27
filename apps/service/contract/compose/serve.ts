@@ -1,8 +1,8 @@
 /*
  * HTTP serving and headless bindings: expose one already-open workspace through authenticated
  * loopback transport; the caller closes transport before draining its workspace. Read-only
- * headless composition shares the service's preset rules and render adapters; the CLI owns retry
- * after dependencies are restored.
+ * headless composition shares the service's preset rules, render-job building and the
+ * render-worker producer; the CLI owns retry after dependencies are restored.
  */
 import type { WorkspaceSession } from '../types.js';
 import type { LocalServer, ServerOptions } from '../records/transport/server.js';
