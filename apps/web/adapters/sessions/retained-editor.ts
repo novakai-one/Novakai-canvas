@@ -4,14 +4,17 @@ import type {
   RetainedEditorBindings,
   RetainedEditorState,
 } from '../../contract/records/retained-editor.js';
+import type { WorkspaceId } from '../../contract/brands.js';
+import type { WorkspaceScope } from '../../contract/records/workspace-scope.js';
 import type { Result, Diagnostic } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
+import { inWorkspace, knownWorkspace, unknownWorkspace } from '../../contract/api.js';
 /** Browser forms share persistence and acknowledgement policy; feature bindings own command replay and admission. */
 export function createRetainedEditor<Selection, Command, Draft extends RetainedDraft>(
   bindings: RetainedEditorBindings<Selection, Command, Draft>,
 ): RetainedEditor<Selection, Command, Draft> {
   let state: RetainedEditorState<Draft> = { drafts: [], problem: null };
-  let workspace = '';
+  let scope: WorkspaceScope = unknownWorkspace;
   const listeners = new Set<() => void>();
   /** Cached immutable snapshots satisfy React external-store identity requirements. */
   function publish(next: RetainedEditorState<Draft>): void {
@@ -26,24 +29,27 @@ export function createRetainedEditor<Selection, Command, Draft extends RetainedD
   }
   /** Failed local retention remains visible; the in-memory form is never silently discarded. */
   function save(drafts: readonly Draft[]): Result<void> {
-    if (workspace === '')
+    if (scope.phase === 'unknown')
       return reject(
         failure('unavailable', 'Recover this workspace before changing retained forms').error,
       );
     publish({ ...state, drafts });
-    const result = writeDrafts(drafts);
+    const result = writeDrafts(drafts, scope.workspace);
     if (!result.ok) return reject(result.error);
     publish({ drafts, problem: null });
     return result;
   }
-  function writeDrafts(drafts: readonly Draft[]): Result<void> {
+  function writeDrafts(
+    drafts: readonly Draft[],
+    workspace: WorkspaceId,
+  ): Result<void> {
     const encoded = bindings.encode(drafts);
     if (!encoded.ok) return encoded;
     return bindings.retention.write(`${bindings.namespace}.${workspace}`, encoded.value);
   }
   /** Read failure blocks all writes while preserving previous forms and both workspaces' stored data. */
-  function restore(id: string): Result<void> {
-    workspace = '';
+  function restore(id: WorkspaceId): Result<void> {
+    scope = unknownWorkspace;
     const stored = bindings.retention.read(`${bindings.namespace}.${id}`);
     if (!stored.ok) return reject(stored.error);
     return restoreValue(stored.value, id);
@@ -51,7 +57,7 @@ export function createRetainedEditor<Selection, Command, Draft extends RetainedD
   /** Recovery never replays a command. The storage key changes only after the destination was read and admitted. */
   function restoreValue(
     value: unknown,
-    id: string,
+    id: WorkspaceId,
   ): Result<void> {
     if (value === null) return restored([], id);
     const checked = bindings.read(value);
@@ -61,7 +67,7 @@ export function createRetainedEditor<Selection, Command, Draft extends RetainedD
   /** Foreign-workspace payloads cannot become forms under a newly admitted storage key. */
   function restored(
     drafts: readonly Draft[],
-    id: string,
+    id: WorkspaceId,
   ): Result<void> {
     if (drafts.some((draft) => draft.base.workspace !== id))
       return reject(
@@ -70,7 +76,7 @@ export function createRetainedEditor<Selection, Command, Draft extends RetainedD
           'Stored forms belong to a different workspace; data was retained',
         ).error,
       );
-    workspace = id;
+    scope = knownWorkspace(id);
     publish({ drafts, problem: null });
     return { ok: true, value: undefined };
   }
@@ -80,7 +86,7 @@ export function createRetainedEditor<Selection, Command, Draft extends RetainedD
     command: Command,
   ): Result<void> {
     const next = bindings.edit(selection, command, state.drafts);
-    if (next.base.workspace !== workspace)
+    if (!inWorkspace(scope, next.base.workspace))
       return reject(
         failure('wrong-workspace', 'Recover the original workspace before editing this form').error,
       );
@@ -98,7 +104,7 @@ export function createRetainedEditor<Selection, Command, Draft extends RetainedD
   }
   /** No failed restore or later workspace switch may submit a form under another workspace's authority. */
   async function submitDraft(draft: Draft): Promise<Result<void>> {
-    if (draft.base.workspace !== workspace)
+    if (!inWorkspace(scope, draft.base.workspace))
       return reject(
         failure('unavailable', 'Recover this workspace before applying its forms').error,
       );
@@ -110,7 +116,7 @@ export function createRetainedEditor<Selection, Command, Draft extends RetainedD
     draft: Draft,
     result: Result<unknown>,
   ): Result<void> {
-    if (draft.base.workspace !== workspace)
+    if (!inWorkspace(scope, draft.base.workspace))
       return failure(
         'wrong-workspace',
         'The original workspace owns this submission; reconcile its receipt there',

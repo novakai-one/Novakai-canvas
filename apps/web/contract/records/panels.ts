@@ -1,8 +1,10 @@
 /*
- * Panel state vocabulary: which side panels are open, their tabs, sizes and sections, the saved
- * panel preferences and which interface controls show. Records only: no behaviour, no I/O. Web
- * core reads them to lay out the shell; `panel-types.ts` names them in the panel controller.
+ * Panel state vocabulary: which side panels are open, their tabs, sizes and sections, the panel
+ * layout and the preferences stored for a workspace, and which interface controls show. Records
+ * only: no behaviour, no I/O. Web core reads them to lay out the shell; `panel-types.ts` names
+ * them in the panel controller.
  */
+import type { WorkspaceId } from '../brands.js';
 
 /** The two side panels. */
 export type PanelId = 'left' | 'right';
@@ -45,15 +47,19 @@ export interface InterfaceVisibility {
   readonly outline: boolean;
 }
 
-/** Saved panel layout: section order and state, panel widths and each panel's tab. */
-export interface PanelPreferences {
-  readonly schemaVersion: 1;
-  readonly workspace: string;
+/** Panel layout: section order and state, panel widths and each panel's tab. */
+export interface PanelLayout {
   readonly sections: Readonly<Record<PanelId, readonly string[]>>;
   readonly collapsed: readonly string[];
   readonly hidden: readonly string[];
   readonly widths: Readonly<Record<PanelId, number>>;
   readonly tabs: Readonly<{ left: 'add' | 'browse'; right: 'inspect' | 'settings' }>;
+}
+
+/** The layout stored for one workspace. Only a restored workspace has stored preferences. */
+export interface PanelPreferences extends PanelLayout {
+  readonly schemaVersion: 1;
+  readonly workspace: WorkspaceId;
 }
 
 /** The web shell alone owns panel visibility. Canvas camera and editor draft data never enter this state. */
@@ -64,6 +70,6 @@ export interface PanelState {
   readonly overlay: PanelId | null;
   readonly lastOpened: PanelId;
   readonly customize: boolean;
-  readonly preferences: PanelPreferences;
+  readonly preferences: PanelLayout;
   readonly interfaceVisibility: InterfaceVisibility;
 }

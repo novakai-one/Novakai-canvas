@@ -1,9 +1,10 @@
+import type { WorkspaceId } from '../brands.js';
 import type { DraftRetention } from '../ports/draft-retention.js';
 import type { Result, Diagnostic } from '../errors.js';
 /** Minimal browser draft identity; domain records and commands stay with the feature. */
 export interface RetainedDraft {
   readonly key: string;
-  readonly base: { readonly workspace: string };
+  readonly base: { readonly workspace: WorkspaceId };
 }
 export interface RetainedEditorState<Draft> {
   readonly drafts: readonly Draft[];
@@ -13,7 +14,7 @@ export interface RetainedEditorState<Draft> {
 export interface RetainedEditor<Selection, Command, Draft> {
   getSnapshot(): RetainedEditorState<Draft>;
   subscribe(listener: () => void): () => void;
-  restore(workspace: string): Result<void>;
+  restore(workspace: WorkspaceId): Result<void>;
   edit(
     selection: Selection,
     command: Command,

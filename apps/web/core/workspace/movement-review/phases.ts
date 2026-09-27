@@ -16,6 +16,7 @@ import type { HistorySlot } from '../history/gate.js';
 import { editsHeld } from '../history/journal.js';
 import { diagramCurrent } from '../render/navigation.js';
 import { staleReview } from './failures.js';
+import { inWorkspace } from '../workspace-scope.js';
 import type { MovementCapture, MovementHeld, MovementPhase, MovementSlot } from './types.js';
 
 /** The parts of the view a chosen option is checked against. */
@@ -172,7 +173,7 @@ function sameDiagram(
     capture.active === view.active &&
     capture.active.generation === view.generation &&
     diagramCurrent(view.collections, capture.active) &&
-    view.snapshot?.workspace === capture.workspace
+    inWorkspace(capture.workspace, view.snapshot?.workspace)
   );
 }
 

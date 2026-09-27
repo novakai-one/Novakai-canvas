@@ -3,6 +3,7 @@
  * draft holds a submitted request. A receipt removes the draft; a refusal keeps it and clears the
  * request. Each function returns the next state or drafts; the session writes and publishes them.
  */
+import type { WorkspaceId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
 import type { DefinitionDraft, DefinitionState } from '../../contract/records/definitions.js';
@@ -20,7 +21,7 @@ export interface SettledRequest {
 /** Restored state: drafts holding a request lock again; another workspace's drafts fail. */
 export function restoredState(
   drafts: readonly DefinitionDraft[],
-  workspace: string,
+  workspace: WorkspaceId,
 ): Result<DefinitionState> {
   if (drafts.some((draft) => draft.base.workspace !== workspace))
     return failure('wrong-workspace', 'Stored definitions belong to another workspace');

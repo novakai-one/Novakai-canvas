@@ -1,21 +1,24 @@
 /*
  * Panel preference rules: move, show or hide a section, match saved preferences to the registered
- * sections, and bound a width. Pure; nothing is stored here. The panel store
- * (`adapters/sessions/panel-session.ts`) saves the result and reports a storage failure.
+ * sections, bound a width, and build the record stored for a workspace. Pure; nothing is stored
+ * here. The panel store (`adapters/sessions/panel-session.ts`) saves the result and reports a
+ * storage failure.
  */
+import type { WorkspaceId } from '../../contract/brands.js';
 import type {
   PanelId,
+  PanelLayout,
   PanelPreferences,
   PanelSectionDefinition,
   PanelSizing,
 } from '../../contract/records/panels.js';
 /** Moving removes the stable ID from both sides first, preventing duplicate sections after repeated moves. */
 export function movePanelSection(
-  preferences: PanelPreferences,
+  preferences: PanelLayout,
   id: string,
   side: PanelId,
   index: number,
-): PanelPreferences {
+): PanelLayout {
   const sections = {
     left: preferences.sections.left.filter((item) => item !== id),
     right: preferences.sections.right.filter((item) => item !== id),
@@ -41,10 +44,10 @@ export function panelMembership(
 }
 /** Unknown/removed saved IDs are ignored; newly registered sections appear in their declared default location. */
 export function reconcilePanelPreferences(
-  saved: PanelPreferences,
+  saved: PanelLayout,
   definitions: readonly PanelSectionDefinition[],
   sizing: PanelSizing,
-): PanelPreferences {
+): PanelLayout {
   const known = new Set(definitions.map((item) => item.id));
   const ordered = [...new Set([...saved.sections.left, ...saved.sections.right])];
   const left = ordered.filter((id) =>
@@ -55,7 +58,7 @@ export function reconcilePanelPreferences(
   );
   const missing = definitions.filter((item) => !left.includes(item.id) && !right.includes(item.id));
   return {
-    ...saved,
+    tabs: saved.tabs,
     sections: {
       left: [...left, ...sectionsOnSide(missing, 'left')],
       right: [...right, ...sectionsOnSide(missing, 'right')],
@@ -71,6 +74,24 @@ export function reconcilePanelPreferences(
       left: panelWidth(saved.widths.left, sizing.sides.left),
       right: panelWidth(saved.widths.right, sizing.sides.right),
     },
+  };
+}
+/**
+ * The record stored for `workspace`: its layout under schema version 1. Built field by field, so
+ * a layout value that carries other keys still stores a record the strict reader accepts.
+ */
+export function storedPanels(
+  layout: PanelLayout,
+  workspace: WorkspaceId,
+): PanelPreferences {
+  return {
+    schemaVersion: 1,
+    workspace,
+    tabs: layout.tabs,
+    sections: layout.sections,
+    collapsed: layout.collapsed,
+    hidden: layout.hidden,
+    widths: layout.widths,
   };
 }
 /** The IDs of the definitions whose default side is `side`, in registration order. */

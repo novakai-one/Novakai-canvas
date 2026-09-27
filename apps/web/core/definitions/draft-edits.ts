@@ -6,6 +6,7 @@
  */
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
+import type { WorkspaceScope } from '../../contract/records/workspace-scope.js';
 import type {
   Definition,
   DefinitionDraft,
@@ -16,6 +17,7 @@ import type {
   TypeExpression,
 } from '../../contract/records/definitions.js';
 import { captureCollectionBase } from '../recovery/editor-records.js';
+import { inWorkspace } from '../workspace/workspace-scope.js';
 import { submissionLock, withoutDraft } from './draft-lifecycle.js';
 import { isPathWithin, samePath } from './paths.js';
 
@@ -34,13 +36,16 @@ export type DefinitionEdit =
       readonly editedPath: ExpressionPath | null;
     };
 
-/** The drafts after an edit. The workspace is checked first, then the Apply lock. */
+/**
+ * The drafts after an edit. The workspace is checked first: an edit outside the restored workspace,
+ * or before one is restored, is `wrong-workspace`. Then the Apply lock.
+ */
 export function editedDrafts(
   state: DefinitionState,
-  workspace: string,
+  scope: WorkspaceScope,
   edit: DefinitionEdit,
 ): Result<readonly DefinitionDraft[]> {
-  if (edit.selection.base.workspace !== workspace)
+  if (!inWorkspace(scope, edit.selection.base.workspace))
     return failure('wrong-workspace', 'Recover the original workspace before editing');
   return unlockedEdit(state, edit);
 }

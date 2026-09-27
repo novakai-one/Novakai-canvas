@@ -15,6 +15,7 @@ import type {
 } from '@novakai/canvas-model';
 import type { Snapshot, Receipt, Request, CanvasEvent, NodeTarget } from './owners.js';
 import type { EditingBase } from './editor-recovery.js';
+import type { WorkspaceId } from '../brands.js';
 import type { Diagnostic, Result } from '../errors.js';
 import type { DraftRetention } from '../ports/draft-retention.js';
 
@@ -115,7 +116,7 @@ export interface DefinitionState {
 export interface DefinitionSession {
   getSnapshot(): DefinitionState;
   subscribe(listener: () => void): () => void;
-  restore(workspace: string): Result<void>;
+  restore(workspace: WorkspaceId): Result<void>;
   create(
     selection: DefinitionSelection,
     definition: Definition,

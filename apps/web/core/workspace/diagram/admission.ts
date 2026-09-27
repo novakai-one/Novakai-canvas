@@ -11,6 +11,7 @@ import type { RenderCode } from '../../../contract/records/error-codes.js';
 import type { RenderDocument, Snapshot } from '../../../contract/records/owners.js';
 import type { WorkspaceView } from '../../../contract/records/workspace.js';
 import { listedRevision, type RenderTicket } from './ticket.js';
+import { inWorkspace } from '../workspace-scope.js';
 
 /** A checked workspace snapshot with its collection catalogue. */
 export interface LatestSnapshot {
@@ -95,26 +96,26 @@ export function snapshotBase(
   return { ok: true, value: snapshot };
 }
 
-/** Workspace, generation or listed revision moved since the ticket; an unlisted collection has moved. */
+/** Workspace, generation or listed revision moved since the ticket; an unlisted collection has moved, and so has a ticket taken before the first snapshot. */
 function inputsMoved(
   view: AdmissionView,
   ticket: RenderTicket,
 ): boolean {
   return (
-    view.snapshot?.workspace !== ticket.workspace ||
+    !inWorkspace(ticket.workspace, view.snapshot?.workspace) ||
     view.generation !== ticket.generation ||
     view.collections.find((item) => item.id === ticket.id)?.revision !== ticket.revision
   );
 }
 
-/** The snapshot still names the ticket's workspace, generation and revision; unlisted reads as -1. */
+/** The snapshot still names the ticket's workspace, generation and revision; unlisted reads as -1. A ticket taken before the first snapshot never matches. */
 function ticketMatches(
   ticket: RenderTicket,
   latest: LatestSnapshot,
   generation: string,
 ): boolean {
   return (
-    ticket.workspace === latest.snapshot.workspace &&
+    inWorkspace(ticket.workspace, latest.snapshot.workspace) &&
     ticket.generation === generation &&
     ticket.revision === listedRevision(latest.collections, ticket.id)
   );

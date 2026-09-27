@@ -2,6 +2,7 @@ import type { Snapshot, Request, Receipt } from './owners.js';
 import type { EditingBase } from './editor-recovery.js';
 import type { ActiveDiagram } from './active-diagram.js';
 import type { Submission } from './submission.js';
+import type { WorkspaceId } from '../brands.js';
 import type { Result, Diagnostic } from '../errors.js';
 import type { WorkspaceDecoders } from '../ports/workspace-decoders.js';
 import type { RequestBuilders } from '../ports/request-builders.js';
@@ -24,7 +25,7 @@ export interface SourceController {
   edit(source: string): void;
   apply(): Promise<void>;
   close(decision: 'keep' | 'discard' | 'stay'): void;
-  restore(workspace: string): void;
+  restore(workspace: WorkspaceId): void;
   confirmed(
     submission: Submission,
     receipt: Receipt,

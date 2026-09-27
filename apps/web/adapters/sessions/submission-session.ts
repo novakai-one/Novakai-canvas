@@ -5,23 +5,34 @@ import type {
   SubmissionSession,
 } from '../../contract/records/submission.js';
 import type { Receipt } from '../../contract/records/owners.js';
+import type { WorkspaceScope } from '../../contract/records/workspace-scope.js';
+import type { WorkspaceId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import type { Diagnostic } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
 import { wireOutcome } from '../../contract/foreign-failures.js';
-import { blocksSubmission, submissionStatus, refused } from '../../contract/api.js';
+import {
+  blocksSubmission,
+  submissionStatus,
+  refused,
+  inWorkspace,
+  knownWorkspace,
+  unknownWorkspace,
+} from '../../contract/api.js';
 
 /** Durable browser recovery coordinates transmission only; Authoring remains the sole commit/idempotency authority.
  * Consumers keep drafts on every failure and call reconcile before an explicit retry.
  */
 export function createSubmissionSession(bindings: SubmissionBindings): SubmissionSession {
-  let workspace = '';
+  let scope: WorkspaceScope = unknownWorkspace;
   let pending: readonly Submission[] = [];
   const recovering = new Set<string>();
-  /** Save the recovery journal before publishing its immutable view. A proven refusal changed nothing, so it is not kept across reload. */
+  /** Save the recovery journal before publishing its immutable view. A proven refusal changed nothing, so it is not kept across reload. With no restored workspace nothing is kept (`recovery-unavailable`). */
   function retain(next: readonly Submission[]): Result<void> {
+    if (scope.phase === 'unknown')
+      return failure('recovery-unavailable', 'No workspace is restored; the request was not kept');
     const stored = bindings.retention.write(
-      `pending.${workspace}`,
+      `pending.${scope.workspace}`,
       next.filter((item) => item.state !== 'rejected'),
     );
     if (!stored.ok) return stored;
@@ -34,8 +45,8 @@ export function createSubmissionSession(bindings: SubmissionBindings): Submissio
     bindings.changed(next);
   }
   /** Restore is read-only with respect to the service; interrupted sending is uncertain, never automatically replayed. */
-  function restore(id: string): void {
-    workspace = id;
+  function restore(id: WorkspaceId): void {
+    scope = knownWorkspace(id);
     const stored = bindings.retention.read(`pending.${id}`);
     if (!stored.ok) {
       bindings.report(stored.error);
@@ -52,13 +63,13 @@ export function createSubmissionSession(bindings: SubmissionBindings): Submissio
       return;
     }
     const own = result.value.filter(
-      (item) => item.request.workspace === workspace && item.state !== 'rejected',
+      (item) => inWorkspace(scope, item.request.workspace) && item.state !== 'rejected',
     );
     publish(own.map(recovered));
   }
   /** Reject overlapping work before writing or sending; creating another collection may proceed independently. */
   async function submit(input: Omit<Submission, 'state'>): Promise<Result<Receipt>> {
-    if (input.request.workspace !== workspace)
+    if (!inWorkspace(scope, input.request.workspace))
       return failure('wrong-workspace', 'The request belongs to another workspace');
     if (blocksSubmission(pending, input.request))
       return failure(

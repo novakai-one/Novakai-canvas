@@ -1,9 +1,11 @@
 import type { PanelBindings, PanelController } from '../../contract/panel-types.js';
+import type { WorkspaceId } from '../../contract/brands.js';
 import type { Diagnostic } from '../../contract/errors.js';
 import { diagnostic } from '../../contract/errors.js';
+import type { WorkspaceScope } from '../../contract/records/workspace-scope.js';
 import type {
   PanelState,
-  PanelPreferences,
+  PanelLayout,
   PanelId,
   PanelTab,
   InterfaceControl,
@@ -20,6 +22,9 @@ import {
   panelGeometry,
   panelTabSide,
   reconcilePanelPreferences,
+  storedPanels,
+  unknownWorkspace,
+  knownWorkspace,
 } from '../../contract/api.js';
 /** This external store owns only panel presentation. Preference failures are reported; no operation changes a diagram or draft. */
 export function createPanelController(bindings: PanelBindings): PanelController {
@@ -30,9 +35,10 @@ export function createPanelController(bindings: PanelBindings): PanelController 
     overlay: null,
     lastOpened: 'left',
     customize: false,
-    preferences: defaultPanels('', bindings.definitions, bindings.sizing),
+    preferences: defaultPanels(bindings.definitions, bindings.sizing),
     interfaceVisibility: defaultInterfaceVisibility(),
   };
+  let scope: WorkspaceScope = unknownWorkspace;
   let beforeHide: Omit<InterfaceVisibility, 'hidden'> | null = null;
   const listeners = new Set<() => void>();
   /** Stable snapshots allow React to subscribe without mirroring props into component state. */
@@ -40,18 +46,18 @@ export function createPanelController(bindings: PanelBindings): PanelController 
     state = next;
     listeners.forEach((listener) => listener());
   }
-  /** Persist only preference data; transient modal visibility is local to this session. */
-  function save(preferences: PanelPreferences): void {
+  /** Persist only preference data; transient modal visibility is local to this session. Before a workspace is restored the layout changes on screen only. */
+  function save(preferences: PanelLayout): void {
     publish({ ...state, preferences });
-    const saved = bindings.retention.write(`panels.${preferences.workspace}`, preferences);
+    if (scope.phase === 'unknown') return;
+    const stored = storedPanels(preferences, scope.workspace);
+    const saved = bindings.retention.write(`panels.${scope.workspace}`, stored);
     if (!saved.ok) bindings.report(panelProblem(saved.error.message));
   }
   /** Workspace identity scopes personal panel preferences independently from diagram theme records. */
-  function restore(workspace: string): void {
-    publish({
-      ...state,
-      preferences: defaultPanels(workspace, bindings.definitions, bindings.sizing),
-    });
+  function restore(workspace: WorkspaceId): void {
+    scope = knownWorkspace(workspace);
+    publish({ ...state, preferences: defaultPanels(bindings.definitions, bindings.sizing) });
     const stored = bindings.retention.read(`panels.${workspace}`);
     if (!stored.ok) {
       bindings.report(panelProblem(stored.error.message));
@@ -62,7 +68,7 @@ export function createPanelController(bindings: PanelBindings): PanelController 
   /** Known registrations decide applicability; persisted values can never inject React renderers. */
   function restoreChecked(
     input: unknown,
-    workspace: string,
+    workspace: WorkspaceId,
   ): void {
     const checked = bindings.read(input, workspace);
     if (!checked.ok) {
@@ -127,8 +133,7 @@ export function createPanelController(bindings: PanelBindings): PanelController 
     hide: (id, hidden) => membership(id, 'hidden', hidden),
     move,
     customize: (customize) => publish({ ...state, customize }),
-    reset: () =>
-      save(defaultPanels(state.preferences.workspace, bindings.definitions, bindings.sizing)),
+    reset: () => save(defaultPanels(bindings.definitions, bindings.sizing)),
     setInterfaceVisibility: (control: InterfaceControl, visible: boolean) => {
       if (state.interfaceVisibility.hidden) return;
       publish({

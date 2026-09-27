@@ -6,6 +6,8 @@
  */
 import type { Collection } from '../../../contract/records/owners.js';
 import type { WorkspaceView } from '../../../contract/records/workspace.js';
+import type { WorkspaceScope } from '../../../contract/records/workspace-scope.js';
+import { snapshotScope } from '../workspace-scope.js';
 
 /** Who asked for the render: ordinary navigation, or the collection chooser. */
 export type RenderMode = 'navigation' | 'chooser';
@@ -15,8 +17,8 @@ export interface RenderTicket {
   readonly id: string;
   /** The collection's revision in the catalogue; -1 when it was not listed. */
   readonly revision: number;
-  /** The checked snapshot's workspace; empty before the first snapshot. */
-  readonly workspace: string;
+  /** The checked snapshot's workspace; unknown before the first snapshot. */
+  readonly workspace: WorkspaceScope;
   readonly generation: string;
   readonly mode: RenderMode;
 }
@@ -33,7 +35,7 @@ export function renderTicket(
   return {
     id,
     revision: listedRevision(view.collections, id),
-    workspace: view.snapshot?.workspace ?? '',
+    workspace: snapshotScope(view.snapshot),
     generation: view.generation,
     mode,
   };

@@ -1,11 +1,17 @@
+/*
+ * The panel-preference reader: checks a stored record's shape and parses its workspace with
+ * Authoring's `workspaceId` schema. Pure; the panel store reports a refusal and keeps defaults.
+ */
 import { z } from 'zod';
+import { workspaceId } from '@novakai/canvas-authoring';
+import type { WorkspaceId } from '../../contract/brands.js';
 import type { PanelPreferences } from '../../contract/records/panels.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
 const ids = z.array(z.string().min(1)).max(100);
 const preferences = z.strictObject({
   schemaVersion: z.literal(1),
-  workspace: z.string(),
+  workspace: workspaceId,
   tabs: z
     .strictObject({ left: z.enum(['add', 'browse']), right: z.enum(['inspect', 'settings']) })
     .default({ left: 'browse', right: 'inspect' }),
@@ -17,10 +23,13 @@ const preferences = z.strictObject({
     right: z.number().finite().positive(),
   }),
 });
-/** Stored preference shape and workspace are admitted before registered-ID reconciliation; invalid records are never applied. */
+/**
+ * Stored preferences for `workspace`, checked before registered-ID reconciliation. A bad shape or
+ * workspace ID is `invalid-preferences`; a record for another workspace is `invalid-preferences`.
+ */
 export function readPanelPreferences(
   input: unknown,
-  workspace: string,
+  workspace: WorkspaceId,
 ): Result<PanelPreferences> {
   const checked = preferences.safeParse(input);
   if (!checked.success)

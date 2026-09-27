@@ -3,6 +3,7 @@
  * Declarations only; `adapters/sessions/panel-session.ts` implements the controller. The panel
  * records it names live in `records/panels.ts`, so Web core can read them.
  */
+import type { WorkspaceId } from './brands.js';
 import type { Diagnostic, Result } from './errors.js';
 import type { DraftRetention } from './ports/draft-retention.js';
 import type {
@@ -19,7 +20,7 @@ import type {
 export interface PanelController {
   getSnapshot(): PanelState;
   subscribe(listener: () => void): () => void;
-  restore(workspace: string): void;
+  restore(workspace: WorkspaceId): void;
   open(
     side: PanelId,
     open: boolean,
@@ -60,7 +61,7 @@ export interface PanelBindings {
   readonly retention: DraftRetention;
   read(
     input: unknown,
-    workspace: string,
+    workspace: WorkspaceId,
   ): Result<PanelPreferences>;
   /** Show a panel-layout failure (`panel-preferences`); it stays shown across renders. */
   report(problem: Diagnostic): void;

@@ -7,6 +7,7 @@ import type {
 } from '@novakai/canvas-model';
 import type { Snapshot, Receipt } from './owners.js';
 import type { EditingBase } from './editor-recovery.js';
+import type { WorkspaceId } from '../brands.js';
 import type { Result, Diagnostic } from '../errors.js';
 import type { DraftRetention } from '../ports/draft-retention.js';
 /** UI edit commands retain incomplete text without pretending it is an admitted Model record. */
@@ -70,7 +71,7 @@ export interface ObjectSelection {
 export interface InspectorSession {
   getSnapshot(): InspectorState;
   subscribe(listener: () => void): () => void;
-  restore(workspace: string): Result<void>;
+  restore(workspace: WorkspaceId): Result<void>;
   edit(
     selection: ObjectSelection,
     command: ObjectEdit,

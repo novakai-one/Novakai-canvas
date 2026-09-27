@@ -6,6 +6,7 @@ import type {
   FolderDraft,
 } from '../../contract/records/library.js';
 import type { Snapshot, Collection } from '../../contract/records/owners.js';
+import type { WorkspaceId } from '../../contract/brands.js';
 import type { OrganisationChange, RecentVisit } from '@novakai/canvas-library';
 import { diagnostic } from '../../contract/errors.js';
 /** The session owns browse filters and local visits; every catalog mutation goes to Authoring with a captured revision. */
@@ -41,7 +42,7 @@ export function createLibraryController(bindings: LibraryBindings): LibraryContr
     search(null);
   }
   /** New workspace preferences cannot inherit a prior workspace's unfinished folder form. */
-  function restoreLocal(workspace: string): void {
+  function restoreLocal(workspace: WorkspaceId): void {
     publish({ folderDraft: null });
     restoreVisits(workspace);
     const stored = bindings.retention.read(`folder-draft.${workspace}`);
@@ -102,7 +103,7 @@ export function createLibraryController(bindings: LibraryBindings): LibraryContr
     if (state.folderDraft === draft) saveFolder(null);
   }
   /** Stored visits are optional local preferences, admitted independently from canonical state. */
-  function restoreVisits(workspace: string): void {
+  function restoreVisits(workspace: WorkspaceId): void {
     recent = [];
     const stored = bindings.retention.read(`visits.${workspace}`);
     if (!stored.ok) {
@@ -156,7 +157,7 @@ export function createLibraryController(bindings: LibraryBindings): LibraryContr
   }
   /** Checked visits are retained before replacing the active ranking preferences. */
   function storeCheckedVisits(
-    workspace: string,
+    workspace: WorkspaceId,
     visits: readonly RecentVisit[],
   ): void {
     const stored = bindings.retention.write(`visits.${workspace}`, visits);

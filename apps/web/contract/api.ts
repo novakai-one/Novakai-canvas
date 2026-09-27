@@ -31,7 +31,14 @@ export {
   panelMembership,
   panelWidth,
   reconcilePanelPreferences,
+  storedPanels,
 } from '../core/panels/preferences.js';
+export {
+  unknownWorkspace,
+  knownWorkspace,
+  snapshotScope,
+  inWorkspace,
+} from '../core/workspace/workspace-scope.js';
 export { editedObject, objectDraftKey } from '../core/inspector/object-edits.js';
 export { selectedObject } from '../core/inspector/selection.js';
 export { defaultPreferences } from '../core/preferences/defaults.js';

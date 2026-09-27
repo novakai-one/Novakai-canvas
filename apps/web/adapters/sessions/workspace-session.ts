@@ -15,6 +15,7 @@ import type { CarriedSnapshot, Submission } from '../../contract/records/submiss
 import type { Receipt } from '../../contract/records/owners.js';
 import type { WorkspaceController, WorkspaceView } from '../../contract/records/workspace.js';
 import type { ActiveDiagram } from '../../contract/records/active-diagram.js';
+import type { WorkspaceScope } from '../../contract/records/workspace-scope.js';
 import type { WorkspaceBindings } from '../../contract/ports/workspace.js';
 import type {
   Request,
@@ -124,6 +125,10 @@ import {
   sendingMove,
   withOption,
   withRequestState,
+  inWorkspace,
+  knownWorkspace,
+  snapshotScope,
+  unknownWorkspace,
   type CaptureIds,
   type CollectionDraft,
   type ConnectionCapture,
@@ -186,7 +191,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   let requestToken = 0;
   let disposed = false;
   let snapshotRead = 0;
-  let restoredWorkspace: string | null = null;
+  let restoredScope: WorkspaceScope = unknownWorkspace;
   let historyGate: HistorySlot = historyIdle;
   /** The held movement review; its phase says whether it is being applied. */
   let movementSlot: MovementSlot = null;
@@ -681,7 +686,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     review: MoveReview,
     option: MoveOption,
   ): boolean {
-    const capture = { active, intent, review, workspace: state.snapshot?.workspace ?? '' };
+    const capture = { active, intent, review, workspace: snapshotScope(state.snapshot) };
     const held = heldMovement(capture, option.id);
     movementSlot = held;
     const accepted = active.session.dispatch({
@@ -1429,8 +1434,8 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   /** Startup recovery is tied to the checked workspace identity; it makes no mutation request. */
   function restoreEdits(): void {
     if (state.snapshot === null) return;
-    if (restoredWorkspace === state.snapshot.workspace) return;
-    restoredWorkspace = state.snapshot.workspace;
+    if (inWorkspace(restoredScope, state.snapshot.workspace)) return;
+    restoredScope = knownWorkspace(state.snapshot.workspace);
     bindings.panels.restore(state.snapshot.workspace);
     submissions.restore(state.snapshot.workspace);
     void reconcileHistory();

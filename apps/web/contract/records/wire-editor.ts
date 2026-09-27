@@ -8,6 +8,7 @@ import type {
 } from './owners.js';
 import type { Snapshot, Receipt } from './owners.js';
 import type { EditingBase } from './editor-recovery.js';
+import type { WorkspaceId } from '../brands.js';
 import type { Diagnostic, Result } from '../errors.js';
 import type { DraftRetention } from '../ports/draft-retention.js';
 /** The semantic relationship is shared; only the selected section owns the route controls. */
@@ -61,7 +62,7 @@ export interface WireEditorState {
 export interface WireEditorSession {
   getSnapshot(): WireEditorState;
   subscribe(listener: () => void): () => void;
-  restore(workspace: string): Result<void>;
+  restore(workspace: WorkspaceId): Result<void>;
   edit(
     selection: WireSelection,
     command: WireEdit,
