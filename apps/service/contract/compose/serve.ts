@@ -8,7 +8,8 @@ import type { WorkspaceSession } from '../types.js';
 import type { LocalServer, ServerOptions } from '../records/transport/server.js';
 import type { Result } from '../errors.js';
 import { failure } from '../errors.js';
-import { createHttpAdmission, readCommand } from '../api.js';
+import { createAdmission as createHttpAdmission } from '../../core/transport/admission.js';
+import { readCommand } from '../../core/transport/command.js';
 import { createServiceLanguage } from './capabilities.js';
 
 /** Expose one already-open workspace through authenticated loopback transport. Caller closes transport before draining its workspace. */

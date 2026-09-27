@@ -1,11 +1,12 @@
+/*
+ * The session facade type, shared by the core facade, the HTTP router and compose. Declaration
+ * only; core/session/facade.ts implements it.
+ */
 import type { ResourceCommands } from './records/presets/preparation.js';
-import type { SessionLifetime } from './ports/lifetime.js';
 import type { Authoring, Snapshot, Receipt, AuthoringResult } from './records/capabilities.js';
 import type { Preparation } from '@novakai/canvas-authoring';
 import type { BuiltinResources } from './records/presets/builtins.js';
-import type { WorkspaceReader } from './records/workspace/contents.js';
-import type { CollectionRenderer } from './ports/collection-renderer.js';
-import type { ChangeChannel, CommittedChange } from './ports/notifications.js';
+import type { CommittedChange } from './ports/notifications.js';
 import type { RenderDocument } from './records/rendering/job.js';
 import type { InspectionReport } from './records/rendering/inspection.js';
 import type { Result } from './errors.js';
@@ -43,18 +44,4 @@ export interface WorkspaceSession {
   ): Promise<RouteOutcome>;
   subscribe(listener: (change: CommittedChange) => void): () => void;
   close(): Promise<Result<void>>;
-}
-/** Lifecycles are already open when wiring this facade; construction starts no I/O and grants no alternative commit path. */
-export interface SessionDependencies {
-  readonly workspace: string;
-  readonly installation: BuiltinResources;
-  readonly resources: ResourceCommands;
-  readonly views: WorkspaceReader;
-  readonly renderer: CollectionRenderer;
-  readonly exporter: (input: unknown, signal: AbortSignal) => Promise<RouteOutcome>;
-  readonly changes: ChangeChannel;
-  readonly lifetime: SessionLifetime;
-  readonly readSignal: AbortSignal;
-  unavailable(): AuthoringResult<never>;
-  authoring(signal: AbortSignal): Authoring;
 }

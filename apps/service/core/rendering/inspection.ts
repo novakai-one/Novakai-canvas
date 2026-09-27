@@ -1,9 +1,12 @@
-import type { SessionDependencies } from '../../contract/types.js';
+/*
+ * Inspects one committed collection: render it and report its quality. Pure over the injected
+ * reads. Missing collections and infrastructure failures stay routing errors, not verdicts.
+ */
 import type { InspectionReport } from '../../contract/records/rendering/inspection.js';
 import type { RenderDocument } from '../../contract/records/rendering/job.js';
 import type { Diagnostic, Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
-import { renderCollection } from './collection.js';
+import { renderCollection, type CollectionReads } from './collection.js';
 /** Arranged scenes passed the independent inspector during derivation; the report surfaces their own warning record. */
 function report(document: RenderDocument): InspectionReport {
   const warnings = document.scene.warnings;
@@ -42,7 +45,7 @@ function rejected(error: Diagnostic): Result<InspectionReport> {
 export async function inspectCollection(
   id: string,
   signal: AbortSignal,
-  dependencies: SessionDependencies,
+  dependencies: CollectionReads,
 ): Promise<Result<InspectionReport>> {
   const outcome = await renderCollection(id, signal, dependencies);
   if (!outcome.ok) return rejected(outcome.error);

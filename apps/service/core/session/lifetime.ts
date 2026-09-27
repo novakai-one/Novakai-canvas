@@ -1,5 +1,17 @@
-import type { SessionLifetime } from '../../contract/ports/lifetime.js';
+/*
+ * The session's lifetime: admit work while open, then drain it and close the owners once. Pure
+ * promise bookkeeping; the owners' close is injected by compose. A failed close is returned, and
+ * the caller keeps the workspace.
+ */
 import { failure, type Result } from '../../contract/errors.js';
+/** Shutdown rejects new work, drains every admitted operation and closes owners only after physical settlement. */
+export interface SessionLifetime {
+  run<T>(
+    operation: () => Promise<T>,
+    unavailable: () => T,
+  ): Promise<T>;
+  close(): Promise<Result<void>>;
+}
 /** Physical owner shutdown is terminal before the returned result; caller retains the workspace on any failed close. */
 async function shutdown(
   active: readonly Promise<unknown>[],

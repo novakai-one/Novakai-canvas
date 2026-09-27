@@ -19,7 +19,8 @@ import type { DiagramProducer } from '../ports/rendering.js';
 import { EMPTY_RESOURCES } from '../ports/capabilities.js';
 import type { Result } from '../errors.js';
 import { authoringFailure, failure, success } from '../errors.js';
-import { createWorkspaceSession } from '../api.js';
+import { createWorkspaceSession } from '../../core/session/facade.js';
+import { createSessionLifetime } from '../../core/session/lifetime.js';
 import { createWorkspaceExporter } from '../../adapters/workspace/export.js';
 import { createPngRuntime } from '../../adapters/raster/png-runtime.js';
 import { cacheRenders } from '../../adapters/rendering/render-cache.js';
@@ -57,7 +58,6 @@ export async function wireWorkspace(
     rendererModule,
     installationModule,
     channelModule,
-    lifetimeModule,
     resourceCommandsModule,
     presetPlannerModule,
     themePreparationModule,
@@ -76,7 +76,6 @@ export async function wireWorkspace(
     import('../../adapters/rendering/collection-renderer.js'),
     import('../../adapters/planning/installation-planner.js'),
     import('../../adapters/notifications/change-channel.js'),
-    import('../../adapters/runtime/session-lifetime.js'),
     import('../../adapters/resources/resource-commands.js'),
     import('../../adapters/planning/preset-planner.js'),
     import('../../adapters/rendering/theme-preparation.js'),
@@ -131,7 +130,7 @@ export async function wireWorkspace(
     wasmResource: `${options.resourceRoot}/vendor/layout/libavoid.wasm`,
   });
   const changes = channelModule.createChangeChannel();
-  const lifetime = lifetimeModule.createSessionLifetime(async () => {
+  const lifetime = createSessionLifetime(async () => {
     changes.close();
     return native.close();
   });
