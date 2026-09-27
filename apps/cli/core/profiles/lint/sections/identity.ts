@@ -2,45 +2,43 @@
  * Section identity rules of the build-spec profile: section IDs are unique, and a section that
  * takes a required slot's ID uses one of that slot's modes. Pure; each rule returns its findings.
  */
-import type { ProfileFinding } from '../../../../contract/records/profiles.js';
+import type { ProfileFinding, ProfileSlot } from '../../../../contract/records/profiles.js';
 import { buildSpecProfile } from '../../build-spec/descriptor.js';
 import { id, text, type Declaration, type DeclarationIndex } from '../declarations.js';
 import { fieldFinding } from '../findings.js';
 
-const reserved = new Map(buildSpecProfile.slots.map((slot) => [slot.id.slice(1), slot]));
+const reserved: ReadonlyMap<string, ProfileSlot> = new Map(
+  buildSpecProfile.slots.map((slot) => [slot.id.slice(1), slot]),
+);
 
-/** Duplicate-id and reserved-mode findings, tracked across the section list. */
+/** Duplicate-id and reserved-mode findings, section by section in document order. */
 export function lintSectionIdentity(indexed: DeclarationIndex): ProfileFinding[] {
-  const seen = new Map<string, Declaration>();
-  const findings: ProfileFinding[] = [];
-  for (const section of indexed.sections) {
-    findings.push(...identifySection(seen, section));
-  }
-  return findings;
+  const sectionIds = indexed.sections.map(id);
+  return indexed.sections.flatMap((section, index) =>
+    identifySection(section, sectionIds.slice(0, index)),
+  );
 }
 
-/** One section's identity findings, remembering its id for the sections after it. */
+/** One section's identity findings; `earlier` holds the ids of the sections before it. */
 function identifySection(
-  seen: Map<string, Declaration>,
   section: Declaration,
+  earlier: readonly (string | undefined)[],
 ): ProfileFinding[] {
   const sectionId = id(section);
   if (sectionId === undefined) return [];
-  const findings = [
-    ...duplicateFinding(seen, section, sectionId),
+  return [
+    ...duplicateFinding(section, sectionId, earlier),
     ...reservedModeFinding(section, sectionId),
   ];
-  seen.set(sectionId, section);
-  return findings;
 }
 
-/** A section id already seen is a duplicate. */
+/** A section id an earlier section already uses is a duplicate. */
 function duplicateFinding(
-  seen: ReadonlyMap<string, Declaration>,
   section: Declaration,
   sectionId: string,
+  earlier: readonly (string | undefined)[],
 ): ProfileFinding[] {
-  return seen.has(sectionId)
+  return earlier.includes(sectionId)
     ? [
         fieldFinding(section, 'id', {
           code: 'duplicate-section',

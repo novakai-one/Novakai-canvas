@@ -20,6 +20,13 @@ export type SyntaxValue = unknown;
 /** A reference field value: kind 'reference' with a string id. */
 export type Reference = { readonly kind: 'reference'; readonly id: string };
 
+/** What {@link wireEnds} reads off one wire. */
+export interface WireEnds {
+  readonly id: string | undefined;
+  readonly source: string | undefined;
+  readonly target: string | undefined;
+}
+
 /** The index of a full canvas document; undefined for any other source (a patch). */
 export function indexSource(source: ParsedSource): DeclarationIndex | undefined {
   if (source.kind !== 'canvas') return undefined;
@@ -96,6 +103,22 @@ export function shown(section: Declaration): readonly string[] {
   return section.children
     .filter((child) => child.kind === 'show')
     .flatMap((child) => ids(child, 'ids'));
+}
+
+/** The wire ids a section connects. */
+export function connected(section: Declaration): readonly string[] {
+  return section.children
+    .filter((child) => child.kind === 'connect')
+    .flatMap((child) => ids(child, 'ids'));
+}
+
+/** A wire's own id and its source and target object ids, each undefined when missing. */
+export function wireEnds(wire: Declaration): WireEnds {
+  return {
+    id: id(wire),
+    source: reference(field(wire, 'source'))?.id,
+    target: reference(field(wire, 'target'))?.id,
+  };
 }
 
 /** The numeric order field of a section, when it is a number. */

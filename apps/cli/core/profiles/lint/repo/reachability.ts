@@ -3,7 +3,7 @@
  * declared root through the connected parent wires. Pure; the findings are returned.
  */
 import type { ProfileFinding } from '../../../../contract/records/profiles.js';
-import { field, id, reference, type Declaration } from '../declarations.js';
+import { wireEnds, type Declaration } from '../declarations.js';
 import { findingAt } from '../findings.js';
 
 /** A parent edge: a wire's source and target object ids. */
@@ -20,7 +20,7 @@ export function reachabilityFindings(
   shownIds: ReadonlySet<string>,
 ): ProfileFinding[] {
   if (rootId === undefined) return [];
-  const reachable = reachableObjects(rootId, childrenByParentOf(parentWires));
+  const reachable = reachableFrom([rootId], new Set([rootId]), childrenByParentOf(parentWires));
   return [...shownIds].flatMap((objectId) => unreachableFinding(section, objectId, reachable));
 }
 
@@ -42,53 +42,40 @@ function unreachableFinding(
       ];
 }
 
-/** The parent edges of the fully-specified wires. */
+/** The children of each parent, in wire order, over the fully-specified wires. */
 function childrenByParentOf(wires: readonly Declaration[]): ReadonlyMap<string, readonly string[]> {
-  const edges = wires.flatMap((wire) => {
-    const edge = parentEdge(wire);
-    return edge === undefined ? [] : [edge];
-  });
-  return groupBySource(edges);
+  const edges = wires.flatMap(parentEdge);
+  return new Map(edges.map((edge) => [edge.source, childrenOf(edge.source, edges)]));
 }
 
-/** A wire's edge, when it carries an id, a source and a target. */
-function parentEdge(wire: Declaration): ParentEdge | undefined {
-  const wireId = id(wire);
-  const source = reference(field(wire, 'source'))?.id;
-  const target = reference(field(wire, 'target'))?.id;
-  return wireId === undefined || source === undefined || target === undefined
-    ? undefined
-    : { source, target };
+/** The wire's edge as a one-item list; empty unless the wire has an id, a source and a target. */
+function parentEdge(wire: Declaration): ParentEdge[] {
+  const { id, source, target } = wireEnds(wire);
+  return id === undefined || source === undefined || target === undefined
+    ? []
+    : [{ source, target }];
 }
 
-/** Targets grouped under their source. */
-function groupBySource(edges: readonly ParentEdge[]): ReadonlyMap<string, readonly string[]> {
-  const byParent = new Map<string, string[]>();
-  for (const edge of edges) {
-    byParent.set(edge.source, [...(byParent.get(edge.source) ?? []), edge.target]);
-  }
-  return byParent;
+/** The targets of the edges leaving one parent. */
+function childrenOf(
+  parent: string,
+  edges: readonly ParentEdge[],
+): readonly string[] {
+  return edges.filter((edge) => edge.source === parent).map((edge) => edge.target);
 }
 
-/** The objects reachable from the root, breadth-first over parent wires. */
-function reachableObjects(
-  rootId: string,
+/**
+ * Everything reachable over parent wires: `reached` plus the children of `frontier`, layer by
+ * layer, until a layer adds nothing new.
+ */
+function reachableFrom(
+  frontier: readonly string[],
+  reached: ReadonlySet<string>,
   childrenByParent: ReadonlyMap<string, readonly string[]>,
 ): ReadonlySet<string> {
-  const reachable = new Set<string>([rootId]);
-  const queue = [...(childrenByParent.get(rootId) ?? [])];
-  while (queue.length > 0) visitReachable(queue, reachable, childrenByParent);
-  return reachable;
-}
-
-/** Dequeue one object; when new, mark it reachable and enqueue its children. */
-function visitReachable(
-  queue: string[],
-  reachable: Set<string>,
-  childrenByParent: ReadonlyMap<string, readonly string[]>,
-): void {
-  const current = queue.shift();
-  if (current === undefined || reachable.has(current)) return;
-  reachable.add(current);
-  queue.push(...(childrenByParent.get(current) ?? []));
+  const next = [
+    ...new Set(frontier.flatMap((parent) => childrenByParent.get(parent) ?? [])),
+  ].filter((child) => !reached.has(child));
+  if (next.length === 0) return reached;
+  return reachableFrom(next, new Set([...reached, ...next]), childrenByParent);
 }

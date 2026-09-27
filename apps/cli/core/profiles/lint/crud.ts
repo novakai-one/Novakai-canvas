@@ -38,7 +38,7 @@ export function crudFindings(
     ...columnFinding(table),
     ...rows.flatMap((row) => crudRowFindings(row, expectedRows)),
     ...missingRowFindings(table, rows, expectedRows),
-    ...duplicateRowFindings(table, rows),
+    ...duplicateRowFindings(rows),
   ];
 }
 
@@ -68,15 +68,17 @@ function columnFinding(table: Declaration): ProfileFinding[] {
       ];
 }
 
-/** The columns field is the fixed five-column list. */
+/** The columns field is exactly {@link crudColumns}. */
 function validColumns(columns: SyntaxValue): boolean {
-  const expected = ['Object', 'Create', 'Read', 'Update', 'Delete'];
   return (
     Array.isArray(columns) &&
-    columns.length === expected.length &&
-    columns.every((value, index) => value === expected[index])
+    columns.length === crudColumns.length &&
+    columns.every((value, index) => value === crudColumns[index])
   );
 }
+
+/** The fixed CRUD table columns; every row has one cell per column. */
+const crudColumns = Object.freeze(['Object', 'Create', 'Read', 'Update', 'Delete'] as const);
 
 /** One row's id finding first, then its cell-count finding. */
 function crudRowFindings(
@@ -103,13 +105,13 @@ function rowIdFinding(
   ];
 }
 
-/** A row must contain exactly five cells. */
+/** A row must contain one cell per CRUD column. */
 function rowCellsFinding(
   row: Declaration,
   rowId: string | undefined,
 ): ProfileFinding[] {
   const cells = field(row, 'cells');
-  return Array.isArray(cells) && cells.length === 5
+  return Array.isArray(cells) && cells.length === crudColumns.length
     ? []
     : [
         fieldFinding(row, 'cells', {
@@ -144,17 +146,15 @@ function missingRowFindings(
   );
 }
 
-/** A row id used more than once is reported at its first row. */
-function duplicateRowFindings(
-  table: Declaration,
-  rows: readonly Declaration[],
-): ProfileFinding[] {
-  return [...countRowIds(rows).entries()].flatMap(([rowId, count]) =>
-    count > 1
+/** A row id used more than once is reported once, at its first row. */
+function duplicateRowFindings(rows: readonly Declaration[]): ProfileFinding[] {
+  const rowIds = rows.map(id);
+  return rows.flatMap((row, index) =>
+    firstOfRepeated(rowIds, index)
       ? [
-          findingAt(rows.find((row) => id(row) === rowId) ?? table, {
+          findingAt(row, {
             code: 'crud-duplicate-row',
-            path: `row @${rowId}`,
+            path: rowLabel(rowIds[index]),
             message: 'CRUD table must contain exactly one row for each entity.',
           }),
         ]
@@ -162,20 +162,13 @@ function duplicateRowFindings(
   );
 }
 
-/** How often each row id appears. */
-function countRowIds(rows: readonly Declaration[]): ReadonlyMap<string, number> {
-  const rowIds = rows.flatMap((row) => {
-    const rowId = id(row);
-    return rowId === undefined ? [] : [rowId];
-  });
-  return tally(rowIds);
-}
-
-/** A count per id, in first-seen order. */
-function tally(rowIds: readonly string[]): ReadonlyMap<string, number> {
-  const counts = new Map<string, number>();
-  for (const rowId of rowIds) {
-    counts.set(rowId, (counts.get(rowId) ?? 0) + 1);
-  }
-  return counts;
+/** The row at `index` has an id, is the first row with it, and a later row repeats it. */
+function firstOfRepeated(
+  rowIds: readonly (string | undefined)[],
+  index: number,
+): boolean {
+  const rowId = rowIds[index];
+  return (
+    rowId !== undefined && rowIds.indexOf(rowId) === index && rowIds.lastIndexOf(rowId) > index
+  );
 }
