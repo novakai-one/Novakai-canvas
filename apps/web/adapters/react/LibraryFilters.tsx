@@ -3,6 +3,7 @@ import type { ComponentType, ReactElement } from 'react';
 import type { DesignSlots } from '../../contract/react-types.js';
 import type { LibraryFeatureProps } from '../../contract/library-react.js';
 import type { FolderId } from '../../contract/brands.js';
+import { defaultLibraryFilters } from '../../contract/api.js';
 import editorStyles from './ObjectEditor.module.css';
 import styles from './LibraryFilters.module.css';
 /** Search, folder scope and archive filters use Library's public query semantics. */
@@ -13,6 +14,7 @@ export function createLibraryFilters(
   /** Filter edits change discovery only; they never mutate the diagram or move its camera. */
   function LibraryFilters({ library, state }: LibraryFeatureProps): ReactElement {
     const filters = state.filters;
+    const folders = folderChoices(state);
     const [advancedOpen, setAdvancedOpen] = useState(!options.compact);
     const advanced = (
       <div className={styles.advanced}>
@@ -23,15 +25,11 @@ export function createLibraryFilters(
               {...props}
               value={filters.folder ?? ''}
               onChange={(event) =>
-                library.filter({ ...filters, folder: listedFolder(state, event.target.value) })
+                library.filter({ ...filters, folder: chosen(folders, event.target.value) ?? null })
               }
             >
               <option value="">All folders</option>
-              {state.source?.organisation.folders.map((folder) => (
-                <option key={folder.id} value={folder.id}>
-                  {folder.title}
-                </option>
-              ))}
+              {choiceOptions(folders)}
             </select>
           )}
         />
@@ -42,15 +40,11 @@ export function createLibraryFilters(
               {...props}
               value={filters.archived}
               onChange={(event) => {
-                const archived = archives.find((item) => item.value === event.target.value)?.value;
+                const archived = chosen(archives, event.target.value);
                 if (archived) library.filter({ ...filters, archived });
               }}
             >
-              {archives.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
+              {choiceOptions(archives)}
             </select>
           )}
         />
@@ -61,24 +55,15 @@ export function createLibraryFilters(
               {...props}
               value={filters.sort}
               onChange={(event) => {
-                const sort = sorts.find((item) => item.value === event.target.value)?.value;
+                const sort = chosen(sorts, event.target.value);
                 if (sort) library.filter({ ...filters, sort });
               }}
             >
-              {sorts.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
+              {choiceOptions(sorts)}
             </select>
           )}
         />
-        <Button
-          label="Reset search"
-          onClick={() =>
-            library.filter({ text: '', folder: null, archived: 'exclude', sort: 'order' })
-          }
-        />
+        <Button label="Reset search" onClick={() => library.filter(defaultLibraryFilters)} />
       </div>
     );
     return (
@@ -112,12 +97,30 @@ export function createLibraryFilters(
   }
   return LibraryFilters;
 }
-/** The listed folder whose ID is `value`; null for "All folders". */
-function listedFolder(
-  state: LibraryFeatureProps['state'],
-  value: string,
-): FolderId | null {
-  return state.source?.organisation.folders.find((folder) => folder.id === value)?.id ?? null;
+/** One option in a filter select: the value the filter takes and the text shown. */
+interface Choice<T extends string> {
+  readonly value: T;
+  readonly label: string;
+}
+/** The listed folders as choices, in catalog order; none before the catalog is read. */
+function folderChoices(state: LibraryFeatureProps['state']): readonly Choice<FolderId>[] {
+  const folders = state.source?.organisation.folders ?? [];
+  return folders.map((folder) => ({ value: folder.id, label: folder.title }));
+}
+/** The listed value whose text is `text`; undefined when no choice has it ("All folders"). */
+function chosen<T extends string>(
+  choices: readonly Choice<T>[],
+  text: string,
+): T | undefined {
+  return choices.find((choice) => choice.value === text)?.value;
+}
+/** One `<option>` per choice, in order. */
+function choiceOptions<T extends string>(choices: readonly Choice<T>[]): readonly ReactElement[] {
+  return choices.map((choice) => (
+    <option key={choice.value} value={choice.value}>
+      {choice.label}
+    </option>
+  ));
 }
 const archives = [
   { value: 'exclude', label: 'Active' },

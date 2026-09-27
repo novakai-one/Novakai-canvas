@@ -1,3 +1,10 @@
+/*
+ * The Library panel's store: browse filters and result pages, the new-folder form and recent visits.
+ * Not pure: it holds the view React reads and calls the Library reader, browser storage and Authoring.
+ * Recovery: the folder form and the visits are kept in browser storage per workspace and restored
+ * with the next snapshot; a stored value that cannot be read is reported and kept. Authoring owns
+ * the catalog; a folder change prepared against an older revision is refused (`library-changed`).
+ */
 import type {
   LibraryBindings,
   LibraryController,
@@ -9,14 +16,15 @@ import type { Snapshot, Collection } from '../../contract/records/owners.js';
 import type { CollectionId, LibraryCursor, WorkspaceId } from '../../contract/brands.js';
 import type { LibrarySnapshot, OrganisationChange, RecentVisit } from '@novakai/canvas-library';
 import { diagnostic, type Result } from '../../contract/errors.js';
-/** The session owns browse filters and local visits; every catalog mutation goes to Authoring with a captured revision. */
+import { defaultLibraryFilters } from '../../contract/api.js';
+/** Creates the store. Failures go to the view's `problem` or to `bindings.report`; nothing throws. */
 export function createLibraryController(bindings: LibraryBindings): LibraryController {
   let state: LibraryView = {
     source: null,
     page: null,
     problem: null,
     folderDraft: null,
-    filters: { text: '', folder: null, archived: 'exclude', sort: 'order' },
+    filters: defaultLibraryFilters,
   };
   let base: Snapshot | null = null;
   let recent: readonly RecentVisit[] = [];
@@ -26,7 +34,7 @@ export function createLibraryController(bindings: LibraryBindings): LibraryContr
     state = { ...state, ...patch };
     listeners.forEach((listener) => listener());
   }
-  /** A new canonical revision invalidates paging, never the user's query. */
+  /** A new canonical revision invalidates paging, never the user's query. Fails: `invalid-library`. */
   function refresh(
     snapshot: Snapshot,
     collections: readonly Collection[],
@@ -41,7 +49,7 @@ export function createLibraryController(bindings: LibraryBindings): LibraryContr
     publish({ source: checked.value });
     search(null);
   }
-  /** New workspace preferences cannot inherit a prior workspace's unfinished folder form. */
+  /** A new workspace drops the prior folder form. Reports `draft-retention-unavailable`. */
   function restoreLocal(workspace: WorkspaceId): void {
     publish({ folderDraft: null });
     restoreVisits(workspace);
@@ -52,7 +60,7 @@ export function createLibraryController(bindings: LibraryBindings): LibraryContr
     }
     restoreFolder(stored.value);
   }
-  /** Invalid recovery is surfaced while the original stored value is retained. */
+  /** Restores a stored folder form. Reports `invalid-folder-draft`; the stored value is kept. */
   function restoreFolder(input: unknown): void {
     if (input === null) return;
     const checked = bindings.reader.folderDraft(input);
@@ -62,22 +70,22 @@ export function createLibraryController(bindings: LibraryBindings): LibraryContr
     }
     publish({ folderDraft: checked.value });
   }
-  /** Form data is persisted outside component lifetime, including temporarily blank titles. */
+  /** Keeps the form, blank titles included, in storage. Fails: `draft-retention-unavailable`. */
   function saveFolder(folderDraft: FolderDraft | null): void {
     if (base === null) return;
     const result = bindings.retention.write(`folder-draft.${base.workspace}`, folderDraft);
     publish({ folderDraft });
     if (!result.ok) publish({ problem: result.error });
   }
-  /** Identity and catalog revision are allocated on the first edit only; no ID, no draft. */
+  /** ID and revision are taken on the first edit only. Fails: `id-unavailable` (no draft is made). */
   function editFolderTitle(title: string): void {
     if (state.source === null) return;
-    const original = folderDraft(state.source);
+    const original = openOrNewFolderDraft(state.source);
     if (!original.ok) return publish({ problem: original.error });
     saveFolder({ ...original.value, title });
   }
-  /** The open folder draft, or a new one. Fails with `id-unavailable` when no folder ID is made. */
-  function folderDraft(source: LibrarySnapshot): Result<FolderDraft> {
+  /** The open folder draft, or a new one. Fails: `id-unavailable` when no folder ID is made. */
+  function openOrNewFolderDraft(source: LibrarySnapshot): Result<FolderDraft> {
     if (state.folderDraft !== null) return { ok: true, value: state.folderDraft };
     const id = bindings.nextFolderId();
     if (!id.ok) return id;
@@ -86,7 +94,7 @@ export function createLibraryController(bindings: LibraryBindings): LibraryContr
       value: { id: id.value, title: '', revision: source.organisation.revision },
     };
   }
-  /** Confirmed creation clears only the exact submitted form; failed or newer typing remains retained. */
+  /** Clears only the exact form Authoring confirmed. Fails: `library-changed`, Authoring's refusal. */
   async function createFolder(): Promise<void> {
     const draft = state.folderDraft;
     if (draft === null) return;
@@ -109,7 +117,7 @@ export function createLibraryController(bindings: LibraryBindings): LibraryContr
   function acknowledgeFolder(draft: FolderDraft): void {
     if (state.folderDraft === draft) saveFolder(null);
   }
-  /** Stored visits are optional local preferences, admitted independently from canonical state. */
+  /** Restores stored visits, apart from the catalog. Reports `draft-retention-unavailable`. */
   function restoreVisits(workspace: WorkspaceId): void {
     recent = [];
     const stored = bindings.retention.read(`visits.${workspace}`);
@@ -119,7 +127,7 @@ export function createLibraryController(bindings: LibraryBindings): LibraryContr
     }
     readVisits(stored.value);
   }
-  /** Corrupt visit data is retained; it cannot corrupt catalog membership. */
+  /** Reads stored visits. Reports `invalid-visits`; the stored value is kept. */
   function readVisits(input: unknown): void {
     if (input === null) return;
     const checked = bindings.reader.visits(input);
@@ -129,7 +137,7 @@ export function createLibraryController(bindings: LibraryBindings): LibraryContr
     }
     recent = checked.value;
   }
-  /** Library owns matching, ranking and cursor consistency. */
+  /** Library owns matching, ranking and cursor consistency. Fails: `invalid-library`. */
   function search(cursor: LibraryCursor | null): void {
     if (state.source === null) return;
     const result = bindings.reader.query(state.source, state.filters, cursor);
@@ -150,7 +158,7 @@ export function createLibraryController(bindings: LibraryBindings): LibraryContr
     if (collection === undefined) return;
     storeVisit({ collection: collection.id, openedAt: bindings.now() });
   }
-  /** Visit data is checked before retention, then the owner recomputes recent ranking. */
+  /** Checks the visit list before storing it. Reports `invalid-visits`. */
   function storeVisit(visit: RecentVisit): void {
     if (base === null) return;
     const checked = bindings.reader.visits(
@@ -162,7 +170,7 @@ export function createLibraryController(bindings: LibraryBindings): LibraryContr
     }
     storeCheckedVisits(base.workspace, checked.value);
   }
-  /** Checked visits are retained before replacing the active ranking preferences. */
+  /** Stores checked visits, then ranks with them. Reports `draft-retention-unavailable`. */
   function storeCheckedVisits(
     workspace: WorkspaceId,
     visits: readonly RecentVisit[],
@@ -181,7 +189,7 @@ export function createLibraryController(bindings: LibraryBindings): LibraryContr
     publish({ source: { ...state.source, recent } });
     search(null);
   }
-  /** A form prepared against an older catalog is rejected visibly; no implicit overwrite or rebase occurs. */
+  /** Refuses a form prepared against an older catalog; no overwrite or rebase. Fails: `library-changed`. */
   async function commit(
     changes: readonly OrganisationChange[],
     revision: number,
@@ -199,7 +207,7 @@ export function createLibraryController(bindings: LibraryBindings): LibraryContr
     }
     return applyOrganisation(base, changes);
   }
-  /** Typed Authoring failure remains visible and never clears an unconfirmed folder form. */
+  /** Sends the change to Authoring. Its refusal goes to `problem`; the folder form is kept. */
   async function applyOrganisation(
     base: Snapshot,
     changes: readonly OrganisationChange[],

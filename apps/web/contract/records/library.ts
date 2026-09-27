@@ -64,7 +64,8 @@ export interface LibraryController {
 }
 export interface LibraryBindings {
   readonly reader: LibraryReader;
-  readonly retention: DraftRetention;
+  /** Keeps the folder form and the visits; the store never removes a key. */
+  readonly retention: Pick<DraftRetention, 'read' | 'write'>;
   /** The time a collection is opened, recorded as a Library visit. */
   now(): VisitTime;
   /** A new folder ID from the ID source. Fails with `id-unavailable`. */
