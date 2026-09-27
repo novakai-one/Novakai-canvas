@@ -15,7 +15,8 @@ import type { MaterializedPreview } from './types.js';
 /**
  * Run the native preview over the materialized changes for verification.
  *
- * A missing preview is `invalid-edit`; a failed second preview returns its failure; a null
+ * A missing preview is `invalid-edit`; a failed second preview returns its failure; a second
+ * preview that is incomplete or has an unexpected or duplicate target is `invalid-edit`; a null
  * second preview, a geometry mismatch or a target that no longer matches declines the option.
  */
 export function previewMaterializedRearrangement(
@@ -36,7 +37,7 @@ function callMaterializedPreview(
   return second.ok ? inspectMaterializedPreview(input, second.value) : second;
 }
 
-/** Flatten the second preview before comparing it with the first. */
+/** Flatten the second preview before comparing it; an incomplete one is `invalid-edit`. */
 function inspectMaterializedPreview(
   input: MaterializedPreview,
   secondPreview: MoveOption['preview'] | null,
@@ -71,11 +72,6 @@ function acceptRearrangement(
   };
 }
 
-/** Every first-preview target must still satisfy the section and closure predicates. */
-function inspectSecondTargets(input: MaterializedPreview): boolean {
-  return [...input.firstMap].every(([key, firstBox]) => inspectSecondTarget(input, key, firstBox));
-}
-
 /** Two geometry maps agree when every shared key holds an exactly equal box. */
 function sameGeometryMap(
   first: ReadonlyMap<string, Box>,
@@ -85,6 +81,11 @@ function sameGeometryMap(
     const counterpart = second.get(key);
     return counterpart !== undefined && exactBox(counterpart, box);
   });
+}
+
+/** Every first-preview target must still satisfy the section and closure predicates. */
+function inspectSecondTargets(input: MaterializedPreview): boolean {
+  return [...input.firstMap].every(([key, firstBox]) => inspectSecondTarget(input, key, firstBox));
 }
 
 /** One second-preview target passes when its section and closure geometry still match. */
