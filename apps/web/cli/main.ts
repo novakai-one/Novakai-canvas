@@ -5,7 +5,12 @@ async function main(): Promise<void> {
   if (element === null) return;
   await loadBrowserStyles();
   const { startWeb } = await import('../contract/index.js');
-  const started = await startWeb(element);
+  const started = await startWeb(element, {
+    window,
+    storage: () => localStorage,
+    random: () => crypto.randomUUID(),
+    now: () => Date.now(),
+  });
   if (!started.ok) element.textContent = `${started.error.message}. ${started.error.recovery}`;
 }
 void main().catch(() => {

@@ -1,10 +1,11 @@
 /*
  * The browser composition root: installation resources, design bindings, feature registration,
  * the workspace controller and the shell mount are assembled once before rendering, so every
- * child registry retains stable component identity across edits. Startup resource reading lives
- * in compose/startup, feature registration in compose/features, the workspace controller in
- * compose/workspace, the movement review binding in compose/movement-review, and the retained
- * form sessions in compose/sessions.
+ * child registry retains stable component identity across edits. The browser entry hands in the
+ * page globals, so nothing here reads one. Startup resource reading lives in compose/startup,
+ * feature registration in compose/features, the side panel tabs in compose/panel-tabs, the
+ * workspace controller in compose/workspace, the movement review binding in
+ * compose/movement-review, and the retained form sessions in compose/sessions.
  */
 import { createLibraryBrowser } from '../adapters/react/LibraryBrowser.js';
 import { createLibraryFilters } from '../adapters/react/LibraryFilters.js';
@@ -43,6 +44,7 @@ import { createSourceEditor } from '../adapters/react/SourceEditor.js';
 import { createWorkspaceShell } from '../adapters/react/WorkspaceShell.js';
 import { mountWorkspace, observeWorkspaceWidth } from '../adapters/edge/browser-host.js';
 import type { Result } from './errors.js';
+import type { BrowserGlobals } from './ports/browser-globals.js';
 import type { PanelController } from './panel-types.js';
 import type { WorkspaceController } from './records/workspace.js';
 import {
@@ -53,29 +55,35 @@ import {
   themeChoices,
 } from './compose/startup.js';
 import { featureSections, panelDefinitions } from './compose/features.js';
+import { panelTabs } from './compose/panel-tabs.js';
 import { composeWorkspace } from './compose/workspace.js';
 
 export { createInspectorSession, createWireSession } from './compose/sessions.js';
 
 /** Browser entry reports startup failure visibly; restarting after correcting the dependency does not alter canonical diagram data. */
-export async function startWeb(element: HTMLElement): Promise<Result<{ dispose(): void }>> {
+export async function startWeb(
+  element: HTMLElement,
+  globals: BrowserGlobals,
+): Promise<Result<{ dispose(): void }>> {
   try {
-    return await mount(element);
+    return await mount(element, globals);
   } catch (error) {
     return initializationFailure(error);
   }
 }
 
 /** Assemble once before rendering: every child/React Flow registry retains stable component identity across edits. */
-async function mount(element: HTMLElement): Promise<Result<{ dispose(): void }>> {
+async function mount(
+  element: HTMLElement,
+  globals: BrowserGlobals,
+): Promise<Result<{ dispose(): void }>> {
   const client = createServiceClient();
-  const retention = createDraftRetention(localStorage);
-  const random = (): string => crypto.randomUUID();
+  const retention = createDraftRetention(globals.storage());
   const installed = await resources(client);
   const design = accepted(await designBindings());
   const scope = accepted(createScopeInstaller(design.createScopeTarget(element)));
   const tokens = composeDesignSystem();
-  const environment = readEnvironment(window);
+  const environment = readEnvironment(globals.window);
   const themes = themeChoices(tokens, installed.tokens, environment);
   const preferences = accepted(
     createPreferenceController({
@@ -87,7 +95,7 @@ async function mount(element: HTMLElement): Promise<Result<{ dispose(): void }>>
       themes: themes.map(({ pin }) => pin),
     }),
   );
-  const stopPreferences = observeEnvironment(window, preferences.environment);
+  const stopPreferences = observeEnvironment(globals.window, preferences.environment);
   const presentation = accepted(await presentationBindings(installed.fonts));
   const surface = accepted(await canvasBindings({ ...presentation, Button: design.Button }));
   const Browser = createLibraryBrowser([
@@ -100,6 +108,7 @@ async function mount(element: HTMLElement): Promise<Result<{ dispose(): void }>>
     { id: 'results', Content: createLibraryResults(design) },
   ]);
   const ThemeSelector = createThemeSelector(design, preferences, themes);
+  // `panels` and `runtime` are declared below; these closures read them only after mount returns.
   const sections = featureSections(design, preferences, ThemeSelector, Browser, {
     subscribe: (listener) => panels.subscribe(listener),
     getSnapshot: () => panels.getSnapshot(),
@@ -125,9 +134,9 @@ async function mount(element: HTMLElement): Promise<Result<{ dispose(): void }>>
     client,
     panels,
     retention,
-    navigation: createWorkspaceNavigation(window.location, window.history),
-    random,
-    now: () => Date.now(),
+    navigation: createWorkspaceNavigation(globals.window.location, globals.window.history),
+    random: globals.random,
+    now: globals.now,
   });
   const stopWidth = observeWorkspaceWidth(element, panels.viewport);
   const Workspace = createWorkspaceShell({
@@ -146,36 +155,7 @@ async function mount(element: HTMLElement): Promise<Result<{ dispose(): void }>>
       sizing,
       portal: element,
       Tabs: createPanelTabs(design),
-      tabs: {
-        left: [
-          {
-            id: 'add',
-            label: 'Add',
-            scope: 'Create diagram content',
-            empty: 'Creation tools are hidden. Customize panels to show them.',
-          },
-          {
-            id: 'browse',
-            label: 'Browse',
-            scope: 'Shared collection',
-            empty: 'All Browse sections are hidden. Customize to show them.',
-          },
-        ],
-        right: [
-          {
-            id: 'inspect',
-            label: 'Inspect',
-            scope: 'Selected diagram content',
-            empty: 'All Inspect sections are hidden. Customize to show them.',
-          },
-          {
-            id: 'settings',
-            label: 'Settings',
-            scope: 'Personal to this browser',
-            empty: 'Settings are hidden. Customize to show them.',
-          },
-        ],
-      },
+      tabs: panelTabs,
     }),
     Source: createSourceEditor(design, element),
     Recovery: createRequestRecovery(design),
@@ -187,7 +167,7 @@ async function mount(element: HTMLElement): Promise<Result<{ dispose(): void }>>
     CanvasSurface: surface.CanvasSurface,
     FontDefinitions: presentation.FontDefinitions,
     portal: element,
-    nextGestureId: random,
+    nextGestureId: globals.random,
   });
   const mounted = accepted(mountWorkspace(element, Workspace, runtime));
   return {
