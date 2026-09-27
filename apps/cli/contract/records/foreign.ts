@@ -23,6 +23,7 @@ export type {
   Request,
   Receipt,
   RecordKey,
+  ReadVersion,
   StoredRecord,
 } from '@novakai/canvas-authoring';
 export type { TransportResponse } from '@novakai/canvas-service';

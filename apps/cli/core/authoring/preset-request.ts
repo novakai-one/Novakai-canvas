@@ -4,14 +4,18 @@
  * record at its stored version or absent. Pure. Nothing is sent; the service still recomputes the
  * preset and compares every read when it admits it.
  */
-import type { Request, Snapshot, StoredRecord } from '../../contract/records/foreign.js';
+import type {
+  ReadVersion,
+  Request,
+  Snapshot,
+  StoredRecord,
+} from '../../contract/records/foreign.js';
 import type { PresetPreparation } from '../../contract/records/service-answers.js';
 import type { AssetBinding } from '../../contract/records/staged-resource.js';
 import type { RecordId, RequestId } from '../../contract/brands.js';
 import type { FailureInput, Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
 import { envelope } from './envelope.js';
-import type { Precondition } from './envelope.js';
 
 /** One prepared preset, before its preconditions are read from the snapshot. */
 export interface PresetDraft {
@@ -39,7 +43,7 @@ export function presetRequest(
   const metadata = snapshot.records.find(isMetadata);
   if (metadata === undefined)
     return failure({ code: 'invalid-response', message: 'Workspace metadata is missing' });
-  const expected: readonly Precondition[] = [
+  const expected: readonly ReadVersion[] = [
     { key: metadata.key, version: metadata.version },
     { key: draft.preparation.key, version: presetVersion(snapshot, draft.preparation.key.id) },
   ];
@@ -65,7 +69,7 @@ function isMetadata(record: StoredRecord): boolean {
 function presetVersion(
   snapshot: Snapshot,
   id: RecordId,
-): Precondition['version'] {
+): ReadVersion['version'] {
   const stored = snapshot.records.find((item) => item.key.kind === 'preset' && item.key.id === id);
   if (stored === undefined) return 'absent';
   return stored.version;

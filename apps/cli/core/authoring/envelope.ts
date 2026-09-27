@@ -6,7 +6,7 @@
  */
 import type { RequestIds } from '../../contract/ports/request-ids.js';
 import type { Retains } from '../../contract/records/command.js';
-import type { RecordKey, Request } from '../../contract/records/foreign.js';
+import type { ReadVersion, Request } from '../../contract/records/foreign.js';
 import type { AssetBinding } from '../../contract/records/staged-resource.js';
 import type { RequestId, WorkspaceId } from '../../contract/brands.js';
 import type { FailureInput, Result } from '../../contract/errors.js';
@@ -16,17 +16,12 @@ import { checked } from '../shared/checks.js';
 /** The Authoring planner that turns the payload into writes: DSL source, or a prepared preset. */
 export type Planner = 'dsl' | 'preset';
 
-/** A record the request expects at `version`, or absent. Authoring's schema brands the key. */
-export interface Precondition {
-  readonly key: { readonly kind: RecordKey['kind']; readonly id: string };
-  readonly version: number | 'absent';
-}
-
 /** What differs between two CLI requests. */
 export interface EnvelopeDraft {
   readonly workspace: WorkspaceId;
   readonly request: RequestId;
-  readonly expected: readonly Precondition[];
+  /** Each record the request expects at a version, or absent; also the write scope. */
+  readonly expected: readonly ReadVersion[];
   readonly assets: readonly AssetBinding[];
   readonly planner: Planner;
   /** Sent unchanged as the change intent's payload. */

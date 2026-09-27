@@ -1,27 +1,52 @@
 /*
  * The Authoring request of one DSL change, with preconditions read from the snapshot the change
- * was prepared from. Pure apart from the injected Model check. `create` needs the collection
- * absent (a deleted one still counts as present) and also expects the catalog; `replace` and
- * `patch` need the revision the agent read. Nothing is sent; the caller fixes the named input and
- * runs the command again.
+ * was prepared from. Pure apart from the injected Model check. The source's collection ID becomes
+ * an Authoring record ID once, here. `create` needs the collection absent (a deleted one still
+ * counts as present) and also expects the catalog; `replace` and `patch` need the revision the
+ * agent read. Nothing is sent; the caller fixes the named input and runs the command again.
  */
 import type { CollectionReader } from '../../contract/ports/collection-reader.js';
 import type { ChangeIntent } from '../../contract/records/command.js';
-import type { Request, Snapshot, StoredRecord } from '../../contract/records/foreign.js';
-import type { CollectionRevision, RequestId } from '../../contract/brands.js';
-import type { Result } from '../../contract/errors.js';
+import type {
+  ReadVersion,
+  Request,
+  Snapshot,
+  StoredRecord,
+} from '../../contract/records/foreign.js';
+import type { CollectionRevision, RecordId, RequestId } from '../../contract/brands.js';
+import type { FailureInput, Result } from '../../contract/errors.js';
+import { recordId } from '../../contract/brands.js';
 import { failure, malformedRequest, success } from '../../contract/errors.js';
+import { checked } from '../shared/checks.js';
 import { envelope } from './envelope.js';
-import type { Precondition } from './envelope.js';
 
 /** One DSL change, before its preconditions are read from the snapshot. */
 export interface ChangeDraft {
   readonly intent: ChangeIntent;
-  /** The collection ID the source declares, as Language parsed it. */
-  readonly collection: string;
+  /** The collection the source declares, from {@link collectionRecordId}. */
+  readonly collection: RecordId;
   /** The DSL source; sent unchanged in the payload. */
   readonly source: string;
   readonly request: RequestId;
+}
+
+/** `replace` or `patch` of a collection no record is stored under. */
+const missingCollection: FailureInput = Object.freeze({
+  code: 'not-found',
+  message: 'The collection does not exist',
+});
+
+/**
+ * The collection ID Language parsed, as an Authoring record ID. An ID Authoring cannot store (over
+ * 128 characters) names no stored collection: fails with `not-found` for `replace` and `patch`,
+ * and `invalid-input` for `create`.
+ */
+export function collectionRecordId(
+  intent: ChangeIntent,
+  text: string,
+): Result<RecordId> {
+  if (intent.mode === 'create') return checked(recordId, text, malformedRequest);
+  return checked(recordId, text, missingCollection);
 }
 
 /**
@@ -51,7 +76,7 @@ function expectedVersion(
   intent: ChangeIntent,
   record: StoredRecord | undefined,
   reader: CollectionReader,
-): Result<Precondition['version']> {
+): Result<ReadVersion['version']> {
   if (intent.mode !== 'create') return storedVersion(record, intent.revision, reader);
   if (record !== undefined)
     return failure({
@@ -71,8 +96,7 @@ function storedVersion(
   requested: CollectionRevision | undefined,
   reader: CollectionReader,
 ): Result<number> {
-  if (record === undefined)
-    return failure({ code: 'not-found', message: 'The collection does not exist' });
+  if (record === undefined) return failure(missingCollection);
   const collection = reader.validate(record.value);
   if (!collection.ok)
     return failure({
@@ -115,12 +139,12 @@ function matchedRevision(
 function withCatalog(
   draft: ChangeDraft,
   snapshot: Snapshot,
-  version: Precondition['version'],
+  version: ReadVersion['version'],
 ): Result<Request> {
   const catalog = snapshot.records.find((item) => item.key.kind === 'catalog' && !item.deleted);
   if (catalog === undefined)
     return failure({ code: 'invalid-response', message: 'Workspace catalog is missing' });
-  const collection: Precondition = { key: { kind: 'collection', id: draft.collection }, version };
+  const collection: ReadVersion = { key: { kind: 'collection', id: draft.collection }, version };
   const expected = preconditions(draft.intent, collection, catalog);
   return envelope(
     {
@@ -138,9 +162,9 @@ function withCatalog(
 /** The collection's precondition, then the catalog's for `create`. */
 function preconditions(
   intent: ChangeIntent,
-  collection: Precondition,
+  collection: ReadVersion,
   catalog: StoredRecord,
-): readonly Precondition[] {
+): readonly ReadVersion[] {
   if (intent.mode !== 'create') return [collection];
   return [collection, { key: catalog.key, version: catalog.version }];
 }
