@@ -29,7 +29,11 @@ function entityFinding(
 ): ProfileFinding[] {
   if (!isEntityNode(entity))
     return [
-      findingAt(section, `section @entities show @${entityId}`, 'Entities must show entity nodes.'),
+      findingAt(section, {
+        code: 'entity-kind',
+        path: `section @entities show @${entityId}`,
+        message: 'Entities must show entity nodes.',
+      }),
     ];
   return invariantFinding(entity, entityId);
 }
@@ -47,10 +51,10 @@ function invariantFinding(
   return entity.children.some((child) => child.kind === 'text')
     ? []
     : [
-        findingAt(
-          entity,
-          `node @${entityId}`,
-          'Entity must contain at least one invariant text child.',
-        ),
+        findingAt(entity, {
+          code: 'entity-invariant',
+          path: `node @${entityId}`,
+          message: 'Entity must contain at least one invariant text child.',
+        }),
       ];
 }

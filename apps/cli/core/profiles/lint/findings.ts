@@ -5,21 +5,22 @@
 import type { ProfileFinding } from '../../../contract/records/profiles.js';
 import type { Declaration } from './declarations.js';
 
+/** What a rule reports: its rule code, the declaration path it names and the message. */
+export type Report = Omit<ProfileFinding, 'span'>;
+
 /** One finding at the declaration's own span. */
 export function findingAt(
   declaration: Declaration,
-  path: string,
-  message: string,
+  report: Report,
 ): ProfileFinding {
-  return { path, message, span: declaration.span };
+  return { ...report, span: declaration.span };
 }
 
 /** One finding at a field's span, falling back to the declaration's. */
 export function fieldFinding(
   declaration: Declaration,
   name: string,
-  path: string,
-  message: string,
+  report: Report,
 ): ProfileFinding {
-  return { path, message, span: declaration.fields[name]?.span ?? declaration.span };
+  return { ...report, span: declaration.fields[name]?.span ?? declaration.span };
 }

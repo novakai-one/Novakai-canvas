@@ -4,12 +4,14 @@
  */
 import type { TransportResponse, createHeadlessBindings } from '@novakai/canvas-service';
 import type { Admission } from '@novakai/canvas-templates';
-export type { Collection } from '@novakai/canvas-model';
+export type { Collection, Mode } from '@novakai/canvas-model';
 export type {
+  Declaration,
   Language,
   ParsedSource,
   ResolvedResources,
   ResourceRequest,
+  Span,
 } from '@novakai/canvas-language';
 export type { InspectionReport, RenderDocument } from '@novakai/canvas-service';
 export type { Assets, StageInput, SupportedMedia } from '@novakai/canvas-assets';

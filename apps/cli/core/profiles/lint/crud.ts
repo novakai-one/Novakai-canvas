@@ -3,10 +3,7 @@
  * one CRUD table, with the fixed columns and one five-cell `<entity-id>-row` row per entity.
  * Pure; the findings are returned.
  */
-import type {
-  ProfileDeclarationIndex,
-  ProfileFinding,
-} from '../../../contract/records/profiles.js';
+import type { ProfileFinding } from '../../../contract/records/profiles.js';
 import {
   descendants,
   field,
@@ -14,13 +11,14 @@ import {
   shown,
   text,
   type Declaration,
+  type DeclarationIndex,
   type SyntaxValue,
 } from './declarations.js';
 import { fieldFinding, findingAt } from './findings.js';
 
 /** The ownership note must hold exactly one CRUD table; its columns and rows are checked. */
 export function crudFindings(
-  indexed: ProfileDeclarationIndex,
+  indexed: DeclarationIndex,
   ownership: Declaration,
   entityIds: readonly string[],
 ): ProfileFinding[] {
@@ -28,11 +26,11 @@ export function crudFindings(
   const [table] = tables;
   if (tables.length !== 1 || table === undefined)
     return [
-      findingAt(
-        ownership,
-        'section @ownership',
-        'Ownership must show one note containing exactly one CRUD table.',
-      ),
+      findingAt(ownership, {
+        code: 'crud-table',
+        path: 'section @ownership',
+        message: 'Ownership must show one note containing exactly one CRUD table.',
+      }),
     ];
   const rows = descendants(table, 'row');
   const expectedRows = new Set(entityIds.map((entityId) => `${entityId}-row`));
@@ -46,7 +44,7 @@ export function crudFindings(
 
 /** The tables inside the note nodes the ownership section shows. */
 function crudTables(
-  indexed: ProfileDeclarationIndex,
+  indexed: DeclarationIndex,
   ownership: Declaration,
 ): readonly Declaration[] {
   return shown(ownership).flatMap((objectId) => {
@@ -62,12 +60,11 @@ function columnFinding(table: Declaration): ProfileFinding[] {
   return validColumns(field(table, 'columns'))
     ? []
     : [
-        fieldFinding(
-          table,
-          'columns',
-          'table',
-          'CRUD table columns must be exactly Object, Create, Read, Update, Delete.',
-        ),
+        fieldFinding(table, 'columns', {
+          code: 'crud-columns',
+          path: 'table',
+          message: 'CRUD table columns must be exactly Object, Create, Read, Update, Delete.',
+        }),
       ];
 }
 
@@ -97,7 +94,13 @@ function rowIdFinding(
   expectedRows: ReadonlySet<string>,
 ): ProfileFinding[] {
   if (rowId !== undefined && expectedRows.has(rowId)) return [];
-  return [findingAt(row, rowLabel(rowId), 'CRUD rows must use one stable <entity-id>-row ID.')];
+  return [
+    findingAt(row, {
+      code: 'crud-row-id',
+      path: rowLabel(rowId),
+      message: 'CRUD rows must use one stable <entity-id>-row ID.',
+    }),
+  ];
 }
 
 /** A row must contain exactly five cells. */
@@ -108,7 +111,13 @@ function rowCellsFinding(
   const cells = field(row, 'cells');
   return Array.isArray(cells) && cells.length === 5
     ? []
-    : [fieldFinding(row, 'cells', rowLabel(rowId), 'CRUD rows must contain five cells.')];
+    : [
+        fieldFinding(row, 'cells', {
+          code: 'crud-cells',
+          path: rowLabel(rowId),
+          message: 'CRUD rows must contain five cells.',
+        }),
+      ];
 }
 
 /** The display path of a row whose id may be missing. */
@@ -125,7 +134,13 @@ function missingRowFindings(
   return [...expectedRows].flatMap((expectedRow) =>
     rows.some((row) => id(row) === expectedRow)
       ? []
-      : [findingAt(table, `row @${expectedRow}`, 'CRUD table is missing a row for an entity.')],
+      : [
+          findingAt(table, {
+            code: 'crud-missing-row',
+            path: `row @${expectedRow}`,
+            message: 'CRUD table is missing a row for an entity.',
+          }),
+        ],
   );
 }
 
@@ -137,11 +152,11 @@ function duplicateRowFindings(
   return [...countRowIds(rows).entries()].flatMap(([rowId, count]) =>
     count > 1
       ? [
-          findingAt(
-            rows.find((row) => id(row) === rowId) ?? table,
-            `row @${rowId}`,
-            'CRUD table must contain exactly one row for each entity.',
-          ),
+          findingAt(rows.find((row) => id(row) === rowId) ?? table, {
+            code: 'crud-duplicate-row',
+            path: `row @${rowId}`,
+            message: 'CRUD table must contain exactly one row for each entity.',
+          }),
         ]
       : [],
   );

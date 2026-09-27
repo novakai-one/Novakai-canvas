@@ -3,12 +3,15 @@
  * order the appendices number, mode and order correctly after the ownership section. Pure; the
  * findings are returned.
  */
-import type {
-  ProfileDeclarationIndex,
-  ProfileFinding,
-} from '../../../../contract/records/profiles.js';
+import type { ProfileFinding } from '../../../../contract/records/profiles.js';
 import { collectAppendices, type Appendix } from '../appendix-ids.js';
-import { order, sectionById, text, type Declaration } from '../declarations.js';
+import {
+  order,
+  sectionById,
+  text,
+  type Declaration,
+  type DeclarationIndex,
+} from '../declarations.js';
 import { fieldFinding, findingAt } from '../findings.js';
 
 /** The sequential appendix-check state: numbers seen and the running order anchor. */
@@ -20,7 +23,7 @@ type AppendixSequence = {
 };
 
 /** Appendix presence findings, then the sequential number, mode and order findings. */
-export function lintAppendixShape(indexed: ProfileDeclarationIndex): ProfileFinding[] {
+export function lintAppendixShape(indexed: DeclarationIndex): ProfileFinding[] {
   const appendices = collectAppendices(indexed.sections);
   return [
     ...appendixPresenceFinding(appendices.length, indexed.declaration),
@@ -35,11 +38,11 @@ function appendixPresenceFinding(
 ): ProfileFinding[] {
   return count === 0
     ? [
-        findingAt(
-          declaration,
-          'appendices',
-          'At least one @flow-5N, @sequence-5N or @state-5N appendix is required.',
-        ),
+        findingAt(declaration, {
+          code: 'missing-appendix',
+          path: 'appendices',
+          message: 'At least one @flow-5N, @sequence-5N or @state-5N appendix is required.',
+        }),
       ]
     : [];
 }
@@ -102,29 +105,30 @@ function duplicateNumberFinding(
 ): ProfileFinding[] {
   return numbers.has(appendix.number)
     ? [
-        fieldFinding(
-          appendix.section,
-          'id',
-          `section @${appendix.id}`,
-          'Appendix number is duplicated.',
-        ),
+        fieldFinding(appendix.section, 'id', {
+          code: 'duplicate-appendix-number',
+          path: `section @${appendix.id}`,
+          message: 'Appendix number is duplicated.',
+        }),
       ]
     : [];
 }
 
-/** Appendix numbers must strictly increase in id order. */
+/**
+ * Appendix numbers must strictly increase in id order. The appendices arrive sorted by number, so
+ * this fires only on a repeated number and carries `duplicate-appendix-number`.
+ */
 function increasingNumberFinding(
   appendix: Appendix,
   previous: number,
 ): ProfileFinding[] {
   return appendix.number <= previous
     ? [
-        fieldFinding(
-          appendix.section,
-          'id',
-          `section @${appendix.id}`,
-          'Appendix numbers must increase.',
-        ),
+        fieldFinding(appendix.section, 'id', {
+          code: 'duplicate-appendix-number',
+          path: `section @${appendix.id}`,
+          message: 'Appendix numbers must increase.',
+        }),
       ]
     : [];
 }
@@ -134,12 +138,11 @@ function appendixModeFinding(appendix: Appendix): ProfileFinding[] {
   return text(appendix.section, 'mode') === appendix.mode
     ? []
     : [
-        fieldFinding(
-          appendix.section,
-          'mode',
-          `section @${appendix.id}`,
-          `Appendix ID prefix requires mode ${appendix.mode}.`,
-        ),
+        fieldFinding(appendix.section, 'mode', {
+          code: 'appendix-mode',
+          path: `section @${appendix.id}`,
+          message: `Appendix ID prefix requires mode ${appendix.mode}.`,
+        }),
       ];
 }
 
@@ -152,11 +155,11 @@ function appendixOrderFinding(
   return current !== undefined && previous !== undefined && current > previous
     ? []
     : [
-        fieldFinding(
-          appendix.section,
-          'order',
-          `section @${appendix.id}`,
-          'Appendix order must be greater than the ownership order and strictly increasing.',
-        ),
+        fieldFinding(appendix.section, 'order', {
+          code: 'appendix-order',
+          path: `section @${appendix.id}`,
+          message:
+            'Appendix order must be greater than the ownership order and strictly increasing.',
+        }),
       ];
 }

@@ -20,28 +20,24 @@ export const buildSpecProfile: ProfileDescriptor = {
     {
       id: '@repo',
       order: 1,
-      required: true,
       modes: ['tree'],
       description: 'Repo tree with scoped NEW/CHANGE/REUSE labels.',
     },
     {
       id: '@entities',
       order: 2,
-      required: true,
       modes: ['er'],
       description: 'Entities with explicit fields and invariant text.',
     },
     {
       id: '@modules',
       order: 3,
-      required: true,
       modes: ['modules'],
       description: 'Interfaces and signatures reusing canonical repo objects.',
     },
     {
       id: '@ownership',
       order: 4,
-      required: true,
       modes: ['grid'],
       description: 'One Object/Create/Read/Update/Delete table row per entity.',
     },

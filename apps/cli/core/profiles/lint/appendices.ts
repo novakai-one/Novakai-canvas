@@ -2,16 +2,13 @@
  * Appendix-content rules of the build-spec profile: sequence appendices hold native events or
  * fragments; flow and state appendices show their native nodes and connect their native wires.
  */
-import type {
-  ProfileDeclarationIndex,
-  ProfileFinding,
-} from '../../../contract/records/profiles.js';
+import type { ProfileFinding } from '../../../contract/records/profiles.js';
 import { collectAppendices, type Appendix } from './appendix-ids.js';
-import { id, ids, shown, text, type Declaration } from './declarations.js';
+import { id, ids, shown, text, type Declaration, type DeclarationIndex } from './declarations.js';
 import { findingAt } from './findings.js';
 
 /** The content findings of every appendix section, in document order. */
-export function lintAppendices(indexed: ProfileDeclarationIndex): ProfileFinding[] {
+export function lintAppendices(indexed: DeclarationIndex): ProfileFinding[] {
   return collectAppendices(indexed.sections).flatMap((appendix) =>
     appendixContentFindings(appendix, indexed),
   );
@@ -20,7 +17,7 @@ export function lintAppendices(indexed: ProfileDeclarationIndex): ProfileFinding
 /** Sequence appendices and node appendices are checked differently. */
 function appendixContentFindings(
   appendix: Appendix,
-  indexed: ProfileDeclarationIndex,
+  indexed: DeclarationIndex,
 ): ProfileFinding[] {
   const mode = text(appendix.section, 'mode');
   return mode === 'sequence'
@@ -35,11 +32,11 @@ function sequenceAppendixFinding(appendix: Appendix): ProfileFinding[] {
   )
     ? []
     : [
-        findingAt(
-          appendix.section,
-          `section @${appendix.id}`,
-          'Sequence appendix must contain native event or fragment declarations.',
-        ),
+        findingAt(appendix.section, {
+          code: 'appendix-sequence-content',
+          path: `section @${appendix.id}`,
+          message: 'Sequence appendix must contain native event or fragment declarations.',
+        }),
       ];
 }
 
@@ -47,7 +44,7 @@ function sequenceAppendixFinding(appendix: Appendix): ProfileFinding[] {
 function nodeAppendixFindings(
   appendix: Appendix,
   mode: string | undefined,
-  indexed: ProfileDeclarationIndex,
+  indexed: DeclarationIndex,
 ): ProfileFinding[] {
   return [
     ...nativeNodesFinding(appendix, mode, shownNodesOf(appendix.section, indexed.nodes)),
@@ -75,11 +72,11 @@ function nativeNodesFinding(
   return nodes.some((node) => allowedKinds(mode).has(text(node, 'kind') ?? ''))
     ? []
     : [
-        findingAt(
-          appendix.section,
-          `section @${appendix.id}`,
-          `${mode} appendix must show native ${mode} objects.`,
-        ),
+        findingAt(appendix.section, {
+          code: 'appendix-native-nodes',
+          path: `section @${appendix.id}`,
+          message: `${mode} appendix must show native ${mode} objects.`,
+        }),
       ];
 }
 
@@ -102,11 +99,11 @@ function nativeWireFinding(
   return wires.some((wire) => nativeConnected(wire, connected, requiredKind(mode)))
     ? []
     : [
-        findingAt(
-          appendix.section,
-          `section @${appendix.id}`,
-          `${mode} appendix must connect native ${mode} wires.`,
-        ),
+        findingAt(appendix.section, {
+          code: 'appendix-native-wires',
+          path: `section @${appendix.id}`,
+          message: `${mode} appendix must connect native ${mode} wires.`,
+        }),
       ];
 }
 

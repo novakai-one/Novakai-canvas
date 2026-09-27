@@ -3,10 +3,7 @@
  * connected and have shown endpoints. Reachability from the root is checked in reachability.ts.
  * Pure; each rule returns its findings.
  */
-import type {
-  ProfileDeclarationIndex,
-  ProfileFinding,
-} from '../../../../contract/records/profiles.js';
+import type { ProfileFinding } from '../../../../contract/records/profiles.js';
 import {
   field,
   id,
@@ -16,12 +13,13 @@ import {
   shown,
   text,
   type Declaration,
+  type DeclarationIndex,
 } from '../declarations.js';
 import { fieldFinding, findingAt } from '../findings.js';
 import { reachabilityFindings } from './reachability.js';
 
 /** Root, wire and reachability findings for the repo tree section. */
-export function lintRepo(indexed: ProfileDeclarationIndex): ProfileFinding[] {
+export function lintRepo(indexed: DeclarationIndex): ProfileFinding[] {
   const section = sectionById(indexed.sections, 'repo');
   if (section === undefined) return [];
   const roots = section.children.filter((child) => child.kind === 'root');
@@ -52,7 +50,13 @@ function rootCountFinding(
   rootIds: readonly string[],
 ): ProfileFinding[] {
   return roots.length !== 1 || rootIds.length !== 1
-    ? [fieldFinding(section, 'id', 'section @repo', 'Tree section must declare one root.')]
+    ? [
+        fieldFinding(section, 'id', {
+          code: 'repo-root',
+          path: 'section @repo',
+          message: 'Tree section must declare one root.',
+        }),
+      ]
     : [];
 }
 
@@ -65,11 +69,11 @@ function rootShownFinding(
   const rootId = rootIds[0];
   return rootId !== undefined && !shownIds.has(rootId)
     ? [
-        findingAt(
-          section,
-          `section @repo root @${rootId}`,
-          'Tree root must be shown in the repo projection.',
-        ),
+        findingAt(section, {
+          code: 'repo-root-hidden',
+          path: `section @repo root @${rootId}`,
+          message: 'Tree root must be shown in the repo projection.',
+        }),
       ]
     : [];
 }
@@ -80,13 +84,19 @@ function wirePresenceFinding(
   count: number,
 ): ProfileFinding[] {
   return count === 0
-    ? [findingAt(section, 'section @repo', 'Tree section must show and connect parent wires.')]
+    ? [
+        findingAt(section, {
+          code: 'repo-wires',
+          path: 'section @repo',
+          message: 'Tree section must show and connect parent wires.',
+        }),
+      ]
     : [];
 }
 
 /** The parent-kind wires whose ids the repo section connects. */
 function repoParentWires(
-  indexed: ProfileDeclarationIndex,
+  indexed: DeclarationIndex,
   section: Declaration,
 ): readonly Declaration[] {
   const connected = new Set(
@@ -123,11 +133,11 @@ function wireFieldsFinding(
   return wireId !== undefined && source !== undefined && target !== undefined
     ? []
     : [
-        findingAt(
-          wire,
-          `wire @${wireId ?? '?'}`,
-          'Parent wire must have source and target objects.',
-        ),
+        findingAt(wire, {
+          code: 'repo-wire-endpoints',
+          path: `wire @${wireId ?? '?'}`,
+          message: 'Parent wire must have source and target objects.',
+        }),
       ];
 }
 
@@ -141,11 +151,11 @@ function wireEndpointsFinding(
 ): ProfileFinding[] {
   return endpointHidden(source, target, shownIds)
     ? [
-        findingAt(
-          wire,
-          `wire @${wireId ?? '?'}`,
-          'Parent wire endpoints must be shown in the repo projection.',
-        ),
+        findingAt(wire, {
+          code: 'repo-wire-hidden',
+          path: `wire @${wireId ?? '?'}`,
+          message: 'Parent wire endpoints must be shown in the repo projection.',
+        }),
       ]
     : [];
 }

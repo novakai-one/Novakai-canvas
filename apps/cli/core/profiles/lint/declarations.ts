@@ -1,17 +1,36 @@
 /*
- * Reading profile declarations: fields, references, ids, descendants, shown objects and orders.
- * Pure vocabulary; no rules live here.
+ * Reading profile declarations: the source's declaration index, fields, references, ids,
+ * descendants, shown objects and orders. Pure vocabulary; no rules live here.
  */
-import type { ProfileDeclaration } from '../../../contract/records/profiles.js';
+import type { Declaration, ParsedSource } from '../../../contract/records/foreign.js';
 
-/** One profile declaration. */
-export type Declaration = ProfileDeclaration;
+export type { Declaration };
+
+/** A full canvas document's declaration and its top-level sections, nodes and wires. */
+export interface DeclarationIndex {
+  readonly declaration: Declaration;
+  readonly sections: readonly Declaration[];
+  readonly nodes: readonly Declaration[];
+  readonly wires: readonly Declaration[];
+}
 
 /** A parsed field value: the profile AST stores values as unknown. */
 export type SyntaxValue = unknown;
 
 /** A reference field value: kind 'reference' with a string id. */
 export type Reference = { readonly kind: 'reference'; readonly id: string };
+
+/** The index of a full canvas document; undefined for any other source (a patch). */
+export function indexSource(source: ParsedSource): DeclarationIndex | undefined {
+  if (source.kind !== 'canvas') return undefined;
+  const declaration = source.declaration;
+  return {
+    declaration,
+    sections: declaration.children.filter((child) => child.kind === 'section'),
+    nodes: declaration.children.filter((child) => child.kind === 'node'),
+    wires: declaration.children.filter((child) => child.kind === 'wire'),
+  };
+}
 
 /** The raw value of a declaration's field, when present. */
 export function field(

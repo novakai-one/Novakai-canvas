@@ -33,11 +33,12 @@ function unreachableFinding(
   return reachable.has(objectId)
     ? []
     : [
-        findingAt(
-          section,
-          `section @repo show @${objectId}`,
-          'Every shown repo object must be connected to the declared root by parent wires.',
-        ),
+        findingAt(section, {
+          code: 'repo-unreachable',
+          path: `section @repo show @${objectId}`,
+          message:
+            'Every shown repo object must be connected to the declared root by parent wires.',
+        }),
       ];
 }
 

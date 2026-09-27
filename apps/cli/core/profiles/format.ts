@@ -1,9 +1,12 @@
 /*
- * Profile command text: the descriptor listing `profile describe` prints and the line each lint
- * finding prints as. Pure; nothing is read or written.
+ * Profile command text: the descriptor listing `profile describe` prints, the lint summary line
+ * and the line each lint finding prints as. Pure; nothing is read or written.
  */
-import type { ProfileFinding } from '../../contract/records/profiles.js';
+import type { ProfileFinding, ProfileLintResult } from '../../contract/records/profiles.js';
 import { buildSpecProfile } from './build-spec/descriptor.js';
+
+/** A lint result that is not `passed`: the `profile-structure` failure reports it. */
+type FailedLint = Exclude<ProfileLintResult, { readonly status: 'passed' }>;
 
 /** The build-spec@1 descriptor as `profile describe` prints it: commands, slots, conventions, notes. */
 export function displayDescriptor(): string {
@@ -26,7 +29,30 @@ export function displayDescriptor(): string {
   ].join('\n');
 }
 
+/** The one-line summary: passed, the issue count, or why the source cannot be linted. */
+export function lintSummary(result: ProfileLintResult): string {
+  if (result.status === 'failed')
+    return `build-spec@1 structural lint found ${result.findings.length} issue(s).`;
+  return fixedSummaries[result.status];
+}
+
+/** The summary of every outcome but `failed`, whose summary counts its findings. */
+const fixedSummaries: Readonly<Record<Exclude<ProfileLintResult['status'], 'failed'>, string>> =
+  Object.freeze({
+    passed: 'build-spec@1 structural lint passed.',
+    'unsupported-source': 'build-spec@1 requires a full canvas 1 document.',
+  });
+
+/**
+ * The `profile-structure` message: the summary, a line break, then one line per finding. An
+ * unsupported source has no findings, so its message ends with the line break.
+ */
+export function lintReport(result: FailedLint): string {
+  const findings = result.status === 'failed' ? result.findings : [];
+  return `${lintSummary(result)}\n${findings.map(findingLine).join('\n')}`;
+}
+
 /** One finding as `PROFILE <path> <line>:<column> <message>`. */
-export function findingLine(finding: ProfileFinding): string {
+function findingLine(finding: ProfileFinding): string {
   return `PROFILE ${finding.path} ${finding.span.start.line}:${finding.span.start.column} ${finding.message}`;
 }

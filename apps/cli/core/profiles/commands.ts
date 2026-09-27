@@ -4,10 +4,10 @@
  * returned as values; the caller prints them.
  */
 import { scaffoldBuildSpec } from './build-spec/starter.js';
-import { displayDescriptor, findingLine } from './format.js';
+import { displayDescriptor, lintReport, lintSummary } from './format.js';
 import { lintBuildSpec } from './lint/lint.js';
 import type { ProfileCommand } from '../../contract/records/command.js';
-import type { ProfileSource } from '../../contract/records/profiles.js';
+import type { ParsedSource } from '../../contract/records/foreign.js';
 import type { SemanticInputs } from '../../contract/ports/runtime.js';
 import type { LocalFiles } from '../../contract/ports/local-files.js';
 import type { FilePath } from '../../contract/brands.js';
@@ -66,14 +66,16 @@ async function lintFile(
   return lintParsedProfile(parsed.value);
 }
 
-/** The lint summary, or `profile-structure` listing every finding. */
-function lintParsedProfile(source: ProfileSource): Result<string> {
+/**
+ * The passed summary, or `profile-structure` with the summary and every finding. A patch source
+ * is `profile-structure` with no findings.
+ */
+function lintParsedProfile(source: ParsedSource): Result<string> {
   const result = lintBuildSpec(source);
-  return result.valid
-    ? success(result.summary)
-    : failure({
-        code: 'profile-structure',
-        message: `${result.summary}\n${result.findings.map(findingLine).join('\n')}`,
-        recovery: 'Fix the reported structural findings and rerun profile lint.',
-      });
+  if (result.status === 'passed') return success(lintSummary(result));
+  return failure({
+    code: 'profile-structure',
+    message: lintReport(result),
+    recovery: 'Fix the reported structural findings and rerun profile lint.',
+  });
 }

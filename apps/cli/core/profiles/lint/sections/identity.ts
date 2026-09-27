@@ -2,18 +2,15 @@
  * Section identity rules of the build-spec profile: section IDs are unique, and a section that
  * takes a required slot's ID uses one of that slot's modes. Pure; each rule returns its findings.
  */
-import type {
-  ProfileDeclarationIndex,
-  ProfileFinding,
-} from '../../../../contract/records/profiles.js';
+import type { ProfileFinding } from '../../../../contract/records/profiles.js';
 import { buildSpecProfile } from '../../build-spec/descriptor.js';
-import { id, text, type Declaration } from '../declarations.js';
+import { id, text, type Declaration, type DeclarationIndex } from '../declarations.js';
 import { fieldFinding } from '../findings.js';
 
 const reserved = new Map(buildSpecProfile.slots.map((slot) => [slot.id.slice(1), slot]));
 
 /** Duplicate-id and reserved-mode findings, tracked across the section list. */
-export function lintSectionIdentity(indexed: ProfileDeclarationIndex): ProfileFinding[] {
+export function lintSectionIdentity(indexed: DeclarationIndex): ProfileFinding[] {
   const seen = new Map<string, Declaration>();
   const findings: ProfileFinding[] = [];
   for (const section of indexed.sections) {
@@ -44,7 +41,13 @@ function duplicateFinding(
   sectionId: string,
 ): ProfileFinding[] {
   return seen.has(sectionId)
-    ? [fieldFinding(section, 'id', `section @${sectionId}`, 'Section ID is duplicated.')]
+    ? [
+        fieldFinding(section, 'id', {
+          code: 'duplicate-section',
+          path: `section @${sectionId}`,
+          message: 'Section ID is duplicated.',
+        }),
+      ]
     : [];
 }
 
@@ -58,14 +61,13 @@ function reservedModeFinding(
 ): ProfileFinding[] {
   const slot = reserved.get(sectionId);
   const mode = text(section, 'mode');
-  return slot !== undefined && mode !== undefined && !slot.modes.includes(mode)
+  return slot !== undefined && mode !== undefined && !slot.modes.some((allowed) => allowed === mode)
     ? [
-        fieldFinding(
-          section,
-          'mode',
-          `section @${sectionId}`,
-          `Required slot must use mode ${slot.modes.join(' or ')}.`,
-        ),
+        fieldFinding(section, 'mode', {
+          code: 'reserved-slot-mode',
+          path: `section @${sectionId}`,
+          message: `Required slot must use mode ${slot.modes.join(' or ')}.`,
+        }),
       ]
     : [];
 }

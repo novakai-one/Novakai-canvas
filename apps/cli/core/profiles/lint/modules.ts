@@ -2,15 +2,19 @@
  * Modules-section rule of the build-spec profile: the modules projection must show canonical
  * module/interface objects that the repo tree also shows.
  */
-import type {
-  ProfileDeclarationIndex,
-  ProfileFinding,
-} from '../../../contract/records/profiles.js';
-import { id, sectionById, shown, text, type Declaration } from './declarations.js';
+import type { ProfileFinding } from '../../../contract/records/profiles.js';
+import {
+  id,
+  sectionById,
+  shown,
+  text,
+  type Declaration,
+  type DeclarationIndex,
+} from './declarations.js';
 import { findingAt } from './findings.js';
 
 /** Every shown modules entry must be a canonical module or interface shown by the repo tree. */
-export function lintModules(indexed: ProfileDeclarationIndex): ProfileFinding[] {
+export function lintModules(indexed: DeclarationIndex): ProfileFinding[] {
   const repo = sectionById(indexed.sections, 'repo');
   const modules = sectionById(indexed.sections, 'modules');
   if (repo === undefined || modules === undefined) return [];
@@ -35,11 +39,12 @@ function moduleProjectionFinding(
   return isCanonicalModule(node, objectId, repoObjects)
     ? []
     : [
-        findingAt(
-          modules,
-          `section @modules show @${objectId}`,
-          'Modules must show canonical module/interface objects also shown by the repo tree.',
-        ),
+        findingAt(modules, {
+          code: 'module-projection',
+          path: `section @modules show @${objectId}`,
+          message:
+            'Modules must show canonical module/interface objects also shown by the repo tree.',
+        }),
       ];
 }
 
