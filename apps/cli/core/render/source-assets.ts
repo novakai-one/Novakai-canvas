@@ -7,7 +7,12 @@
  */
 import type { RenderEnvironment } from '../../contract/ports/render.js';
 import type { ResourceReader } from '../../contract/ports/resource-reader.js';
-import type { Catalog, Collection, ResourceRequest } from '../../contract/records/foreign.js';
+import type {
+  Catalog,
+  Collection,
+  ResourceRequest,
+  SupportedMedia,
+} from '../../contract/records/foreign.js';
 import type { RenderEvidence } from '../../contract/records/render-failure.js';
 import type { SourceFile } from '../../contract/records/source-file.js';
 import type { StagedResource } from '../../contract/records/staged-resource.js';
@@ -35,7 +40,7 @@ export interface AssetDependencies extends AdmissionDependencies {
 interface AssetEntry extends Credit {
   readonly id: string;
   readonly digest: PinnedDigest;
-  readonly mediaType: string;
+  readonly mediaType: SupportedMedia;
   readonly alt: string;
 }
 

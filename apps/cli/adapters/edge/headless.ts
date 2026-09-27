@@ -2,9 +2,10 @@
  * The headless render boundary: one read-only render runs in a temporary directory — admission,
  * lowering, projection, layout, export — and stored collections are never touched. The render
  * rules (themes, source, assets, collection, snapshot) live in core/render behind
- * contract/api.js and return Results; capability wiring lives in contract/render.js and the Export
- * stage in contract/render-export.js; file I/O, the temporary asset store and raster start-up are
- * injected (adapters/render/). This adapter owns the owner sequence and the RenderAbort boundary:
+ * contract/api.js and return Results; capability wiring lives in contract/render.js, the port
+ * those rules call in contract/render-environment.js and the Export stage in
+ * contract/render-export.js; file I/O, the temporary asset store and raster start-up are injected
+ * (adapters/render/). This adapter owns the owner sequence and the RenderAbort boundary:
  * accepted() unwraps each step and throws its evidence, renderHeadless converts it to a typed
  * failure, and the temporary directory is always removed.
  */
@@ -20,13 +21,9 @@ import {
   renderReport,
   renderSnapshot,
 } from '../../contract/api.js';
+import { renderEnvironment } from '../../contract/render-environment.js';
 import { exportSections } from '../../contract/render-export.js';
-import {
-  environment,
-  renderEnvironment,
-  renderJob,
-  type Environment,
-} from '../../contract/render.js';
+import { environment, renderJob, type Environment } from '../../contract/render.js';
 
 /**
  * Render every section of one collection to files, read-only.
