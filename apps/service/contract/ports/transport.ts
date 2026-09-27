@@ -1,6 +1,6 @@
 /*
- * The seams of the HTTP server (adapters/http/server.ts): the transport policy it asks for each
- * decision, the static files it serves and the bindings it is started with. Declarations only;
+ * The seams of the HTTP server (adapters/http/server.ts): the transport policy it asks for request
+ * decisions, the static files it serves and the bindings it is started with. Declarations only;
  * core/transport implements the policy and compose/serve.ts binds it. A refused request is the
  * caller's to correct and resend; Authoring owns commit and receipt recovery.
  */
@@ -27,8 +27,8 @@ import type {
 } from '../records/transport/server.js';
 
 /**
- * Every HTTP decision the server does not make itself (core/transport). The server only reads
- * sockets and writes what this policy answers.
+ * The request decisions core/transport makes for the server. The server keeps its socket limits,
+ * heartbeat, request order, fixed header tables, content types and status 200 for bytes and events.
  */
 export interface TransportPolicy {
   /** The untrusted head admission reads, from the method and the raw header lists. */

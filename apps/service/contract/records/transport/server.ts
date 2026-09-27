@@ -1,8 +1,9 @@
 /*
  * The HTTP server's startup options, its running handle, the file it sends as bytes, the answers
  * the transport policy gives the socket edge (which part answers a request, the HTTP status, the
- * browser grant) and the fixed response headers. Declarations only. A failed start leaves the
- * workspace with the caller, which closes it; clients reconcile a retained request's receipt.
+ * browser grant) and the fixed response headers. Declarations and fixed header constants. A
+ * failed start leaves the workspace with the caller, which closes it; clients reconcile a retained
+ * request's receipt.
  */
 import type { Result } from '../../errors.js';
 

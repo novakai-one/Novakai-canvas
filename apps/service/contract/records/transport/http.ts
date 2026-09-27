@@ -1,8 +1,8 @@
 /*
  * The HTTP ingress vocabulary: the authenticated caller, the raw and read request headers, the
  * server's security secrets, the ingress admission port, the body limit and the browser cookie
- * name. Declarations only. A refused request is the caller's to correct and resend; Authoring owns
- * commit and receipt recovery.
+ * name. Declarations and two fixed constants (body limit, cookie name). A refused request is the
+ * caller's to correct and resend; Authoring owns commit and receipt recovery.
  */
 import type { Result } from '../../errors.js';
 import type { Request } from '../capabilities.js';

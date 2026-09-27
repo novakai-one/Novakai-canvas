@@ -1,8 +1,10 @@
 /*
- * The node:http edge of the service: listen and close on IPv4 loopback, read request heads and
- * bodies, write JSON, bytes and server-sent events. Impure (sockets, timers). Every decision comes
- * from the injected `TransportPolicy`. A failed start leaves the workspace with the caller; a
- * request that throws answers `unavailable`, and its client reconciles the request's receipt.
+ * The node:http edge of the service. Impure (sockets, timers). `TransportPolicy` decides the
+ * request head, body, kind, query, status, envelope, browser access and event frames. Kept here:
+ * loopback listen and close, socket limits, heartbeat, request order, the contract's fixed header
+ * tables, the JSON content type, the `Content-Disposition` format and status 200 for bytes and
+ * events. A failed start leaves the workspace with the caller. A request that throws answers
+ * `unavailable`, and its client reconciles the request's receipt.
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { ServerBindings } from '../../contract/ports/transport.js';
