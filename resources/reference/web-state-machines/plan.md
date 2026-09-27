@@ -5,6 +5,7 @@
 | **What** | Replace `apps/web/adapters/sessions/workspace-session.ts` (1,746 lines) with pure state machines in `apps/web/core/` and one runner in `apps/web/adapters/`. |
 | **Code base** | `owners-base` @ `5571c7e`, read-only. |
 | **New work stacks on** | `origin/owners/delete-apps-tests`: the same web code with the apps tests deleted (checked: only `apps/web/tests/` differs). |
+| **Built** | P1–P8: #115, #131, #135, #138, #140, #143, #151, #154. Their "Plan corrections needed" are applied here (28 Sep). |
 | **Paths** | Under `apps/web/` unless they start with `capability/` or `apps/service/`. |
 | **Sources** | The code, four research inventories (types, session map, inventory, movement), designs A and B. No Codex plan file was used. |
 | **Tests** | None now (Chris, 27 Sep). Each PR is proven by a headless drive. Table tests are listed for later (§14). |
@@ -24,7 +25,7 @@
 9. Error codes
 10. Target file tree
 11. Behaviour kept
-12. Intentional changes and the 16 quirks
+12. Intentional changes and the 17 quirks
 13. PRs
 14. Tests (later)
 15. Corrections made while writing this plan
@@ -68,7 +69,7 @@
 | D5 | Machine state types live next to their machine in core. Types named by events, effects, ports or the view live in `contract/` (§5). The runner treats state as opaque. | Types sit with their owner (TS standard §1). Declaration files may not import core (`.dependency-cruiser.cjs`, `declarations-no-policy`). |
 | D6 | The view is split by feature: `DiagramView`, `JournalView`, `HistoryView`, `EditingView`, `SourceView`, `status`, `may` (§7.7). Each React feature gets its own view part and its own command set (§8.4). Stored `busy` flags are removed; "can I act now?" has one answer, `may`. | Today React reads `Pick` slices of one flat view and one 38-member controller (`library-react.ts:4-5`, `react-types.ts:42-51`), and `busy` sits beside `may`. |
 | D7 | Status text is derived. The notices machine stores only the problem slot and one status note. | Store each fact once. |
-| D8 | The library, panel, preference, inspector/wire and definition stores stay stores. They send through the journal. Inspector, wire and library get answers through waiters; definitions through one settle effect. | Smallest change. |
+| D8 | The library, panel, preference, inspector/wire and definition stores stay stores until the U-series. They send through the journal. Inspector, wire and library get answers through waiters; definitions through one settle effect. U32–U42 turn them into machines and delete the waiters. | Smallest change for M-series. |
 | D9 | `TransportGeneration` is a Service brand. `GestureId` is a Canvas brand, parsed by Canvas when a gesture begins. | Service mints the generation (`local-credentials.ts:102`). Canvas events carry gesture IDs (`react-types.ts:106,240`). |
 | D10 | The journal writes storage first, then posts when the write answers. Two effects; the decision between them is made in core. | One piece of I/O per executor; the policy is testable. |
 | D11 | The bridge (§8.5) lets old and new code run side by side. It has a written interface, a message table (which PR adds and removes each message) and a line budget. It is deleted in the last machine PR. | The app works after every PR. |
@@ -241,18 +242,18 @@ export interface IdSource {
 ```
 
 - `adapters/edge/ids.ts` (~90 lines) builds each value from `random()` and checks it with the owner's schema using `safeParse`, never `parse`. The only failure code is `id-unavailable`. The caller reports it and keeps its draft.
-- The web calls `crypto.randomUUID()` in exactly one place: `contract/compose/workspace.ts`. It passes `random` to `createIdSource` and to Canvas `nextGestureId`; Canvas parses that value itself.
+- The web calls `crypto.randomUUID()` in exactly one place: `cli/main.ts`, the browser entry (P3). It reaches composition as `BrowserGlobals.random` (`contract/ports/browser-globals.ts`). `contract/compose/workspace.ts` passes `random` to `createIdSource` and to Canvas `nextGestureId`; Canvas parses that value itself. Until B3b, `compose/features.ts` builds content IDs from `random` (P6).
 - ID text. All but the relationship ID match today's text, so stored drafts and records keep working:
 
 | ID | Text | Today |
 |---|---|---|
-| Request | `<uuid>` | same (`compose.ts:254,269`) |
+| Request | `<uuid>` | same (`compose/workspace.ts`; was `compose.ts:254,269`) |
 | Collection | `collection-<uuid>` | same (`workspace-session.ts:1046`) |
 | Section, object, group | `section-<uuid>`, `object-<uuid>`, `group-<uuid>` | same (`workspace-session.ts:200-202`) |
 | Relationship | `relationship-<uuid>` | `relationship-<gesture ID>` (`core/editing/connection/request.ts:69`); change I28 |
 | Definition | `definition-<uuid>` | same (`react/Definitions.tsx:58`) |
-| Content (descendant) | `content-<uuid>` | same (`compose/features.ts:79`) |
-| Folder | `folder-<uuid>` | same (`compose.ts:242`) |
+| Content (descendant) | `content-<uuid>` | same (`compose/features.ts`, from `random` since P6) |
+| Folder | `folder-<uuid>` | same (`compose/workspace.ts`; was `compose.ts:242`) |
 
 ---
 
@@ -270,7 +271,8 @@ Rule: a type named by an event, an effect, a port or the view is a declaration i
 | `ProjectedView`, `DiagramView`, `JournalView`, `PendingView`, `HistoryView`, `EditingView`, `SourceView` | `contract/records/workflow/view.ts` | React reads them. |
 | `Permission`, `Permissions`, `BlockReason` | `contract/records/workflow/permissions.ts` | React reads them. |
 | The command sets (`NavigationCommands` … `EditorSends`) and `WorkspaceController` | `contract/records/commands.ts`, `contract/records/workspace.ts` | React calls them (§8.4). |
-| `WorkflowDeps`, `RequestBuilders`, `HistoryPlan`, `RoutePreview` | `contract/ports/workflow-deps.ts` | Injected at composition. |
+| `WorkflowDeps`, `HistoryPlan`, `RoutePreview` | `contract/ports/workflow-deps.ts` | Injected at composition. |
+| `RequestBuilders`, `WorkspaceDecoders` | `contract/ports/request-builders.ts`, `contract/ports/workspace-decoders.ts` (P2a). M1 reshapes `RequestBuilders` to §6.0; no second port. | Seams an adapter implements. |
 | `ConnectionPolicy`, `IdGrammar` (moved from `core/editing/connection/types.ts`) | `contract/ports/connection-policy.ts` | `WorkflowDeps` names them; a port may not import core. |
 | `IdSource` | `contract/ports/ids.ts` | Facade and executors call it. |
 | `ExecutorHandles`, `CanvasHandles`, `BrowserHandles`, `StoreHandles`, `Waiters` | `contract/ports/executors.ts` | Compose passes them to executors (§8.6). |
@@ -1089,7 +1091,7 @@ export type FormsEvent =
 // AddGroupDraft: placement 'fixed' | 'find-room'
 
 // core/workspace/forms/state.ts
-export interface Capture { readonly base: Snapshot; readonly generation: TransportGeneration } // taken at first edit
+export interface Capture { readonly base: Snapshot; readonly generation: TransportGeneration } // taken at each edit (I33)
 export type Form<K extends FormKind> =
   | { readonly phase: 'empty' }
   | { readonly phase: 'editing'; readonly draft: DraftOf[K]; readonly capture: Capture }
@@ -1105,7 +1107,7 @@ export interface Forms { readonly forms: { readonly [K in FormKind]: Form<K> }; 
 
 | Form | Event | Guard | → | out |
 |---|---|---|---|---|
-| any, not locked | edited k | — | k editing{draft, capture ?? open diagram base} | note none |
+| any, not locked | edited k | — | k editing{draft, capture = open diagram base} (I33) | note none |
 | locked | edited / submitted / cancelled | — | same | — (view reason `form-locked`) |
 | empty / editing | submitted k | validation fails (`core/creation/validation.ts`) | same | note invalid |
 | empty / editing | submitted k fresh r | valid ∧ builder ok | sent{r} | send (origin add-form, generation captured) |
@@ -1394,7 +1396,7 @@ export interface WorkspaceView extends ProjectedView { readonly active: ActiveDi
 | `active.session`, `active.canvas` | attached by the facade from the scene executor; not state |
 
 - Removed: `busy`, `history.busy`, `creation.busy`. React asks `may` instead (D6).
-- Each React feature receives its own part: `LibraryBrowser` → `{connected, may.library}`; `CollectionChooser` → `diagram` + `may`; `HistoryControls` → `history` + `may.undo/redo`; `RequestRecovery` → `journal`; `MovementReview` → `editing.movementReview` + `may.chooseMove/applyMove/cancelMove`; `AddForms` → `editing.creation` + `may.addForms`; `SourceEditor` → `source` + `may.applySource`; `ObjectEditor`, `WireEditor`, `Definitions` → `may.applyEdits`. `contract/react-types.ts`, `library-react.ts` and `definitions-model.ts` stop building `Pick`s of one flat view (M33).
+- Each React feature receives its own part: `LibraryBrowser` → `{connected, may.library}`; `CollectionChooser` → `diagram` + `may`; `HistoryControls` → `history` + `may.undo/redo`; `RequestRecovery` → `journal`; `MovementReview` → `editing.movementReview` + `may.chooseMove/applyMove/cancelMove`; `AddTools` (the registered feature) → `editing.creation` + `may.addForms`, and each `AddForms` form gets its own form view (M23); `SourceEditor` → `source` + `may.applySource`; `ObjectEditor`, `WireEditor`, `Definitions` → `may.applyEdits`. `contract/react-types.ts`, `library-react.ts`, `definitions-model.ts` and `creation-react.ts` stop building `Pick`s of one flat view (M33).
 - `null` and `boolean` appear only in the view, as "nothing to draw" and derived flags kept for React. Stored state has none.
 
 Status (`view/status.ts`). The first matching row wins. Wording unchanged.
@@ -1640,7 +1642,8 @@ export interface LegacySession {
 ```ts
 // contract/ports/executors.ts (~60 lines)
 export interface CanvasHandles { readonly viewport: HTMLElement; openSession(input: SceneOpenInput): Result<CanvasSessionHandle>; }
-export interface BrowserHandles { readonly window: Pick<Window, 'addEventListener' | 'removeEventListener'> }
+/** Reuses the P3/P5 port (contract/ports/browser-globals.ts). Do not add a second window port. */
+export interface BrowserHandles { readonly window: BrowserGlobals['window'] }
 export interface StoreHandles {
   readonly panels: PanelController; readonly library: LibraryController;
   readonly editors: { readonly inspector: RetainedEditor; readonly wires: RetainedEditor; readonly definitions: DefinitionSession };
@@ -1652,8 +1655,13 @@ export interface ExecutorHandles {
   readonly navigation: WorkspaceNavigation; readonly stores: StoreHandles; readonly ids: IdSource;
   readonly waiters: Waiters; readonly legacy: LegacySession; // legacy: until M34
 }
-// contract/compose/workspace.ts
-interface WorkspaceParts { readonly element: HTMLElement; readonly client: ServiceClient; readonly panels: PanelController; readonly random: () => string }
+// contract/compose/workspace.ts (P3). random and now come from BrowserGlobals; only cli/main.ts reads the globals.
+interface WorkspaceParts {
+  readonly element: HTMLElement; readonly client: ServiceClient;
+  readonly panels: Pick<PanelController, 'restore' | 'open' | 'selectTab'>;
+  readonly retention: DraftRetention; readonly navigation: WorkspaceNavigation;
+  readonly random: () => string; readonly now: () => number;
+}
 
 // core/workspace/journal/*.ts: internal
 type EntryLookup = { readonly kind: 'found'; readonly entry: JournalEntry; readonly index: number } | { readonly kind: 'unknown' };
@@ -1751,24 +1759,30 @@ Consumers branch only on `origin` and `code`. The one comparison of message text
 
 ## 10. Target file tree (`apps/web`)
 
-`N` new · `C` changed · `M` moved · `D` deleted. The number is the expected line count. Nothing is over 300 after P7.
+`N` new · `C` changed · `M` moved · `D` deleted. The number is the expected line count; P1–P8 give the real count. Nothing is over 300 after P7.
 
 ```
+cli/main.ts C18 (P3: the one place that reads browser globals: window, storage, random, now)
 contract/
-  brands.ts N130 · errors.ts C130 · api.ts C230 · index.ts C40 · compose.ts C200
-  compose/workspace.ts N140 (deps, machine, runner, facade parts, handles; the bridge until M34) · compose/executors.ts N120
-  compose/movement-review.ts D (→ core/editing/gesture-plan.ts) · compose/features.ts C (content IDs from IdSource)
+  brands.ts N130 · errors.ts C130 · api.ts C234 (P8: header) · index.ts C40 · compose.ts C195 (P3: 271 → 184; P5, P6 wiring)
+  compose/workspace.ts N140 (P3: controller() moved, 115; then deps, machine, runner, facade parts, handles; the bridge until M34)
+  compose/executors.ts N120 · compose/panel-tabs.ts N37 (P3: side-panel tab text)
+  compose/movement-review.ts D (→ core/editing/gesture-plan.ts) · compose/features.ts C130 (P6: takes `random`; B3b: IdSource)
   ports/ids.ts N40 · ports/workflow-deps.ts N70 · ports/connection-policy.ts M30 (from core/editing/connection/types.ts)
-  ports/executors.ts N60 · ports/bridge.ts N40 (temporary, M1 → M34) · ports/workspace.ts C60 (WorkspaceBindings removed)
+  ports/executors.ts N60 · ports/bridge.ts N40 (temporary, M1 → M34) · ports/workspace.ts C60 (WorkspaceBindings removed, M34)
+  ports/browser-globals.ts N32 (P3; P5 widened `window`) · ports/draft-retention.ts N19 (P2a)
+  ports/workspace-decoders.ts N19 (P2a) · ports/request-builders.ts N57 (P2a; M1 reshapes it to §6.0)
   records/error-codes.ts N90 · records/failure-source.ts D · records/source.ts D
   records/submission.ts C50 (StoredSubmission, CarriedSnapshot) · records/workspace.ts C90 (WorkspaceView, WorkspaceController)
   records/commands.ts N110 (the command sets, §8.4)
   records/movement.ts C35 (MoveReview, MoveOptionKind and MoveOption.id deleted; builder inputs stay)
-  records/connection.ts C · records/creation.ts C (view types, PaletteDrop) · records/panels.ts C (P2a, B6b)
+  records/connection.ts C · records/creation.ts C (view types, PaletteDrop) · records/panels.ts C69 (P2a, B6b)
+  records/active-diagram.ts N14 (P2a) · records/editor-recovery.ts C55 (P2a: RecoveredSource) · records/wire-editor.ts C83 (P2a: EndpointChoice)
   records/workflow/ machine.ts N40 · events.ts N80 · effects.ts N150 · gate.ts N30 · view.ts N150 · permissions.ts N50
                     lifecycle.ts N40 · link.ts N30 · catalogue.ts N40 · journal.ts N130 · history.ts N40
                     source.ts N60 · notices.ts N50 · diagram.ts N110 · gesture.ts N60 · connection.ts N40 · forms.ts N70
-  panel-types.ts C (P2a: records → records/panels.ts) · library-react.ts C · react-types.ts C · definitions-model.ts C (M33: feature views)
+  panel-types.ts C66 (P2a: PanelController, PanelBindings only) · react-types.ts C134 (P5: shell slot and hook types)
+  creation-react.ts N94 (P6) · library-react.ts C · definitions-model.ts C (M33: feature views, creation-react.ts too)
 core/workspace/
   step.ts N30 · state.ts N60 · machine.ts N110 · contexts.ts N100 · finalize.ts N80
   lift/ lifecycle N50 · link N30 · catalogue N100 · journal N140 · history N30 · source N30 · diagram N110
@@ -1779,47 +1793,114 @@ core/workspace/
   source/ state N80 · source N130 · editing N110 · rebase N80
   notices/ state N40 · notices N110
   diagram/ state N110 · session N120 · children N110 · navigation N160 · render N140 · refresh N110
-           create N70 · ticket M60 (P8) · admission M130 (P8)
+           create N70 · ticket M48 · admission M145 (P8, moved as-is)
   gesture/ state N70 · gesture N120 · intake N120 · choices N140 · settle N110 · failures M80
   connection/ state N30 · connection N130      forms/ state N70 · forms N120 · submit N130
   rules/ gated-send N130 · permissions N140 · flags N60 · refusals N100 · stale-uncertainty N40
          history-release N70 · note-expiry N40 · refusal-classes N70
   view/ project N60 · diagram-view N130 · editing-view N110 · journal-view N90 · status N120
-  panel-state.ts C (P2a) · D: render/patches.ts, render/navigation.ts (→ diagram/), movement-review/{phases,types,outcome}.ts,
+  panel-state.ts C130 (P2a) · D: render/patches.ts, render/navigation.ts (→ diagram/), movement-review/{phases,types,outcome}.ts,
      status.ts, history-keys.ts (→ adapters/effects/browser.ts), history/journal.ts (→ rules/gated-send + history/navigable)
   C: session-reuse.ts (reusableSession and renderChanged stay; retainCamera → scene executor)
-core/panels/preferences.ts C (P2a) · core/inspector/endpoints.ts C (P2a)
+core/panels/preferences.ts C90 (P2a) · core/inspector/endpoints.ts C45 (P2a)
 core/editing/  N: gesture-plan.ts 130, module-move.ts 50 · C: plan.ts (duplicate/ancestor check; one change builder
                from capture/settling/sections.ts), connection/request.ts (IDs in), definition-request.ts (RequestId in),
                movement.ts (plain-move builder only)
                connection/types.ts C (ConnectionPolicy, IdGrammar → contract/ports) · palette-drop.ts C (type → records)
-               D: submissions.ts, connection/capture.ts · M: rearrange/materialize.ts → materialize 190 + acceptance 125 (P4)
+               D: submissions.ts, connection/capture.ts · M: rearrange/materialize.ts → materialize 220 + acceptance 110 (P4)
 core/creation/ N: validation.ts 120, changes.ts 150 (M21) · D: captures.ts, problem.ts, records.ts (M24) · C: drafts.ts, panel.ts
 adapters/
   runner/ runner.ts N140 · waiters.ts N50 · bridge.ts N≤120 (temporary, M2 → M34)
   effects/ service N140 · apply N100 · storage N120 · scene N150 · canvas-intake N90 · browser N110 · stores N110
   facade/ navigation N80 · journal N60 · history N40 · forms N80 · connection N50 · movement N50 · source N50
           editor-sends N90 · view N40
-  edge/ ids N90 · request-builders M150 · workspace-decoders M140 · export-artifact N40 · service-client C · browser-navigation C
+  edge/ ids N90 · request-builders N219 · workspace-decoders N162 (P3; workspace-inputs.ts D) · export-artifact N40
+        service-client C · browser-navigation C
   readers/submission-readers.ts C (RetainedEntry ↔ stored shape; restoredOrigin) · readers/{inspector,wire,definition,library}-reader.ts C (B2b, ER1)
   sessions/ D: workspace-session (1,746), submission-session, source-session, canvas-session
             kept: draft-retention, library-session C, panel-session, preference-session, retained-editor C, definition-session C
-  react/ AddTools C90 · AddForms N140 · AddFields N110 · WorkspaceShell C200 · ShellAlerts N70 · shell-hooks N70
+  react/ AddTools C129 · AddForms N184 · AddFields N89 (P6) · WorkspaceShell C224 · ShellAlerts N47 · shell-hooks N68 (P5)
          MovementReview, HistoryControls, RequestRecovery, SourceEditor, LibraryBrowser, ObjectEditor, WireEditor,
          CollectionChooser, Definitions C (feature views and `may`, CollectionId, ChoiceKind; drop await; Definitions stops minting)
-capability/canvas/adapters/react-flow/ (P7, B5)
-  interaction-handlers.ts C 358 → ~170 (selection, hover, composition) · geometry-gestures.ts N~130 (drag, resize, preview)
-  keyboard-commands.ts N~70 · gesture-ids.ts N~25 (B5: parses the host's random text into GestureId)
+capability/canvas/ (P7, B5)
+  adapters/react-flow/ interaction-handlers.ts C 358 → 198 (selection, hover, connections, viewport) · geometry-gestures.ts N175
+                       (drag, resize) · keyboard-commands.ts N60 · browser-bindings.ts N38 (from contract/compose.ts)
+                       gesture-ids.ts N~25 (B5: parses the host's random text into GestureId)
+  contract/interaction-parts.ts N67 (part types) · contract/compose.ts C 104 → 86
 capability/design-system/adapters/react/Dialog.module.css C (P1, +23 / -7)
 apps/service/contract/ brands.ts N25 · index.ts C · records/protocol.ts C · records/server.ts C (P2b)
 capability/layout/{core, contract/records} C (P2b: 7 cycle reports) · capability/export/contract/records/artifact.ts C (P2b: 2)
 ```
 
-- **Watch list (250–300 lines; no action unless touched):** `core/editing/preview/rules.ts` 285, `react/WireEditor.tsx` 267, `react/DefinitionExpression.tsx` 253. (`core/creation/records.ts` 296 is split in M21 and deleted in M24.)
-- **Over 300 today and touched:** `capability/canvas/adapters/react-flow/interaction-handlers.ts` 358. B5 changes its 5 `nextGestureId` call sites, so P7 splits it by responsibility first (moves only; Canvas tests must pass). Its `createInteractions` function alone is 246 lines (86–331).
+**U-series (after ER3; §13.2 U1–U42).** The rest of `apps/web`, re-homed by seam or feature. Paths are after U7.
+
+```
+README.md C (find-it table: task → folder; U7)
+contract/
+  types.ts M (was records/owners.ts) · schemas/installation.ts M (was records/installation.ts)
+  schemas/ editing-base M (was editor-recovery.ts) · lists N20 · object-draft N90 · wire-draft N80 · definition-draft N70
+           source-draft N35 · panel-preferences N35 (U11, U12; each typed z.ZodType<Record>)
+  records/ data only (U8): object-draft M (was inspector.ts) · wire-draft M (was wire-editor.ts)
+           definition-draft M (was definitions.ts) · canvas-edits M (was editing.ts; EditContext only)
+  records/workflow/ panels · preferences · library · drafts · definitions N (events; U32, U34, U36, U38, U40)
+  ports/ service M (was client.ts) · panels M (was panel-types.ts; D in U33)
+         object-inspector · wire-inspector · retained-editor · library · definitions · preferences N
+         (U8: session interfaces out of records; each D in its machine's wire PR)
+  react/ shell M (was react-types.ts) · library · creation · definitions · object-inspector · wire-inspector M (were *-react.ts)
+         design · header · panels (RegisteredSection, PanelSlots) · settings · failures N (U9)
+  api/ workspace · failures · panels · creation · object-inspector · wire-inspector · library · preferences · drafts N
+       definitions M (was definitions-model.ts) (U10; api.ts D)
+  compose/sessions.ts D (U39)
+core/
+  shared/results.ts M
+  failures/ display M (was output/diagnostics.ts) · messages N30 (U31: text by origin + code; no regex)
+  canvas-edits/ plan · targets · placements · regroup · routes M · capture/{boxes,pinning,scene} M
+                settle/{grow,stop-short,sections,types} M (was capture/settling)
+  movement/ movement · gesture-plan · module-move M · single-node N90 (U30)
+            intent/* M (was movement-intent) · expand/* M · rearrange/* M
+            preview/{completeness,geometry,indexing,measure,types} M · allowed N70 · grow-rules N75 · push-rules N95
+            stop-rules N55 (U13; rules.ts D)
+  connection/* M (was editing/connection)
+  creation/ palette-drop · group-creation M
+  definitions/ request M (was editing/definition-request) · state N · definitions N (machine, U40) · draft-lifecycle D (U42)
+  drafts/ keys N45 (the 3 draft-key functions) · base N80 · encode N90 (was recovery/editor-records; U14)
+          state N · drafts N (machine, U38)
+  inspector/object/ edits · content-edits N90 (U15) · selection · retain N15 (U14)
+  inspector/wire/ edits · changes N55 (U15) · selection · endpoints · retain N15 (U14; draft-commands D)
+  panels/ preferences · geometry N70 · visibility N60 (was workspace/panel-state; U16) · shell-layout M (was workspace/)
+          sections N30 (U18) · state N · panels N (machine, U32)
+  preferences/ defaults C · themes N40 (U26) · state N · preferences N (machine, U34)
+  library/ state N · library N · defaults N15 (machine, U36)
+  workspace/ machine.ts C (routes 5 more machines) · lift/{panels,preferences,library,drafts,definitions} N
+  D: editing/, output/, recovery/
+adapters/
+  browser/ host.tsx M · navigation M · environment M (was preferences/browser-preferences) · ids M (was edge/ids)
+           token-dimensions N40 · theme-scope N30 (U26) · download N25 (U25)
+  service/ client M · diagram-reader M · workspace-decoders M · export-artifact M · answers N (U2: receipt, applied answer)
+  storage/ local-retention M (was sessions/draft-retention) · panel-preferences M · object-drafts · wire-drafts · definition-drafts M
+           (were readers/{inspector,wire,definition}-reader) · journal-entries N · source-drafts N (U2)
+  authoring/requests M (was edge/request-builders) · language/printer N40 (U2) · layout/route-preview M · library/catalog-reader M
+  facade/ panels · preferences · library · drafts · definitions N · editor-sends D (U42)
+  effects/stores.ts D · runner/waiters.ts D (U42)
+  D: edge/, readers/, preferences/, sessions/ (panel, preference, library, retained-editor, definition sessions: U33–U41)
+  react/ shell/ · header/ · panels/ · library/ · add/ · navigation/ · export/ · definitions/ · object-inspector/
+         wire-inspector/ · connection/ · movement/ · requests/ · source/ · settings/ · failures/ · shared-styles/
+         (U6; each .module.css beside its component)
+         wire-inspector/ WireSection N45 · WireSelectionEditor N110 · connection/ConnectionForm N140 (U17; WireEditor D)
+         panels/ WorkspaceSidePanel C120 · SectionCustomizer N85 (U18)
+         definitions/ ExpressionEditor N160 · LiteralEditor N95 (U19; DefinitionExpression D)
+         failures/ FailureNotice N30 (U20) · shell/ShellAlerts.module.css N25 (U21)
+         library/LibrarySection N15 (U6: out of compose/features.ts)
+         shared-styles/ form.module.css M (was ObjectEditor.module.css) · navigation.module.css M (was Navigation.module.css)
+capability/model/contract/index.ts C (U23: objectKind, size, wire enums) · capability/layout/core/scene-in.ts C (U31)
+capability/design-system/cli/audit-styles.ts N (U22) · package.json C (`styles:audit`)
+```
+
+- **Watch list (250–300 lines; no action unless touched):** `core/editing/preview/rules.ts` 285 (split U13), `react/WireEditor.tsx` 267 (split U17), `react/DefinitionExpression.tsx` 253 (split U19). (`core/creation/records.ts` 296 is split in M21 and deleted in M24.)
+- **Over 300 and touched:** `capability/canvas/adapters/react-flow/interaction-handlers.ts` 358. P7 split it (moves only): 198 · 175 · 60. B5's 5 `nextGestureId` call sites now sit in 3 files (B5 row).
 - **Import matrix:**
-  - Core imports only `contract/records/*`, `contract/ports/*`, `brands.ts` and `errors.ts`.
-  - Adapters reach core only through `contract/api.ts` and compose.
+  - Core imports only `contract/records/*`, `contract/ports/*`, `brands.ts` and `errors.ts` (`types.ts` from U7).
+  - Adapters reach core only through `contract/api.ts` (`contract/api/*` from U10) and compose.
   - Declaration files import no core type (§5).
 
 ---
@@ -1880,7 +1961,7 @@ capability/layout/{core, contract/records} C (P2b: 7 cycle reports) · capabilit
 | 48 | A finished inverse holds the gate | history `restored-inverse` / sending | M20 |
 | 49 | History reads use a ticket; a failed read is not reported | history rows | M20 |
 | 50 | Create needs a snapshot; minted ID; opens after the receipt | diagram create / created; O2 | M17 |
-| 51 | Add forms: capture at first edit, lock, refused frees, uncertain keeps body, confirmed empties, new revision keeps | forms rows | M23 |
+| 51 | Add forms: capture at the last edit (I33), lock, refused frees, uncertain keeps body, confirmed empties, new revision keeps | forms rows | M23 |
 | 52 | Add validation (name; reused object exists and is not shown; group) | `forms/submit.ts` → `core/creation/records.ts` | M23 |
 | 53 | Palette: tree section refused; module added | forms `palette-dropped` | M23 |
 | 54 | Connection: begin checks, Inspect opens, edit clears the problem, retry reuses the request, dismissed → editing, confirmed closes | connection rows | M25 |
@@ -1892,7 +1973,7 @@ capability/layout/{core, contract/records} C (P2b: 7 cycle reports) · capabilit
 
 ---
 
-## 12. Intentional changes and the 16 quirks
+## 12. Intentional changes and the 17 quirks
 
 ### 12.1 Intentional changes
 
@@ -1930,8 +2011,15 @@ capability/layout/{core, contract/records} C (P2b: 7 cycle reports) · capabilit
 | I30 | A foreign or corrupt stored source draft makes the source editor read-only for the session, with the reason `stored-draft-kept` | typing was accepted, every save reported an error and Apply was refused (`source-session.ts:134-141, 212-223`) |
 | I31 | Move Apply is held by a request for the same collection or by undo/redo | any unrefused request in any collection held it (`movement-review/phases.ts:66-75`) |
 | I32 | The Add panel no longer repeats a refused add's text; the refusal shows in the problem bar only, and closing the bar clears it | the panel showed the refusal unless the bar showed the same text (`core/creation/problem.ts`, `AddTools.tsx:348-357`), so after the bar closed the panel still said why |
+| I33 | An Add form takes its capture at each edit, not the first (quirk 17; M22, driven in M23) | Object or Group draft → add a diagram → pick it → Add → "Choose an existing diagram." and nothing added (`core/creation/records.ts:146-171`, `contextIn`) → it is added |
+| I34 | With no diagram, the Group form shows its own note (U27) | Group showed the Object note: heading "Object", a second `id="add-object-title"` → heading "Group", `id="add-group-title"`, "Add a diagram before adding a group." |
+| I35 | Library organisation acts on the collection shown now (U28) | read `workspace.getSnapshot()` during render, so after a switch the folder and archive controls could act on the previous collection |
+| I36 | A definitions Apply answer for another workspace is ignored (U41) | a late answer acted on the new workspace's drafts |
+| I37 | A failed definitions settle write keeps the draft locked and shows the problem (U41) | the draft kept its request but its key unlocked |
+| I38 | A confirmed definitions Apply writes drafts once; a refused one reports once (U41; quirk 13) | written twice; reported twice |
+| I39 | A failed definitions restore writes nothing (U41) | later discard, Apply or settle wrote to the key `definitions.` |
 
-### 12.2 The 16 quirks
+### 12.2 The 17 quirks
 
 | # | Quirk | Decision |
 |---|---|---|
@@ -1947,10 +2035,11 @@ capability/layout/{core, contract/records} C (P2b: 7 cycle reports) · capabilit
 | 10 | Gate stays settling while history reads fail | KEEP: the next accepted snapshot rereads history; releasing on unknown status could allow an edit against a stale history view |
 | 11 | Any render clears the bar and dismisses refusals | FIX (I16) |
 | 12 | Stale uncertainty cleared only after Check or Retry | FIX (I19) |
-| 13 | Definition apply reports twice and writes twice | KEEP (store unchanged; later store track) |
+| 13 | Definition apply reports twice and writes twice | FIX in U41, the definitions machine (I38). Kept through the M-series (store unchanged). |
 | 14 | `confirmedGestures` leaks connection IDs | FIX (I24) |
 | 15 | Work continues after dispose | FIX (I20) |
 | 16 | AddTools keeps a second copy of form state | FIX (M23 deletes `useLocalCreation`) |
+| 17 | An Add draft keeps the collection from its first edit, so a diagram added later cannot be picked in it (#143; same on base) | FIX (I33): capture at each edit. The draft holds only names and choices, so a newer base loses nothing; Authoring still refuses a foreign conflict |
 
 ---
 
@@ -1961,47 +2050,47 @@ capability/layout/{core, contract/records} C (P2b: 7 cycle reports) · capabilit
 | Rule | Detail |
 |---|---|
 | Order | **One stack.** Every PR's base is the PR before it in §13.2, starting from `origin/owners/delete-apps-tests`. "Depends" names the code a PR needs; it is always earlier in the list. Nothing is rebased across branches. |
-| Size | Changed lines = insertions + deletions (`git diff --shortstat`); a move counts both ways. Target ≤ 600. Estimates are written `+added / −removed`. The PR body gives the real numbers. |
+| Size | Changed lines = insertions + deletions (`git diff --shortstat`); a move counts both ways. Target ≤ 600. Estimates are written `+added / −removed`. The PR body gives the real numbers. An overage is accepted when the change cannot be split without breaking the app (lead, 28 Sep). A pure-rename PR (U1, U3–U7) is sized by `git diff -M --shortstat` (edited lines only); its estimate also gives the files and lines renamed, and the body gives both counts (P8 precedent). |
 | Commands | `pnpm typecheck` · `pnpm architecture` · `pnpm exec eslint apps/web` (0 errors) · `pnpm exec prettier --check <touched>` · `wc -l <touched>` (report anything over 300) |
-| Score | 16-principle score > 144/160 on every changed file, by the review ritual in `docs/standards/CODING-STANDARDS.md` ("Review ritual"; manual; scores go in the PR body). `workspace-session.ts` and the bridge files cannot pass while they are being removed (SRP 0 for a god module); default: exempt them and apply the shrink rule instead (§8.5). Open decision §16 Q2. |
-| Capability PRs | When a capability is touched: `pnpm exec vitest run capability/<name>`; add no new failures. P1 design-system · P2b layout, export · P7, B5, M28b canvas · B1, B3a, B3b model · B3a library. `apps/service` has no tests: `pnpm dev` boots and `curl` answers (P2b, B1, B2b, ER1). |
+| Score | 16-principle score > 144/160 on every file a PR changes in substance, by the review ritual in `docs/standards/CODING-STANDARDS.md` ("Review ritual"; manual; scores go in the PR body). `workspace-session.ts` and the bridge files are exempt until M34; the shrink rule applies instead (§8.5, §16 Q2). **G1 (lead, 28 Sep):** a file a PR only moves, re-points imports in, or moves types into or out of keeps its baseline score and may stay ≤ 144 until its named fixing PR. The body lists each such file with its score and fixing PR. A file with no fixing PR in this plan is reported to the lead, who adds one. Known files and fixing PRs: §16 G1. |
+| Capability PRs | When a capability is touched: `pnpm exec vitest run capability/<name>`; add no new failures. P1, U21, U22 design-system · P2b layout, export · U31 layout · P7, B5, M28b canvas · B1, B3a, B3b, U23 model · B3a library. `apps/service` has no tests: `pnpm dev` boots and `curl` answers (P2b, B1, B2b, ER1). |
 | Headless smoke | `pnpm --filter @novakai/canvas-web build` → `pnpm dev --port <appPort> --workspace <scratch copy>` → `NVK_BROWSE_PORT=<port> node ~/.agents/browse/browse.mjs goto\|click\|type\|press\|shot\|text\|eval\|close`. Shot names start with the slug. Click every changed control, read the screenshots, then close the browser and stop the server. |
-| Moves and splits (P PRs in `apps/`) | Body states: "Spec skipped: Chris approved skipping the spec for /apps re-homing and file splits (27 Sep)." P7 is a Canvas split: its body states "moves only" and gives the Canvas test result instead. |
-| Core PRs | Add new pure files next to the live ones. They do not change or delete any file the running session uses; the switch and the deletes happen in the wire PR. The app is unchanged; the smoke is "the app loads and opens a diagram". |
-| Wire PRs | Drive the §11 rows marked "Driven in" this PR, and list in the body the core table rows the drive exercised. List the bridge rows added and removed (§8.5). Give `wc -l workspace-session.ts` before and after. |
+| Moves and splits (P and U PRs in `apps/`) | Body states: "Spec skipped: Chris approved skipping the spec for /apps re-homing and file splits (27 Sep)." P7 is a Canvas split: its body states "moves only" and gives the Canvas test result instead. |
+| Core PRs (M and U `-core`) | Add new pure files next to the live ones. They do not change or delete any file the running session uses; the switch and the deletes happen in the wire PR. The app is unchanged; the smoke is "the app loads and opens a diagram". |
+| Wire PRs | Drive the §11 rows marked "Driven in" this PR, and list in the body the core table rows the drive exercised. List the bridge rows added and removed (§8.5). Give `wc -l workspace-session.ts` before and after. U `-wire` PRs drive their row's headless check and give the deleted session's `wc -l`. |
 | PR body | **What** / **Why** / **Decisions** / **Verified** (commands + results; UI as "click X → Y") / **Not verified**. Ends with the Claude Code line. Commits end with the Co-Authored-By line. |
 
 ### 13.2 PR list (in stack order)
 
 | # | Slug | One change | Main files | +added / −removed | Depends | Headless check | Achieves |
 |---|---|---|---|---|---|---|---|
-| P1 | web-css-tokens | Branch exists (`owners/web-css-tokens`: 5a0fcd6, 275cf40). Rebase and open. | web CSS; `capability/design-system/adapters/react/Dialog.module.css` (+23 / −7); 1 line in CollectionChooser.tsx | +110 / −30 | — | DS audit: 0 violations, tokenRatio ≥ 0.95. Open chooser → pending strip visible; Add hints muted; Source focus ring | DoD12 |
-| P2a | web-type-cycles | Fix the 14 web cycle reports and 3 core-direction breaks that type-only imports hide: record types that ports hold move to records; panel-types records → records/panels.ts; fix `core/inspector/endpoints.ts`. Flag stays off. | ports/workspace.ts, records/*, panel-types.ts, core/workspace/panel-state.ts, core/panels/preferences.ts, core/inspector/endpoints.ts | +160 / −140 | — | app loads | DoD6 |
+| P1 · built #115 | web-css-tokens | Stylesheet token and layer fixes: 3 undefined tokens, AddTools in `@layer components`, raw sizes → tokens; chooser height owned by Dialog | web CSS (AddTools, CollectionChooser, MovementReview, SourceEditor, ExportPanel); `capability/design-system/adapters/react/Dialog.module.css` (+23 / −7); 1 line in CollectionChooser.tsx | real +112 / −57 | — | DS audit: 0 violations, tokenRatio ≥ 0.95 on touched sheets. Open chooser → pending strip visible; Add hints muted; Source focus ring. 4 untouched sheets still fail (CollectionLibrary, RequestRecovery, WorkspaceHeader, WorkspaceShell) → U21, U22 | DoD12 |
+| P2a · built #131 | web-type-cycles | Fix the 14 web cycle reports and 3 core-direction breaks that type-only imports hide. `DraftRetention`, `WorkspaceDecoders`, `RequestBuilders` → own ports; `ActiveDiagram` → own record; panel records → records/panels.ts; `EndpointChoice` → records/wire-editor.ts; `panel-state.ts` reuses `sectionsOnSide`. Flag stays off. | ports/{workspace,draft-retention,workspace-decoders,request-builders}.ts, records/{active-diagram,panels,wire-editor,editor-recovery,…}.ts, panel-types.ts, core/workspace/panel-state.ts, core/panels/preferences.ts, core/inspector/endpoints.ts, ViewMenu.tsx; 46 files | real +289 / −194 | — | app loads; open a diagram; View → canvas tools, source editor; default Browse and Inspect sections | DoD6 |
 | P2b | type-import-gate | Fix the other 11 cycle reports (2 service, 7 layout, 2 export), then set `tsPreCompilationDeps: true` | .dependency-cruiser.cjs, apps/service/contract/records/{server,protocol}.ts, capability/layout/{core,contract/records}, capability/export/contract/records/artifact.ts | +160 / −140 | P2a | app loads; `pnpm dev` boots | DoD6 |
-| P3 | web-compose-split | `controller()` → compose/workspace.ts; workspace-inputs → request-builders + workspace-decoders | compose.ts, edge/* | +190 / −190 (moves) | — | open a diagram | DoD1 |
-| P4 | web-materialize-split | materialize.ts → materialize + acceptance | core/editing/rearrange/ | +165 / −165 (moves) | — | drag a module past its edge → choices appear | DoD1 |
-| P5 | web-shell-split | Hooks → shell-hooks.ts; ProblemBar and StatusBar → ShellAlerts.tsx | react/WorkspaceShell* | +165 / −165 (moves) | — | problem bar shows and dismisses; status bar text | DoD1 |
-| P6 | web-add-tools-split | AddTools → AddTools / AddForms / AddFields (move only) | react/AddTools* | +190 / −190 (moves) | — | type in every Add field; Add diagram, object, group | DoD1 |
-| P7 | canvas-interactions-split | `interaction-handlers.ts` (358) by responsibility: geometry gestures and keyboard commands move out (moves only) | capability/canvas/adapters/react-flow/{interaction-handlers, geometry-gestures, keyboard-commands}.ts | +220 / −200 (moves) | — | drag a node → Saved; arrow keys move a selected node; hover highlights | DoD1, DoD10 |
-| P8 | web-render-move | `render/ticket.ts`, `render/admission.ts` → `diagram/` (moves, imports updated) | core/workspace/{render,diagram}/, api.ts | +200 / −195 (moves) | — | open a diagram; chooser switch | DoD1 |
+| P3 · built #135 | web-compose-split | `controller()` → compose/workspace.ts; workspace-inputs → request-builders + workspace-decoders (one `browserRequest()`); `startWeb(element, globals)` takes the new `BrowserGlobals` port, so `cli/main.ts` is the one place that reads browser globals; tab text → compose/panel-tabs.ts | compose.ts, compose/{workspace,panel-tabs}.ts, ports/browser-globals.ts, edge/{request-builders,workspace-decoders}.ts (workspace-inputs.ts D), cli/main.ts | real +601 / −409 | — | open a diagram; Add module; Undo; Library folder; source draft survives reload; theme survives reload | DoD1 |
+| P4 · built #138 | web-materialize-split | materialize.ts → materialize (first preview → placements, 220) + acceptance (second preview agrees, 110) | core/editing/rearrange/ | real +115 / −96 | — | drag a module to open space inside its section → choices appear → Apply → Saved | DoD1 |
+| P5 · built #140 | web-shell-split | Hooks → shell-hooks.ts and ProblemBar, StatusBar → ShellAlerts.tsx, both reaching the shell as slots (adapters may not import adapters); hooks read `BrowserGlobals.window`; prop and hook types → react-types.ts. CSS stays in WorkspaceShell.module.css (follow-up U21) | react/{WorkspaceShell,ShellAlerts}.tsx, react/shell-hooks.ts, contract/{compose,react-types}.ts, ports/browser-globals.ts | real +177 / −110 | — | problem bar shows, Technical details, dismisses; status bar text; Hide interface → Escape reveals | DoD1 |
+| P6 · built #143 | web-add-tools-split | AddTools → AddTools / AddForms / AddFields, as slots; AddTools takes `CreationCommands`, not the whole controller; compose/features.ts takes named parts incl. `random` | react/{AddTools,AddForms,AddFields}.tsx, contract/creation-react.ts (N), compose/features.ts, compose.ts, ports/browser-globals.ts | real +442 / −273 (overage: field helpers became components) | — | type in every Add field; Add diagram, object, group; lock while adding; refused add unlocks | DoD1 |
+| P7 · built #151 | canvas-interactions-split | `interaction-handlers.ts` (358) by responsibility: geometry gestures and keyboard commands move out; part types → contract/interaction-parts.ts; browser helpers leave compose.ts (moves plus same-behaviour dedupes for the score gate) | capability/canvas/adapters/react-flow/{interaction-handlers,geometry-gestures,keyboard-commands,browser-bindings}.ts, contract/{interaction-parts,compose}.ts, tests/react-bindings.test.tsx | real +450 / −285 (overage) | — | drag a node → Saved; Escape mid-drag → nothing saved; arrow keys select; Alt+arrow moves → Saved; resize → Saved; hover highlights; Canvas tests 15 pass, 1 fails as on base | DoD1, DoD10 |
+| P8 · built #154 | web-render-move | `render/ticket.ts`, `render/admission.ts` → `diagram/` (moves, imports updated; JSDoc names `render-input-changed`); api.ts header | core/workspace/{render,diagram}/, api.ts | real +204 / −198 (+13 / −7 rename-detected) | — | open a diagram; chooser switch; CLI replace → diagram updates; bundle byte-identical to P7 | DoD1 |
 | B1 | web-brands-foundation | brands.ts (no GestureId), IdSource, edge/ids.ts, Service `TransportGeneration` brand and runtime schema, Model type exports; no consumers | contract/brands.ts, ports/ids.ts, edge/ids.ts, apps/service/contract/{brands,index}.ts, model index | +330 / −10 | P2b | app loads; `pnpm dev` boots | DoD4 |
-| ER1 | web-error-codes | Closed `WebErrorCode`; owner-keyed `Diagnostic`; `foreignFailure(owner, source)`; `library-changed`; failure-source copy deleted; `owner` moves out; service index exports `OperationSource` | errors.ts, error-codes.ts, service index, service-client.ts, library-reader.ts, library-session.ts, ~40 non-literal call sites | +330 / −140 | B1 | refused add (duplicate name) → bar shows the same text; Library edit on a changed library → `library-changed` text | DoD4 |
+| ER1 | web-error-codes | Closed `WebErrorCode`; owner-keyed `Diagnostic`; `foreignFailure(owner, source)`; `library-changed`; failure-source copy deleted; `owner` moves out; service index exports `OperationSource`; `admission.ts` returns `RenderCode` (G1 fix) | errors.ts, error-codes.ts, service index, service-client.ts, library-reader.ts, library-session.ts, core/workspace/diagram/admission.ts, panel-types.ts, ~40 non-literal call sites | +340 / −150 | B1 | refused add (duplicate name) → bar shows the same text; Library edit on a changed library → `library-changed` text | DoD4 |
 | B2a | web-brand-workspace | WorkspaceId through records, readers and panel preferences; `''` placeholders → phases | ~22 files | +140 / −110 | ER1 | reload → panels and drafts restore | DoD4 |
 | B2b | web-brand-generation | TransportGeneration through web and service; stored generations parsed with Service's schema by the 7 readers (§4.1 row 1); `''` → `'unread'` | ~25 files + service/cli literals | +200 / −170 | B2a | stop and restart the service → diagram rerenders; reload with an inspector draft → it restores | DoD4 |
 | B3a | web-brand-collection | CollectionId, FolderId, cursor and time aliases; URL and recovery readers | ~25 | +160 / −140 | B2b | open by URL; Library new folder | DoD4 |
-| B3b | web-brand-model-ids | Section, object, group, relationship, definition, content IDs; Definitions.tsx and features.ts stop minting | ~21 | +140 / −120 | B3a | Definitions → New → it appears; add a content block in the inspector | DoD4 |
+| B3b | web-brand-model-ids | Section, object, group, relationship, definition, content IDs; Definitions.tsx stops minting; features.ts takes `IdSource.descendantId()` instead of `random` (P6); api.ts loses `definitionDraftId` (G1 fix); `TargetSection` in creation-react.ts follows the form views' section type | ~22 incl. contract/creation-react.ts, contract/api.ts, compose/features.ts | +170 / −140 | B3a | Definitions → New → it appears; add a content block in the inspector | DoD4 |
 | B4 | web-brand-request | RequestId, ActorId, PlannerId; `ReadVersion` as an owner record; delete unused editing types. The session mints each Canvas send's request ID (I2 early); the 3 lookups match on the stored `gesture` | ~16 + workspace-session.ts | +220 / −180 | B3b | stop the service → Add object → Recovery shows it uncertain → start the service → Check → `No receipt found…` → Retry → Saved; drag a node → Saved | DoD4, DoD9 |
-| B5 | canvas-gesture-id | Canvas `GestureId` brand; Canvas parses at gesture begin in `gesture-ids.ts`; the web re-exports the type; canvas test fixtures compile | capability/canvas contract, gesture-ids.ts, the 5 call sites, fixtures; contract/brands.ts | +150 / −100 | B4, P7 | drag a node → Saved; drag a module off its edge → choices | DoD4, DoD10 |
+| B5 | canvas-gesture-id | Canvas `GestureId` brand; Canvas parses at gesture begin in `gesture-ids.ts`; the web re-exports the type; canvas test fixtures compile. The 5 call sites (after P7): `geometry-gestures.ts` startDrag, beginResize; `keyboard-commands.ts` keyboard; `interaction-handlers.ts` connect, nextId. `moved.id` and `livePreview(id)` become `GestureId`. The parts get it through `Pick<InteractionOwners, 'nextGestureId'>`: no edit to interaction-parts.ts | capability/canvas contract, react-flow/{gesture-ids,interaction-handlers,geometry-gestures,keyboard-commands}.ts, fixtures; contract/brands.ts | +150 / −100 | B4, P7 | drag a node → Saved; drag a module off its edge → choices | DoD4, DoD10 |
 | B6a | web-brand-draft-keys | Draft-key brands; RetentionSlot; readers reject a mismatched key | ~16 | +200 / −150 | B5 | inspector edit survives reload | DoD4 |
 | B6b | web-brand-panels-source-edit | PanelSectionId union; SourceEdit brand | ~9 | +110 / −90 | B6a | Customize panels → hide / show; source edit survives reload | DoD4 |
-| M1 | web-workflow-records | Records and ports only: machine, events (commandKeys), effects (lifecycle, browser, bridge families; `Executor`), view and permissions skeletons, lifecycle records; ports workflow-deps, bridge, connection-policy (moved) | records/workflow/{machine,events,effects,view,permissions,lifecycle}.ts, ports/{workflow-deps,bridge,connection-policy}.ts, core/editing/connection/types.ts | +330 / −30 | B6b, P3 | app loads | DoD5 |
+| M1 | web-workflow-records | Records and ports only: machine, events (commandKeys), effects (lifecycle, browser, bridge families; `Executor`), view and permissions skeletons, lifecycle records; ports workflow-deps, bridge, connection-policy (moved); reshape `RequestBuilders` (P2a port) to §6.0 | records/workflow/{machine,events,effects,view,permissions,lifecycle}.ts, ports/{workflow-deps,bridge,connection-policy,request-builders}.ts, core/editing/connection/types.ts | +350 / −40 | B6b, P3 | app loads | DoD5 |
 | M2 | web-runner | Runner; root machine with lifecycle `started` / `disposed`; step, state, contexts, finalize, `view/project.ts` and `rules/permissions.ts` with no rows yet; bridge adapter skeleton; compose builds runner and session side by side; core-purity lint (`no-restricted-globals`, `Date.now`) and ticket-import lint | adapters/runner/{runner,bridge}.ts, core/workspace/{machine,state,step,contexts,finalize}.ts, lifecycle/*, view/project.ts, rules/permissions.ts, compose/workspace.ts, eslint.config.js | +560 / −20 | M1 | app loads; open a diagram | DoD2 |
 | M3 | web-journal-records | Journal and gate records; `RefusedCode`, `Refusal`; apply and journal-storage effects; `classifyApply` and the refusal tables | records/workflow/{journal,gate}.ts, effects.ts, rules/refusal-classes.ts | +270 / −0 | M2 | app unchanged | DoD3 |
 | M4 | web-journal-core | Journal send path: state, update, send, entries; `sendReadiness` + `gatedSend`; J3 lint with the `syntax()` helper | journal/{state,journal,send,entries}.ts, rules/gated-send.ts, eslint.config.js | +520 / −0 | M3 | app unchanged | DoD3 |
 | M5 | web-journal-recovery-core | Answers, Check, Retry, Dismiss, restore, autoCheck | journal/{answers,recovery,restore}.ts | +320 / −0 | M4 | app unchanged | DoD3 |
 | M6 | web-journal-executors | Apply and storage (journal part) executors, reader `RetainedEntry` mapping and `restoredOrigin`, waiters, compose/executors.ts; unwired | effects/{apply,storage}.ts, readers/submission-readers.ts, runner/waiters.ts, compose/executors.ts, ports/executors.ts | +330 / −10 | M5 | app unchanged | DoD3 |
 | M7 | web-journal-wire | lift/journal (owner rows as `legacy-settled`); the session sends through the runner; journal view part and Check / Retry / Dismiss permissions; facade/journal (Check, Retry, Dismiss); delete submission-session.ts | lift/journal.ts, bridge, view/journal-view.ts, facade/journal.ts, workspace-session.ts | +250 / −350 | M6 | Add object → Saved; stop the service → Add object → Recovery shows uncertain → start the service → Check → `No receipt found…` → Retry → Saved; refused add → bar → close → form unlocks | DoD3, DoD8 |
-| M8 | web-notices | Notices machine; F1, F2, F3, F6; session `report` and panel reports → events; problem part of the view | notices/*, records/workflow/notices.ts, rules/{refusals,stale-uncertainty,note-expiry}.ts, finalize.ts, facade/journal.ts, compose.ts (panel `reportPanel`), workspace-session.ts | +420 / −60 | M7 | two refused adds → only the newer is listed; close bar → both gone; a panel-preference problem survives opening another diagram | DoD5, DoD8 |
+| M8 | web-notices | Notices machine; F1, F2, F3, F6; session `report` and panel reports → events (`PanelBindings.report` takes a `Diagnostic`; G1 fix of panel-types.ts with ER1); problem part of the view | notices/*, records/workflow/notices.ts, rules/{refusals,stale-uncertainty,note-expiry}.ts, finalize.ts, facade/journal.ts, compose.ts (panel `reportPanel`), panel-types.ts, workspace-session.ts | +430 / −70 | M7 | two refused adds → only the newer is listed; close bar → both gone; a panel-preference problem survives opening another diagram | DoD5, DoD8 |
 | M9 | web-startup-core | Link (stream phase + reach), lifecycle rows, their records and lifts | link/*, lifecycle/lifecycle.ts, records/workflow/{link,catalogue}.ts, lift/{link,lifecycle}.ts | +350 / −0 | M8 | app unchanged | DoD8 |
 | M10 | web-catalogue-core | Catalogue and its lift | catalogue/*, lift/catalogue.ts, contexts.ts | +250 / −0 | M9 | app unchanged | DoD8 |
 | M11 | web-startup-executors | Service reads and stream, browser (location, keys), stores executors; unwired | effects/{service,browser,stores}.ts | +320 / −0 | M10 | app unchanged | DoD2 |
@@ -2015,8 +2104,8 @@ capability/layout/{core, contract/records} C (P2b: 7 cycle reports) · capabilit
 | M19 | web-history-core | History machine (new files; `history/gate.ts` untouched); F4 | records/workflow/history.ts, history/{state,history,navigable}.ts, rules/history-release.ts, lift/history.ts | +350 / −0 | M18 | app unchanged | DoD8 |
 | M20 | web-history-wire | read-history; keys handle → facade; Retry gated; history/gate.ts changes; history/journal.ts deleted; HistoryControls reads `may` | service part, facade/history.ts, permissions, HistoryControls.tsx, history/{gate,journal}.ts, workspace-session.ts | +160 / −290 | M19 | Undo / Redo buttons; Cmd+Z / Shift+Cmd+Z; buttons disabled with a reason while saving; Retry waits while an undo settles | DoD3, DoD8 |
 | M21 | web-forms-prep | Forms records; `PaletteDrop` type → records; `core/creation/validation.ts` and `changes.ts` next to the live `records.ts` | records/workflow/forms.ts, records/creation.ts, core/editing/palette-drop.ts, core/creation/{validation,changes}.ts | +370 / −10 | M20 | app unchanged | DoD1 |
-| M22 | web-forms-core | Forms child; palette one-shot; pass-down | forms/*, diagram/children.ts | +340 / −0 | M21 | app unchanged | DoD5 |
-| M23 | web-forms-wire | facade/forms; AddForms reads the view; delete `useLocalCreation`; add-form and palette origins leave the bridge | facade/forms.ts, view/editing-view.ts, permissions, react/{AddForms,AddTools}.tsx, lift/journal.ts, workspace-session.ts | +200 / −330 | M22 | Add diagram, object, group; drop a module on the canvas; refused add → form unlocks; switch collection → forms empty; add while locked → disabled with reason | DoD5, DoD8 |
+| M22 | web-forms-core | Forms child; palette one-shot; pass-down; capture at each edit (I33) | forms/*, diagram/children.ts | +340 / −0 | M21 | app unchanged | DoD5 |
+| M23 | web-forms-wire | facade/forms; **AddTools** reads the view (`editing.creation` + `may.addForms`); each AddForms form gets its form view; delete `useLocalCreation`; `CreationCommands` → `FormCommands`; add-form and palette origins leave the bridge | facade/forms.ts, view/editing-view.ts, permissions, react/{AddTools,AddForms}.tsx, contract/creation-react.ts, lift/journal.ts, workspace-session.ts | +230 / −360 | M22 | Add diagram, object, group; drop a module on the canvas; refused add → form unlocks; switch collection → forms empty; add while locked → disabled with reason; Object draft → add a diagram → pick it → Add module → Saved (I33) | DoD5, DoD8 |
 | M24 | web-forms-cleanup | Delete the now-unimported `captures.ts`, `problem.ts`, `records.ts` | core/creation/* | +0 / −484 | M23 | Add object → Saved | DoD1 |
 | M25 | web-connection | Connection child and wiring; request.ts takes IDs; delete connection/capture.ts | records/workflow/connection.ts, connection/*, core/editing/connection/request.ts, facade/connection.ts, view, permissions, workspace-session.ts | +330 / −250 | M24 | draw a connection → edit label → Apply → wire appears; Cancel; draw a second while one is open → refused | DoD8 |
 | M26 | web-gesture-plan | `planGesture`, `choicesAfterRefusal`, `placementCapture`, `moduleMove` as new files (plan.ts and route-preview.ts untouched); gesture records | core/editing/{gesture-plan,module-move}.ts, records/workflow/gesture.ts | +250 / −0 | M25 | app unchanged | DoD9 |
@@ -2027,22 +2116,65 @@ capability/layout/{core, contract/records} C (P2b: 7 cycle reports) · capabilit
 | M30 | web-editor-sends | Inspector, wire, definition and library sends through the journal; waiters; settle-definition; blocked editor sends answer the caller | facade/editor-sends.ts, stores, retained-editor, definition-session, library-session, lift/journal.ts, workspace-session.ts | +200 / −210 | M29 | Inspector edit → Apply → Saved; Wire editor → Apply → Saved; Definitions apply / refuse; Library new folder; Apply during an undo → the store unlocks with a reason | DoD3, DoD8 |
 | M31 | web-source-core | Source machine (with `blocked`) and records | records/workflow/source.ts, source/*, lift/source.ts | +490 / −0 | M30 | app unchanged | DoD8 |
 | M32 | web-source-wire | Source storage part; facade/source; SourceEditor reads its view; delete source-session.ts and records/source.ts | effects/storage.ts, facade/source.ts, view, permissions, react/SourceEditor.tsx, workspace-session.ts | +190 / −390 | M31 | Show source → type → Apply → Saved; close dirty → keep / discard / stay; after discard, reopen → text reprinted; reload → dirty draft back | DoD8 |
-| M33 | web-status-and-views | Status; React features read their own view part and command set; busy flags removed; delete core/workspace/status.ts | view/status.ts, react-types.ts, library-react.ts, definitions-model.ts, react/*, records/workspace.ts | +330 / −230 | M32 | status texts: Connecting, Ready, Saving, Saved, Draft not applied; each panel's disabled reasons | DoD5, DoD8 |
-| M34 | web-remove-session | Delete the bridge and the rest of workspace-session.ts; export through the facade | adapters/runner/bridge.ts, ports/bridge.ts, workspace-session.ts, compose, edge/export-artifact.ts | +60 / −500 | M33 | full pass: start, open, add, move, connect, undo, source, chooser, recovery, export, reload | DoD1, DoD8 |
+| M33 | web-status-and-views | Status; React features read their own view part and command set; busy flags removed; delete core/workspace/status.ts; records/workspace.ts fixed (G1) | view/status.ts, react-types.ts, library-react.ts, definitions-model.ts, creation-react.ts, react/*, records/workspace.ts | +345 / −245 | M32 | status texts: Connecting, Ready, Saving, Saved, Draft not applied; each panel's disabled reasons | DoD5, DoD8 |
+| M34 | web-remove-session | Delete the bridge and the rest of workspace-session.ts; export through the facade; ports/workspace.ts loses `WorkspaceBindings` (G1 fix) | adapters/runner/bridge.ts, ports/bridge.ts, ports/workspace.ts, workspace-session.ts, compose, edge/export-artifact.ts | +60 / −530 | M33 | full pass: start, open, add, move, connect, undo, source, chooser, recovery, export, reload | DoD1, DoD8 |
 | ER2 | web-error-codes-core | Remaining core call sites use area codes | core/** | +200 / −200 | M34 | one refused move; one invalid Add | DoD4 |
 | ER3 | web-error-codes-adapters | Readers, stores, React | adapters/** | +175 / −175 | ER2 | one refused add, one offline add | DoD4 |
+| U1 | web-move-adapters | Rename non-React adapters into folders named by seam; import paths only: edge/{browser-host,browser-navigation,ids} → browser/{host,navigation,ids}; preferences/browser-preferences → browser/environment; edge/{service-client,workspace-decoders,export-artifact}, readers/diagram-reader → service/; edge/request-builders → authoring/requests; sessions/draft-retention → storage/local-retention; preferences/panel-preferences, readers/{inspector,wire,definition}-reader → storage/{panel-preferences,object-drafts,wire-drafts,definition-drafts}; readers/route-preview → layout/; readers/library-reader → library/catalog-reader | adapters/{edge,preferences,readers,sessions}/*, contract/compose.ts, compose/{workspace,executors,sessions}.ts | +70 / −70 (16 renames, ~2,000 lines) | ER3 | open a diagram; drag a node → Saved; View → Show source editor → text; reload with `?collection=` → reopens; inspector draft survives reload; Export PNG → downloads | DoD13 |
+| U2 | web-adapter-seams | Split files that hold two seams (no logic change): readers/submission-readers → service/answers.ts (receipt, applied answer) + storage/journal-entries.ts (stored entries, `restoredOrigin`); the source-recovery decoder → storage/source-drafts.ts; DSL print and new-collection source → language/printer.ts. Delete `readers/` | adapters/{readers,service,storage,authoring,language}/*, compose/{workspace,executors}.ts | +280 / −240 | U1 | stop the service → Add object → reload → Recovery shows it uncertain → start → Check → `No receipt found…`; Source edit → reload → restored; New collection → opens with Start → Step → Done | DoD1, DoD13 |
+| U3 | web-move-core-edits | Rename core/editing's gesture planning: {plan,targets,placements,regroup,routes}.ts, capture/{boxes,pinning,scene} → core/canvas-edits/; capture/settling/* → canvas-edits/settle/; results.ts → core/shared/results.ts. api.ts paths only | core/editing/*, core/canvas-edits/*, contract/api.ts | +45 / −45 (13 renames, ~1,160 lines) | ER3 | drag a node → Saved; drag a node into another group → regrouped; select a wire → change its route → Saved | DoD13 |
+| U4 | web-move-core-movement | Rename move review: editing/{movement,gesture-plan,module-move}.ts → core/movement/; movement-intent/* → movement/intent/; {preview,expand,rearrange}/* → movement/{preview,expand,rearrange}/ | core/editing/*, core/movement/*, contract/{api,workspace-model}.ts | +80 / −80 (28 renames, ~3,000 lines) | U3 | drag in modules → Saved; overlap drag → choices → Apply → Saved | DoD13 |
+| U5 | web-move-core-features | Rename the rest by feature: editing/connection/* → core/connection/; editing/{palette-drop,group-creation} → core/creation/; editing/definition-request → definitions/request; output/diagnostics → failures/display; recovery/editor-records → drafts/; workspace/{panel-state,shell-layout} → panels/{layout,shell-layout}; inspector/* → inspector/object/, inspector/wire/. Delete editing/, output/, recovery/ | core/**, contract/api.ts | +70 / −70 (19 renames, ~1,850 lines) | U4 | draw a connection → Apply → wire; Add object; Definitions → Apply; resize to 700px → panels overlay | DoD13 |
+| U6 | web-move-react | Rename adapters/react/* into feature folders (shell, header, panels, library, add, navigation, export, definitions, object-inspector, wire-inspector, movement, requests, source, settings), each `.module.css` beside its component; ObjectEditor.module.css → shared-styles/form.module.css (used by 11); Navigation.module.css → shared-styles/navigation.module.css; `LibrarySection` leaves compose/features.ts for library/LibrarySection.tsx | adapters/react/**, contract/compose.ts, compose/features.ts | +280 / −270 (~60 renames, ~4,800 lines) | ER3 | Add, Browse, Inspect, Settings → same content as base; chooser, New collection, View menu, Undo / Redo, Source, Export → each opens; shots equal base | DoD13 |
+| U7 | web-move-contract | Rename loose contract files: records/owners → types.ts; records/installation → schemas/; schemas/editor-recovery → schemas/editing-base; ports/client → ports/service; panel-types → ports/panels; react-types, *-react → contract/react/{shell,library,creation,definitions,object-inspector,wire-inspector}; definitions-model → api/definitions; records/{inspector,wire-editor,definitions,editing} → records/{object-draft,wire-draft,definition-draft,canvas-edits}. README becomes a find-it table (task → folder) | contract/** (16 renames), ~90 importers, apps/web/README.md | +300 / −290 (16 renames, ~850 lines) | U6 | load → library; Settings → theme applies; Definitions → edit → Apply → Saved | DoD13 |
+| U8 | web-contract-ports | Records hold data only: every Session / Controller / Bindings / Factory / Reader interface in records/{object-draft,wire-draft,definition-draft,library,preferences,retained-editor,canvas-edits} → ports/{object-inspector,wire-inspector,definitions,library,preferences,retained-editor,canvas-edits}.ts; the inspector and wire sessions become aliases of `RetainedEditor<…>` (no restatement). Fixes records/inspector.ts (G1, 142) | contract/records/*, contract/ports/* (7 new), importers in adapters/sessions, adapters/storage, compose | +300 / −240 | U7 | edit an object title → reload → draft restored; Library → new folder; Settings → theme | DoD1, DoD7 |
+| U9 | web-contract-react | react/shell.ts (was react-types.ts) → react/{design,shell,header,panels,settings,failures}.ts; `RegisteredSection` and `PanelSlots` leave WorkspaceSidePanel.tsx for react/panels.ts, so compose stops importing an adapter type | contract/react/*, adapters/react/panels/WorkspaceSidePanel.tsx, compose/{features,panel-tabs}.ts | +260 / −230 | U8 | Customize panels → move Export to the right → reload → stays; each tab shows its label | DoD1 |
+| U10 | web-api-split | contract/api.ts → contract/api/{workspace,failures,panels,creation,object-inspector,wire-inspector,definitions,library,preferences}.ts, one per feature; unused exports deleted; index.ts keeps `startWeb`, `Result`, `Diagnostic` and the §14 entries; the eslint `contract/api.ts` adapter rule also covers `contract/api/**` | contract/api.ts (D), contract/api/*, contract/index.ts, eslint.config.js, importers | +300 / −250 | U9 | Add, Browse, Inspect, Settings; refused move → problem bar → Technical details → Dismiss | DoD1 |
+| U11 | web-schemas-object-wire | Object and wire draft schemas leave storage/{object,wire}-drafts.ts for contract/schemas/{lists,object-draft,wire-draft}.ts, each typed `z.ZodType<Record>`; the 3 copied captured-base checks (object, wire, source) become one `admitCapturedBase` in api/drafts.ts. Stored formats unchanged | contract/schemas/*, contract/api/drafts.ts, adapters/storage/{object,wire,source}-drafts.ts | +260 / −230 | U10 | object and wire drafts made on the U10 build → this build → reload → restored | DoD1, DoD4 |
+| U12 | web-schemas-definition-source-panels | Definition, source and panel-preference schemas leave storage/* for contract/schemas/{definition-draft,source-draft,panel-preferences}.ts, each typed `z.ZodType<Record>`. Stored formats unchanged | contract/schemas/*, adapters/storage/{definition-drafts,source-drafts,panel-preferences}.ts | +190 / −160 | U11 | definition and source drafts made on the U11 build → this build → reload → restored; panel layout kept | DoD1, DoD4 |
+| U13 | web-split-preview-rules | core/movement/preview/rules.ts (285) → allowed.ts, grow-rules.ts, push-rules.ts, stop-rules.ts. No logic change | core/movement/preview/* | +250 / −215 | U4 | drag a child past its group edge → group grows; drag into a row → siblings pushed; drag between two nodes → stops short | DoD1 |
+| U14 | web-split-drafts | drafts/editor-records (186) → drafts/{base,encode}.ts; the 3 draft-key functions (B6a) → drafts/keys.ts; inspector/draft-commands → inspector/{object,wire}/retain.ts. No logic change | core/drafts/*, core/inspector/{object,wire}/*, contract/api/* | +230 / −190 | U5, U10 | edit an object and a wire without Apply → reload → both restored → Apply → Saved | DoD1 |
+| U15 | web-split-inspector-edits | inspector/object/edits.ts (235) → edits + content-edits; inspector/wire/edits.ts → edits + changes. No logic change | core/inspector/{object,wire}/*, contract/api/{object-inspector,wire-inspector}.ts | +190 / −160 | U14 | object: size and a content row → Apply → Saved; wire: kind and route → Apply → Saved | DoD1 |
+| U16 | web-split-panel-layout | core/panels/layout.ts (was workspace/panel-state) → geometry.ts (mode, geometry, resize) + visibility.ts (open, tab side, defaults). No logic change | core/panels/*, contract/api/panels.ts | +80 / −65 | U5 | 1400px: toggle both panels; drag an edge → reload → width kept; 700px: open left, then right → one overlay | DoD1 |
+| U17 | web-split-wire-editor | react/wire-inspector/WireEditor.tsx (267) → WireSection.tsx (picks the form) + WireSelectionEditor.tsx + react/connection/ConnectionForm.tsx; slots in compose/features.ts | adapters/react/{wire-inspector,connection}/*, contract/react/wire-inspector.ts, compose/features.ts | +230 / −170 | U9 | draw a connection → form → kind and cardinality → Apply → wire drawn; select a wire → meaning, endpoints, routing → Apply → Saved | DoD1 |
+| U18 | web-split-side-panel | react/panels/WorkspaceSidePanel.tsx → WorkspaceSidePanel.tsx + SectionCustomizer.tsx; visible-section filtering → core/panels/sections.ts. Fixes WorkspaceSidePanel.tsx (G1, 127) | adapters/react/panels/*, core/panels/sections.ts, contract/{react,api}/panels.ts, compose/features.ts | +230 / −170 | U16, U9 | Customize → hide, move, collapse, Reset; hide every Browse section → "All Browse sections are hidden…" | DoD1, DoD7 |
+| U19 | web-split-definition-expression | react/definitions/DefinitionExpression.tsx (253) → ExpressionEditor.tsx + LiteralEditor.tsx; slots in compose/features.ts | adapters/react/definitions/*, contract/react/definitions.ts, compose/features.ts | +160 / −120 | U9 | Definitions → add a union alternative, edit literal text, switch literal kind → Apply → Saved | DoD1 |
+| U20 | web-shared-failure-notice | The identical "summary + Technical details" blocks in ObjectEditor, WireSelectionEditor and Definitions → react/failures/FailureNotice.tsx, passed as a slot. Same markup | adapters/react/{failures,object-inspector,wire-inspector,definitions}/*, contract/react/failures.ts, compose/features.ts | +120 / −90 | U17, U19 | refused object, wire and definition Apply (stale tab) → notice + Technical details; `browse text` equals base | DoD1 |
+| U21 | web-shell-alerts-css | P5 follow-up: a token for `.alerts max-height: 40%` in WorkspaceShell.module.css; `.problem`, `.problemText`, `.status` → ShellAlerts.module.css | adapters/react/shell/{WorkspaceShell,ShellAlerts}.module.css, ShellAlerts.tsx, capability/design-system tokens | +60 / −40 | U6 | DoD12 audit on both sheets; problem bar and status bar look the same | DoD12, DoD10 |
+| U22 | web-css-audit | `pnpm styles:audit <folder>`: a Design System CLI over every `.module.css` (exit 1 on a violation or tokenRatio < 0.95), so DoD12 needs no scratch script. Fix the 3 failing sheets: CollectionLibrary (unused rules; 600 → font token), RequestRecovery (multiplier 5), WorkspaceHeader (700 / 600 / −0.08em → type tokens). Same computed values; any difference listed with before / after shots | capability/design-system/cli/audit-styles.ts, package.json, adapters/react/{library,requests,header}/*.module.css | +230 / −120 | U6 | `pnpm styles:audit apps/web/adapters/react` → 0 violations, tokenRatio ≥ 0.95; Library, header and Recovery row shots equal base | DoD12, DoD10 |
+| U23 | web-model-vocabulary | Model exports `objectKind`, `size` and the wire route / side / multiplicity enums; web schemas, core/connection/endpoints and the selects (WireSemantics, WireRouting, ObjectEditor, ConnectionForm) read them through frozen `Readonly<Record<Kind, Label>>` tables. Option order and labels unchanged | capability/model/contract/{index,records/section,records/object}.ts, contract/schemas/*, core/connection/endpoints.ts, adapters/react/{wire-inspector,object-inspector,connection}/* | +330 / −250 | U12, U17 | open every select (object size, relationship kind, cardinality, route, side) → options equal base; old drafts restore | DoD4, DoD10 |
+| U24 | web-checked-inputs | Inputs read back by lookup or guard, never `as`: InterfacePreferences number inputs checked; wire endpoint `<option>` values get an `EndpointChoiceKey` brand minted in core/inspector/wire/endpoints.ts; `FilterLayout 'compact' \| 'full'` replaces `compact` booleans | adapters/react/{settings,wire-inspector,library}/*, core/inspector/wire/endpoints.ts, contract/{brands,react/library}.ts | +200 / −120 | U17 | Settings number inputs accept and clamp as base; endpoint selects keep their choices; chooser compact filters vs Library full | DoD4 |
+| U25 | web-export-io | ExportPanel: format and scope read by frozen lookup (no `as`); the Blob / anchor download → adapters/browser/download.ts, passed as a slot | adapters/react/export/ExportPanel.tsx, adapters/browser/download.ts, contract/react/shell.ts, compose | +110 / −50 | U6 | Export each format and one section → `<collection>.<ext>` downloads | DoD4 |
+| U26 | web-startup-result | compose/startup.ts stops throwing: each step returns a `Result`; `getComputedStyle` → adapters/browser/token-dimensions.ts; theme scope → adapters/browser/theme-scope.ts; `themeChoices` → core/preferences/themes.ts; the duplicate preference literal → core/preferences/defaults.ts. Same failure text. Fixes compose/startup.ts (G1, 129) | contract/compose/startup.ts, contract/compose.ts, adapters/browser/{token-dimensions,theme-scope}.ts, core/preferences/{themes,defaults}.ts | +260 / −150 | U1 | app boots; Settings → each theme applies; serve a bad workspace path → same startup failure text as base | DoD1, DoD7 |
+| U27 | web-fix-add-group-empty | Bug fix I34: with no diagram, the Group form shows its own note | adapters/react/add/AddForms.tsx | +20 / −10 | U6 | empty collection → Add → Object note says Object, Group note says Group; `#add-object-title` count = 1 | DoD8 |
+| U28 | web-fix-library-active-collection | Bug fix I35: LibraryOrganisation gets the shown collection as a prop, not from `getSnapshot()` during render | adapters/react/library/{LibraryOrganisation,LibraryBrowser}.tsx, contract/react/library.ts, compose | +40 / −20 | U9 | open A → Browse → Collections shows A's folder; chooser → B → B's folder at once; move B → only B moves | DoD8 |
+| U29 | web-canvas-edits-results | Errors as values: canvas-edits/targets.ts lookups return `Result` (no `missing()` throw); placements, regroup, routes and plan.ts chain Results; `EditRejected` and its try / catch deleted; `plannedIntent` returns a union, not null. Same outcomes and codes | core/canvas-edits/*, core/movement/intent/admission.ts | +300 / −240 | U3 | move, regroup, route change → Saved; delete a node in tab 2 → drag it in tab 1 → same `stale-target` text as base | DoD4, DoD7 |
+| U30 | web-movement-dedupe | expand/prepare.ts and rearrange/prepare.ts share a new movement/single-node.ts; rearrange/release.ts drops the `''` parent sentinel and sets no `undefined` keys. Same options | core/movement/{single-node,expand/prepare,rearrange/prepare,rearrange/release}.ts | +200 / −230 | U4 | crowded drop in a group → Expand and Rearrange offered; multi-select drop → as base | DoD1, DoD4 |
+| U31 | web-wiring-failure-codes | Layout's scene-in.ts rejects with its wiring failure as a typed source (`unroutable-leg`, `infeasible-embedding`), not JSON in the message; core/failures/messages.ts picks today's text by origin + code; the `plainMessage` regex is deleted. First trace that Authoring and the service pass the source; if not, the body says where it stops | capability/layout/core/scene-in.ts, core/failures/{messages,display}.ts, contract/api/failures.ts | +220 / −90 | U5 | drop a node where wires cannot route → "Couldn't route a wire for that position. Nothing was changed." as base | DoD4, DoD10 |
+| U32 | web-panels-machine-core | Panels machine, unwired: events in records/workflow/panels.ts (unions for open, expand, hide, customize; no booleans); `PanelState` unrestored \| restored{workspace}; `PanelLayout` by mode; `InterfaceVisibility` shown \| hidden{restore}; read / write panel-preference effects | contract/records/workflow/panels.ts, core/panels/{state,panels}.ts | +480 / −0 | U16, U18 | app unchanged | DoD2, DoD5 |
+| U33 | web-panels-machine-wire | Route `panels` in the root; lift/panels.ts (the diagram's open-inspect becomes a panels event); the storage executor runs its effects; problems → notices `panel-preferences`; facade/panels.ts; side panels, ViewMenu and the shell read the panels view; delete sessions/panel-session.ts and ports/panels.ts. Fixes panel-session.ts (G1, 129) | core/workspace/{machine,lift/panels}.ts, effects/{storage,stores}.ts, facade/panels.ts, adapters/react/{panels,header,shell}/*, compose | +250 / −340 | U32 | 1400px and 700px: toggle, resize, tab select, Customize hide / move / collapse / Reset, Hide interface → Escape; reload → kept; draw a connection with the right panel closed → opens on Inspect | DoD2, DoD8, DoD14 |
+| U34 | web-preferences-machine-core | Preferences machine, unwired: restore, change, reset, environment change; `unrestored` phase instead of a sentinel; storage and theme-scope effects | records/workflow/preferences.ts, core/preferences/{state,preferences}.ts | +230 / −0 | U26 | app unchanged | DoD2, DoD5 |
+| U35 | web-preferences-machine-wire | Route `preferences`; lift/preferences.ts; Settings reads its view; facade/preferences.ts; delete sessions/preference-session.ts and ports/preferences.ts | core/workspace/{machine,lift/preferences}.ts, effects/*, facade/preferences.ts, adapters/react/settings/*, compose | +150 / −240 | U34 | Settings → theme, density, text size, motion apply; Reset → defaults; reload → kept; emulate `prefers-color-scheme: dark` → system theme follows | DoD2, DoD8, DoD14 |
+| U36 | web-library-machine-core | Library machine, unwired: `LibraryView` loading \| failed \| ready; `FolderDraftState` none \| editing \| creating{request}; busy derived; folder filter `FolderId \| 'all'`; effects read catalog, query, visits, folder draft; organisation changes leave as `send` (origin editor library) | records/workflow/library.ts, core/library/{state,library,defaults}.ts | +480 / −0 | U8 | app unchanged | DoD2, DoD5 |
+| U37 | web-library-machine-wire | Route `library`; lift/library.ts: an accepted snapshot refreshes, a journal settle or block answers it, `record-visit` becomes an event; library executor part; LibraryBrowser, Filters, Results, Organisation read the view; delete sessions/library-session.ts and ports/library.ts | core/workspace/{machine,lift/library,lift/journal}.ts, effects/*, facade/library.ts, adapters/react/library/* | +240 / −310 | U36, U28 | search, folder filter, archived, sort, next page; folder title → reload → kept → Create folder; move a collection; archive; open a collection → in recent | DoD3, DoD8, DoD14 |
+| U38 | web-drafts-machine-core | Object and wire draft machine, unwired, generic over the draft: `RetainedDrafts<D>` unrestored \| restored{workspace}; edit, discard, apply (`send`, origin editor inspector / wires), settled, blocked; read / write draft effects | records/workflow/drafts.ts, core/drafts/{state,drafts}.ts | +420 / −0 | U14 | app unchanged | DoD2, DoD5 |
+| U39 | web-drafts-machine-wire | Route `drafts`; the storage executor runs object and wire draft effects; ObjectEditor and WireSection read their view (selection and draft key resolved in core); delete sessions/retained-editor.ts, compose/sessions.ts, ports/{object-inspector,wire-inspector,retained-editor}.ts | core/workspace/{machine,lift/drafts,lift/journal}.ts, effects/storage.ts, facade/drafts.ts, adapters/react/{object-inspector,wire-inspector}/* | +240 / −295 | U38 | edit an object → Discard; edit → Apply → Saved; edit a wire → reload → restored → Apply → Saved; select another object → its own draft; camera does not move | DoD3, DoD8, DoD14 |
+| U40 | web-definitions-machine-core | Definitions machine, unwired: `DefinitionDraftPhase` editing \| applying \| submitted{request}; pending keys derived; apply leaves as `send` (origin editor definitions); settled and released come from the journal; takes over draft-lifecycle.ts's rules | records/workflow/definitions.ts, core/definitions/{state,definitions}.ts | +450 / −0 | U14 | app unchanged | DoD2, DoD5 |
+| U41 | web-definitions-machine-wire | Route `definitions`; `settle-definition` becomes journal-lift events; definition storage effects; Definitions reads its view; delete sessions/definition-session.ts and ports/definitions.ts. Fixes I36–I39 and quirk 13; finishes records/definitions.ts (stored busy flags) | core/workspace/{machine,lift/definitions,lift/journal}.ts, effects/storage.ts, facade/definitions.ts, adapters/react/definitions/* | +230 / −250 | U40 | edit → Apply → Saved with one `localStorage.setItem` (eval spy); Apply, then switch collection before the answer → the new collection's drafts untouched; refused Apply (stale tab) → one problem, draft unlocks; reload with a submitted draft → locked until settled | DoD3, DoD8, DoD14 |
+| U42 | web-remove-stores | Delete what no machine uses now: core/definitions/draft-lifecycle.ts, facade/editor-sends.ts, runner/waiters.ts, effects/stores.ts, `CallerEffect`, `StoreEffect`, `StoreHandles`, `Waiters`; lift/journal.ts's `answer-caller` rows. `adapters/sessions/` is gone | core/definitions/draft-lifecycle.ts, adapters/{facade,runner,effects}/*, records/workflow/effects.ts, ports/executors.ts, lift/journal.ts, compose | +40 / −480 | U37, U39, U41 | full pass: start, open, add, move, connect, undo, source, chooser, recovery, export, inspector / wire / definition / library applies, panels, settings, reload | DoD1, DoD14 |
 
 **M28 note (decision 1, server half).** A second browser committing first cannot force `constraint-conflict`: Authoring checks read versions before layout feasibility, so it gives `revision-conflict`, which snaps back (§3). `constraint-conflict` needs a move the local preview accepts and the service's layout refuses. M28 looks for a repeatable one in a scratch workspace; if none is found, the PR lists "choices after a server refusal" under **Not verified**, and M28b is decided on the local-refusal drive only. The Canvas side is expected to work: `preview-routes` needs the entry still `submitted` at the same stamp (`draft-events.ts:31-35`), D4 keeps it `submitted`, and a refusal with no foreign commit rereads without a reopen, so the stamp is unchanged.
 
-- **Not scheduled (needs Chris's decision):** owner brands (§16 Q1, 2 PRs).
-- **Totals.** 55 PRs (plus M28b if needed); none over 600 by estimate (M7 is at 600). The estimates add to +13,775 / −7,984 = 21,759 changed lines. The story canvas's per-file totals (+13,693 / −7,758 with the brand ripple) count each file once; the PR sum is larger because moves (P3–P8, about 1,100 lines each way) count on both sides, and bridge and session lines are added and later removed.
+- **Not scheduled (needs Chris's decision, §16 Q4):** `layout-owns-settling` (drop settling and expand geometry → capability/layout) and `layout-owns-preview-rules` (Layout's preview returns the grew / pushed / stopped verdict). Until then `core/canvas-edits/settle/` and `core/movement/preview/*-rules.ts` stay in web with that written reason.
+- **Totals.** 97 PRs (plus M28b if needed): 8 built (P1–P8, real +2,390 / −1,622), 47 more plan PRs (+12,490 / −6,834 by estimate) and 42 U PRs (+9,105 / −6,590; renames sized by `git diff -M`). Sum +23,985 / −15,046 = 39,031 changed lines. Over 600: P3, P6, P7 (built; overages accepted). P1–P8 ran 0.6–2.7× their estimates (house-style headers and JSDoc, score-gate fixes); expect the same spread later.
 
 ### 13.3 Order
 
-One stack, in this order (lead's revision, 27 Sep): P1 · P2a · P3 · P4 · P5 · P6 · P7 · P8 · **SYNC** · P2b · B1 · ER1 · B2a · B2b · B3a · B3b · B4 · B5 · B6a · B6b · M1 … M28 · (M28b) · M29 … M34 · ER2 · ER3 · **OB1 … OB3**.
+One stack, in this order (lead's revision, 27 Sep; U-series 28 Sep): P1 · P2a · P3 · P4 · P5 · P6 · P7 · P8 (built) · **SYNC** · P2b · B1 · ER1 · B2a · B2b · B3a · B3b · B4 · B5 · B6a · B6b · M1 … M28 · (M28b) · M29 … M34 · ER2 · ER3 · **U1 … U42** · **OB1 … OB3**.
 
 - **SYNC** (merge only, no new code): merges the finished `apps/service` and `apps/cli` re-engineering stacks into this stack, so P2b, B1, B2b and ER1 edit service and cli files in their new homes. The body lists the already-reviewed PRs it brings in.
 - **P2b moves after SYNC** because it edits `apps/service/contract/records/*`, which the service stack re-homes.
+- **U1 … U42** (the rest of `apps/web`, after the machines): moves U1–U7 · contract splits U8–U12 · file splits U13–U20 · CSS U21–U22 · types and boundaries U23–U26 · bug fixes and errors-as-values U27–U31 · store machines U32–U42 (panels, preferences, library, object / wire drafts, definitions; after M34 they are the only workflow state outside the runner, so D8 ends here). Source: a separate web-UI design, minus what this plan already does.
 - **OB1 … OB3** (owner brands, §16 Q1 decided yes): brand workspace sequence (Authoring), collection revision (Model), Canvas target ID and scene key, Library cursor and visit time in their owning capabilities; the web picks them up with no web edits.
 
 ### 13.4 Definition of done (the story canvas shows the same table)
@@ -2060,7 +2192,9 @@ One stack, in this order (lead's revision, 27 Sep): P1 · P2a · P3 · P4 · P5 
 | DoD9 | Decision 1 | Headless: overlap drag → choices at once → Apply → Saved; Recovery shows a request ID different from the gesture ID. Server half: M28 note | choices after a completed move = 0; applied request ID ≠ gesture ID; server half verified or listed under Not verified |
 | DoD10 | Touched capabilities do not regress | `pnpm exec vitest run capability/<name>` for each touched capability (§13.1 "Capability PRs") | new failures vs baseline = 0 |
 | DoD11 | Every quirk decided | §12.2 | undecided = 0 |
-| DoD12 | Stylesheets | The `auditStyles` call from `capability/design-system/tests/artifacts.test.ts:108-115`, run on the touched `.module.css` files by a scratch script (not committed); `pnpm exec vitest run capability/design-system` for `Dialog.module.css`; headless look | violations = 0; tokenRatio ≥ 0.95 |
+| DoD12 | Stylesheets | The `auditStyles` call from `capability/design-system/tests/artifacts.test.ts:108-115`, run on the touched `.module.css` files by a scratch script (not committed); from U22, `pnpm styles:audit <folder>`; `pnpm exec vitest run capability/design-system` for `Dialog.module.css`; headless look | violations = 0; tokenRatio ≥ 0.95 |
+| DoD13 | Folders by responsibility (U1–U7) | `ls apps/web/adapters apps/web/core apps/web/adapters/react apps/web/contract` | no `adapters/{edge,readers,preferences}/`, no `core/{editing,output,recovery}/`; no loose `*-react.ts` in contract; every React file in a feature folder; README find-it table names every folder |
+| DoD14 | No store sessions (U33–U42) | `test ! -d apps/web/adapters/sessions`; `grep -rnE "answer-caller\|createWaiters" apps/web` | folder absent; 0 matches |
 
 ---
 
@@ -2094,7 +2228,7 @@ Each was checked in the code at `5571c7e`.
 | C5 | `WorkflowDeps.connection: ConnectionPolicy` with the type in core | `ConnectionPolicy`, `IdGrammar` move to `contract/ports/connection-policy.ts` (M1) | `core/editing/connection/types.ts`; `contract/api.ts:103` |
 | C6 | `FormsEvent` names `PaletteDrop` (declared in core) | `PaletteDrop` type → `contract/records/creation.ts` (M21) | `core/editing/palette-drop.ts:8` |
 | C7 | `ConnectionIntent` imported from Canvas | `Extract<EditIntent, {kind: 'connection'}>` | not in `capability/canvas/contract/index.ts` |
-| C8 | `IdSource` has no content ID | adds `descendantId()`; `compose/features.ts:79` stops minting (B3b) | `compose/features.ts:79` |
+| C8 | `IdSource` has no content ID | adds `descendantId()`; `compose/features.ts` takes `random` since P6 and `IdSource.descendantId()` from B3b | `compose/features.ts:79` at `5571c7e` |
 | C9 | `nextCount(schema: z.ZodType<T, z.ZodTypeDef, number>, …)` | `z.ZodType<T, number>` | zod 4.6.2 has no `ZodTypeDef` |
 | C10 | `write-journal` carries `StoredSubmission[]`; "the writer maps Origin" | carries `RetainedEntry[]` (Origin-based); the storage executor maps both ways (table in §6.4) | `adapters/readers/submission-readers.ts:8-14` |
 | C11 | `read-receipt` carries the whole `Request` | carries `RequestId`; the reader only compares IDs | `submission-readers.ts:72-78` |
@@ -2112,17 +2246,36 @@ Each was checked in the code at `5571c7e`.
 
 ---
 
-## 16. Decisions (were open; decided by the lead, 27 Sep)
+## 16. Decisions (decided by the lead, 27–28 Sep; Q4 open)
 
 | # | Question | Decision |
 |---|---|---|
-| Q1 | Owner brands for values that are named aliases today (workspace sequence, collection revision, Canvas target ID and scene key, Library cursor and visit time) | **Yes — brand them in their owning capabilities.** Chris's rule: no bare string/number for identities or domain values. Scheduled last as OB1–OB3, after ER3, so they do not collide with the service/cli stacks. |
+| Q1 | Owner brands for values that are named aliases today (workspace sequence, collection revision, Canvas target ID and scene key, Library cursor and visit time) | **Yes — brand them in their owning capabilities.** Chris's rule: no bare string/number for identities or domain values. Scheduled last as OB1–OB3, after ER3 and the U-series, so they do not collide with the service/cli stacks. |
 | Q2 | Score gate for `workspace-session.ts` and the temporary bridge while they are being removed | **Exempt both until M34.** Instead `wc -l workspace-session.ts` must drop in every wire PR, and the bridge stays within its §8.5 budget. |
 | Q3 | Choices after a server refusal: which refusal codes | **`constraint-conflict` only.** The other 7 codes snap back. |
+| Q4 | Should capability/layout own drop settling, expand geometry and the preview rules that web re-derives today (`core/canvas-edits/settle/`, `core/movement/expand/geometry.ts`, `core/movement/preview/*-rules.ts`)? | **Open (Chris).** Default: not scheduled; web keeps them with that written reason (§13.2 "Not scheduled"). |
 
 Decided by default, no question needed:
 - Run M28b (Canvas change) only if the M28 drive shows the Canvas drops the preview.
-- Keep quirk 13 (definition apply reports twice and writes twice); fix later in a store PR.
+- Keep quirk 13 (definition apply reports twice and writes twice) through the M-series; U41 fixes it.
+
+### G1 score-gate rule (lead, 28 Sep)
+
+A file a PR only moves, re-points imports in, or moves types into or out of keeps its baseline score and may stay ≤ 144 until its named fixing PR. The PR body lists each such file with its score and fixing PR. A file with no fixing PR is reported to the lead, who adds one. Files a PR changes in substance must pass (> 144), except `workspace-session.ts` and the bridge until M34 (Q2).
+
+| File | Baseline | Fixing PR |
+|---|---|---|
+| `contract/ports/workspace.ts` | 142 (SRP 5, Deep 5: `WorkspaceBindings`) | M34 |
+| `contract/panel-types.ts` | 141 (Errors 5: `report(message: string)`) | ER1, M8 |
+| `contract/records/workspace.ts` | 137 (SRP 5, ISP 5: flat view, 38-member controller) | M33 |
+| `contract/api.ts` | 141 (Errors 5: `definitionDraftId` throws) | B3b |
+| `core/workspace/diagram/admission.ts` | 141 (Errors 5: open `string` codes) | ER1 |
+| `contract/records/inspector.ts` | 142 (DRY 7: restates `RetainedEditor<…>`) | U8 |
+| `adapters/sessions/panel-session.ts` | 129 (Errors 5, Imm 5, DRY 6) | U33 (deleted) |
+| `contract/compose/startup.ts` | 129 (SRP 6, ISP 5, throws as control flow, ambient `getComputedStyle`) | U26 |
+| `adapters/react/WorkspaceSidePanel.tsx` | 127 (KISS 5, Cog 5, SRP 6) | U18 |
+
+Other files at or below 144 in #131's score table keep the fixing PR named there; `contract/records/definitions.ts` is finished by U41.
 
 ---
 
