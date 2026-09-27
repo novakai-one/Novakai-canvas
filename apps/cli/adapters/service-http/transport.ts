@@ -1,17 +1,21 @@
 /*
  * HTTP transport to the local service: one checked loopback origin, a bearer token, and the
- * service's response envelope. Network I/O; each failure is returned as a value. A lost answer is
- * `connection-uncertain`; for a write, `core/authoring/submit.ts` names the retained request so
- * `receipt` then `retry` recover it. This file never retries.
+ * service's response envelope; a rejection in it becomes `service-rejected`. Network I/O; each
+ * failure is returned as a value. A lost answer is `connection-uncertain`; for a write,
+ * `core/authoring/submit.ts` names the retained request so `receipt` then `retry` recover it.
+ * This file never retries.
  */
 import { responseEnvelope } from '@novakai/canvas-service';
-import type { ServiceAnswer, Transport } from '../../contract/ports/runtime.js';
+import type { HttpTransport, RouteQuery } from '../../contract/ports/http-transport.js';
+import type { Observed } from '../../contract/records/service-answers.js';
+import type { TransportResponse } from '../../contract/records/foreign.js';
 import type { LocalFailure, Result } from '../../contract/errors.js';
-import { failure, success } from '../../contract/errors.js';
+import { failure, rejected, success } from '../../contract/errors.js';
 import {
   generation,
   loopbackOrigin,
   type AgentToken,
+  type Generation,
   type LoopbackOrigin,
 } from '../../contract/brands.js';
 
@@ -29,12 +33,12 @@ type Method = 'GET' | 'POST';
 export function createTransport(
   server: string,
   token: AgentToken,
-): Result<Transport, LocalFailure> {
+): Result<HttpTransport, LocalFailure> {
   const checked = origin(server);
   if (!checked.ok) return checked;
   return success({
-    get: (path) => send(checked.value, token, path, 'GET', undefined),
-    post: (path, body) => send(checked.value, token, path, 'POST', JSON.stringify(body)),
+    get: (route, query) => send(checked.value, token, route + search(query), 'GET', undefined),
+    post: (route, body) => send(checked.value, token, route, 'POST', JSON.stringify(body)),
   });
 }
 /**
@@ -53,10 +57,15 @@ function origin(input: string): Result<LoopbackOrigin, LocalFailure> {
     });
   return success(checked.data);
 }
+/** A read route's query string: `?` and the parameters in order, or nothing when there are none. */
+function search(query: RouteQuery | undefined): string {
+  if (query === undefined) return '';
+  return `?${new URLSearchParams(query).toString()}`;
+}
 /**
  * Sends one request; a redirect is refused so no other host receives the token. Fails with
- * `invalid-response` (the answer is not a service envelope) or `connection-uncertain` (no
- * confirmed answer: timeout, lost connection or unreadable body).
+ * `invalid-response` (the answer is not a service envelope), `connection-uncertain` (no confirmed
+ * answer: timeout, lost connection or unreadable body) or `service-rejected`.
  */
 async function send(
   origin: LoopbackOrigin,
@@ -64,7 +73,7 @@ async function send(
   path: string,
   method: Method,
   body: string | undefined,
-): Promise<Result<ServiceAnswer, LocalFailure>> {
+): Promise<Result<Observed<unknown>>> {
   try {
     const response = await fetch(`${origin}${path}`, {
       method,
@@ -83,15 +92,23 @@ async function send(
   }
 }
 /**
- * The service envelope's generation, minted, and its outcome, kept whole. Fails with
- * `invalid-response` when the body is not a service envelope.
+ * The service envelope's generation, minted, and its value. Fails with `invalid-response` when the
+ * body is not a service envelope, or `service-rejected` with the service's failure record.
  */
-function answer(input: unknown): Result<ServiceAnswer, LocalFailure> {
+function answer(input: unknown): Result<Observed<unknown>> {
   const envelope = responseEnvelope.safeParse(input);
   if (!envelope.success) return invalidEnvelope();
   const sent = generation.safeParse(envelope.data.generation);
   if (!sent.success) return invalidEnvelope();
-  return success({ generation: sent.data, outcome: envelope.data.outcome });
+  return observed(sent.data, envelope.data.outcome);
+}
+/** A successful outcome's value under its generation; a failed one as `service-rejected`, kept whole. */
+function observed(
+  sent: Generation,
+  outcome: TransportResponse['outcome'],
+): Result<Observed<unknown>> {
+  if (!outcome.ok) return rejected('service-rejected', outcome.error);
+  return success({ generation: sent, value: outcome.value });
 }
 /** The answer is not a service envelope. */
 function invalidEnvelope(): Result<never, LocalFailure> {

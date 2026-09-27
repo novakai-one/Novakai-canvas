@@ -5,19 +5,39 @@
  * the named input and runs the command again.
  */
 import { prepareResources } from '../resources/stage.js';
+import type { ResourceDependencies } from '../resources/stage.js';
 import type { ChangeCommand, ChangeIntent, ChangeMode } from '../../contract/records/command.js';
-import type { CliDependencies, ServiceAnswer } from '../../contract/ports/runtime.js';
+import type { SemanticInputs } from '../../contract/ports/runtime.js';
+import type { HttpTransport } from '../../contract/ports/http-transport.js';
+import type { LocalFiles } from '../../contract/ports/local-files.js';
+import type { Observed } from '../../contract/records/service-answers.js';
 import type { RetainedRequest } from '../../contract/records/retained-request.js';
-import type { Snapshot } from '../../contract/records/foreign.js';
 import type { SourceFile } from '../../contract/records/source-file.js';
-import type { CollectionRevision, Generation } from '../../contract/brands.js';
+import type { CollectionRevision, RequestId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
-import { rejected, success } from '../../contract/errors.js';
 
-/** Capture source and observed versions once; neither preview nor apply refreshes the resulting Authoring envelope. */
+/**
+ * What `prepare` uses: the source read, the workspace read, request IDs, and the request and
+ * resource staging readers.
+ */
+export interface PrepareDependencies extends ResourceDependencies {
+  readonly files: Pick<LocalFiles, 'readSource'>;
+  readonly transport: HttpTransport;
+  readonly semantic: Pick<
+    SemanticInputs,
+    'snapshot' | 'request' | 'requests' | 'admissionDigest' | 'backup' | 'checkedRequest'
+  >;
+  nextRequestId(): RequestId;
+}
+
+/**
+ * Capture source and observed versions once; neither preview nor apply refreshes the resulting
+ * Authoring envelope. Fails as the source read, the workspace read, the request reader or
+ * resource staging does; nothing is retained or sent to Authoring.
+ */
 export async function prepare(
   command: ChangeCommand,
-  dependencies: CliDependencies,
+  dependencies: PrepareDependencies,
 ): Promise<Result<RetainedRequest>> {
   const source = await dependencies.files.readSource(command.file);
   if (!source.ok) return source;
@@ -30,45 +50,28 @@ export async function prepare(
     dependencies,
   );
 }
-/** Capture and resource preparation finish before retention or canonical submission. */
+/**
+ * Owner readers give the transported snapshot its type; an explicit ID supports scripted receipt
+ * lookup, a generated one is retained before any submission. Resource preparation finishes before
+ * retention or canonical submission.
+ */
 async function prepareCaptured(
   command: ChangeCommand,
   source: SourceFile,
-  current: ServiceAnswer,
-  dependencies: CliDependencies,
+  current: Observed<unknown>,
+  dependencies: PrepareDependencies,
 ): Promise<Result<RetainedRequest>> {
-  const draft = captured(command, source.source, current, dependencies);
-  if (!draft.ok) return draft;
-  return prepareResources(source, draft.value, dependencies);
-}
-/** Owner readers give transported snapshots their type before request construction. */
-function captured(
-  command: ChangeCommand,
-  source: string,
-  current: ServiceAnswer,
-  dependencies: CliDependencies,
-): Result<RetainedRequest> {
-  if (!current.outcome.ok) return rejected('service-rejected', current.outcome.error);
-  const snapshot = dependencies.semantic.snapshot(current.outcome.value);
+  const snapshot = dependencies.semantic.snapshot(current.value);
   if (!snapshot.ok) return snapshot;
-  return draft(command, source, snapshot.value, current.generation, dependencies);
-}
-/** An explicit ID supports scripted receipt lookup; generated IDs are persisted before any network submission. */
-function draft(
-  command: ChangeCommand,
-  source: string,
-  snapshot: Snapshot,
-  generation: Generation,
-  dependencies: CliDependencies,
-): Result<RetainedRequest> {
   const request = dependencies.semantic.request(
     intentOf(command),
-    source,
-    snapshot,
+    source.source,
+    snapshot.value,
     command.request ?? dependencies.nextRequestId(),
   );
   if (!request.ok) return request;
-  return success({ generation, request: request.value, backups: [] });
+  const retained = { generation: current.generation, request: request.value, backups: [] };
+  return prepareResources(source, retained, dependencies);
 }
 
 /** The preconditions the command asks for: preview by its --mode, the others by their name. */

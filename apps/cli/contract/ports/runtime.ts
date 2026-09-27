@@ -4,37 +4,15 @@
  * compose binds the adapters. Every method returns its failure as a value.
  */
 import type { LocalFiles } from './local-files.js';
+import type { HttpTransport } from './http-transport.js';
 import type { RequestJournal } from './request-journal.js';
 import type { ResourceReader } from './resource-reader.js';
-import type { LocalFailure, Result } from '../errors.js';
-import type {
-  ParsedSource,
-  Request,
-  ResourceRequest,
-  Snapshot,
-  TransportResponse,
-} from '../records/foreign.js';
+import type { Result } from '../errors.js';
+import type { ParsedSource, Request, ResourceRequest, Snapshot } from '../records/foreign.js';
 import type { ByteBackup } from '../records/retained-request.js';
 import type { AssetBinding } from '../records/staged-resource.js';
 import type { AdmitCommand, ChangeIntent } from '../records/command.js';
-import type { AssetDigest, Generation, RequestId } from '../brands.js';
-
-/** One service answer: the generation that sent it, checked, and the service's outcome, kept whole. */
-export interface ServiceAnswer {
-  readonly generation: Generation;
-  readonly outcome: TransportResponse['outcome'];
-}
-/**
- * Sends one request to the local service. Fails only locally: `invalid-response` or
- * `connection-uncertain`. A service rejection arrives inside the answer's `outcome`.
- */
-export interface Transport {
-  get(path: string): Promise<Result<ServiceAnswer, LocalFailure>>;
-  post(
-    path: string,
-    body: unknown,
-  ): Promise<Result<ServiceAnswer, LocalFailure>>;
-}
+import type { AssetDigest, RequestId } from '../brands.js';
 
 /** The resource declarations of a DSL source, read by Language. Fails with `invalid-source`. */
 export interface ResourceSyntax {
@@ -90,7 +68,7 @@ export interface PresetInputs {
 
 /** Narrow effects are bound once at CLI composition. */
 export interface CliDependencies {
-  readonly transport: Transport;
+  readonly transport: HttpTransport;
   readonly files: LocalFiles;
   readonly journal: RequestJournal;
   readonly resources: ResourceReader;

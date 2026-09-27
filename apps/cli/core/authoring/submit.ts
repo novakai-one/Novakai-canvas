@@ -5,19 +5,32 @@
  * recover it.
  */
 import { restoreResources } from '../resources/restore.js';
+import type { ResourcePoster } from '../resources/stage.js';
 import { prepare } from './prepare.js';
+import type { PrepareDependencies } from './prepare.js';
 import type { ChangeCommand } from '../../contract/records/command.js';
-import type { CliDependencies, ServiceAnswer } from '../../contract/ports/runtime.js';
+import type { SemanticInputs } from '../../contract/ports/runtime.js';
+import type { RequestJournal } from '../../contract/ports/request-journal.js';
 import type { RetainedRequest } from '../../contract/records/retained-request.js';
 import type { RequestId } from '../../contract/brands.js';
-import type { LocalFailure, Result } from '../../contract/errors.js';
-import { rejected, success } from '../../contract/errors.js';
+import type { CliFailure, Result } from '../../contract/errors.js';
+import { success } from '../../contract/errors.js';
 
-/** Retention failure prevents a write because an uncertain result could not be reconciled safely without the request. */
+/** What `submit` uses: the journal's save, the transport's POST and the apply-answer reader. */
+export interface SubmitDependencies extends ResourcePoster {
+  readonly journal: Pick<RequestJournal, 'save'>;
+  readonly semantic: Pick<SemanticInputs, 'applied'>;
+}
+
+/**
+ * Retention failure prevents a write because an uncertain result could not be reconciled safely
+ * without the request. Fails as the journal save, the resource restore or the send does; a lost
+ * answer names `receipt` then `retry` for the retained request.
+ */
 export async function submit(
   retained: RetainedRequest,
   preview: boolean,
-  dependencies: CliDependencies,
+  dependencies: SubmitDependencies,
 ): Promise<Result<string>> {
   const saved = await dependencies.journal.save(retained);
   if (!saved.ok) return saved;
@@ -29,41 +42,42 @@ export async function submit(
 async function transmit(
   retained: RetainedRequest,
   preview: boolean,
-  dependencies: CliDependencies,
+  dependencies: SubmitDependencies,
 ): Promise<Result<string>> {
-  const path = preview ? '/api/v1/authoring/preview' : '/api/v1/authoring/apply';
-  const outcome = await dependencies.transport.post(path, {
+  const route = preview ? '/api/v1/authoring/preview' : '/api/v1/authoring/apply';
+  const answer = await dependencies.transport.post(route, {
     version: 1,
     generation: retained.generation,
     request: retained.request,
     preview,
   });
-  return submitted(outcome, retained.request.request, preview, dependencies);
+  if (!answer.ok) return unconfirmed(answer.error, retained.request.request);
+  return confirmed(answer.value.value, retained.request.request, preview, dependencies);
 }
-/** Network uncertainty names the retained request instead of suggesting a new request ID. */
-function submitted(
-  result: Result<ServiceAnswer, LocalFailure>,
+/**
+ * A lost or unreadable answer (`connection-uncertain`, `invalid-response`) names the retained
+ * request instead of suggesting a new request ID. A service rejection is returned whole.
+ */
+function unconfirmed(
+  error: CliFailure,
   id: RequestId,
-  preview: boolean,
-  dependencies: CliDependencies,
-): Result<string> {
-  if (!result.ok)
+): Result<never> {
+  if (error.code === 'connection-uncertain' || error.code === 'invalid-response')
     return {
       ok: false,
       error: {
-        ...result.error,
+        ...error,
         recovery: `Run canvas receipt ${id}, then canvas retry ${id} only if no receipt exists.`,
       },
     };
-  if (!result.value.outcome.ok) return rejected('service-rejected', result.value.outcome.error);
-  return confirmed(result.value.outcome.value, id, preview, dependencies);
+  return { ok: false, error };
 }
 /** Preview prints reviewable owner output and a stable apply command; successful writes use the apply-answer reader. */
 function confirmed(
   value: unknown,
   id: RequestId,
   preview: boolean,
-  dependencies: CliDependencies,
+  dependencies: Pick<SubmitDependencies, 'semantic'>,
 ): Result<string> {
   if (preview)
     return success(
@@ -74,7 +88,7 @@ function confirmed(
 /** Agent authoring consumes readable source only. JSON envelopes and coordinates are never required user input. */
 export async function author(
   command: ChangeCommand,
-  dependencies: CliDependencies,
+  dependencies: PrepareDependencies & SubmitDependencies,
 ): Promise<Result<string>> {
   const prepared = await prepare(command, dependencies);
   if (!prepared.ok) return prepared;

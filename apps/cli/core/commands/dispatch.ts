@@ -12,7 +12,7 @@ import { admitPreset } from '../presets/admit.js';
 import { instantiateRecipe } from '../presets/instantiate.js';
 import { author } from '../authoring/submit.js';
 import { retry } from '../authoring/reconcile.js';
-import { describe, inspectPath, query, receiptPath, sourcePath } from '../reads/queries.js';
+import { describe, inspectRead, query, receiptRead, sourceRead } from '../reads/queries.js';
 import { unsupported } from '../shared/results.js';
 
 /**
@@ -35,17 +35,17 @@ function run(
 ): Promise<Result<string>> {
   switch (command.name) {
     case 'describe':
-      return query('/api/v1/language', describe, dependencies);
+      return query({ route: '/api/v1/language' }, describe, dependencies);
     case 'list':
-      return query('/api/v1/workspace', dependencies.semantic.collections, dependencies);
+      return query({ route: '/api/v1/workspace' }, dependencies.semantic.collections, dependencies);
     case 'read':
       return query(
-        sourcePath(command.collection, command.scope),
+        sourceRead(command.collection, command.scope),
         dependencies.semantic.readout,
         dependencies,
       );
     case 'inspect':
-      return query(inspectPath(command.collection), describe, dependencies);
+      return query(inspectRead(command.collection), describe, dependencies);
     case 'receipt':
       return lookup(command.request, dependencies);
     case 'create':
@@ -72,7 +72,7 @@ function lookup(
   dependencies: CliDependencies,
 ): Promise<Result<string>> {
   return query(
-    receiptPath(request),
+    receiptRead(request),
     (input) => dependencies.semantic.receipt(input, { kind: 'lookup', request }),
     dependencies,
   );

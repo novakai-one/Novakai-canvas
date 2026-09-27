@@ -4,13 +4,10 @@
  * Authoring owns the commit; the retained request file is the recovery record for `retry`.
  */
 import type { AdmitCommand } from '../../contract/records/command.js';
-import type { CliDependencies, PresetSource, ServiceAnswer } from '../../contract/ports/runtime.js';
-import type { ByteBackup } from '../../contract/records/retained-request.js';
-import type { AssetBinding } from '../../contract/records/staged-resource.js';
-import type { Snapshot } from '../../contract/records/foreign.js';
-import type { Generation } from '../../contract/brands.js';
+import type { CliDependencies, PresetSource } from '../../contract/ports/runtime.js';
+import type { StagedBackup } from '../../contract/records/staged-resource.js';
+import type { Request } from '../../contract/records/foreign.js';
 import type { Result } from '../../contract/errors.js';
-import { rejected } from '../../contract/errors.js';
 import { assetBindings, resourceCall, stageResources } from '../resources/stage.js';
 import { submit } from '../authoring/submit.js';
 
@@ -33,72 +30,46 @@ async function stagePreset(
 ): Promise<Result<string>> {
   const staged = await stageResources(command.file, parsed.resources, dependencies);
   if (!staged.ok) return staged;
-  const assets = assetBindings(staged.value);
   const prepared = await resourceCall(
     'prepare',
-    { admission: parsed.admission, assets },
+    { admission: parsed.admission, assets: assetBindings(staged.value) },
     dependencies,
   );
   if (!prepared.ok) return prepared;
-  return retain(
-    command,
-    prepared.value,
-    assets,
-    staged.value.map((item) => item.backup),
-    dependencies,
-  );
+  return retain(command, prepared.value, staged.value, dependencies);
 }
 /** Observe write preconditions after staging; the service still recomputes content and compares all reads during admission. */
 async function retain(
   command: AdmitCommand,
   prepared: unknown,
-  assets: readonly AssetBinding[],
-  backups: readonly ByteBackup[],
+  staged: readonly StagedBackup[],
   dependencies: CliDependencies,
 ): Promise<Result<string>> {
   const current = await dependencies.transport.get('/api/v1/workspace');
   if (!current.ok) return current;
-  if (!current.value.outcome.ok) return rejected('service-rejected', current.value.outcome.error);
-  return retainedSnapshot(command, prepared, assets, backups, current.value, dependencies);
-}
-/** Checked snapshot versions and local backups form one retained request. */
-async function retainedSnapshot(
-  command: AdmitCommand,
-  prepared: unknown,
-  assets: readonly AssetBinding[],
-  backups: readonly ByteBackup[],
-  current: ServiceAnswer,
-  dependencies: CliDependencies,
-): Promise<Result<string>> {
-  if (!current.outcome.ok) return rejected('service-rejected', current.outcome.error);
-  const snapshot = dependencies.semantic.snapshot(current.outcome.value);
-  if (!snapshot.ok) return snapshot;
-  return retainRequest(
-    command,
-    prepared,
-    assets,
-    backups,
-    snapshot.value,
-    current.generation,
+  const request = presetRequest(command, prepared, staged, current.value.value, dependencies);
+  if (!request.ok) return request;
+  const backups = staged.map((item) => item.backup);
+  return submit(
+    { generation: current.value.generation, request: request.value, backups },
+    false,
     dependencies,
   );
 }
 /** Request identity and preconditions are validated before durable local retention. */
-async function retainRequest(
+function presetRequest(
   command: AdmitCommand,
   prepared: unknown,
-  assets: readonly AssetBinding[],
-  backups: readonly ByteBackup[],
-  snapshot: Snapshot,
-  generation: Generation,
+  staged: readonly StagedBackup[],
+  workspace: unknown,
   dependencies: CliDependencies,
-): Promise<Result<string>> {
-  const request = dependencies.presets.request(
+): Result<Request> {
+  const snapshot = dependencies.semantic.snapshot(workspace);
+  if (!snapshot.ok) return snapshot;
+  return dependencies.presets.request(
     prepared,
-    snapshot,
+    snapshot.value,
     command.request ?? dependencies.nextRequestId(),
-    assets,
+    assetBindings(staged),
   );
-  if (!request.ok) return request;
-  return submit({ generation, request: request.value, backups }, false, dependencies);
 }
