@@ -7,20 +7,21 @@
  * `encoding-failed` (SVG, PNG); for DSL and Markdown the HTTP server's `receive` answers it
  * `unavailable` at `request`. Pure over the owners compose injects; the caller owns retry.
  */
-import type { Assets, Authoring, Snapshot } from '../../contract/records/capabilities.js';
-import type { CollectionRenderer } from '../../contract/ports/collection-renderer.js';
-import type { ResourceSelector } from '../../contract/records/planning/selection.js';
-import type { WorkspaceReader } from '../../contract/records/workspace/contents.js';
 import type {
   AssetResult,
-  ExportRequest,
+  Assets,
+  Authoring,
   ExportResult,
   ExportSnapshot,
   ReadLease,
-  SelectedCollection,
+  Snapshot,
   SnapshotLease,
   StoredBlob,
-} from '../../contract/records/export/request.js';
+} from '../../contract/records/capabilities.js';
+import type { CollectionRenderer } from '../../contract/ports/rendering.js';
+import type { ResourceSelector, WorkspaceReader } from '../../contract/ports/workspace.js';
+import type { ExportRequest } from '../../contract/records/export/request.js';
+import type { SelectedCollection } from '../../contract/records/export/snapshot.js';
 import { cancelledExport, exportRejection, releaseOutcome, settledFailure } from './faults.js';
 import {
   exportSnapshot,

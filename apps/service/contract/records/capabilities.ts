@@ -57,7 +57,13 @@ export type {
   PortableToken,
   ChromeName,
 } from '@novakai/canvas-design-system';
-export type { Assets, WriteLease } from '@novakai/canvas-assets';
+export type {
+  Assets,
+  WriteLease,
+  ReadLease,
+  Result as AssetResult,
+  StoredBlob,
+} from '@novakai/canvas-assets';
 export type {
   FontSource,
   VisualAsset,
@@ -65,3 +71,15 @@ export type {
 } from '@novakai/canvas-presentation';
 export type { Scene } from '@novakai/canvas-layout';
 export type { Organisation, LibrarySnapshot } from '@novakai/canvas-library';
+export type {
+  Artifact,
+  Diagnostic as ExportDiagnostic,
+  Documents,
+  ErrorCode as ExportErrorCode,
+  MarkdownScope,
+  Resource,
+  Resources,
+  Result as ExportResult,
+  Snapshot as ExportSnapshot,
+  SnapshotLease,
+} from '@novakai/canvas-export';

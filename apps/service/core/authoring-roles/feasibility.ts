@@ -14,10 +14,18 @@ import type {
   Snapshot,
 } from '../../contract/records/capabilities.js';
 import type { WorkspaceContents } from '../../contract/records/workspace/contents.js';
-import type { FeasibilityOwners } from '../../contract/ports/render-jobs.js';
+import type { WorkspaceReader } from '../../contract/ports/workspace.js';
+import type { DiagramProducer, RenderJobs } from '../../contract/ports/rendering.js';
 import type { RenderDocument } from '../../contract/records/rendering/job.js';
 import { json } from '../../contract/schemas.js';
 import { authoringFailure } from '../../contract/errors.js';
+
+/** What feasibility reads the candidate with, builds each job with and renders it with. */
+export interface FeasibilityOwners {
+  readonly workspace: WorkspaceReader;
+  readonly jobs: RenderJobs;
+  readonly producer: DiagramProducer;
+}
 
 /**
  * Binds feasibility to the real producer. `check` fails with `constraint-conflict` at the

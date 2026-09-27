@@ -7,11 +7,9 @@
 import type {
   AdmittedMutation,
   ApiCall,
-  ApiRouter,
-  CommandDecoder,
   WireOutcome,
 } from '../../contract/records/transport/protocol.js';
-import type { HttpAdmission } from '../../contract/records/transport/http.js';
+import type { ApiRouter, CommandDecoder, HttpAdmission } from '../../contract/ports/transport.js';
 import type { WorkspaceSession } from '../../contract/types.js';
 
 /** A mutation route, as `METHOD path`. */

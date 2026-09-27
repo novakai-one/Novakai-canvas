@@ -10,11 +10,8 @@ import type {
   ReadVersion,
   Snapshot,
 } from '../../../contract/records/capabilities.js';
-import type { ResourceSelector } from '../../../contract/records/planning/selection.js';
-import type {
-  WorkspaceContents,
-  WorkspaceReader,
-} from '../../../contract/records/workspace/contents.js';
+import type { ResourceSelector, WorkspaceReader } from '../../../contract/ports/workspace.js';
+import type { WorkspaceContents } from '../../../contract/records/workspace/contents.js';
 import { authoringFailure } from '../../../contract/errors.js';
 import { AdmissionFault, requireFact, requireRecord, requireRetention } from './admission-fault.js';
 import { checkMetadata, checkPresets, type CatalogCheckOwners } from './catalog-checks.js';

@@ -7,10 +7,10 @@ import { createRequire } from 'node:module';
 import { readFile } from 'node:fs/promises';
 import { initializeRaster } from '@novakai/canvas-export';
 import { failure, type Result } from '../../contract/errors.js';
-import type { PngRuntime } from '../../contract/ports/export.js';
+import type { Rasterizer } from '../../contract/ports/export.js';
 
 /** A runtime that initializes the rasterizer on the first `prepare` and shares that outcome. */
-export function createPngRuntime(): PngRuntime {
+export function createPngRuntime(): Rasterizer {
   let prepared: Promise<Result<void>> | null = null;
   return {
     prepare: () => {

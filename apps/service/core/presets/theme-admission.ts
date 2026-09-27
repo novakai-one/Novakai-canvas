@@ -11,9 +11,7 @@ import type {
   Catalog,
   ChromeName,
   Json,
-  LoweredIntent,
   Preset,
-  Templates,
 } from '../../contract/records/capabilities.js';
 import {
   hexColour,
@@ -25,15 +23,7 @@ import {
 import { admissionFields } from '../../contract/records/presets/preparation.js';
 import { chromeName } from '../../contract/schemas.js';
 import { authoringFailure } from '../../contract/errors.js';
-
-/** What theme admission uses: Assets to verify fonts, Templates to select the base theme. */
-export interface ThemeAdmissionOwners {
-  readonly assets: Pick<Assets, 'resolve'>;
-  readonly templates: Pick<Templates<LoweredIntent>, 'read'>;
-}
-
-/** One font alias the theme names and the digest of the uploaded font bytes it binds. */
-type FontBinding = { readonly alias: string; readonly digest: string };
+import type { FontBinding, ThemeAdmissionOwners } from '../../contract/ports/headless.js';
 
 /**
  * Prepares one admission. An admission that is not a source-syntax theme is returned unchanged.

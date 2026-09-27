@@ -5,16 +5,18 @@
  * Cancellation is checked after each owner await. Pure; the adapter calls the owners.
  */
 import type { Result } from '../../contract/errors.js';
-import type { AuthoringResult, Collection, Snapshot } from '../../contract/records/capabilities.js';
-import type { WorkspaceContents } from '../../contract/records/workspace/contents.js';
-import type { RenderDocument } from '../../contract/records/rendering/job.js';
 import type {
-  ExportRequest,
+  AuthoringResult,
+  Collection,
   ExportResult,
   ExportSnapshot,
-  LeaseRead,
-  SelectedCollection,
-} from '../../contract/records/export/request.js';
+  Snapshot,
+} from '../../contract/records/capabilities.js';
+import type { WorkspaceContents } from '../../contract/records/workspace/contents.js';
+import type { RenderDocument } from '../../contract/records/rendering/job.js';
+import type { ExportRequest } from '../../contract/records/export/request.js';
+import type { LeaseRead } from '../../contract/ports/export.js';
+import type { SelectedCollection } from '../../contract/records/export/snapshot.js';
 import { cancelledExport, exportRejection, ownerRejection } from './faults.js';
 import { retainedResources } from './resources.js';
 

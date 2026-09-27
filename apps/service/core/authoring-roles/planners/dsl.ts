@@ -12,12 +12,12 @@ import type {
   Request,
   Snapshot,
 } from '../../../contract/records/capabilities.js';
-import type { WorkspaceReader } from '../../../contract/records/workspace/contents.js';
 import type {
   CollectionPlanner,
-  ResourceSelection,
   ResourceSelector,
-} from '../../../contract/records/planning/selection.js';
+  WorkspaceReader,
+} from '../../../contract/ports/workspace.js';
+import type { ResourceSelection } from '../../../contract/records/planning/selection.js';
 import type { DslCommand } from '../../../contract/records/planning/commands.js';
 import { dslCommand } from '../../../contract/records/planning/commands.js';
 import { plannerId } from '../../../contract/schemas.js';

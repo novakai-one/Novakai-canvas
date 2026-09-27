@@ -6,9 +6,8 @@
 import type { WorkspaceSession } from '../../contract/types.js';
 import type { Authoring, AuthoringResult } from '../../contract/records/capabilities.js';
 import type { BuiltinResources } from '../../contract/records/presets/builtins.js';
-import type { ResourceCommands } from '../../contract/records/presets/preparation.js';
-import type { WorkspaceReader } from '../../contract/records/workspace/contents.js';
-import type { CollectionRenderer } from '../../contract/ports/collection-renderer.js';
+import type { ResourceCommands, WorkspaceReader } from '../../contract/ports/workspace.js';
+import type { CollectionRenderer } from '../../contract/ports/rendering.js';
 import type { ChangeChannel } from '../../contract/ports/notifications.js';
 import type { RouteOutcome } from '../../contract/records/transport/protocol.js';
 import { failure } from '../../contract/errors.js';

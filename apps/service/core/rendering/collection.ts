@@ -3,11 +3,9 @@
  * Pure over the injected reads. The caller keeps its navigation and draft on any failure.
  */
 import type { Authoring } from '../../contract/records/capabilities.js';
-import type {
-  WorkspaceContents,
-  WorkspaceReader,
-} from '../../contract/records/workspace/contents.js';
-import type { CollectionRenderer } from '../../contract/ports/collection-renderer.js';
+import type { WorkspaceContents } from '../../contract/records/workspace/contents.js';
+import type { WorkspaceReader } from '../../contract/ports/workspace.js';
+import type { CollectionRenderer } from '../../contract/ports/rendering.js';
 import type { RenderDocument } from '../../contract/records/rendering/job.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';

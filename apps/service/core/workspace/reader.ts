@@ -13,10 +13,8 @@ import type {
   Templates,
 } from '../../contract/records/capabilities.js';
 import type { LibraryRules, ModelRules } from '../../contract/ports/capabilities.js';
-import type {
-  WorkspaceContents,
-  WorkspaceReader,
-} from '../../contract/records/workspace/contents.js';
+import type { WorkspaceContents } from '../../contract/records/workspace/contents.js';
+import type { WorkspaceReader } from '../../contract/ports/workspace.js';
 import { authoringFailure, success } from '../../contract/errors.js';
 import { projectCollection } from './collection-projection.js';
 import { liveRecords } from './records.js';

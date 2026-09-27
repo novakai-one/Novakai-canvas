@@ -17,14 +17,15 @@ import type {
   ResourceAdmission,
   Result as AuthoringResult,
 } from '@novakai/canvas-authoring';
-import type { WorkspaceOptions } from '../records/workspace/startup.js';
-import type { Installation } from '../records/workspace/installation.js';
+import type { Installation, WorkspaceOptions } from '../records/workspace/startup.js';
 import type { BuiltinResources } from '../records/presets/builtins.js';
 import type { ServiceCapabilities } from '../ports/capabilities.js';
-import type { FeasibilityOwners } from '../ports/render-jobs.js';
 import type { AuthoringStore, ConditionalStorage } from '../ports/storage.js';
 import { createResourceAdmission } from '../../core/authoring-roles/resource-leases.js';
-import { createFeasibility } from '../../core/authoring-roles/feasibility.js';
+import {
+  createFeasibility,
+  type FeasibilityOwners,
+} from '../../core/authoring-roles/feasibility.js';
 import { createCandidateValidator } from '../../core/authoring-roles/validation/candidate.js';
 import {
   createInstallationPlanner,

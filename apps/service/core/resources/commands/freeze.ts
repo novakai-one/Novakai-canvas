@@ -5,7 +5,7 @@
  * ResourceResult), and Authoring owns the canonical write and receipt.
  */
 import type { Request, Snapshot } from '../../../contract/records/capabilities.js';
-import type { ResourceSelector } from '../../../contract/records/planning/selection.js';
+import type { ResourceSelector } from '../../../contract/ports/workspace.js';
 import { dslCommand } from '../../../contract/records/planning/commands.js';
 import { requestSchema } from '../../../contract/schemas.js';
 import { accepted } from './refusal.js';

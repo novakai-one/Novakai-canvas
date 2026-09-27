@@ -5,8 +5,9 @@
  * Authoring owns commit and receipt recovery. A throw reaches the HTTP server's `receive`
  * (routes.ts).
  */
-import type { ApiCall, ApiRouter, WireOutcome } from '../../contract/records/transport/protocol.js';
-import type { ResourceCommands } from '../../contract/records/presets/preparation.js';
+import type { ApiCall, WireOutcome } from '../../contract/records/transport/protocol.js';
+import type { ApiRouter } from '../../contract/ports/transport.js';
+import type { ResourceCommands } from '../../contract/ports/workspace.js';
 import type { WorkspaceSession } from '../../contract/types.js';
 import { jsonBody } from './json-body.js';
 

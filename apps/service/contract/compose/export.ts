@@ -8,7 +8,7 @@ import type { Assets } from '@novakai/canvas-assets';
 import type { Authoring } from '@novakai/canvas-authoring';
 import type { WorkspaceOptions } from '../records/workspace/startup.js';
 import type { BuiltinResources } from '../records/presets/builtins.js';
-import type { ExportHandler } from '../records/export/request.js';
+import type { ExportHandler } from '../ports/export.js';
 import type { ServiceCapabilities } from '../ports/capabilities.js';
 import type { Result } from '../errors.js';
 import { failure, success } from '../errors.js';

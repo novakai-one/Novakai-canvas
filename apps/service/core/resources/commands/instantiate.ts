@@ -13,7 +13,7 @@ import type {
   Templates,
 } from '../../../contract/records/capabilities.js';
 import { instantiateInput } from '../../../contract/records/presets/preparation.js';
-import type { ResourceSelector } from '../../../contract/records/planning/selection.js';
+import type { ResourceSelector } from '../../../contract/ports/workspace.js';
 import { selectionRequest, storedCatalog, unboundTemplates } from './catalog.js';
 import { PreparationFault, accepted } from './refusal.js';
 

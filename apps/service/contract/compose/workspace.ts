@@ -6,13 +6,9 @@
  */
 import type { Assets } from '@novakai/canvas-assets';
 import type { BuiltinResources } from '../records/presets/builtins.js';
-import type { ResourceCommands } from '../records/presets/preparation.js';
-import type { ResourceSelector } from '../records/planning/selection.js';
-import type { WorkspaceReader } from '../records/workspace/contents.js';
+import type { ResourceCommands, ResourceSelector, WorkspaceReader } from '../ports/workspace.js';
 import type { ServiceCapabilities } from '../ports/capabilities.js';
-import type { CollectionRenderer } from '../ports/collection-renderer.js';
-import type { RenderJobs } from '../ports/render-jobs.js';
-import type { DiagramProducer } from '../ports/rendering.js';
+import type { CollectionRenderer, DiagramProducer, RenderJobs } from '../ports/rendering.js';
 import { EMPTY_RESOURCES } from '../ports/capabilities.js';
 import { createWorkspaceReader } from '../../core/workspace/reader.js';
 import { createResourceSelector } from '../../core/resources/selection/select.js';

@@ -21,10 +21,10 @@ import {
 } from '../../contract/schemas.js';
 import type { Result } from '../../contract/errors.js';
 import { authoringFailure, success } from '../../contract/errors.js';
-import type { RenderResourceOwners } from '../../contract/records/rendering/resources.js';
+import type { RenderResourceOwners } from '../../contract/ports/headless.js';
 import type { WorkspaceContents } from '../../contract/records/workspace/contents.js';
 import type { RenderingJob } from '../../contract/records/rendering/job.js';
-import type { RenderJobs } from '../../contract/ports/render-jobs.js';
+import type { RenderJobs } from '../../contract/ports/rendering.js';
 
 /**
  * Binds job building to the given owners. `create` returns the job for one collection (see

@@ -1,7 +1,7 @@
 import { Worker as NodeWorker } from 'node:worker_threads';
 import type { RenderingJob } from '../../contract/records/rendering/job.js';
 import type { RenderTransport } from '../../contract/ports/rendering.js';
-import { resultEnvelope } from '../../contract/records/rendering/results.js';
+import { resultEnvelope } from '../../contract/records/rendering/worker.js';
 import { failure, type Result } from '../../contract/errors.js';
 /** Structured worker replies remain unknown until the composed reader independently reconstructs the scene. */
 function reply(input: unknown): Result<unknown> {

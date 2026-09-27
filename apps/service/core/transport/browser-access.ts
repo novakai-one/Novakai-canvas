@@ -4,12 +4,12 @@
  * (core/transport/admission.ts) and the server's session secret. A refusal issues nothing; the
  * browser reloads the workspace from its loopback address.
  */
-import type { TransportPolicy } from '../../contract/ports/transport.js';
 import type {
   HttpAdmission,
-  HttpMetadata,
   HttpSecurity,
-} from '../../contract/records/transport/http.js';
+  TransportPolicy,
+} from '../../contract/ports/transport.js';
+import type { HttpMetadata } from '../../contract/records/transport/http.js';
 import type { BrowserGrant } from '../../contract/records/transport/server.js';
 import { success, type Result } from '../../contract/errors.js';
 

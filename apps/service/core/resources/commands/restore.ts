@@ -4,10 +4,8 @@
  * recovery, and the caller keeps its local backup bytes.
  */
 import type { Assets, WriteLease } from '../../../contract/records/capabilities.js';
-import type {
-  ResourceCommands,
-  RestoreInput,
-} from '../../../contract/records/presets/preparation.js';
+import type { RestoreInput } from '../../../contract/records/presets/preparation.js';
+import type { ResourceCommands } from '../../../contract/ports/workspace.js';
 import { restoreInput } from '../../../contract/records/presets/preparation.js';
 
 /** The owner a restore writes through. */

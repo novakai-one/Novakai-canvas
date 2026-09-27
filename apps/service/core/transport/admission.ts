@@ -5,12 +5,8 @@
  * constant-time equality (`HttpSecurity`). A refusal performs no owner mutation, so the caller
  * corrects its request and resends it; Authoring owns commit and receipt recovery.
  */
-import type {
-  Caller,
-  HttpAdmission,
-  HttpMetadata,
-  HttpSecurity,
-} from '../../contract/records/transport/http.js';
+import type { Caller, HttpMetadata } from '../../contract/records/transport/http.js';
+import type { HttpAdmission, HttpSecurity } from '../../contract/ports/transport.js';
 import { browserCookieName } from '../../contract/records/transport/http.js';
 import type { PlannerId, Request } from '../../contract/records/capabilities.js';
 import { plannerId, requestSchema } from '../../contract/schemas.js';

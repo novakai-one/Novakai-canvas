@@ -4,7 +4,8 @@
  * owners. A refused scope or print is the caller's to correct. A throw, Language's included,
  * reaches the HTTP server's `receive` (routes.ts).
  */
-import type { ApiCall, ApiRouter, WireOutcome } from '../../contract/records/transport/protocol.js';
+import type { ApiCall, WireOutcome } from '../../contract/records/transport/protocol.js';
+import type { ApiRouter } from '../../contract/ports/transport.js';
 import type { Scope, Snapshot, StoredRecord } from '../../contract/records/capabilities.js';
 import type { WorkspaceSession } from '../../contract/types.js';
 import { failure, success, type Result } from '../../contract/errors.js';

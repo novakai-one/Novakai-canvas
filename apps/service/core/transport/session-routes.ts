@@ -6,10 +6,10 @@
  */
 import type {
   ApiCall,
-  ApiRouter,
   RouteOutcome,
   WireOutcome,
 } from '../../contract/records/transport/protocol.js';
+import type { ApiRouter } from '../../contract/ports/transport.js';
 import type { WorkspaceSession } from '../../contract/types.js';
 import { success } from '../../contract/errors.js';
 import { historyVersionsOnly } from '../session/history-versions.js';

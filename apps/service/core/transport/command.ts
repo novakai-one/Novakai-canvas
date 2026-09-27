@@ -3,10 +3,8 @@
  * Authoring. A changed generation never grants an automatic retry: the caller rereads and
  * reconciles its original receipt first. Authoring owns commit and receipt recovery.
  */
-import type {
-  AdmittedMutation,
-  CommandAdmission,
-} from '../../contract/records/transport/protocol.js';
+import type { AdmittedMutation } from '../../contract/records/transport/protocol.js';
+import type { CommandAdmission } from '../../contract/ports/transport.js';
 import { mutationEnvelope } from '../../contract/records/transport/protocol.js';
 import { failure, success, type Result } from '../../contract/errors.js';
 import { jsonBody } from './json-body.js';

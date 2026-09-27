@@ -11,7 +11,7 @@ import type {
   Snapshot,
 } from '../../../contract/records/capabilities.js';
 import type { LibraryRules } from '../../../contract/ports/capabilities.js';
-import type { WorkspaceReader } from '../../../contract/records/workspace/contents.js';
+import type { WorkspaceReader } from '../../../contract/ports/workspace.js';
 import { libraryCommand } from '../../../contract/records/planning/commands.js';
 import { plannerId } from '../../../contract/schemas.js';
 import { authoringFailure } from '../../../contract/errors.js';

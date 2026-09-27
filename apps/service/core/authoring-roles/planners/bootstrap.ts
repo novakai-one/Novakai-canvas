@@ -10,7 +10,7 @@ import type {
   Proposal,
   Request,
 } from '../../../contract/records/capabilities.js';
-import type { Installation } from '../../../contract/records/workspace/installation.js';
+import type { Installation } from '../../../contract/records/workspace/startup.js';
 import { initializeCommand } from '../../../contract/records/planning/commands.js';
 import { plannerId, proposalSchema, requestSchema } from '../../../contract/schemas.js';
 import { authoringFailure } from '../../../contract/errors.js';

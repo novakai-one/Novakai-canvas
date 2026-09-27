@@ -6,8 +6,7 @@
  */
 import type { WorkspaceSession } from '../types.js';
 import type { LocalServer, ServerOptions } from '../records/transport/server.js';
-import type { HttpAdmission, HttpSecurity } from '../records/transport/http.js';
-import type { TransportPolicy } from '../ports/transport.js';
+import type { HttpAdmission, HttpSecurity, TransportPolicy } from '../ports/transport.js';
 import type { Result } from '../errors.js';
 import { failure } from '../errors.js';
 import { createAdmission } from '../../core/transport/admission.js';

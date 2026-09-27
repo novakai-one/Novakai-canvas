@@ -11,8 +11,7 @@ import type {
   Snapshot,
 } from '../../../contract/records/capabilities.js';
 import type { ModelRules } from '../../../contract/ports/capabilities.js';
-import type { WorkspaceReader } from '../../../contract/records/workspace/contents.js';
-import type { CollectionPlanner } from '../../../contract/records/planning/selection.js';
+import type { CollectionPlanner, WorkspaceReader } from '../../../contract/ports/workspace.js';
 import type { ModelCommand } from '../../../contract/records/planning/commands.js';
 import { modelCommand } from '../../../contract/records/planning/commands.js';
 import { plannerId } from '../../../contract/schemas.js';

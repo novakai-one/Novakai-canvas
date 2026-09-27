@@ -1,8 +1,14 @@
+/*
+ * The wire protocol: the mutation and response envelopes, an admitted mutation, the route outcome
+ * and one authenticated API call. Declarations and the two envelope schemas; the router and
+ * command decoder ports are in ports/transport.ts. A refused request is the caller's to correct
+ * and resend; Authoring owns commit and receipt recovery.
+ */
 import type { OperationSource } from './failure-source.js';
 import { operationSource } from './failure-source.js';
 import { z } from 'zod';
 import type { Result } from '../../errors.js';
-import type { Caller, HttpAdmission, HttpMetadata } from './http.js';
+import type { Caller, HttpMetadata } from './http.js';
 import type { Request } from '../capabilities.js';
 import type { StaticFile } from './server.js';
 /** A transport generation prevents a retained request from silently targeting a restarted/restored owner set. */
@@ -18,12 +24,6 @@ export interface AdmittedMutation {
   readonly preview: boolean;
   readonly options: unknown;
 }
-export interface CommandAdmission {
-  readonly caller: Caller;
-  readonly metadata: HttpMetadata;
-  readonly generation: string;
-  readonly ingress: Pick<HttpAdmission, 'mutation'>;
-}
 /** Owner error codes remain stable in transport; consumers can retain richer owner-specific diagnostics. */
 export type WireOutcome = Result<unknown, OperationSource>;
 export type RouteOutcome = WireOutcome | { readonly kind: 'bytes'; readonly file: StaticFile };
@@ -35,15 +35,6 @@ export interface ApiCall {
   readonly signal: AbortSignal;
   readonly metadata: HttpMetadata;
   readonly body: string;
-}
-export interface ApiRouter {
-  invoke(call: ApiCall): Promise<RouteOutcome>;
-}
-export interface CommandDecoder {
-  read(
-    body: string,
-    context: CommandAdmission,
-  ): Result<AdmittedMutation>;
 }
 /** HTTP consumers decode this envelope before handing success values to their respective capability readers. */
 export const responseEnvelope = z.strictObject({

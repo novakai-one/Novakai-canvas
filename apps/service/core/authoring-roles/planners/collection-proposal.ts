@@ -11,14 +11,12 @@ import type {
   Snapshot,
 } from '../../../contract/records/capabilities.js';
 import type { LibraryRules } from '../../../contract/ports/capabilities.js';
+import type { WorkspaceContents } from '../../../contract/records/workspace/contents.js';
 import type {
-  WorkspaceReader,
-  WorkspaceContents,
-} from '../../../contract/records/workspace/contents.js';
-import type {
-  ResourceSelector,
   CollectionPlanner,
-} from '../../../contract/records/planning/selection.js';
+  ResourceSelector,
+  WorkspaceReader,
+} from '../../../contract/ports/workspace.js';
 import { checkedProposal, ownerRejected } from './change-payload.js';
 
 /** What the collection planner uses; compose passes Library from ServiceCapabilities. */

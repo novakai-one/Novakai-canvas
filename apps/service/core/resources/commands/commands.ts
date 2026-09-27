@@ -14,11 +14,8 @@ import type {
   ResolvedResources,
   Templates,
 } from '../../../contract/records/capabilities.js';
-import type {
-  ResourceCommands,
-  ResourceResult,
-} from '../../../contract/records/presets/preparation.js';
-import type { ResourceSelector } from '../../../contract/records/planning/selection.js';
+import type { ResourceResult } from '../../../contract/records/presets/preparation.js';
+import type { ResourceCommands, ResourceSelector } from '../../../contract/ports/workspace.js';
 import { freeze } from './freeze.js';
 import { instantiate } from './instantiate.js';
 import { prepare } from './preparation.js';

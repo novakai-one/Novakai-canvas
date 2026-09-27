@@ -1,4 +1,11 @@
+/*
+ * The render worker's wire: the job envelope the worker decodes, the render envelope a reply's
+ * value is checked against, and the result envelope that carries it. Declarations only; the
+ * worker adapters decode with them, and each capability checks its own payload. A refused reply
+ * keeps the caller's last accepted scene.
+ */
 import { z } from 'zod';
+import { failureSource } from '../transport/failure-source.js';
 /** Transport validates only host-owned fields; capability payloads are checked by the corresponding public owners. */
 export const renderingEnvelope = z
   .strictObject({
@@ -24,3 +31,25 @@ export const renderEnvelope = z
     style: z.unknown(),
   })
   .readonly();
+/** Versioned transport errors are host-owned; owner-specific detail is reported before encoding this boundary. */
+const diagnostic = z
+  .strictObject({
+    code: z.enum([
+      'invalid-input',
+      'unauthorized',
+      'not-found',
+      'unavailable',
+      'conflict',
+      'cancelled',
+    ]),
+    path: z.string(),
+    message: z.string(),
+    recovery: z.string(),
+    source: failureSource.optional(),
+  })
+  .readonly();
+/** An unknown success payload acquires its domain type only after owner decoding. */
+export const resultEnvelope = z.discriminatedUnion('ok', [
+  z.strictObject({ ok: z.literal(true), value: z.unknown() }),
+  z.strictObject({ ok: z.literal(false), error: diagnostic }),
+]);

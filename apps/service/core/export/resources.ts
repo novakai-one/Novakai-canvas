@@ -7,15 +7,15 @@
 import type {
   AssetResult,
   Catalog,
-  ExportFailure,
+  Collection,
   ExportResult,
-  LeaseRead,
   Resource,
   Resources,
   StoredBlob,
   ThemePreset,
-} from '../../contract/records/export/request.js';
-import type { Collection } from '../../contract/records/capabilities.js';
+} from '../../contract/records/capabilities.js';
+import type { ExportFailure } from '../../contract/records/export/snapshot.js';
+import type { LeaseRead } from '../../contract/ports/export.js';
 import type { RenderDocument } from '../../contract/records/rendering/job.js';
 import { exportRejection } from './faults.js';
 

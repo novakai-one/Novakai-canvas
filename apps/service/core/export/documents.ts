@@ -5,13 +5,14 @@
  * Export refusal; the export route releases its lease and the caller owns the retry. A throw from
  * Language or the formatter is not caught; the HTTP server's `receive` answers it `unavailable`.
  */
-import type { Collection, Language } from '../../contract/records/capabilities.js';
-import type { ExportRules, ModelRules } from '../../contract/ports/capabilities.js';
 import type {
+  Collection,
   Documents,
   ExportResult,
+  Language,
   MarkdownScope,
-} from '../../contract/records/export/request.js';
+} from '../../contract/records/capabilities.js';
+import type { ExportRules, ModelRules } from '../../contract/ports/capabilities.js';
 import { cancelledExport, exportRejection } from './faults.js';
 
 /** The capabilities the documents port reads through. */

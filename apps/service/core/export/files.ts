@@ -5,11 +5,8 @@
  */
 import type { RouteOutcome } from '../../contract/records/transport/protocol.js';
 import type { StaticFile } from '../../contract/records/transport/server.js';
-import type {
-  Artifact,
-  ExportRequest,
-  ExportResult,
-} from '../../contract/records/export/request.js';
+import type { ExportRequest } from '../../contract/records/export/request.js';
+import type { Artifact, ExportResult } from '../../contract/records/capabilities.js';
 import { exportRouteFailure } from './faults.js';
 
 /** The artifact as a download, or its failure as the route failure. */

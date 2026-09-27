@@ -13,10 +13,10 @@ import type {
 } from '../../../contract/records/capabilities.js';
 import { presetCommand } from '../../../contract/records/presets/preparation.js';
 import type {
-  ResourceCommands,
   PresetPreparation,
   ResourceDiagnostic,
 } from '../../../contract/records/presets/preparation.js';
+import type { ResourceCommands } from '../../../contract/ports/workspace.js';
 import { workspaceMetadata } from '../../../contract/records/workspace/metadata.js';
 import { plannerId } from '../../../contract/schemas.js';
 import { authoringFailure } from '../../../contract/errors.js';

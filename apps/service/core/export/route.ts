@@ -9,8 +9,8 @@ import type { Result } from '../../contract/errors.js';
 import type { RouteOutcome } from '../../contract/records/transport/protocol.js';
 import type { PresentationBindings } from '../../contract/records/capabilities.js';
 import type { ExportRules } from '../../contract/ports/capabilities.js';
-import type { PngRuntime } from '../../contract/ports/export.js';
-import type { ExportHandler, ExportRequest } from '../../contract/records/export/request.js';
+import type { ExportHandler, Rasterizer } from '../../contract/ports/export.js';
+import type { ExportRequest } from '../../contract/records/export/request.js';
 import { readExportRequest } from './request.js';
 import { resourceInspector } from './resources.js';
 import { artifactOutcome } from './files.js';
@@ -22,7 +22,7 @@ import { exportDsl, exportMarkdown, type TextOwners } from './text.js';
 export interface ExportRouteOwners extends TextOwners, DocumentOwners {
   readonly export: Pick<ExportRules, 'compose' | 'formatMarkdown'>;
   readonly presentation: PresentationBindings;
-  readonly png: PngRuntime;
+  readonly png: Rasterizer;
 }
 
 /**

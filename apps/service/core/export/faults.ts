@@ -11,9 +11,9 @@ import type {
   AssetResult,
   ExportDiagnostic,
   ExportErrorCode,
-  ExportFailure,
   ExportResult,
-} from '../../contract/records/export/request.js';
+} from '../../contract/records/capabilities.js';
+import type { ExportFailure } from '../../contract/records/export/snapshot.js';
 
 /** An Export refusal carrying the route's one recovery text. */
 export function exportRejection(

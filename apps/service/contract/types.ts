@@ -2,7 +2,7 @@
  * The session facade type, shared by the core facade, the HTTP router and compose. Declaration
  * only; core/session/facade.ts implements it.
  */
-import type { ResourceCommands } from './records/presets/preparation.js';
+import type { ResourceCommands } from './ports/workspace.js';
 import type { Authoring, Snapshot, Receipt, AuthoringResult } from './records/capabilities.js';
 import type { Preparation } from '@novakai/canvas-authoring';
 import type { BuiltinResources } from './records/presets/builtins.js';

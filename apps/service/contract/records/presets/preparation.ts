@@ -1,13 +1,13 @@
 /*
  * Preset preparation records: the request schemas resource commands decode, the prepared preset
- * the preset planner carries, and the ResourceCommands the session exposes. Declarations only;
- * Templates and Assets own their failures, Authoring owns commit and replay.
+ * the preset planner carries, and the diagnostic resource commands answer with. Declarations
+ * only; the ResourceCommands port is in ports/workspace.ts. Templates and Assets own their
+ * failures, Authoring owns commit and replay.
  */
 import type { FailureSource } from '../transport/failure-source.js';
 import type { Result } from '../../errors.js';
 import { z } from 'zod';
-import type { Admission, StoredBlob, Result as AssetResult } from '@novakai/canvas-assets';
-import type { Request, Snapshot, ReadVersion, RecordKey } from '@novakai/canvas-authoring';
+import type { ReadVersion, RecordKey } from '@novakai/canvas-authoring';
 import type { Pin } from '@novakai/canvas-templates';
 /** A preset preparation request: the admission and the uploaded assets it may bind (none by default). */
 export const preparationInput = z.strictObject({
@@ -62,21 +62,3 @@ export interface ResourceDiagnostic {
   readonly source?: FailureSource | undefined;
 }
 export type ResourceResult<T> = Result<T, ResourceDiagnostic>;
-/** Byte operations remain Assets-owned; semantic operations bind one explicit snapshot. */
-export interface ResourceCommands {
-  stage(input: unknown): Promise<AssetResult<Admission>>;
-  restore(input: unknown): Promise<AssetResult<void>>;
-  blob(input: unknown): AssetResult<StoredBlob>;
-  freeze(
-    input: unknown,
-    snapshot: Snapshot,
-  ): ResourceResult<Request>;
-  preparePreset(
-    input: unknown,
-    snapshot: Snapshot,
-  ): ResourceResult<PresetPreparation>;
-  instantiate(
-    input: unknown,
-    snapshot: Snapshot,
-  ): ResourceResult<string>;
-}

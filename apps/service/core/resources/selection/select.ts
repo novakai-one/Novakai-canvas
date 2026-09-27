@@ -14,10 +14,8 @@ import type {
   Templates,
 } from '../../../contract/records/capabilities.js';
 import type { ModelRules } from '../../../contract/ports/capabilities.js';
-import type {
-  ResourceSelector,
-  ResourceSelection,
-} from '../../../contract/records/planning/selection.js';
+import type { ResourceSelection } from '../../../contract/records/planning/selection.js';
+import type { ResourceSelector } from '../../../contract/ports/workspace.js';
 import { json } from '../../../contract/schemas.js';
 import { liveRecords } from '../../workspace/records.js';
 import { boundAssets } from './asset-bindings.js';

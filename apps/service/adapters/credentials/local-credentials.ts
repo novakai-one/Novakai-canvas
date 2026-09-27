@@ -5,7 +5,7 @@ import { dirname } from 'node:path';
 import { z } from 'zod';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
-import type { HttpSecurity } from '../../contract/records/transport/http.js';
+import type { HttpSecurity } from '../../contract/ports/transport.js';
 /** Credentials have no diagram semantics. Their bytes never enter an API response, URL, diagnostic or log. */
 const credential = z.strictObject({
   version: z.literal(1),
