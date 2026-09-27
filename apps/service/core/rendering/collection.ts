@@ -18,27 +18,31 @@ export interface CollectionReads {
   readonly renderer: CollectionRenderer;
   authoring(signal: AbortSignal): Pick<Authoring, 'read'>;
 }
-/** Read one consistent committed workspace; no render result or cache can mutate its canonical diagram. */
+/**
+ * Reads one consistent committed workspace and renders the named collection from it. A failed
+ * workspace read or view check is `unavailable` (source kept); a missing collection is `not-found`;
+ * the renderer's own failures pass through.
+ */
 export async function renderCollection(
   id: string,
   signal: AbortSignal,
-  dependencies: CollectionReads,
+  reads: CollectionReads,
 ): Promise<Result<RenderDocument>> {
-  const snapshot = await dependencies.authoring(signal).read(dependencies.workspace);
+  const snapshot = await reads.authoring(signal).read(reads.workspace);
   if (!snapshot.ok)
     return failure('unavailable', snapshot.error.path, snapshot.error.message, snapshot.error);
-  const view = dependencies.views.read(snapshot.value);
+  const view = reads.views.read(snapshot.value);
   if (!view.ok) return failure('unavailable', view.error.path, view.error.message, view.error);
-  return renderSelected(id, signal, view.value, dependencies);
+  return renderSelected(id, signal, view.value, reads);
 }
 /** Missing collection is distinct from an empty collection; the caller retains its current navigation/draft. */
 function renderSelected(
   id: string,
   signal: AbortSignal,
   view: WorkspaceContents,
-  dependencies: CollectionReads,
+  reads: CollectionReads,
 ): Promise<Result<RenderDocument>> {
   const collection = view.collections.find((item) => item.id === id);
   if (!collection) return Promise.resolve(failure('not-found', id, 'Collection does not exist'));
-  return dependencies.renderer.render(collection, view, signal);
+  return reads.renderer.render(collection, view, signal);
 }

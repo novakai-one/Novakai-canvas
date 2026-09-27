@@ -10,8 +10,9 @@ import { historyVersionsOnly } from './history-versions.js';
 
 /**
  * Commit, then read the post-commit workspace from the same owner, with history contents stripped as the
- * workspace route strips them. A failed read is the result, yet the commit stands: its receipt is durable
- * and the client reconciles through the receipt lookup.
+ * workspace route strips them. A refused commit passes Authoring's failure through unchanged. A failed
+ * read after the commit is `storage-unavailable` (path `snapshot`), yet the commit stands: its receipt
+ * is durable and the client reconciles through the receipt lookup.
  */
 export async function commitThenRead(
   authoring: Authoring,

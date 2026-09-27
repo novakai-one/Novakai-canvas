@@ -32,56 +32,59 @@ export interface SessionOwners {
   authoring(signal: AbortSignal): Authoring;
 }
 
-/** Bind a persistent workspace to read, mutation and render consumers; HTTP owns authentication and caller identity. */
-export function createWorkspaceSession(dependencies: SessionOwners): WorkspaceSession {
-  const lifetime = dependencies.lifetime;
+/**
+ * Binds one open workspace to its read, mutation, render, inspection and export calls, each run
+ * inside the session lifetime. Once the session is closing or closed:
+ * - `read`, `history`, `prepare`, `apply`, `receipt` answer `owners.unavailable()` (compose returns
+ *   `storage-unavailable`, path `session`).
+ * - `render`, `inspect`, `exportArtifact` answer `unavailable` (path `session`).
+ * While open, every failure passes through unchanged from Authoring, rendering and export.
+ * `close` answers the owners' close failure, or `unavailable` (path `shutdown`) when their close throws.
+ */
+export function createWorkspaceSession(owners: SessionOwners): WorkspaceSession {
+  const lifetime = owners.lifetime;
   return {
-    workspace: dependencies.workspace,
-    installation: dependencies.installation,
-    resources: dependencies.resources,
+    workspace: owners.workspace,
+    installation: owners.installation,
+    resources: owners.resources,
     history: () =>
       lifetime.run(
-        () => dependencies.authoring(dependencies.readSignal).history(dependencies.workspace),
-        dependencies.unavailable,
+        () => owners.authoring(owners.readSignal).history(owners.workspace),
+        owners.unavailable,
       ),
     read: () =>
       lifetime.run(
-        () => dependencies.authoring(dependencies.readSignal).read(dependencies.workspace),
-        dependencies.unavailable,
+        () => owners.authoring(owners.readSignal).read(owners.workspace),
+        owners.unavailable,
       ),
     prepare: (request, signal, preview = false) =>
-      lifetime.run(
-        () => dependencies.authoring(signal).prepare(request, preview),
-        dependencies.unavailable,
-      ),
+      lifetime.run(() => owners.authoring(signal).prepare(request, preview), owners.unavailable),
     apply: (request, signal, options = {}) =>
       lifetime.run(
-        () =>
-          commitThenRead(dependencies.authoring(signal), dependencies.workspace, request, options),
-        dependencies.unavailable,
+        () => commitThenRead(owners.authoring(signal), owners.workspace, request, options),
+        owners.unavailable,
       ),
     receipt: (request) =>
       lifetime.run(
-        () =>
-          dependencies.authoring(dependencies.readSignal).receipt(dependencies.workspace, request),
-        dependencies.unavailable,
+        () => owners.authoring(owners.readSignal).receipt(owners.workspace, request),
+        owners.unavailable,
       ),
     render: (id, signal) =>
       lifetime.run(
-        () => renderCollection(id, signal, dependencies),
+        () => renderCollection(id, signal, owners),
         () => failure('unavailable', 'session', 'Workspace is closing or closed'),
       ),
     inspect: (id, signal) =>
       lifetime.run(
-        () => inspectCollection(id, signal, dependencies),
+        () => inspectCollection(id, signal, owners),
         () => failure('unavailable', 'session', 'Workspace is closing or closed'),
       ),
     exportArtifact: (input, signal) =>
       lifetime.run(
-        () => dependencies.exporter(input, signal),
+        () => owners.exporter(input, signal),
         () => unavailableExport(),
       ),
-    subscribe: (listener) => dependencies.changes.subscribe(listener),
+    subscribe: (listener) => owners.changes.subscribe(listener),
     close: () => lifetime.close(),
   };
 }

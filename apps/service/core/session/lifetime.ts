@@ -12,19 +12,12 @@ export interface SessionLifetime {
   ): Promise<T>;
   close(): Promise<Result<void>>;
 }
-/** Physical owner shutdown is terminal before the returned result; caller retains the workspace on any failed close. */
-async function shutdown(
-  active: readonly Promise<unknown>[],
-  close: () => Promise<Result<void>>,
-): Promise<Result<void>> {
-  await Promise.allSettled(active);
-  try {
-    return await close();
-  } catch {
-    return failure('unavailable', 'shutdown', 'Workspace owners could not close cleanly');
-  }
-}
-/** Session-local operation tracking is lifecycle state, never canonical diagram data or a second admission mechanism. */
+/**
+ * Tracks the session's admitted work. `run` answers the caller's `unavailable()` once closing has
+ * begun. `close` drains admitted work, then closes the owners once; every later call gets the same
+ * answer. The owners' own close failure is returned as-is; a thrown close is `unavailable` (path
+ * `shutdown`).
+ */
 export function createSessionLifetime(close: () => Promise<Result<void>>): SessionLifetime {
   const active = new Set<Promise<unknown>>();
   let closing: Promise<Result<void>> | null = null;
@@ -44,4 +37,16 @@ export function createSessionLifetime(close: () => Promise<Result<void>>): Sessi
       return closing;
     },
   };
+}
+/** Waits for every admitted operation to settle, then closes the owners; a thrown close is `unavailable` (path `shutdown`). */
+async function shutdown(
+  active: readonly Promise<unknown>[],
+  close: () => Promise<Result<void>>,
+): Promise<Result<void>> {
+  await Promise.allSettled(active);
+  try {
+    return await close();
+  } catch {
+    return failure('unavailable', 'shutdown', 'Workspace owners could not close cleanly');
+  }
 }
