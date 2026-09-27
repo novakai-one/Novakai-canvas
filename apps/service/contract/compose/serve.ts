@@ -45,7 +45,6 @@ export async function serveWorkspace(
         admission,
         decoder: { read: readCommand },
         source: createSourceReadout(createServiceLanguage()),
-        exporter: session.exportArtifact,
       }),
     });
   } catch {

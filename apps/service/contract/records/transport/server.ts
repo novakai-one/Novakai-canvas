@@ -1,10 +1,9 @@
 import type { WorkspaceSession } from '../../types.js';
 import type { HttpAdmission, HttpSecurity } from './http.js';
-import type { ApiRouter, CommandDecoder } from './protocol.js';
+import type { ApiRouter } from './protocol.js';
 import type { Result } from '../../errors.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { WireOutcome } from './protocol.js';
-import type { Scope } from '@novakai/canvas-language';
 /** Body readers expose only the iterator control needed to preserve a rejected native socket. */
 export interface BodyStream {
   iterator(options: { readonly destroyOnReturn: false }): AsyncIterableIterator<unknown>;
@@ -51,34 +50,3 @@ export interface StaticFile {
 export interface StaticFiles {
   read(path: string): Promise<Result<StaticFile>>;
 }
-export interface RouterBindings {
-  readonly session: Pick<
-    WorkspaceSession,
-    | 'workspace'
-    | 'installation'
-    | 'read'
-    | 'history'
-    | 'apply'
-    | 'prepare'
-    | 'receipt'
-    | 'render'
-    | 'inspect'
-    | 'resources'
-  >;
-  readonly generation: string;
-  readonly admission: Pick<HttpAdmission, 'mutation'>;
-  readonly decoder: CommandDecoder;
-  readonly source: {
-    describe(): unknown;
-    print(
-      collection: unknown,
-      scope?: Scope,
-    ): WireReadout;
-  };
-  readonly exporter?: (
-    input: unknown,
-    signal: AbortSignal,
-  ) => Promise<import('./protocol.js').RouteOutcome>;
-}
-/** Language diagnostics use an array, so this adapter translates them into the single transport diagnostic. */
-export type WireReadout = Result<unknown>;

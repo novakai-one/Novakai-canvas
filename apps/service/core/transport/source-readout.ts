@@ -4,16 +4,14 @@
  * the injected Language. The caller keeps its draft on a refused print.
  */
 import type { Language, Scope } from '../../contract/records/capabilities.js';
-import type { RouterBindings, WireReadout } from '../../contract/records/transport/server.js';
-import { failure, success } from '../../contract/errors.js';
+import type { SourceReadout } from './routes.js';
+import { failure, success, type Result } from '../../contract/errors.js';
 
 /**
  * Binds the readout to Language. `describe` returns Language's vocabulary; `print` behaves as
  * `print` below, over the whole collection when no scope is given.
  */
-export function createSourceReadout(
-  language: Pick<Language, 'describe' | 'print'>,
-): RouterBindings['source'] {
+export function createSourceReadout(language: Pick<Language, 'describe' | 'print'>): SourceReadout {
   return {
     describe: () => language.describe(),
     print: (collection, scope = { kind: 'all' }) => print(language, collection, scope),
@@ -28,7 +26,7 @@ function print(
   language: Pick<Language, 'print'>,
   collection: unknown,
   scope: Scope,
-): WireReadout {
+): Result<unknown> {
   const printed = language.print({ collection, scope });
   if (!printed.ok)
     return failure(
