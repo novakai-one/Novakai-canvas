@@ -7,13 +7,13 @@ import type {
   Result,
   ErrorCode,
 } from '@novakai/canvas-authoring';
-import { presetCommand } from '../../contract/records/resource-commands.js';
+import { presetCommand } from '../../contract/records/presets/preparation.js';
 import type {
   ResourceCommands,
   PresetPreparation,
   ResourceDiagnostic,
-} from '../../contract/records/resource-commands.js';
-import { workspaceMetadata } from '../../contract/records/metadata.js';
+} from '../../contract/records/presets/preparation.js';
+import { workspaceMetadata } from '../../contract/records/workspace/metadata.js';
 const authoringCodes: Readonly<Record<string, ErrorCode>> = {
   'invalid-input': 'invalid-input',
   'unsupported-version': 'unsupported-version',

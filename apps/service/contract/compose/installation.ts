@@ -8,7 +8,7 @@ import { composeTemplates } from '@novakai/canvas-templates';
 import { createLanguage } from '@novakai/canvas-language';
 import { validate, plan, stage } from '@novakai/canvas-model';
 import type { Assets } from '@novakai/canvas-assets';
-import type { BuiltinResources } from '../records/builtins.js';
+import type { BuiltinResources } from '../records/presets/builtins.js';
 import type { Result } from '../errors.js';
 import { failure } from '../errors.js';
 

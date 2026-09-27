@@ -1,9 +1,13 @@
 import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse, Server } from 'node:http';
-import type { HttpMetadata } from '../../contract/records/http.js';
-import type { Caller } from '../../contract/records/http.js';
-import type { LocalServer, ServerBindings, ServerOptions } from '../../contract/records/server.js';
-import type { RouteOutcome } from '../../contract/records/protocol.js';
+import type { HttpMetadata } from '../../contract/records/transport/http.js';
+import type { Caller } from '../../contract/records/transport/http.js';
+import type {
+  LocalServer,
+  ServerBindings,
+  ServerOptions,
+} from '../../contract/records/transport/server.js';
+import type { RouteOutcome } from '../../contract/records/transport/protocol.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
 

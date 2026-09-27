@@ -1,7 +1,7 @@
-import type { WorkspaceSession } from '../types.js';
+import type { WorkspaceSession } from '../../types.js';
 import type { HttpAdmission, HttpSecurity } from './http.js';
 import type { ApiRouter, CommandDecoder } from './protocol.js';
-import type { Result } from '../errors.js';
+import type { Result } from '../../errors.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { WireOutcome } from './protocol.js';
 import type { Scope } from '@novakai/canvas-language';

@@ -7,10 +7,10 @@
 import { openAssets } from '@novakai/canvas-assets';
 import { openSqlite } from '@novakai/canvas-persistence';
 import type { Result as AuthoringResult } from '@novakai/canvas-authoring';
-import type { WorkspaceOptions, NativeWorkspace } from '../records/startup.js';
-import type { BuiltinResources } from '../records/builtins.js';
+import type { WorkspaceOptions, NativeWorkspace } from '../records/workspace/startup.js';
+import type { BuiltinResources } from '../records/presets/builtins.js';
 import type { DiagramProducer } from '../ports/rendering.js';
-import type { Snapshot } from '../records/owners.js';
+import type { Snapshot } from '../records/capabilities.js';
 import type { WorkspaceSession } from '../types.js';
 import type { Result } from '../errors.js';
 import { failure } from '../errors.js';

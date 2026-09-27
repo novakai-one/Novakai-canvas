@@ -2,8 +2,14 @@ import { planMembership } from '@novakai/canvas-library';
 import { proposalSchema, failure } from '@novakai/canvas-authoring';
 import type { Snapshot, Proposal, Result, Digest } from '@novakai/canvas-authoring';
 import type { Collection } from '@novakai/canvas-model';
-import type { WorkspaceReader, WorkspaceContents } from '../../contract/records/workspace.js';
-import type { ResourceSelector, CollectionPlanner } from '../../contract/records/planning.js';
+import type {
+  WorkspaceReader,
+  WorkspaceContents,
+} from '../../contract/records/workspace/contents.js';
+import type {
+  ResourceSelector,
+  CollectionPlanner,
+} from '../../contract/records/planning/planning.js';
 /** A create includes catalog membership in the same proposed Authoring transaction as its canonical collection. */
 function propose(
   snapshot: Snapshot,

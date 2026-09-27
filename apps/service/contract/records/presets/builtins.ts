@@ -1,7 +1,7 @@
 import type { FontSet } from '@novakai/canvas-presentation';
 import type { Catalog, RecipePayload, Templates } from '@novakai/canvas-templates';
 import type { LoweredIntent } from '@novakai/canvas-language';
-import type { PresetContext } from './presets.js';
+import type { PresetContext } from './codecs.js';
 /** Repository-owned source inputs are prepared for Authoring admission; reading/staging alone creates no canonical bindings. */
 export interface BuiltinSources {
   readonly fonts: FontSet;

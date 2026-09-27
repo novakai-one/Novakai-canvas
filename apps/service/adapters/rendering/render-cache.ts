@@ -1,5 +1,5 @@
 import type { DiagramProducer } from '../../contract/ports/rendering.js';
-import type { RenderingJob, RenderDocument } from '../../contract/records/rendering.js';
+import type { RenderingJob, RenderDocument } from '../../contract/records/rendering/job.js';
 import type { Result } from '../../contract/errors.js';
 /** Recent renders kept; enough for the check render during apply plus the reads after it. */
 const KEEP = 8;

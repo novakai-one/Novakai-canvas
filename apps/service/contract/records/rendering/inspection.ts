@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { failureSource } from './failure-source.js';
+import { failureSource } from '../transport/failure-source.js';
 /** Scene warnings arrive owner-defined; consumers retain codes without reinterpreting message text. */
 const warning = z
   .strictObject({

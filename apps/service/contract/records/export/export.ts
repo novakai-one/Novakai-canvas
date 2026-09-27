@@ -7,13 +7,13 @@
 import { z } from 'zod';
 import type { Assets, Result as AssetResult, StoredBlob } from '@novakai/canvas-assets';
 import type { Diagnostic as ExportDiagnostic } from '@novakai/canvas-export';
-import type { Authoring, Collection, Language } from './owners.js';
-import type { BuiltinResources } from './builtins.js';
-import type { ResourceSelector } from './planning.js';
-import type { WorkspaceContents, WorkspaceReader } from './workspace.js';
-import type { RouteOutcome } from './protocol.js';
-import type { CollectionRenderer } from '../ports/collection-renderer.js';
-import type { PngRuntime } from '../ports/png-runtime.js';
+import type { Authoring, Collection, Language } from '../capabilities.js';
+import type { BuiltinResources } from '../presets/builtins.js';
+import type { ResourceSelector } from '../planning/planning.js';
+import type { WorkspaceContents, WorkspaceReader } from '../workspace/contents.js';
+import type { RouteOutcome } from '../transport/protocol.js';
+import type { CollectionRenderer } from '../../ports/collection-renderer.js';
+import type { PngRuntime } from '../../ports/export.js';
 
 export type { ReadLease, Result as AssetResult, StoredBlob } from '@novakai/canvas-assets';
 export type {

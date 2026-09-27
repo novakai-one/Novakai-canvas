@@ -1,10 +1,10 @@
-import type { FailureSource } from '../../contract/records/failure-source.js';
+import type { FailureSource } from '../../contract/records/transport/failure-source.js';
 import { presetId, version, digest } from '@novakai/canvas-templates';
 import type { PortableTheme, PortableToken } from '@novakai/canvas-design-system';
 import type { Result, RecipePayload, ThemePayload, ThemePreset } from '@novakai/canvas-templates';
 import type { LoweredIntent, Result as LanguageResult } from '@novakai/canvas-language';
-import type { PresetCodecs, PresetContext } from '../../contract/records/presets.js';
-import { themeInput, type ThemeInput } from '../../contract/records/theme-input.js';
+import type { PresetCodecs, PresetContext } from '../../contract/records/presets/codecs.js';
+import { themeInput, type ThemeInput } from '../../contract/records/presets/theme-input.js';
 /** Codec failures leave immutable preset admission uncommitted; Authoring callers correct the source or selected base. */
 function rejected<T>(
   message: string,

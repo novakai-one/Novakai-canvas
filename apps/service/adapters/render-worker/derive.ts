@@ -1,4 +1,4 @@
-import type { FailureSource } from '../../contract/records/failure-source.js';
+import type { FailureSource } from '../../contract/records/transport/failure-source.js';
 import { validate, fieldTypeDisplay, typeUseDisplay } from '@novakai/canvas-model';
 import {
   composePresentation,
@@ -12,7 +12,7 @@ import type {
 } from '@novakai/canvas-presentation';
 import { composeLayout } from '@novakai/canvas-layout';
 import type { Result as LayoutResult, ProjectionReader } from '@novakai/canvas-layout';
-import type { RenderingJob, RenderDocument } from '../../contract/records/rendering.js';
+import type { RenderingJob, RenderDocument } from '../../contract/records/rendering/job.js';
 import { failure, type Result } from '../../contract/errors.js';
 /** A structured local failure is translated only at produce; callers retain current scene and retry corrected resources. */
 class RenderingFault extends Error {

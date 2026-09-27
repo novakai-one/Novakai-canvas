@@ -8,8 +8,8 @@ import {
 import type { Result as PresentationResult } from '@novakai/canvas-presentation';
 import { readScene, defaultEngineVersions, options } from '@novakai/canvas-layout';
 import type { Result as LayoutResult } from '@novakai/canvas-layout';
-import { renderEnvelope } from '../../contract/records/worker.js';
-import type { RenderingJob, RenderDocument } from '../../contract/records/rendering.js';
+import { renderEnvelope } from '../../contract/records/rendering/worker.js';
+import type { RenderingJob, RenderDocument } from '../../contract/records/rendering/job.js';
 import { failure, type Result } from '../../contract/errors.js';
 /** Typed local decoding failures are caught before the service exposes a worker response. */
 class ReadoutFault extends Error {}

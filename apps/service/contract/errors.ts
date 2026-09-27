@@ -1,4 +1,4 @@
-import type { FailureSource } from './records/failure-source.js';
+import type { FailureSource } from './records/transport/failure-source.js';
 /** Host failures name correction/recovery without exposing database or provider exception strings. */
 export type ErrorCode =
   'invalid-input' | 'unauthorized' | 'not-found' | 'unavailable' | 'conflict' | 'cancelled';

@@ -3,9 +3,9 @@ import type { Collection } from '@novakai/canvas-model';
 import type { CollectionRenderer } from '../../contract/ports/collection-renderer.js';
 import type { RenderJobs } from '../../contract/ports/render-jobs.js';
 import type { DiagramProducer } from '../../contract/ports/rendering.js';
-import type { ResourceSelector } from '../../contract/records/planning.js';
-import type { WorkspaceContents } from '../../contract/records/workspace.js';
-import type { RenderDocument } from '../../contract/records/rendering.js';
+import type { ResourceSelector } from '../../contract/records/planning/planning.js';
+import type { WorkspaceContents } from '../../contract/records/workspace/contents.js';
+import type { RenderDocument } from '../../contract/records/rendering/job.js';
 import { failure, type Result } from '../../contract/errors.js';
 export interface CollectionRenderOwners {
   readonly assets: Assets;

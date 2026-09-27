@@ -7,9 +7,9 @@ import type {
   ReadVersion,
   AuthoringResult,
   Proposal,
-} from './owners.js';
+} from '../capabilities.js';
 import type { ResolvedResources, Language } from '@novakai/canvas-language';
-import type { WorkspaceContents, WorkspaceReader } from './workspace.js';
+import type { WorkspaceContents, WorkspaceReader } from '../workspace/contents.js';
 /** Immutable alias resolution is repeated against the same snapshot, then compared with Authoring's admitted pins. */
 export interface ResourceSelection {
   readonly resources: ResolvedResources;

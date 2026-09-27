@@ -1,6 +1,6 @@
 import type { Assets, Result as AssetResult } from '@novakai/canvas-assets';
 import type { Persistence, Result as StorageResult } from '@novakai/canvas-persistence';
-import type { Result } from '../errors.js';
+import type { Result } from '../../errors.js';
 /** Host-selected absolute locations never originate in diagram DSL or browser-authored content. */
 export interface WorkspaceOptions {
   readonly directory: string;

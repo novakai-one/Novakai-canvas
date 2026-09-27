@@ -2,7 +2,7 @@ import { parentPort } from 'node:worker_threads';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
 import type { DiagramProducer } from '../../contract/ports/rendering.js';
-import type { RenderingJob } from '../../contract/records/rendering.js';
+import type { RenderingJob } from '../../contract/records/rendering/job.js';
 /** Parsing is injected at composition; worker transport owns no domain schema or rendering implementation. */
 export interface WorkerOwners {
   readonly producer: DiagramProducer;

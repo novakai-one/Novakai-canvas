@@ -11,8 +11,8 @@
 import { composeExport } from '@novakai/canvas-export';
 import { createReactBindings, type ReactBindings } from '@novakai/canvas-presentation';
 import { failure, type Result } from '../../contract/errors.js';
-import type { RouteOutcome } from '../../contract/records/protocol.js';
-import type { Snapshot } from '../../contract/records/owners.js';
+import type { RouteOutcome } from '../../contract/records/transport/protocol.js';
+import type { Snapshot } from '../../contract/records/capabilities.js';
 import type {
   AssetResult,
   ExportHandler,
@@ -24,7 +24,7 @@ import type {
   SelectedCollection,
   SnapshotLease,
   StoredBlob,
-} from '../../contract/records/export.js';
+} from '../../contract/records/export/export.js';
 import {
   artifactOutcome,
   cancelledExport,

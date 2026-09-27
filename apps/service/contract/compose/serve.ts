@@ -7,7 +7,7 @@
 import { createLanguage } from '@novakai/canvas-language';
 import { validate, plan, stage } from '@novakai/canvas-model';
 import type { WorkspaceSession } from '../types.js';
-import type { LocalServer, ServerOptions } from '../records/server.js';
+import type { LocalServer, ServerOptions } from '../records/transport/server.js';
 import type { Result } from '../errors.js';
 import { failure } from '../errors.js';
 import { createHttpAdmission, readCommand } from '../api.js';

@@ -10,8 +10,8 @@ import type {
   PresetPreparation,
   ResourceDiagnostic,
   ResourceResult,
-} from '../../contract/records/resource-commands.js';
-import { dslCommand, presetAdmission } from '../../contract/records/commands.js';
+} from '../../contract/records/presets/preparation.js';
+import { dslCommand, presetAdmission } from '../../contract/records/planning/commands.js';
 const input = z.strictObject({
   admission: z.json(),
   assets: z.array(z.strictObject({ alias: z.string(), digest: z.string() })).default([]),

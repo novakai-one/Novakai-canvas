@@ -8,7 +8,7 @@ import type {
   WorkspaceReader,
   WorkspaceReaderOwners,
   WorkspaceContents,
-} from '../../contract/records/workspace.js';
+} from '../../contract/records/workspace/contents.js';
 /** Preserve owner rejection across typed record accumulation; no invalid member is dropped from a workspace. */
 function collection(
   records: Result<readonly Collection[]>,

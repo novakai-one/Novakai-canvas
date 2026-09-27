@@ -1,4 +1,4 @@
-import type { Collection } from '../../contract/records/owners.js';
+import type { Collection } from '../../contract/records/capabilities.js';
 /** Search projections contain only canonical descriptions and visibility; Library checks its own inventory vocabulary. */
 export function projectCollection(collection: Collection): unknown {
   return {

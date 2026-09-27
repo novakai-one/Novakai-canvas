@@ -3,9 +3,13 @@
  * <collection>-<revision>[-<scope>].<extension> and stamped with the exported revision; an
  * artifact also carries its digest. A failed artifact becomes the route failure.
  */
-import type { RouteOutcome } from '../../contract/records/protocol.js';
-import type { StaticFile } from '../../contract/records/server.js';
-import type { Artifact, ExportRequest, ExportResult } from '../../contract/records/export.js';
+import type { RouteOutcome } from '../../contract/records/transport/protocol.js';
+import type { StaticFile } from '../../contract/records/transport/server.js';
+import type {
+  Artifact,
+  ExportRequest,
+  ExportResult,
+} from '../../contract/records/export/export.js';
 import { exportRouteFailure } from './faults.js';
 
 /** The artifact as a download, or its failure as the route failure. */

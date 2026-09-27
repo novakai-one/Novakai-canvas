@@ -1,4 +1,4 @@
-import type { Snapshot } from '../../contract/records/owners.js';
+import type { Snapshot } from '../../contract/records/capabilities.js';
 /** The browser needs history versions, not history contents (which grow with every edit). */
 export function historyVersionsOnly(snapshot: Snapshot): Snapshot {
   return {

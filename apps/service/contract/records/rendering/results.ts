@@ -1,4 +1,4 @@
-import { failureSource } from './failure-source.js';
+import { failureSource } from '../transport/failure-source.js';
 import { z } from 'zod';
 /** Versioned transport errors are host-owned; owner-specific detail is reported before encoding this boundary. */
 export const diagnostic = z

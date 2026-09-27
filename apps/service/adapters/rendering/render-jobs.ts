@@ -1,4 +1,4 @@
-import type { FailureSource } from '../../contract/records/failure-source.js';
+import type { FailureSource } from '../../contract/records/transport/failure-source.js';
 import { fontSource, fontSet, visualAsset, resolvedStyle } from '@novakai/canvas-presentation';
 import type { FontSource, VisualAsset } from '@novakai/canvas-presentation';
 import { options } from '@novakai/canvas-layout';
@@ -6,9 +6,9 @@ import type { Scene } from '@novakai/canvas-layout';
 import { failure } from '@novakai/canvas-authoring';
 import type { Result } from '@novakai/canvas-authoring';
 import type { Collection } from '@novakai/canvas-model';
-import type { RenderResourceOwners } from '../../contract/records/render-resources.js';
-import type { WorkspaceContents } from '../../contract/records/workspace.js';
-import type { RenderingJob } from '../../contract/records/rendering.js';
+import type { RenderResourceOwners } from '../../contract/records/rendering/resources.js';
+import type { WorkspaceContents } from '../../contract/records/workspace/contents.js';
+import type { RenderingJob } from '../../contract/records/rendering/job.js';
 import type { RenderJobs } from '../../contract/ports/render-jobs.js';
 /** Known owner failures preserve their actionable explanation at the Authoring feasibility boundary. */
 class RenderResourceFault extends Error {

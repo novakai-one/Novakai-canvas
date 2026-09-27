@@ -5,7 +5,7 @@ import type { FontSource } from '@novakai/canvas-presentation';
 import type { Assets } from '@novakai/canvas-assets';
 import type { TokenFileBindings } from '@novakai/canvas-design-system';
 import type { RecipePayload } from '@novakai/canvas-templates';
-import type { BuiltinSources } from '../../contract/records/builtins.js';
+import type { BuiltinSources } from '../../contract/records/presets/builtins.js';
 import { failure, type Result } from '../../contract/errors.js';
 /** Typed staging failure is caught before any canonical startup admission; previously staged bytes remain collectible. */
 class BuiltinFault extends Error {}

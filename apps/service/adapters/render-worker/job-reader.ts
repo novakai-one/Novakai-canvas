@@ -1,8 +1,8 @@
 import { validate } from '@novakai/canvas-model';
 import { fontSet, resolvedStyle, visualAsset } from '@novakai/canvas-presentation';
 import { options } from '@novakai/canvas-layout';
-import { renderingEnvelope } from '../../contract/records/worker.js';
-import type { RenderingJob } from '../../contract/records/rendering.js';
+import { renderingEnvelope } from '../../contract/records/rendering/worker.js';
+import type { RenderingJob } from '../../contract/records/rendering/job.js';
 import { failure, type Result } from '../../contract/errors.js';
 /** Runtime worker decoding uses owner schemas before calling native providers; host owns correction/retry. */
 export function readRenderingJob(input: unknown): Result<RenderingJob> {

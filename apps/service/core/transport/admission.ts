@@ -4,11 +4,11 @@ import type {
   HttpMetadata,
   HttpSecurity,
   MutationOwner,
-} from '../../contract/records/http.js';
+} from '../../contract/records/transport/http.js';
 import { sessionCookieName } from './session-cookie.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
-import type { Request } from '../../contract/records/owners.js';
+import type { Request } from '../../contract/records/capabilities.js';
 
 /** Reject DNS rebinding before credentials, paths or body content can reach an owner. */
 function admitHost(

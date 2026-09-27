@@ -9,9 +9,9 @@ import type {
   Diagnostic,
 } from '@novakai/canvas-authoring';
 import type { Collection } from '@novakai/canvas-model';
-import type { WorkspaceContents } from '../../contract/records/workspace.js';
+import type { WorkspaceContents } from '../../contract/records/workspace/contents.js';
 import type { FeasibilityOwners } from '../../contract/ports/render-jobs.js';
-import type { RenderDocument } from '../../contract/records/rendering.js';
+import type { RenderDocument } from '../../contract/records/rendering/job.js';
 /** Geometry failure is mandatory even when callers did not request a visual preview. */
 async function render(
   collection: Collection,

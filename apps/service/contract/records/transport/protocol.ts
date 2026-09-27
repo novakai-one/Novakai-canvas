@@ -1,9 +1,9 @@
 import type { OperationSource } from './failure-source.js';
 import { operationSource } from './failure-source.js';
 import { z } from 'zod';
-import type { Result } from '../errors.js';
+import type { Result } from '../../errors.js';
 import type { Caller, HttpAdmission, HttpMetadata } from './http.js';
-import type { Request } from './owners.js';
+import type { Request } from '../capabilities.js';
 import type { StaticFile } from './server.js';
 /** A transport generation prevents a retained request from silently targeting a restarted/restored owner set. */
 export const mutationEnvelope = z.strictObject({

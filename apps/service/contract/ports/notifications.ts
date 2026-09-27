@@ -1,4 +1,4 @@
-import type { Notifications, Receipt, WorkspaceId } from '../records/owners.js';
+import type { Notifications, Receipt, WorkspaceId } from '../records/capabilities.js';
 /** Change messages are hints only; subscribers reread authoritative snapshots and preserve their local drafts. */
 export interface CommittedChange {
   readonly workspace: WorkspaceId;

@@ -8,7 +8,7 @@ import type {
   ErrorCode,
 } from '@novakai/canvas-authoring';
 import type { Result as StorageResult, StorageError } from '@novakai/canvas-persistence';
-import type { AuthoringStore, ConditionalStorage } from '../../contract/ports/store.js';
+import type { AuthoringStore, ConditionalStorage } from '../../contract/ports/storage.js';
 const storageCodes: Readonly<Record<StorageError['code'], ErrorCode>> = {
   'invalid-input': 'invalid-input',
   'unsupported-version': 'unsupported-version',

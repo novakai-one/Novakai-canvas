@@ -1,10 +1,10 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { HttpMetadata } from '../../contract/records/http.js';
-import { httpBodyLimit } from '../../contract/records/http.js';
+import type { HttpMetadata } from '../../contract/records/transport/http.js';
+import { httpBodyLimit } from '../../contract/records/transport/http.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
-import type { BodyStream, HttpIo, StaticFile } from '../../contract/records/server.js';
-import type { WireOutcome } from '../../contract/records/protocol.js';
+import type { BodyStream, HttpIo, StaticFile } from '../../contract/records/transport/server.js';
+import type { WireOutcome } from '../../contract/records/transport/protocol.js';
 /** Ambiguous duplicated headers are rejected by returning a value that cannot pass exact admission. */
 function header(
   request: IncomingMessage,

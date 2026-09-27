@@ -1,4 +1,4 @@
-import type { Collection, Snapshot, AuthoringResult } from './owners.js';
+import type { Collection, Snapshot, AuthoringResult } from '../capabilities.js';
 import type { Catalog as PresetCatalog, Templates } from '@novakai/canvas-templates';
 import type { LoweredIntent } from '@novakai/canvas-language';
 import type { LibrarySnapshot } from '@novakai/canvas-library';

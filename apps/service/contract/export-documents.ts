@@ -7,8 +7,8 @@
 import { validate } from '@novakai/canvas-model';
 import { formatMarkdown } from '@novakai/canvas-export';
 import { cancelledExport, exportRejection } from './api.js';
-import type { Collection, Language } from './records/owners.js';
-import type { Documents, ExportResult, MarkdownScope } from './records/export.js';
+import type { Collection, Language } from './records/capabilities.js';
+import type { Documents, ExportResult, MarkdownScope } from './records/export/export.js';
 
 /** The documents port: Model validates, Language prints whole collections; import is refused. */
 export function exportDocuments(language: Pick<Language, 'print'>): Documents {

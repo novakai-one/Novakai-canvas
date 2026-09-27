@@ -1,6 +1,6 @@
 import type { SessionDependencies } from '../../contract/types.js';
-import type { InspectionReport } from '../../contract/records/inspection.js';
-import type { RenderDocument } from '../../contract/records/rendering.js';
+import type { InspectionReport } from '../../contract/records/rendering/inspection.js';
+import type { RenderDocument } from '../../contract/records/rendering/job.js';
 import type { Diagnostic, Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
 import { renderCollection } from './collection.js';

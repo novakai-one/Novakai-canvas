@@ -5,15 +5,15 @@
  * outcome, keeping the diagnostic as structured source evidence.
  */
 import { failure } from '../../contract/errors.js';
-import type { RouteOutcome } from '../../contract/records/protocol.js';
-import type { OperationSource } from '../../contract/records/failure-source.js';
+import type { RouteOutcome } from '../../contract/records/transport/protocol.js';
+import type { OperationSource } from '../../contract/records/transport/failure-source.js';
 import type {
   AssetResult,
   ExportDiagnostic,
   ExportErrorCode,
   ExportFailure,
   ExportResult,
-} from '../../contract/records/export.js';
+} from '../../contract/records/export/export.js';
 
 /** An Export refusal carrying the route's one recovery text. */
 export function exportRejection(

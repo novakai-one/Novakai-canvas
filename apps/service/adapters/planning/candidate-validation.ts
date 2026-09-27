@@ -1,4 +1,4 @@
-import type { FailureSource } from '../../contract/records/failure-source.js';
+import type { FailureSource } from '../../contract/records/transport/failure-source.js';
 import { failure } from '@novakai/canvas-authoring';
 import type {
   CandidateValidator,
@@ -9,8 +9,8 @@ import type {
 } from '@novakai/canvas-authoring';
 import type { Preset } from '@novakai/canvas-templates';
 import type { AdmissionOwners } from '../../contract/ports/admission.js';
-import type { WorkspaceContents } from '../../contract/records/workspace.js';
-import { workspaceMetadata, assetMetadata } from '../../contract/records/metadata.js';
+import type { WorkspaceContents } from '../../contract/records/workspace/contents.js';
+import { workspaceMetadata, assetMetadata } from '../../contract/records/workspace/metadata.js';
 /** Cross-owner references are validated as a whole; a missing participant never becomes a skipped check. */
 class AdmissionFault extends Error {
   /** Expected owner failures keep their evidence through private short-circuiting. */

@@ -1,11 +1,11 @@
-import type { FailureSource } from './failure-source.js';
-import type { Result } from '../errors.js';
+import type { FailureSource } from '../transport/failure-source.js';
+import type { Result } from '../../errors.js';
 import { z } from 'zod';
 import type { Assets, Admission, StoredBlob, Result as AssetResult } from '@novakai/canvas-assets';
 import type { Request, Snapshot, ReadVersion, RecordKey } from '@novakai/canvas-authoring';
 import type { Templates, Pin } from '@novakai/canvas-templates';
 import type { Language, LoweredIntent, ResolvedResources } from '@novakai/canvas-language';
-import type { ResourceSelector } from './planning.js';
+import type { ResourceSelector } from '../planning/planning.js';
 /** Prepared content is immutable host data; Authoring repeats preparation and owns commit/replay. */
 export const presetCommand = z.strictObject({
   admission: z.json(),

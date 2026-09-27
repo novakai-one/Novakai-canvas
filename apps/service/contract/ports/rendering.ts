@@ -1,4 +1,4 @@
-import type { RenderingJob, RenderDocument } from '../records/rendering.js';
+import type { RenderingJob, RenderDocument } from '../records/rendering/job.js';
 import type { Result } from '../errors.js';
 /** Service schedules real worker work; callers keep the last accepted scene until this request succeeds. */
 export interface DiagramProducer {

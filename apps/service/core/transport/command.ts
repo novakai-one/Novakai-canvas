@@ -1,6 +1,9 @@
-import { mutationEnvelope } from '../../contract/records/protocol.js';
-import type { AdmittedMutation, CommandAdmission } from '../../contract/records/protocol.js';
-import { httpBodyLimit } from '../../contract/records/http.js';
+import { mutationEnvelope } from '../../contract/records/transport/protocol.js';
+import type {
+  AdmittedMutation,
+  CommandAdmission,
+} from '../../contract/records/transport/protocol.js';
+import { httpBodyLimit } from '../../contract/records/transport/http.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
 /** Decode only bounded JSON with the advertised content type; malformed input never reaches Authoring. */

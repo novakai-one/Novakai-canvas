@@ -1,5 +1,5 @@
-import type { Result } from '../errors.js';
-import type { Request } from './owners.js';
+import type { Result } from '../../errors.js';
+import type { Request } from '../capabilities.js';
 /** Transport identities are minted by credential admission; submitted authorship cannot choose privileges. */
 export interface Caller {
   readonly id: string;

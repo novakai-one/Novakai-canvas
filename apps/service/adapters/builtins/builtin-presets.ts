@@ -1,4 +1,4 @@
-import type { FailureSource } from '../../contract/records/failure-source.js';
+import type { FailureSource } from '../../contract/records/transport/failure-source.js';
 import { validate } from '@novakai/canvas-model';
 import type { Catalog, Preset, RecipePayload } from '@novakai/canvas-templates';
 import type { ResolvedResources } from '@novakai/canvas-language';
@@ -6,7 +6,7 @@ import type {
   BuiltinSources,
   BuiltinResources,
   BuiltinPresetOwners,
-} from '../../contract/records/builtins.js';
+} from '../../contract/records/presets/builtins.js';
 import { failure, type Result } from '../../contract/errors.js';
 /** Boot admission stops at an owner rejection; service retains the original workspace. */
 class PresetFault extends Error {

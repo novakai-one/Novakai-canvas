@@ -1,5 +1,5 @@
 import type { SessionDependencies } from '../../contract/types.js';
-import type { RenderDocument } from '../../contract/records/rendering.js';
+import type { RenderDocument } from '../../contract/records/rendering/job.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
 /** Read one consistent committed workspace; no render result or cache can mutate its canonical diagram. */
@@ -19,7 +19,7 @@ export async function renderCollection(
 function renderSelected(
   id: string,
   signal: AbortSignal,
-  view: import('../../contract/records/workspace.js').WorkspaceContents,
+  view: import('../../contract/records/workspace/contents.js').WorkspaceContents,
   dependencies: SessionDependencies,
 ): Promise<Result<RenderDocument>> {
   const collection = view.collections.find((item) => item.id === id);

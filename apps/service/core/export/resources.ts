@@ -14,9 +14,9 @@ import type {
   Resources,
   StoredBlob,
   ThemePreset,
-} from '../../contract/records/export.js';
-import type { Collection } from '../../contract/records/owners.js';
-import type { RenderDocument } from '../../contract/records/rendering.js';
+} from '../../contract/records/export/export.js';
+import type { Collection } from '../../contract/records/capabilities.js';
+import type { RenderDocument } from '../../contract/records/rendering/job.js';
 import { exportRejection } from './faults.js';
 
 /** Every retained resource: the theme preset, then collection assets, then document fonts. */

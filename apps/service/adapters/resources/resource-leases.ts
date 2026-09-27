@@ -7,7 +7,7 @@ import type {
   ResourceLease,
   Result,
 } from '@novakai/canvas-authoring';
-import type { ResourceSelector } from '../../contract/records/planning.js';
+import type { ResourceSelector } from '../../contract/records/planning/planning.js';
 /** Physical byte protection lasts through authoritative commit/receipt settlement, including prior inverse-history resources. */
 function acquire(
   request: Request,

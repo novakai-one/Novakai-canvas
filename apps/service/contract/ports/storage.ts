@@ -1,4 +1,4 @@
-import type { SnapshotReader, ReceiptReader, Committer } from '../records/owners.js';
+import type { SnapshotReader, ReceiptReader, Committer } from '../records/capabilities.js';
 import type { Result, WorkspaceState, Receipt } from '@novakai/canvas-persistence';
 /** Consumer-owned physical role: the Authoring bridge does not receive maintenance or lifecycle authority. */
 export interface ConditionalStorage {
