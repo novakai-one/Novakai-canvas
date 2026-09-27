@@ -27,11 +27,12 @@ import type { FailureSource, OperationSource } from './records/foreign.js';
  *   path was empty.
  *
  * Request journal:
- * - `retention-unavailable`: the request could not be retained. Nothing was sent.
+ * - `retention-unavailable`: the request could not be retained. No Authoring request is sent.
  * - `request-unavailable`: the retained request file is missing or cannot be read.
  * - `request-reused`: the request ID is already retained for a different request.
- * - `journal-corrupt`: the request ID's retained file reads, but is not JSON or not a journal
- *   record. Nothing is sent; check the ID's receipt before authoring again under a new ID.
+ * - `journal-corrupt`: the request ID's retained file reads, but is not JSON, not a journal
+ *   record, or another request ID's record. No Authoring request is sent; check the ID's receipt
+ *   before authoring again under a new ID.
  *
  * Resources (`location` names the declaration; printed before the message):
  * - `absolute-path`: the resource path is absolute.
