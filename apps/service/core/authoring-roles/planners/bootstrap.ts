@@ -105,7 +105,10 @@ function proposal(installation: Installation): Proposal {
   });
 }
 
-/** One preset's write at `preset:<digest>`, retaining a theme's fonts or a recipe's assets. Never fails. */
+/**
+ * One preset's write at `preset:<digest>`, retaining a theme's fonts or a recipe's assets.
+ * Never fails.
+ */
 function presetWrite(preset: Preset): unknown {
   return {
     kind: 'put',

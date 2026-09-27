@@ -4,7 +4,12 @@
  * a failure, so each caller names its own refusal. Authoring owns the records, commit and
  * recovery.
  */
-import type { RecordKey, Snapshot, StoredRecord } from '../../contract/records/capabilities.js';
+import type {
+  Preset,
+  RecordKey,
+  Snapshot,
+  StoredRecord,
+} from '../../contract/records/capabilities.js';
 
 /** A record kind Authoring stores. */
 export type RecordKind = RecordKey['kind'];
@@ -38,7 +43,7 @@ export function liveRecords(
 }
 
 /** The ID of a preset record (kind `preset`): `preset:<digest>`. Never fails. */
-export function presetRecordId(digest: string): `preset:${string}` {
+export function presetRecordId(digest: Preset['digest']): `preset:${string}` {
   return `preset:${digest}`;
 }
 

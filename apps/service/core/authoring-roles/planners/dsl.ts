@@ -33,10 +33,10 @@ export interface DslPlannerOwners {
 }
 
 /**
- * Binds the `dsl` planner, which humans and agents may both address. `plan` fails with `invalid-input` at `intent` (not a change), `dsl` (bad envelope) or `source` (Language
- * parse, source kept), `revision-conflict` at `pins`, or `invariant-violation` at `source`
- * (Language lower, source kept). Reader, selector and collection planner failures pass through
- * unchanged.
+ * Binds the `dsl` planner, which humans and agents may both address. `plan` fails with
+ * `invalid-input` at `intent` (not a change), `dsl` (bad envelope) or `source` (Language parse,
+ * source kept), `revision-conflict` at `pins`, or `invariant-violation` at `source` (Language
+ * lower, source kept). Reader, selector and collection planner failures pass through unchanged.
  */
 export function createDslPlanner(owners: DslPlannerOwners): IntentPlanner {
   return {
