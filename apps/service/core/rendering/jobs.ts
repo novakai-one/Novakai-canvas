@@ -19,7 +19,7 @@ import {
   resolvedStyle,
   layoutOptions,
 } from '../../contract/schemas.js';
-import { authoringFailure } from '../../contract/errors.js';
+import { authoringFailure, success } from '../../contract/errors.js';
 import type { RenderResourceOwners } from '../../contract/records/rendering/resources.js';
 import type { WorkspaceContents } from '../../contract/records/workspace/contents.js';
 import type { RenderingJob } from '../../contract/records/rendering/job.js';
@@ -36,7 +36,7 @@ export function createRenderJobs(owners: RenderResourceOwners): RenderJobs {
   return {
     create(collection, view, previous, id): AuthoringResult<RenderingJob> {
       try {
-        return { ok: true, value: create(collection, view, previous, id, owners) };
+        return success(create(collection, view, previous, id, owners));
       } catch (error) {
         return rejected(error);
       }

@@ -15,10 +15,10 @@ import { failure, type Result } from '../../contract/errors.js';
 
 /** The owners one collection read needs: byte selection and leases, job building and the producer. */
 export interface CollectionRenderOwners {
-  readonly assets: Assets;
+  readonly assets: Pick<Assets, 'acquire'>;
   readonly jobs: RenderJobs;
   readonly producer: DiagramProducer;
-  readonly resources: ResourceSelector;
+  readonly resources: Pick<ResourceSelector, 'forCollection'>;
 }
 
 /** Binds collection reads to the given owners; `render` behaves as `render` below. */

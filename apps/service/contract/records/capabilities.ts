@@ -39,6 +39,7 @@ export type {
   LoweredIntent,
   ResolvedResources,
   ResourceRequest,
+  Scope,
   Result as LanguageResult,
   ValidationError as LanguageError,
 } from '@novakai/canvas-language';

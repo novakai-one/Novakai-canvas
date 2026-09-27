@@ -55,5 +55,7 @@ function remember(
 
 /** Bounded memory: the oldest render is evicted once past KEEP. */
 function evictOldest(kept: Map<string, Result<RenderDocument>>): void {
-  if (kept.size > KEEP) kept.delete(kept.keys().next().value as string);
+  if (kept.size <= KEEP) return;
+  const oldest = kept.keys().next();
+  if (oldest.done !== true) kept.delete(oldest.value);
 }
