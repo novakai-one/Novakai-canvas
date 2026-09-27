@@ -10,6 +10,7 @@ import { requestSchema } from '../../contract/schemas.js';
 import type { RequestId } from '../../contract/brands.js';
 import type { AssetBinding } from '../../contract/records/staged-resource.js';
 import type { PresetInputs, PresetSource, ResourceSyntax } from '../../contract/ports/runtime.js';
+import type { ThemeSource } from '../../contract/records/theme-source.js';
 import type { RecipeHeader } from '../../contract/records/command.js';
 import type { Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
@@ -79,11 +80,19 @@ function checkedResult(checked: ReturnType<typeof requestSchema.safeParse>): Res
 /** Theme grammar is injected; this adapter owns only command-to-owner envelope construction. */
 export function createPresetInputs(
   syntax: ResourceSyntax,
-  theme: (source: string) => Result<PresetSource>,
+  theme: (source: string) => Result<ThemeSource>,
 ): PresetInputs {
   return {
     source: (command, source) =>
-      command.name === 'theme-admit' ? theme(source) : recipe(command.recipe, source, syntax),
+      command.name === 'theme-admit'
+        ? themeAdmission(theme(source))
+        : recipe(command.recipe, source, syntax),
     request,
   };
+}
+
+/** A checked theme file's admission, with its three fonts as the declarations to stage. */
+function themeAdmission(theme: Result<ThemeSource>): Result<PresetSource> {
+  if (!theme.ok) return theme;
+  return success({ admission: theme.value.admission, resources: theme.value.fonts });
 }

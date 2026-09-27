@@ -1,23 +1,35 @@
 /*
- * The `.theme` text grammar: header, three fonts and token overrides → a theme admission and its
- * font requests. Pure. Grammar faults are thrown privately and returned as `invalid-theme` or
- * `duplicate-token`; the caller fixes the theme file and runs the command again.
+ * The `.theme` text grammar: header, three fonts and token overrides → a typed theme source. Pure.
+ * Grammar faults are thrown privately and returned as `invalid-theme` or `duplicate-token`; the
+ * caller fixes the theme file and runs the command again.
  */
-import type { ResourceRequest } from '../../contract/records/foreign.js';
-import type { PortableToken } from '../../contract/records/foreign.js';
-import { chromeName, type ChromeName } from '../../contract/brands.js';
+import { fontRoles } from '../../contract/records/theme-source.js';
+import type {
+  FontRequest,
+  FontRole,
+  ThemeRaw,
+  ThemeSource,
+  TokenOverride,
+} from '../../contract/records/theme-source.js';
+import {
+  chromeName,
+  presetId,
+  version,
+  type PresetId,
+  type Version,
+} from '../../contract/brands.js';
 import type { LocalCode, LocalFailure, Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
-interface Override {
-  readonly token: string;
-  // Existing raw color/scalar syntax stays at the grammar edge; dimensions reuse the owner vocabulary.
-  readonly value:
-    | string
-    | number
-    | (Pick<Extract<PortableToken, { readonly type: 'dimension' }>, 'value'> & {
-        readonly unit: 'px';
-      });
+
+/** One trimmed, non-comment line and its 1-based line number. */
+interface Line {
+  readonly text: string;
   readonly line: number;
+}
+/** What one body line declares: a font, or token overrides. */
+interface Entry {
+  readonly fonts: readonly FontRequest[];
+  readonly overrides: readonly TokenOverride[];
 }
 /** The codes a theme file can fail with. */
 type ThemeCode = Extract<LocalCode, 'invalid-theme' | 'duplicate-token'>;
@@ -31,10 +43,12 @@ class ThemeFault extends Error {
     super(message);
   }
 }
-/** Read semantic token intent; syntax failures retain the source for CLI correction, while Design System owns token validation. */
-export function readThemeConfig(
-  source: string,
-): Result<{ readonly admission: unknown; readonly resources: readonly ResourceRequest[] }> {
+/**
+ * Read semantic token intent; syntax failures retain the source for CLI correction, while Design
+ * System owns token validation. Fails with `invalid-theme` (the text does not match the grammar,
+ * or the header's @id or version is not a Templates preset ID or version) or `duplicate-token`.
+ */
+export function readThemeSource(source: string): Result<ThemeSource> {
   try {
     return success(parse(source));
   } catch (error) {
@@ -51,11 +65,12 @@ function themeFailure(error: unknown): Result<never, LocalFailure> {
       'Expected theme 1 @id "Title" version=X base=ALIAS, font body/mono/strong source="PATH", set color TOKEN="HEX", or set number TOKEN=VALUE',
   });
 }
-/** Header vocabulary is intentionally closed and coordinate-free; no diagram or typography metric model is introduced. */
-function parse(source: string): {
-  readonly admission: unknown;
-  readonly resources: readonly ResourceRequest[];
-} {
+/**
+ * Header vocabulary is intentionally closed and coordinate-free; no diagram or typography metric
+ * model is introduced. Checks run in the base order (lines, duplicate tokens, fonts, chrome); the
+ * header's @id and version are checked last.
+ */
+function parse(source: string): ThemeSource {
   const lines = source
     .split(/\r?\n/)
     .map((text, index) => ({ text: text.trim(), line: index + 1 }))
@@ -66,80 +81,85 @@ function parse(source: string): {
     );
   if (!header) throw new Error('Invalid theme header');
   const entries = lines.slice(1).map(line);
-  const resources = entries.flatMap((item) => item.resources);
   const overrides = uniqueOverrides(entries.flatMap((item) => item.overrides));
-  if (resources.length !== 3 || new Set(resources.map((item) => item.alias)).size !== 3)
-    throw new Error('Exactly body, mono and strong are required');
+  const fonts = threeFonts(entries.flatMap((item) => item.fonts));
+  const raw = themeRaw(required(header, 4), header[5], overrides);
   return {
     admission: {
       schemaVersion: 1,
       kind: 'theme',
-      id: header[1],
-      title: header[2],
-      version: header[3],
+      id: themeId(required(header, 1)),
+      title: required(header, 2),
+      version: themeVersion(required(header, 3)),
       description: '',
-      raw: {
-        base: header[4],
-        ...chromeField(header[5]),
-        overrides: Object.fromEntries(overrides.map((item) => [item.token, item.value])),
-      },
+      raw,
     },
-    resources,
+    fonts,
   };
 }
-/** Font and token syntax is translated only; Design System owns token types, bounds and derived values. */
-function line(input: { readonly text: string; readonly line: number }): {
-  readonly resources: readonly ResourceRequest[];
-  readonly overrides: readonly Override[];
-} {
-  const font = /^font (body|mono|strong) source="([^"]+)"$/.exec(input.text);
-  if (font)
-    return {
-      resources: [
-        {
-          kind: 'font',
-          alias: required(font, 1),
-          source: required(font, 2),
-          span: {
-            start: { line: input.line, column: 1, offset: 0 },
-            end: { line: input.line, column: input.text.length + 1, offset: input.text.length },
-          },
-        },
-      ],
-      overrides: [],
-    };
-  return tokenLine(input);
+/** Exactly one body, one mono and one strong font, in file order. */
+function threeFonts(fonts: readonly FontRequest[]): ThemeSource['fonts'] {
+  const [first, second, third, ...rest] = fonts;
+  const roles = new Set(fonts.map((item) => item.alias));
+  if (first === undefined || second === undefined || third === undefined) throw missingFonts();
+  if (rest.length > 0 || roles.size !== fontRoles.length) throw missingFonts();
+  return [first, second, third];
+}
+/** The fault for anything but exactly body, mono and strong. */
+function missingFonts(): Error {
+  return new Error('Exactly body, mono and strong are required');
+}
+/**
+ * Font and token syntax is translated only; Design System owns token types, bounds and derived
+ * values. A `font` line whose role is not body, mono or strong is read as a token line, which
+ * rejects it.
+ */
+function line(input: Line): Entry {
+  const font = /^font (\w+) source="([^"]+)"$/.exec(input.text);
+  if (!font) return tokenLine(input);
+  const role = required(font, 1);
+  if (!isFontRole(role)) return tokenLine(input);
+  return fontEntry(role, required(font, 2), input);
+}
+/** Whether `text` names one of the three theme font roles. */
+function isFontRole(text: string): text is FontRole {
+  return fontRoles.some((role) => role === text);
+}
+/** A line that declares one font: a Language font request spanning the whole line. */
+function fontEntry(
+  role: FontRole,
+  source: string,
+  input: Line,
+): Entry {
+  const span = {
+    start: { line: input.line, column: 1, offset: 0 },
+    end: { line: input.line, column: input.text.length + 1, offset: input.text.length },
+  };
+  return { fonts: [{ kind: 'font', alias: role, source, span }], overrides: [] };
 }
 /** Existing color syntax remains unchanged; numeric root tokens enable reusable readable diagram themes. */
-function tokenLine(input: { readonly text: string; readonly line: number }): {
-  readonly resources: readonly ResourceRequest[];
-  readonly overrides: readonly Override[];
-} {
+function tokenLine(input: Line): Entry {
   const color = /^set color ([\w.-]+)="(#[a-fA-F0-9]{6}(?:[a-fA-F0-9]{2})?)"$/.exec(input.text);
   if (!color) return numberLine(input);
-  return {
-    resources: [],
-    overrides: [{ token: required(color, 1), value: required(color, 2), line: input.line }],
-  };
+  return overrideEntry({
+    type: 'color',
+    token: required(color, 1),
+    value: required(color, 2),
+    line: input.line,
+  });
 }
 
 /** Parse finite numbers without inventing token names or duplicating owner range validation. */
-function numberLine(input: { readonly text: string; readonly line: number }): {
-  readonly resources: readonly ResourceRequest[];
-  readonly overrides: readonly Override[];
-} {
+function numberLine(input: Line): Entry {
   const match = /^set number ([\w.-]+)=(-?\d+(?:\.\d+)?)$/.exec(input.text);
   if (!match) return dimensionLine(input);
   const value = Number(required(match, 2));
   if (!Number.isFinite(value)) throw new Error('Theme number must be finite');
-  return {
-    resources: [],
-    overrides: [{ token: required(match, 1), value, line: input.line }],
-  };
+  return overrideEntry({ type: 'number', token: required(match, 1), value, line: input.line });
 }
 
 /** Duplicate tokens reject at the second declaration instead of silently changing preset identity. */
-function uniqueOverrides(overrides: readonly Override[]): readonly Override[] {
+function uniqueOverrides(overrides: readonly TokenOverride[]): readonly TokenOverride[] {
   const duplicate = overrides.find(
     (item, index, all) => all.findIndex((candidate) => candidate.token === item.token) !== index,
   );
@@ -162,27 +182,54 @@ function required(
   return value;
 }
 
-/** Raw regex capture is checked by chromeName before transport; absent chrome stays absent so existing immutable preset digests remain unchanged. */
-function chromeField(chrome: string | undefined): { readonly chrome?: ChromeName } {
-  if (chrome === undefined) return {};
-  return { chrome: chromeName.parse(chrome) };
+/** The header's @id as a Templates preset ID; otherwise `invalid-theme` naming the rule. */
+function themeId(text: string): PresetId {
+  const checked = presetId.safeParse(text);
+  if (!checked.success)
+    throw headerFault('Theme @id must be 1-80 characters: a letter, then letters, digits, _ or -');
+  return checked.data;
+}
+
+/** The header's version as a Templates version; otherwise `invalid-theme` naming the rule. */
+function themeVersion(text: string): Version {
+  const checked = version.safeParse(text);
+  if (!checked.success) throw headerFault('Theme version must be MAJOR.MINOR.PATCH');
+  return checked.data;
+}
+
+/** An `invalid-theme` fault for a header value Templates would reject. */
+function headerFault(message: string): ThemeFault {
+  return new ThemeFault('invalid-theme', message, 'Correct the theme header and retry.');
+}
+
+/**
+ * The theme's `raw` input: base, chrome and each override's value by token. The chrome capture is
+ * checked by chromeName before transport; absent chrome stays absent so existing immutable preset
+ * digests remain unchanged.
+ */
+function themeRaw(
+  base: string,
+  chrome: string | undefined,
+  overrides: readonly TokenOverride[],
+): ThemeRaw {
+  const values = Object.fromEntries(overrides.map((item) => [item.token, item.value]));
+  if (chrome === undefined) return { base, overrides: values };
+  return { base, chrome: chromeName.parse(chrome), overrides: values };
 }
 
 /** Explicit pixel dimensions preserve Design System's typed literal vocabulary. */
-function dimensionLine(input: Parameters<typeof line>[0]): {
-  readonly resources: readonly ResourceRequest[];
-  readonly overrides: readonly Override[];
-} {
+function dimensionLine(input: Line): Entry {
   const match = /^set dimension ([\w.-]+)=(-?\d+(?:\.\d+)?)$/.exec(input.text);
   if (!match) throw new Error('Invalid theme line');
-  return {
-    resources: [],
-    overrides: [
-      {
-        token: required(match, 1),
-        value: { value: Number(required(match, 2)), unit: 'px' },
-        line: input.line,
-      },
-    ],
-  };
+  return overrideEntry({
+    type: 'dimension',
+    token: required(match, 1),
+    value: { value: Number(required(match, 2)), unit: 'px' },
+    line: input.line,
+  });
+}
+
+/** A line that declares one token override and no font. */
+function overrideEntry(override: TokenOverride): Entry {
+  return { fonts: [], overrides: [override] };
 }

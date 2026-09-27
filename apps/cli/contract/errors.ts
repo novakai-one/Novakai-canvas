@@ -47,8 +47,9 @@ import type { FailureSource, OperationSource } from './records/foreign.js';
  * - `revision-required`: replace or patch without `--revision`.
  * - `revision-conflict`: `--revision` is not the collection's current revision.
  *
- * Themes: `invalid-theme` (the file does not match the theme grammar), `duplicate-token` (one
- * token set twice). Profiles: `profile-structure` (lint findings, listed in the message).
+ * Themes: `invalid-theme` (the file does not match the theme grammar, or its header @id or version
+ * is not a Templates preset ID or version), `duplicate-token` (one token set twice). Profiles:
+ * `profile-structure` (lint findings, listed in the message).
  *
  * Transport:
  * - `connection-uncertain`: no confirmed answer. Check the receipt before retrying.

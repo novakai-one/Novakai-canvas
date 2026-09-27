@@ -17,7 +17,7 @@ import { createLocalFiles } from '../adapters/files/local-files.js';
 import { createRequestJournal } from '../adapters/files/request-journal.js';
 import { createTransport } from '../adapters/service-http/transport.js';
 import { createSemanticInputs } from '../adapters/inputs/semantic-inputs.js';
-import { executeCommand, executeProfile, parseCommand, readThemeConfig, usage } from './api.js';
+import { executeCommand, executeProfile, parseCommand, readThemeSource, usage } from './api.js';
 import type { LocalFailure, Result } from './errors.js';
 import type {
   ParsedCommand,
@@ -72,7 +72,7 @@ async function run(
     journal: createRequestJournal(resolve(options.workspace, 'requests')),
     resources: createResourceReader(),
     semantic,
-    presets: createPresetInputs(semantic, readThemeConfig),
+    presets: createPresetInputs(semantic, readThemeSource),
     nextRequestId,
   });
 }
@@ -131,7 +131,7 @@ export async function runHeadless(
     return adapter.renderHeadless(options, {
       service: await service.createHeadlessBindings(),
       resources: createResourceReader(),
-      readTheme: readThemeConfig,
+      readTheme: readThemeSource,
       temp: temp.createTempAssets(),
       files: { ...files.createRenderFiles(options), ...raster.createRaster(options.root) },
     });

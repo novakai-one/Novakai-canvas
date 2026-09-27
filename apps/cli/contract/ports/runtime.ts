@@ -8,7 +8,13 @@ import type { HttpTransport } from './http-transport.js';
 import type { RequestJournal } from './request-journal.js';
 import type { ResourceReader } from './resource-reader.js';
 import type { Result } from '../errors.js';
-import type { ParsedSource, Request, ResourceRequest, Snapshot } from '../records/foreign.js';
+import type {
+  Admission,
+  ParsedSource,
+  Request,
+  ResourceRequest,
+  Snapshot,
+} from '../records/foreign.js';
 import type { ByteBackup } from '../records/retained-request.js';
 import type { AssetBinding } from '../records/staged-resource.js';
 import type { AdmitCommand, ChangeIntent } from '../records/command.js';
@@ -44,9 +50,9 @@ export interface SemanticInputs extends ResourceSyntax {
   ): Result<string>;
 }
 
-/** A preset file's admission, checked by Templates, and the font or image declarations to stage first. */
+/** A preset file's Templates admission and the font or image declarations to stage first. */
 export interface PresetSource {
-  readonly admission: unknown;
+  readonly admission: Admission;
   readonly resources: readonly ResourceRequest[];
 }
 

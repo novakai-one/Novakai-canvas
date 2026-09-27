@@ -10,7 +10,7 @@ export { parseCommand } from '../core/commands/operands.js';
 
 export { executeProfile } from '../core/profiles/commands.js';
 
-export { readThemeConfig } from '../core/themes/grammar.js';
+export { readThemeSource } from '../core/themes/grammar.js';
 
 export { formatFailure } from '../core/diagnostics/format.js';
 

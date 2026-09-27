@@ -7,8 +7,8 @@
 import type { createHeadlessBindings } from '@novakai/canvas-service';
 import type { AssetError, Assets } from '@novakai/canvas-assets';
 import type { Diagnostic as ExportDiagnostic } from '@novakai/canvas-export';
-import type { readThemeConfig } from '../theme-reader.js';
 import type { ResourceReader } from './resource-reader.js';
+import type { ThemeSource } from '../records/theme-source.js';
 import type { ProviderFault } from '../records/headless.js';
 import type { SourceFile } from '../records/source-file.js';
 import type { RecipeFamily } from '../records/foreign.js';
@@ -19,7 +19,8 @@ import type { Result } from '../errors.js';
 export interface HeadlessOwners {
   readonly resources: ResourceReader;
   readonly service: Awaited<ReturnType<typeof createHeadlessBindings>>;
-  readonly readTheme: readThemeConfig;
+  /** The theme grammar. Fails with `invalid-theme` or `duplicate-token`. */
+  readTheme(source: string): Result<ThemeSource>;
   readonly temp: TempAssets;
   readonly files: RenderFiles;
 }

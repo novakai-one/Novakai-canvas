@@ -136,7 +136,7 @@ async function admitTheme(
   const theme = accepted(await owners.files.read(path));
   const source = accepted(owners.readTheme(theme.source));
   const bindings = await Promise.all(
-    source.resources.map(async (resource) => ({
+    source.fonts.map(async (resource) => ({
       alias: resource.alias,
       digest: await admitResource(theme.file, resource, env.assets, owners),
     })),
