@@ -54,13 +54,21 @@ export function createDiagramPlanners(owners: DiagramPlannerOwners): readonly In
     },
   ];
 }
-/** A planner never interprets an undo/redo payload; Authoring owns those journal-based operations. */
+
+/**
+ * The request's change payload. Fails with `invalid-input` at `intent` for an undo or redo;
+ * Authoring runs those itself, so no planner reads them.
+ */
 function payload(request: Request): AuthoringResult<Json> {
   if (request.intent.kind !== 'change')
     return authoringFailure('invalid-input', 'intent', 'Expected a diagram change');
   return { ok: true, value: request.intent.payload };
 }
-/** Current snapshot and admitted pins form one immutable lowering context, preventing alias drift during application. */
+
+/**
+ * The `dsl` planner: takes the change payload, then lowers it (see `lowerSource`). Fails with
+ * `invalid-input` at `intent` when the request is not a change.
+ */
 function lower(
   request: Request,
   snapshot: Snapshot,
@@ -71,7 +79,12 @@ function lower(
   if (!input.ok) return input;
   return lowerSource(input.value, request, snapshot, pins, owners);
 }
-/** Invalid syntax/semantics returns diagnostics before any catalog or collection write is proposed. */
+
+/**
+ * Decodes the DSL command and repeats resource selection on this snapshot, then compiles it (see
+ * `compile`). Fails with `invalid-input` at `dsl` when the payload lacks source or mode. Selector
+ * failures pass through unchanged.
+ */
 function lowerSource(
   input: Json,
   request: Request,
@@ -90,7 +103,12 @@ function lowerSource(
   if (!selected.ok) return selected;
   return compile(command.data, snapshot, pins, selected.value, owners);
 }
-/** Recomputed aliases must match the lease decision exactly; a new alias interpretation requires a fresh preparation. */
+
+/**
+ * Parses the source, then lowers it (see `compileCollection`). Fails with `revision-conflict` at
+ * `pins` when the selected pins differ from the admitted pins, and `invalid-input` at `source`
+ * when Language cannot parse the source (Language's failure kept as source).
+ */
 function compile(
   command: DslCommand,
   snapshot: Snapshot,
@@ -115,7 +133,13 @@ function compile(
     );
   return compileCollection(command, parsed.value.collection, snapshot, selected, owners);
 }
-/** Language's public lower operation validates Model changes; create receives the actual absence/presence state. */
+
+/**
+ * Lowers the command against the stored collection (null when not stored yet) and hands the
+ * result to the collection planner. Fails with `invariant-violation` at `source` when Language
+ * refuses the change (Language's failure kept as source). Reader and collection planner failures
+ * pass through unchanged.
+ */
 function compileCollection(
   command: DslCommand,
   id: string,
@@ -141,7 +165,12 @@ function compileCollection(
     );
   return owners.collections.propose(snapshot, intent.value.collection);
 }
-/** Human-generated Model changes pass through the same Authoring gate and final cross-owner validation. */
+
+/**
+ * The `model` planner: decodes the change batch, then plans it (see `modelCollection`). Fails
+ * with `invalid-input` at `intent` when the request is not a change, and at `model` when the
+ * payload lacks a collection or change batch.
+ */
 function model(
   request: Request,
   snapshot: Snapshot,
@@ -158,7 +187,12 @@ function model(
     );
   return modelCollection(command.data, snapshot, owners);
 }
-/** Missing or invalid changed records never become raw JSON writes. */
+
+/**
+ * Plans the batch on the stored collection through Model and hands the result to the collection
+ * planner. Fails with `invariant-violation` at the collection ID when Model refuses the batch
+ * (Model's failure kept as source). Reader and collection planner failures pass through unchanged.
+ */
 function modelCollection(
   command: ModelCommand,
   snapshot: Snapshot,

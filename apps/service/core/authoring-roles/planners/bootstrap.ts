@@ -25,6 +25,7 @@ import { authoringFailure } from '../../../contract/errors.js';
 export function createInstallationPlanner(installation: Installation): IntentPlanner {
   return { id: plannerId.parse('bootstrap'), plan: async (request) => plan(request, installation) };
 }
+
 /**
  * The deterministic installation request: it expects every installation record to be absent,
  * so it never replaces or upserts an existing workspace. Fails with `invalid-input` at
@@ -51,7 +52,12 @@ export function installationRequest(installation: Installation): AuthoringResult
     );
   return { ok: true, value: result.data };
 }
-/** Private startup envelope cannot substitute arbitrary preset/workspace JSON; HTTP never exposes this planner. */
+
+/**
+ * The `bootstrap` planner: answers the installation proposal (see `proposal`, which can throw).
+ * Fails with `invalid-input` at `bootstrap` when the request is not a change or its payload is
+ * not the initialize command.
+ */
 function plan(
   request: Request,
   installation: Installation,
@@ -66,7 +72,12 @@ function plan(
     return authoringFailure('invalid-input', 'bootstrap', 'Invalid initialization command');
   return { ok: true, value: proposal(installation) };
 }
-/** Startup proposes ordinary canonical records and receives the same atomic receipt/history semantics as other authors. */
+
+/**
+ * The installation proposal: workspace metadata, an empty `main` catalog and one write per
+ * shipped preset, with no reads. Returns no failure code: it throws a schema error when the
+ * installation exceeds Authoring's proposal limits.
+ */
 function proposal(installation: Installation): Proposal {
   return proposalSchema.parse({
     reads: [],
@@ -94,7 +105,8 @@ function proposal(installation: Installation): Proposal {
     ],
   });
 }
-/** Templates already admitted this exact immutable preset; Authoring still validates the complete candidate and byte coverage. */
+
+/** One preset's write at `preset:<digest>`, retaining a theme's fonts or a recipe's assets. Never fails. */
 function presetWrite(preset: Preset): unknown {
   return {
     kind: 'put',

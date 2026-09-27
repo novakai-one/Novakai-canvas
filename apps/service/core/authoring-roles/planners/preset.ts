@@ -34,7 +34,12 @@ export function createPresetPlanner(owner: Pick<ResourceCommands, 'preparePreset
     plan: async (request, snapshot) => plan(request, snapshot, owner),
   };
 }
-/** Preparation drift rejects without a write; retained requests recover through Authoring receipts. */
+
+/**
+ * The `preset` planner: decodes the prepared command, then repeats the preparation (see
+ * `reprepare`). Fails with `invalid-input` at `preset` when the request is not a change or its
+ * payload is not an exact prepared preset.
+ */
 function plan(
   request: Request,
   snapshot: Snapshot,
@@ -47,7 +52,11 @@ function plan(
     return authoringFailure('invalid-input', 'preset', 'Expected an exact prepared preset');
   return reprepare(request, snapshot, owner, command.data);
 }
-/** Recompute only after decoding the exact prepared command. */
+
+/**
+ * Repeats the preparation on Authoring's snapshot, then compares it with the command (see
+ * `compared`). A failed preparation answers its own diagnostic (see `ownerRejected`).
+ */
 function reprepare(
   request: Request,
   snapshot: Snapshot,
@@ -61,7 +70,41 @@ function reprepare(
   if (!prepared.ok) return ownerRejected(prepared.error);
   return compared(command, prepared.value, snapshot);
 }
-/** Pin and manifest comparison prevents caller substitution; read versions stay client-observed CAS preconditions. */
+
+/**
+ * The preparation's diagnostic as an Authoring failure. Path, message, recovery and source are
+ * kept. The code is kept when Authoring has it too, otherwise it becomes `invalid-input`.
+ */
+function ownerRejected<T>(owner: ResourceDiagnostic): AuthoringResult<T> {
+  const code = authoringCodes[owner.code] ?? 'invalid-input';
+  return {
+    ok: false,
+    error: { ...owner, code, targets: [], traceId: null },
+  };
+}
+
+/** The preparation codes Authoring has too, each mapped to itself. */
+const authoringCodes: Readonly<Record<string, AuthoringErrorCode>> = Object.freeze({
+  'invalid-input': 'invalid-input',
+  'unsupported-version': 'unsupported-version',
+  'unknown-reference': 'unknown-reference',
+  'invariant-violation': 'invariant-violation',
+  'constraint-conflict': 'constraint-conflict',
+  'revision-conflict': 'revision-conflict',
+  'request-reused': 'request-reused',
+  'missing-asset': 'missing-asset',
+  'permission-denied': 'permission-denied',
+  'storage-unavailable': 'storage-unavailable',
+  'corrupt-record': 'corrupt-record',
+  cancelled: 'cancelled',
+});
+
+/**
+ * Answers a proposal with no writes when the preset is already stored, otherwise the insertion
+ * (see `insertion`). Fails with `revision-conflict` at `preset` when the prepared pin, key or
+ * resources differ from the command's, and `invalid-input` at `preset.proposal` when the proposal
+ * exceeds Authoring's limits.
+ */
 function compared(
   command: ReturnType<typeof presetCommand.parse>,
   prepared: PresetPreparation,
@@ -84,7 +127,13 @@ function compared(
     });
   return insertion(prepared, snapshot);
 }
-/** Every new identity changes shared metadata in the same proposal; competing inserts cannot both pass physical CAS. */
+
+/**
+ * Proposes the preset record and the workspace metadata with `presetRevision` raised by one, so
+ * two inserts from the same snapshot cannot both commit. Fails with `corrupt-record` at
+ * `metadata` when workspace metadata is missing or invalid, and `invalid-input` at
+ * `preset.proposal` when the proposal exceeds Authoring's limits.
+ */
 function insertion(
   prepared: PresetPreparation,
   snapshot: Snapshot,
@@ -112,30 +161,11 @@ function insertion(
     warnings: [],
   });
 }
-/** Preparation codes Authoring shares, mapped to themselves; any other code becomes `invalid-input`. */
-const authoringCodes: Readonly<Record<string, AuthoringErrorCode>> = {
-  'invalid-input': 'invalid-input',
-  'unsupported-version': 'unsupported-version',
-  'unknown-reference': 'unknown-reference',
-  'invariant-violation': 'invariant-violation',
-  'constraint-conflict': 'constraint-conflict',
-  'revision-conflict': 'revision-conflict',
-  'request-reused': 'request-reused',
-  'missing-asset': 'missing-asset',
-  'permission-denied': 'permission-denied',
-  'storage-unavailable': 'storage-unavailable',
-  'corrupt-record': 'corrupt-record',
-  cancelled: 'cancelled',
-};
-/** Owner failures retain their path/message/recovery while Authoring admits only its bounded code vocabulary. */
-function ownerRejected<T>(owner: ResourceDiagnostic): AuthoringResult<T> {
-  const code = authoringCodes[owner.code] ?? 'invalid-input';
-  return {
-    ok: false,
-    error: { ...owner, code, targets: [], traceId: null },
-  };
-}
-/** Schema limits reject as a typed planner outcome; no Zod exception crosses Authoring. */
+
+/**
+ * Checks the proposal against Authoring's schema. Fails with `invalid-input` at
+ * `preset.proposal` when it exceeds Authoring's limits.
+ */
 function proposal(input: unknown): AuthoringResult<Proposal> {
   const parsed = proposalSchema.safeParse(input);
   if (!parsed.success)

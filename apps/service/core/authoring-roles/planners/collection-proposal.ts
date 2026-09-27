@@ -37,7 +37,11 @@ export interface CollectionProposalOwners {
 export function createCollectionPlanner(owners: CollectionProposalOwners): CollectionPlanner {
   return { propose: (snapshot, collection) => propose(snapshot, collection, owners) };
 }
-/** A create includes catalog membership in the same proposed Authoring transaction as its canonical collection. */
+
+/**
+ * Reads the snapshot and the collection's expected resources, then builds the proposal (see
+ * `proposal`). Reader and selector failures pass through unchanged.
+ */
 function propose(
   snapshot: Snapshot,
   collection: Collection,
@@ -49,7 +53,13 @@ function propose(
   if (!blobs.ok) return blobs;
   return proposal(collection, view.value, blobs.value, owners);
 }
-/** Updating existing semantics never rewrites catalog organisation or other collections. */
+
+/**
+ * Proposes the collection write alone when the collection is already stored. A new collection
+ * also gets Library's catalog membership as a second write. Fails with `invariant-violation` at
+ * `catalog` when Library refuses the membership (Library's failure kept as source), and
+ * `invalid-input` at `proposal` when the proposal exceeds Authoring's limits.
+ */
 function proposal(
   collection: Collection,
   view: WorkspaceContents,
@@ -96,7 +106,11 @@ function proposal(
     collection.id,
   );
 }
-/** Authoring's public schema mints record identity brands and JSON payloads before admitting this owner proposal. */
+
+/**
+ * Checks the writes against Authoring's proposal schema, with no reads and the collection ID as
+ * the diff. Fails with `invalid-input` at `proposal` when they exceed Authoring's limits.
+ */
 function checked(
   writes: readonly unknown[],
   collection: string,

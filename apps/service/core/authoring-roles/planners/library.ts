@@ -34,7 +34,12 @@ export function createLibraryPlanner(owners: LibraryPlannerOwners): IntentPlanne
     plan: async (request, snapshot) => propose(request, snapshot, owners),
   };
 }
-/** Organisation commands are interpreted only by Library; the host cannot write an arbitrary organisation record. */
+
+/**
+ * The `library` planner: decodes the change batch, then plans it (see `planOrganisationChange`).
+ * Fails with `invalid-input` at `intent` when the request is not a change, and at `library` when
+ * the payload is not a bounded change batch.
+ */
 function propose(
   request: Request,
   snapshot: Snapshot,
@@ -51,7 +56,12 @@ function propose(
     );
   return planOrganisationChange(command.data.changes, snapshot, owners);
 }
-/** The complete inventory checks membership and folder invariants before any write is proposed. */
+
+/**
+ * Plans the batch on the stored catalog through Library, then proposes the result (see
+ * `checkedProposal`). Fails with `invariant-violation` at `catalog` when Library refuses the
+ * batch (Library's failure kept as source). Reader failures pass through unchanged.
+ */
 function planOrganisationChange(
   changes: readonly unknown[],
   snapshot: Snapshot,
@@ -70,7 +80,13 @@ function planOrganisationChange(
     );
   return checkedProposal(planned.value.candidate, snapshot);
 }
-/** Collection inventory dependencies participate in conditional admission; organisation changes never rewrite diagrams. */
+
+/**
+ * Proposes one write of the planned catalog over the stored one. Every collection and catalog
+ * record version is a read, so Authoring refuses the commit if any of them changed. Fails with
+ * `invariant-violation` at `catalog` when no catalog is stored, and `invalid-input` at `catalog`
+ * when the proposal exceeds Authoring's limits.
+ */
 function checkedProposal(
   organisation: unknown,
   snapshot: Snapshot,

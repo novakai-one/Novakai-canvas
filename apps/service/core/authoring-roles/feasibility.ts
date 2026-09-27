@@ -27,7 +27,12 @@ import { authoringFailure } from '../../contract/errors.js';
 export function createFeasibility(owners: FeasibilityOwners): Feasibility {
   return { check: (candidate, changed, preview) => check(candidate, changed, preview, owners) };
 }
-/** Validate changed collection geometry only; catalog/preset organisation alone creates no new scene to solve. */
+
+/**
+ * Renders each changed collection of the candidate in turn, then reports (see `report`). Other
+ * changed records are not rendered. Fails with the first render failure (see `render`). Reader
+ * failures pass through unchanged.
+ */
 async function check(
   candidate: Snapshot,
   changed: readonly RecordKey[],
@@ -47,7 +52,11 @@ async function check(
   if (!documents.ok) return documents;
   return { ok: true, value: report(documents.value, preview) };
 }
-/** Preserve failure while accumulating complete changed diagrams; no partial preview is admitted. */
+
+/**
+ * One reduce step: waits for the earlier documents, then renders this collection and appends it.
+ * An earlier failure passes through unchanged; a new one stops the run (see `render`).
+ */
 async function append(
   previous: Promise<AuthoringResult<readonly RenderDocument[]>>,
   collection: Collection,
@@ -60,7 +69,12 @@ async function append(
   if (!next.ok) return next;
   return { ok: true, value: [...result.value, next.value] };
 }
-/** Geometry failure is mandatory even when callers did not request a visual preview. */
+
+/**
+ * Builds the render job for one collection and renders it, preview or not. Fails with
+ * `constraint-conflict` at the producer's path when the producer cannot render it (the
+ * producer's failure kept as source). Job failures pass through unchanged.
+ */
 async function render(
   collection: Collection,
   view: WorkspaceContents,
@@ -84,7 +98,12 @@ async function render(
     );
   return result;
 }
-/** Preview serialization is separate from mandatory geometry checks; an apply never returns an unused image payload. */
+
+/**
+ * The report: every routing warning, each collection's layout adjustments as the diff, and the
+ * rendered documents as the preview only when `preview` is true. Returns no failure code: it
+ * throws when a document is not JSON, and Authoring turns that throw into a failure.
+ */
 function report(
   documents: readonly RenderDocument[],
   preview: boolean,
@@ -100,7 +119,8 @@ function report(
     preview: preview ? json.parse(JSON.parse(JSON.stringify(documents))) : null,
   };
 }
-/** Crossing warnings remain warnings in the result envelope, with labelled correction targets and no permission to violate constraints. */
+
+/** Each routing warning as a `constraint-conflict` warning at its collection ID, naming the wires to adjust. Never fails. */
 function warnings(documents: readonly RenderDocument[]): readonly AuthoringDiagnostic[] {
   return documents.flatMap((document) =>
     document.scene.warnings.map((item) => ({
