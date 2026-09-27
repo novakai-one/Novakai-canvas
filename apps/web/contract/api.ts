@@ -35,6 +35,7 @@ export {
 export { editedObject, objectDraftKey } from '../core/inspector/object-edits.js';
 export { selectedObject } from '../core/inspector/selection.js';
 export { defaultPreferences } from '../core/preferences/defaults.js';
+export { preferenceFailure, storageFailure } from '../core/preferences/failures.js';
 export { editedWire, wireChanges, wireDraftKey } from '../core/inspector/wire-edits.js';
 export { selectedWire } from '../core/inspector/wire-selection.js';
 export { retainObjectCommand, retainWireCommand } from '../core/inspector/draft-commands.js';

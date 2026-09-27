@@ -11,7 +11,7 @@ import type { Diagnostic as LayoutDiagnostic } from '@novakai/canvas-layout';
 import type { ValidationError as LanguageFailure } from '@novakai/canvas-language';
 import type { Diagnostic as PresentationDiagnostic } from '@novakai/canvas-presentation';
 import type { TokenError } from '@novakai/canvas-design-system';
-import type { ForeignDiagnostic, Result } from './errors.js';
+import type { Diagnostic, ForeignDiagnostic, Result } from './errors.js';
 
 /** The owners that answer over the service wire. */
 export type WireOwner = 'authoring' | 'service';
@@ -43,10 +43,13 @@ export function wireOutcome<T>(
   return ownerResult(outcome, (source) => foreignFailure(owner, source));
 }
 
-/** An owner's result as a web result; `read` keeps its failure as a foreign diagnostic. */
+/**
+ * An owner's result as a web result. `read` turns its failure into a diagnostic: the owner's own,
+ * or a web failure that keeps it as `cause`.
+ */
 export function ownerResult<T, E>(
   result: OwnerResult<T, E>,
-  read: (error: E) => ForeignDiagnostic,
+  read: (error: E) => Diagnostic,
 ): Result<T> {
   if (result.ok) return result;
   return { ok: false, error: read(result.error) };

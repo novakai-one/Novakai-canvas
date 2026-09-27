@@ -7,7 +7,7 @@ import type { Diagnostic, ForeignDiagnostic } from '../../contract/errors.js';
 
 /** The code, message and recovery, with every owner detail behind the failure in between. */
 export function formatFailure(error: Diagnostic): readonly string[] {
-  return [`${error.code}: ${error.message}`, ...evidenceLines(evidence(error)), error.recovery];
+  return [`${error.code}: ${error.message}`, ...detailLines(error), error.recovery];
 }
 
 /** The actionable owner cause; the full chain stays available as technical details. */
@@ -41,21 +41,50 @@ type Problem = Extract<Evidence, { readonly diagnostics: unknown }>['diagnostics
 /** The owner record Language keeps under a `domain` problem. */
 type RecordIssue = NonNullable<Extract<Problem, { readonly span: unknown }>['source']>;
 
+/** One owner's failure record: a code at a path, what to do, and anything it kept under it. */
+interface OwnerRecord {
+  readonly code: string;
+  readonly path: string;
+  readonly message: string;
+  readonly recovery: string;
+  readonly source?: Evidence | undefined;
+  readonly cleanup?: OperationSource | undefined;
+}
+
+/**
+ * The lines between a failure's own line and its recovery. A web failure shows its cause's whole
+ * record, so the other owner's code stays visible; a foreign failure shows what it kept.
+ */
+function detailLines(error: Diagnostic): readonly string[] {
+  if (error.origin !== 'web') return evidenceLines(foreignEvidence(error));
+  return error.cause === undefined ? [] : ownerLines(error.cause);
+}
+
+/** A foreign failure's whole record: its list of problems, or its own line and what it kept. */
+function ownerLines(failure: ForeignDiagnostic): readonly string[] {
+  if (failure.origin === 'library' || failure.origin === 'language')
+    return evidenceLines(failure.source);
+  return operationLines(failure.source);
+}
+
 /** The evidence behind a failure: a web failure's cause, or a foreign failure's own. */
 function evidence(error: Diagnostic): Evidence | undefined {
   if (error.origin !== 'web') return foreignEvidence(error);
   return error.cause === undefined ? undefined : foreignEvidence(error.cause);
 }
 
-/** What each owner kept under its failure; Canvas and Design System keep nothing further. */
+/**
+ * What each owner kept under its failure; Canvas and Design System keep nothing further. An
+ * unrecognised failure keeps its whole raw record, so its own code and path are shown.
+ */
 function foreignEvidence(error: ForeignDiagnostic): Evidence | undefined {
   switch (error.origin) {
     case 'authoring':
     case 'service':
-    case 'unrecognised':
     case 'layout':
     case 'presentation':
       return error.source.source;
+    case 'unrecognised':
     case 'library':
     case 'language':
       return error.source;
@@ -82,7 +111,7 @@ function evidenceLines(source: Evidence | undefined): readonly string[] {
 }
 
 /** Nested owner failures preserve order and cleanup guidance in the final display. */
-function operationLines(source: OperationSource): readonly string[] {
+function operationLines(source: OwnerRecord): readonly string[] {
   return [
     `${source.code} ${source.path}: ${source.message}`,
     source.recovery,
