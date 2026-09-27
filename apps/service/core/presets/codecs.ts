@@ -1,15 +1,22 @@
 import type { FailureSource } from '../../contract/records/transport/failure-source.js';
-import { presetId, version, digest } from '@novakai/canvas-templates';
-import type { PortableTheme, PortableToken } from '@novakai/canvas-design-system';
-import type { Result, RecipePayload, ThemePayload, ThemePreset } from '@novakai/canvas-templates';
-import type { LoweredIntent, Result as LanguageResult } from '@novakai/canvas-language';
+import { presetId, presetVersion, presetDigest } from '../../contract/schemas.js';
+import type {
+  LanguageResult,
+  LoweredIntent,
+  PortableTheme,
+  PortableToken,
+  RecipePayload,
+  TemplatesResult,
+  ThemePayload,
+  ThemePreset,
+} from '../../contract/records/capabilities.js';
 import type { PresetCodecs, PresetContext } from '../../contract/records/presets/codecs.js';
 import { themeInput, type ThemeInput } from '../../contract/records/presets/theme-input.js';
 /** Codec failures leave immutable preset admission uncommitted; Authoring callers correct the source or selected base. */
 function rejected<T>(
   message: string,
   source?: FailureSource,
-): Result<T> {
+): TemplatesResult<T> {
   return {
     ok: false,
     error: {
@@ -22,7 +29,7 @@ function rejected<T>(
   };
 }
 /** Compiler diagnostics remain typed through preset admission; display adapters choose how to present them. */
-function translated<T>(result: LanguageResult<T>): Result<T> {
+function translated<T>(result: LanguageResult<T>): TemplatesResult<T> {
   if (result.ok) return result;
   return rejected('Language rejected the preset source', result.error);
 }
@@ -31,7 +38,7 @@ function inspected(
   source: string,
   family: RecipePayload['family'],
   context: PresetContext,
-): Result<RecipePayload> {
+): TemplatesResult<RecipePayload> {
   const lowered = translated(
     context.language.lower({
       source,
@@ -52,7 +59,7 @@ function recipePayload(
   intent: LoweredIntent,
   source: string,
   family: RecipePayload['family'],
-): Result<RecipePayload> {
+): TemplatesResult<RecipePayload> {
   const theme = intent.collection.theme;
   const payload = {
     languageVersion: 1,
@@ -77,19 +84,19 @@ function checkedPayload(input: {
     readonly version: string;
     readonly digest: string;
   }[];
-}): Result<RecipePayload> {
+}): TemplatesResult<RecipePayload> {
   return {
     ok: true,
     value: {
       languageVersion: 1,
       source: input.source,
       family: input.family,
-      assets: input.assets.map((value) => digest.parse(value)),
+      assets: input.assets.map((value) => presetDigest.parse(value)),
       themes: input.themes.map((pin) => ({
         kind: 'theme',
         id: presetId.parse(pin.id),
-        version: version.parse(pin.version),
-        digest: digest.parse(pin.digest),
+        version: presetVersion.parse(pin.version),
+        digest: presetDigest.parse(pin.digest),
       })),
     },
   };
@@ -98,7 +105,7 @@ function checkedPayload(input: {
 function selectedBase(
   input: ThemeInput['base'],
   available: readonly ThemePreset[],
-): Result<unknown> {
+): TemplatesResult<unknown> {
   if (input.kind === 'ui') return { ok: true, value: input };
   const found = available.find(
     (item) =>
@@ -117,7 +124,7 @@ function theme(
   raw: unknown,
   available: readonly ThemePreset[],
   context: PresetContext,
-): Result<ThemePayload> {
+): TemplatesResult<ThemePayload> {
   const input = themeInput.safeParse(raw);
   if (!input.success) return rejected('Theme admission requires a base, fonts and overrides');
   return resolvedTheme(input.data, available, context);
@@ -127,7 +134,7 @@ function resolvedTheme(
   input: ThemeInput,
   available: readonly ThemePreset[],
   context: PresetContext,
-): Result<ThemePayload> {
+): TemplatesResult<ThemePayload> {
   const base = selectedBase(input.base, available);
   if (!base.ok) return base;
   const result = context.system.resolveTheme({
@@ -152,7 +159,7 @@ export function createPresetCodecs(context: PresetContext): PresetCodecs {
 /** Public owner data carries string digests; Templates brands are minted without copying or altering token semantics. */
 function token(value: PortableToken): ThemePayload['tokens'][string] {
   if (value.type !== 'font') return value;
-  return { ...value, digest: digest.parse(value.digest) };
+  return { ...value, digest: presetDigest.parse(value.digest) };
 }
 /** Portable base pins are exact owner identities, never aliases resolved against a changing latest version. */
 function basePin(base: PortableTheme['base']): ThemePayload['base'] {
@@ -160,12 +167,12 @@ function basePin(base: PortableTheme['base']): ThemePayload['base'] {
   return {
     kind: 'theme',
     id: presetId.parse(base.id),
-    version: version.parse(base.version),
-    digest: digest.parse(base.digest),
+    version: presetVersion.parse(base.version),
+    digest: presetDigest.parse(base.digest),
   };
 }
 /** Translate identity brands after Design System validation; no second token rule is introduced in the bridge. */
-function checkedThemePayload(value: PortableTheme): Result<ThemePayload> {
+function checkedThemePayload(value: PortableTheme): TemplatesResult<ThemePayload> {
   return {
     ok: true,
     value: {
@@ -173,13 +180,13 @@ function checkedThemePayload(value: PortableTheme): Result<ThemePayload> {
       tokens: Object.fromEntries(
         Object.entries(value.tokens).map(([id, value]) => [id, token(value)]),
       ),
-      fonts: [...new Set(value.fonts.map((value) => digest.parse(value)))].toSorted(),
+      fonts: [...new Set(value.fonts.map((value) => presetDigest.parse(value)))].toSorted(),
       base: basePin(value.base),
     },
   };
 }
 /** Invalid owner/provider output rejects admission; caller keeps the source and repairs the named resource. */
-function guarded<T>(operation: () => Result<T>): Result<T> {
+function guarded<T>(operation: () => TemplatesResult<T>): TemplatesResult<T> {
   try {
     return operation();
   } catch {

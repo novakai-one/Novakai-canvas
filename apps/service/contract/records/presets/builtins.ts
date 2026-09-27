@@ -1,8 +1,5 @@
 import type { FontSet } from '@novakai/canvas-presentation';
-import type { DesignSystem } from '@novakai/canvas-design-system';
-import type { Catalog, RecipePayload, Templates } from '@novakai/canvas-templates';
-import type { LoweredIntent, ResolvedResources } from '@novakai/canvas-language';
-import type { ModelRules } from '../../ports/capabilities.js';
+import type { Catalog, RecipePayload } from '@novakai/canvas-templates';
 /** Repository-owned source inputs are prepared for Authoring admission; reading/staging alone creates no canonical bindings. */
 export interface BuiltinSources {
   readonly fonts: FontSet;
@@ -11,12 +8,6 @@ export interface BuiltinSources {
     readonly family: RecipePayload['family'];
     readonly source: string;
   }[];
-}
-/** The slice of ServiceCapabilities builtin preparation uses: theme binding, UI token resolution and preset admission. */
-export interface BuiltinPresetOwners {
-  readonly model: Pick<ModelRules, 'validate'>;
-  readonly system: Pick<DesignSystem, 'resolve'>;
-  templates(resources: ResolvedResources): Pick<Templates<LoweredIntent>, 'planAdmission'>;
 }
 export interface BuiltinResources extends BuiltinSources {
   readonly presets: Catalog;

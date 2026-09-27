@@ -35,8 +35,23 @@ export type {
   LoweredIntent,
   ResolvedResources,
   ResourceRequest,
+  Result as LanguageResult,
   ValidationError as LanguageError,
 } from '@novakai/canvas-language';
-export type { Templates, Catalog, Preset, ThemePreset } from '@novakai/canvas-templates';
+export type {
+  Templates,
+  Catalog,
+  Preset,
+  ThemePreset,
+  RecipePayload,
+  ThemePayload,
+  Result as TemplatesResult,
+} from '@novakai/canvas-templates';
+export type {
+  DesignSystem,
+  PortableTheme,
+  PortableToken,
+  ChromeName,
+} from '@novakai/canvas-design-system';
 export type { Assets, WriteLease } from '@novakai/canvas-assets';
 export type { Organisation, LibrarySnapshot } from '@novakai/canvas-library';

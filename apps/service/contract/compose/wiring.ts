@@ -35,6 +35,7 @@ import { createCollectionPlanner } from '../../core/authoring-roles/planners/col
 import { createDiagramPlanners } from '../../core/authoring-roles/planners/diagram.js';
 import { createLibraryPlanner } from '../../core/authoring-roles/planners/library.js';
 import { createPresetPlanner } from '../../core/authoring-roles/planners/preset.js';
+import { prepareTheme } from '../../core/presets/theme-admission.js';
 import { createWorkspaceExporter } from '../../adapters/workspace/export.js';
 import { createPngRuntime } from '../../adapters/raster/png-runtime.js';
 import { cacheRenders } from '../../adapters/rendering/render-cache.js';
@@ -56,25 +57,13 @@ export async function wireWorkspace(
   worker: DiagramProducer,
 ): Promise<Result<WiredWorkspace>> {
   const producer = cacheRenders(worker);
-  const [
-    storeModule,
-    codecModule,
-    jobModule,
-    rendererModule,
-    channelModule,
-    themePreparationModule,
-  ] = await Promise.all([
+  const [storeModule, jobModule, rendererModule, channelModule] = await Promise.all([
     import('../../adapters/storage/authoring-store.js'),
-    import('../../core/presets/codecs.js'),
     import('../../adapters/rendering/render-jobs.js'),
     import('../../adapters/rendering/collection-renderer.js'),
     import('../../adapters/notifications/change-channel.js'),
-    import('../../core/presets/theme-admission.js'),
   ]);
-  const capabilities = createServiceCapabilities(
-    installation.tokens,
-    codecModule.createPresetCodecs,
-  );
+  const capabilities = createServiceCapabilities(installation.tokens);
   const { language, system, model, library } = capabilities;
   const templates = capabilities.templates(EMPTY_RESOURCES);
   const views = createWorkspaceReader({ model, library, templates });
@@ -90,7 +79,7 @@ export async function wireWorkspace(
     selector: resources,
     language,
     normalize: (admission, catalog, bindings) =>
-      themePreparationModule.prepareTheme(admission, catalog, bindings, {
+      prepareTheme(admission, catalog, bindings, {
         assets: native.assets,
         templates,
       }),

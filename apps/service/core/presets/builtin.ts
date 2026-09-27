@@ -1,13 +1,23 @@
 import type { FailureSource } from '../../contract/records/transport/failure-source.js';
-import type { Catalog, Preset, RecipePayload } from '@novakai/canvas-templates';
-import type { ResolvedResources } from '@novakai/canvas-language';
 import type {
-  BuiltinSources,
-  BuiltinResources,
-  BuiltinPresetOwners,
-} from '../../contract/records/presets/builtins.js';
+  Catalog,
+  DesignSystem,
+  LoweredIntent,
+  Preset,
+  RecipePayload,
+  ResolvedResources,
+  Templates,
+} from '../../contract/records/capabilities.js';
+import type { BuiltinSources, BuiltinResources } from '../../contract/records/presets/builtins.js';
+import type { ModelRules } from '../../contract/ports/capabilities.js';
 import { failure, type Result } from '../../contract/errors.js';
 import { EMPTY_RESOURCES } from '../../contract/ports/capabilities.js';
+/** The slice of ServiceCapabilities builtin preparation uses: theme binding, UI token resolution and preset admission. */
+export interface BuiltinPresetOwners {
+  readonly model: Pick<ModelRules, 'validate'>;
+  readonly system: Pick<DesignSystem, 'resolve'>;
+  templates(resources: ResolvedResources): Pick<Templates<LoweredIntent>, 'planAdmission'>;
+}
 /** Boot admission stops at an owner rejection; service retains the original workspace. */
 class PresetFault extends Error {
   /** Private native/input failures have no invented source; checked owner failures retain theirs. */

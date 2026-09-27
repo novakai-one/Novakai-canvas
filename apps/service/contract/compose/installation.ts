@@ -8,6 +8,7 @@ import type { Assets } from '@novakai/canvas-assets';
 import type { BuiltinResources } from '../records/presets/builtins.js';
 import type { Result } from '../errors.js';
 import { failure } from '../errors.js';
+import { prepareBuiltinPresets } from '../../core/presets/builtin.js';
 import { createServiceCapabilities } from './capabilities.js';
 
 /** Resource/provider startup failures leave the existing workspace untouched; caller repairs the installation and retries. */
@@ -35,13 +36,8 @@ async function prepareInstallationInputs(
 ): Promise<Result<BuiltinResources>> {
   const files = await createTokenFileBindings(tokenRoot);
   if (!files.ok) return failure('unavailable', 'tokens', files.error.message, files.error);
-  const [loader, codecs, builtins] = await Promise.all([
-    import('../../adapters/files/shipped-resources.js'),
-    import('../../core/presets/codecs.js'),
-    import('../../core/presets/builtin.js'),
-  ]);
+  const loader = await import('../../adapters/files/shipped-resources.js');
   const sources = await loader.loadBuiltinSources(resourceRoot, assets, files.value);
   if (!sources.ok) return sources;
-  const capabilities = createServiceCapabilities(sources.value.tokens, codecs.createPresetCodecs);
-  return builtins.prepareBuiltinPresets(sources.value, capabilities);
+  return prepareBuiltinPresets(sources.value, createServiceCapabilities(sources.value.tokens));
 }

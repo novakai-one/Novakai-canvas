@@ -10,6 +10,8 @@ import type { Result } from '../errors.js';
 import { failure } from '../errors.js';
 import { createAdmission as createHttpAdmission } from '../../core/transport/admission.js';
 import { readCommand } from '../../core/transport/command.js';
+import { createPresetCodecs } from '../../core/presets/codecs.js';
+import { prepareTheme } from '../../core/presets/theme-admission.js';
 import { createServiceLanguage } from './capabilities.js';
 
 /** Expose one already-open workspace through authenticated loopback transport. Caller closes transport before draining its workspace. */
@@ -62,15 +64,13 @@ export async function readAgentCredential(path: string): Promise<Result<string>>
 
 /** Read-only headless composition shares service adapters. CLI runHeadless catches import failures, reports render-unavailable and owns retry after dependencies are restored. */
 export async function createHeadlessBindings() {
-  const [codecs, themes, jobs, rendering] = await Promise.all([
-    import('../../core/presets/codecs.js'),
-    import('../../core/presets/theme-admission.js'),
+  const [jobs, rendering] = await Promise.all([
     import('../../adapters/rendering/render-jobs.js'),
     import('../../adapters/render-worker/derive.js'),
   ]);
   return {
-    createPresetCodecs: codecs.createPresetCodecs,
-    prepareTheme: themes.prepareTheme,
+    createPresetCodecs,
+    prepareTheme,
     createRenderJobs: jobs.createRenderJobs,
     produceDiagram: rendering.produceDiagram,
   };

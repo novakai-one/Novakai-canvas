@@ -1,9 +1,9 @@
 /*
  * The one construction site for Language, Design System, the Templates factory and the Model,
- * Library and Export rule tables. installation.ts and wiring.ts each call it once; serve.ts builds
- * only Language here. Some adapters still import Model and Export rules directly until later
- * PRs move those rules into core. Constructing starts no I/O; each capability owns its own
- * failures and recovery.
+ * Library and Export rule tables. Templates is composed from the core preset codecs. installation.ts
+ * and wiring.ts each call it once; serve.ts builds only Language here. Some adapters still import
+ * Model and Export rules directly until later PRs move those rules into core. Constructing starts
+ * no I/O; each capability owns its own failures and recovery.
  */
 import { composeDesignSystem } from '@novakai/canvas-design-system';
 import { composeExport, formatMarkdown } from '@novakai/canvas-export';
@@ -17,20 +17,14 @@ import type {
   ModelRules,
   ServiceCapabilities,
 } from '../ports/capabilities.js';
-import type { PresetCodecs, PresetContext } from '../records/presets/codecs.js';
-
-/** Builds the recipe and theme codecs Templates admits presets with, for one preset context. */
-export type PresetCodecFactory = (context: PresetContext) => PresetCodecs;
+import { createPresetCodecs } from '../../core/presets/codecs.js';
 
 /**
  * Binds every capability the service uses. `sources` is the installation's raw token source
- * envelope; Design System revalidates it on every call. `codecs` builds the preset codecs each
- * `templates(resources)` call composes Templates from. Never fails.
+ * envelope; Design System revalidates it on every call. Each `templates(resources)` call composes
+ * Templates from new preset codecs bound to those resources. Never fails.
  */
-export function createServiceCapabilities(
-  sources: unknown,
-  codecs: PresetCodecFactory,
-): ServiceCapabilities {
+export function createServiceCapabilities(sources: unknown): ServiceCapabilities {
   const language = createServiceLanguage();
   const system = composeDesignSystem();
   return {
@@ -39,7 +33,8 @@ export function createServiceCapabilities(
     export: EXPORT_RULES,
     language,
     system,
-    templates: (resources) => composeTemplates(codecs({ system, language, sources, resources })),
+    templates: (resources) =>
+      composeTemplates(createPresetCodecs({ system, language, sources, resources })),
   };
 }
 
