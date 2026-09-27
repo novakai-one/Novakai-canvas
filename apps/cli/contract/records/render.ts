@@ -61,45 +61,39 @@ export interface RenderReport {
 }
 
 /**
- * render:png's option values → RenderRequest. `parse` throws a ZodError naming the first
- * malformed option (an empty --theme or --theme-file); cli/render.ts prints it and exits 1.
+ * render:png's option values → RenderRequest. An option passed as `undefined` counts as not
+ * given. `parse` throws a ZodError naming the first malformed option (an empty --theme or
+ * --theme-file); cli/render.ts prints it and exits 1.
  */
 export const renderRequest = z
-  .strictObject({
-    collection: collectionName,
-    theme: themeName.optional(),
-    themeFile: filePath.optional(),
-    out: filePath,
-    format: z.enum(['svg', 'png']),
-    labels: z.boolean().optional(),
-    root: filePath,
-  })
-  .transform((options): RenderRequest => ({
-    collection: selector(options.collection),
-    ...themeEntry(options.theme),
-    ...themeFileEntry(options.themeFile),
-    out: options.out,
-    format: options.format,
-    labels: labelMode(options.labels),
-    root: options.root,
+  .preprocess(
+    givenOptions,
+    z.strictObject({
+      collection: collectionName,
+      theme: themeName.exactOptional(),
+      themeFile: filePath.exactOptional(),
+      out: filePath,
+      format: z.enum(['svg', 'png']),
+      labels: z.boolean().exactOptional(),
+      root: filePath,
+    }),
+  )
+  .transform(({ collection, labels, ...given }): RenderRequest => ({
+    ...given,
+    collection: selector(collection),
+    labels: labelMode(labels),
   }));
+
+/** The option record without its `undefined` entries, so an option not given stays an absent key. */
+function givenOptions(options: unknown): unknown {
+  if (typeof options !== 'object' || options === null) return options;
+  return Object.fromEntries(Object.entries(options).filter((entry) => entry[1] !== undefined));
+}
 
 /** `.canvas` text is a file path; both brands take the same non-empty text, so the mint holds. */
 function selector(text: CollectionName): CollectionSelector {
   if (!text.endsWith('.canvas')) return { kind: 'named', name: text };
   return { kind: 'file', path: filePath.parse(text) };
-}
-
-/** `{ theme }` when --theme was given; `{}` otherwise, so the key stays absent. */
-function themeEntry(theme: ThemeName | undefined): Pick<RenderRequest, 'theme'> {
-  if (theme === undefined) return {};
-  return { theme };
-}
-
-/** `{ themeFile }` when --theme-file was given; `{}` otherwise, so the key stays absent. */
-function themeFileEntry(themeFile: FilePath | undefined): Pick<RenderRequest, 'themeFile'> {
-  if (themeFile === undefined) return {};
-  return { themeFile };
 }
 
 /** `--labels` draws hidden wire labels too; without it only the shown ones are drawn. */

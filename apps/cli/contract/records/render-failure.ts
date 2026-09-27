@@ -5,8 +5,14 @@
  * and call nativeFault; the caller corrects the named input or resource and runs render:png again.
  */
 import type { CliFailure } from '../errors.js';
-import type { Collection, FailureSource } from './foreign.js';
-import { filePath, type CollectionName, type FilePath } from '../brands.js';
+import type { FailureSource } from './foreign.js';
+import {
+  filePath,
+  type CollectionName,
+  type FilePath,
+  type PresetId,
+  type ThemeName,
+} from '../brands.js';
 
 /** A native error's failing path, raw OS code (e.g. `ENOENT`) and syscall (e.g. `open`), when given. */
 export interface NativeDetail {
@@ -17,7 +23,7 @@ export interface NativeDetail {
 
 /**
  * A render failure the CLI found itself. Consumers branch on the code, never the message.
- * - `missing-theme`: the chosen theme has no admitted pin.
+ * - `missing-theme`: the theme override has no admitted pin.
  * - `collection-selection`: a collection name matched no recipe and not exactly one shipped
  *   collection; `matches` counts the shipped matches.
  * - `collection-required`: a theme override was asked for a source that is not a collection.
@@ -27,8 +33,8 @@ export interface NativeDetail {
 export type RenderFault =
   | {
       readonly code: 'missing-theme';
-      /** The theme ID the render chose: --theme, the --theme-file's `@id`, or the collection's own. */
-      readonly theme: Collection['theme']['id'];
+      /** The override: --theme, or else the --theme-file's `@id`. */
+      readonly theme: ThemeName | PresetId;
     }
   | {
       readonly code: 'collection-selection';

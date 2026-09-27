@@ -13,7 +13,13 @@ import type { Catalog } from '@novakai/canvas-templates';
 import { validate, type Collection } from '@novakai/canvas-model';
 import type { RenderReport, RenderRequest } from '../../contract/records/render.js';
 import type { ProviderFault, RenderFailure } from '../../contract/records/render-failure.js';
-import type { AssetDigest, CollectionName, FilePath } from '../../contract/brands.js';
+import type {
+  AssetDigest,
+  CollectionName,
+  FilePath,
+  PresetId,
+  ThemeName,
+} from '../../contract/brands.js';
 import type { SourceFile } from '../../contract/records/source-file.js';
 import type { HeadlessOwners, TempDirectory } from '../../contract/ports/render.js';
 import type { Result } from '../../contract/errors.js';
@@ -173,7 +179,8 @@ async function input(
       resources: bindings,
     }),
   ).collection;
-  const theme = (await selectedTheme(request, owners, original.theme.id)) ?? original.theme.id;
+  const theme = await selectedTheme(request, owners);
+  if (theme === null) return accepted(validate(original));
   const pin = bindings.themes[theme];
   if (!pin) throw new RenderAbort({ code: 'missing-theme', theme });
   return accepted(validate({ ...original, theme: pin }));
@@ -223,14 +230,16 @@ async function sourceFromId(
   return match;
 }
 
-/** A theme file names its own `@id`; --theme takes precedence when both are supplied. */
+/**
+ * The theme override: --theme, or else the --theme-file's `@id`; null without either. Without
+ * one, the lowered collection keeps the pin Language resolved for its own theme.
+ */
 async function selectedTheme(
   request: RenderRequest,
   owners: HeadlessOwners,
-  original: Collection['theme']['id'] | null,
-): Promise<Collection['theme']['id'] | null> {
+): Promise<ThemeName | PresetId | null> {
   if (request.theme !== undefined) return request.theme;
-  if (request.themeFile === undefined) return original;
+  if (request.themeFile === undefined) return null;
   const theme = accepted(await owners.files.read(request.themeFile));
   return accepted(owners.readTheme(theme.source)).admission.id;
 }
@@ -278,7 +287,7 @@ async function overrideSource(
   owners: HeadlessOwners,
   env: Environment,
 ): Promise<SourceFile> {
-  const selected = await selectedTheme(request, owners, null);
+  const selected = await selectedTheme(request, owners);
   if (selected === null) return source;
   return { ...source, source: sourceWithTheme(source.source, selected, env.language.parse) };
 }
