@@ -1,11 +1,12 @@
 import { historyStatusSchema } from '@novakai/canvas-authoring';
 import type { GeometryPreview } from '@novakai/canvas-canvas';
 import type { ObjectDraft } from '../../contract/records/inspector.js';
-import type { DiagramObject, Group, Section } from '../../contract/records/owners.js';
+import type { Change, Collection, DiagramObject } from '../../contract/records/owners.js';
 import type {
   AddDiagramDraft,
   AddGroupDraft,
   AddObjectDraft,
+  CreationKind,
 } from '../../contract/records/creation.js';
 import type { ConnectionDraft, ConnectionEdit } from '../../contract/records/connection.js';
 import {
@@ -42,8 +43,6 @@ import {
   emptyRefusalOrder,
   observeRefusals,
   supersededRefusal,
-  groupDraftProblem,
-  groupCreationChanges,
   chooseMoveOption as chooseReviewedMoveOption,
   buildConnectionDraft,
   connectionRequest,
@@ -91,17 +90,46 @@ import {
   settlingHistory,
   submissionAllowed,
   unresolvedInverses,
+  addedCreation,
+  cancelledCreation,
+  capturedIn,
+  captureFor,
+  creationContext,
+  creationLocked,
+  diagramChanges,
+  diagramTarget,
+  dismissedCaptures,
+  emptyCreation,
+  groupChanges,
+  holding,
+  landedElsewhere,
+  noCaptures,
+  objectChanges,
+  refusedCaptures,
+  refusedElsewhereNote,
+  released,
+  settledCaptures,
+  settledCreation,
+  withRequest,
+  type CaptureIds,
   type CollectionDraft,
   type ConnectionCapture,
   type ConnectionPolicy,
   type ConnectionReview,
+  type CreationCapture,
+  type CreationCaptures,
   type HistorySlot,
   type LatestSnapshot,
   type RenderMode,
   type RenderTicket,
 } from '../../contract/api.js';
+import {
+  groupDraftId,
+  groupGrammar,
+  objectDraftId,
+  sectionDraftId,
+} from '../../contract/workspace-model.js';
 
-const creationKinds = ['diagram', 'object', 'group'] as const;
 /** Model's connection policy, read once here; the editing core imports no capability's runtime. */
 const connectionPolicy: ConnectionPolicy = {
   compatibleWires,
@@ -144,14 +172,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     pending: [],
     movementReview: null,
     connection: null,
-    creation: {
-      diagram: { title: '', mode: 'grid' },
-      object: { section: '', label: '', kind: 'module', reuseObject: null, group: null },
-      group: { section: '', title: '' },
-      problem: null,
-      busy: false,
-      adding: null,
-    },
+    creation: emptyCreation(),
     history: { status: null, busy: false },
     ...source.getSnapshot(),
   };
@@ -173,27 +194,13 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   let movementApplying = false;
   let connectionCapture: ConnectionCapture | null = null;
   let historyRead = 0;
-  let diagramCapture: {
-    readonly id: Section['id'];
-    readonly base: NonNullable<WorkspaceView['snapshot']>;
-    readonly collection: ActiveDiagram['document']['collection'];
-    readonly generation: string;
-    request: Request | null;
-  } | null = null;
-  let objectCapture: {
-    readonly id: DiagramObject['id'];
-    readonly base: NonNullable<WorkspaceView['snapshot']>;
-    readonly collection: ActiveDiagram['document']['collection'];
-    readonly generation: string;
-    request: Request | null;
-  } | null = null;
-  let groupCapture: {
-    readonly id: Group['id'];
-    readonly base: NonNullable<WorkspaceView['snapshot']>;
-    readonly collection: ActiveDiagram['document']['collection'];
-    readonly generation: string;
-    request: Request | null;
-  } | null = null;
+  let creationCaptures: CreationCaptures = noCaptures;
+  /** Each Add form's new ID, minted once when its capture is made and branded by Model's ID grammar. */
+  const creationIds: CaptureIds = {
+    diagram: () => sectionDraftId(`section-${bindings.nextId()}`),
+    object: () => objectDraftId(`object-${bindings.nextId()}`),
+    group: () => groupDraftId(`group-${bindings.nextId()}`),
+  };
   let removeHistoryKeys = (): void => undefined;
   const inspector = bindings.inspector({ apply: applyObject, report });
   const definitions = bindings.definitions({ apply: applyDefinition, report });
@@ -231,7 +238,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     update({
       pending,
       busy: pending.some((item) => item.state === 'sending'),
-      creation: { ...state.creation, busy: creationLocked() },
+      creation: { ...state.creation, busy: creationLocked(creationCaptures) },
       ...(connection === undefined ? {} : { connection }),
     });
     updateMutationAvailability();
@@ -1057,48 +1064,14 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     settleConfirmedCreation(submission.request.request);
     finishConfirmedSubmission(submission, receipt);
   }
+  /** A confirmed request empties the Add forms that sent it; the connection it sent closes too. */
   function settleConfirmedCreation(requestId: string): void {
-    const diagramCleared = diagramCapture?.request?.request === requestId;
-    const objectCleared = objectCapture?.request?.request === requestId;
-    const groupCleared = groupCapture?.request?.request === requestId;
-    settleDiagramCapture(requestId);
-    settleObjectCapture(requestId);
-    settleGroupCapture(requestId);
+    const settled = settledCaptures(creationCaptures, requestId);
+    creationCaptures = settled.captures;
     settleConnectionCapture(requestId);
-    if (!diagramCleared && !objectCleared && !groupCleared) return;
-    update({ creation: settledCreationView(diagramCleared, objectCleared, groupCleared) });
-  }
-  function settledCreationView(
-    diagramCleared: boolean,
-    objectCleared: boolean,
-    groupCleared: boolean,
-  ): WorkspaceView['creation'] {
-    return {
-      diagram: settledDiagramDraft(diagramCleared),
-      object: settledObjectDraft(objectCleared),
-      group: settledGroupDraft(groupCleared),
-      problem: null,
-      busy: creationLocked(),
-      adding: state.creation.adding,
-    };
-  }
-  function settledDiagramDraft(cleared: boolean): AddDiagramDraft {
-    return cleared ? resetDiagramDraft('diagram', state.creation.diagram) : state.creation.diagram;
-  }
-  function settledObjectDraft(cleared: boolean): AddObjectDraft {
-    return cleared ? resetObjectDraft('object', state.creation.object) : state.creation.object;
-  }
-  function settledGroupDraft(cleared: boolean): AddGroupDraft {
-    return cleared ? resetGroupDraft('group', state.creation.group) : state.creation.group;
-  }
-  function settleDiagramCapture(requestId: string): void {
-    if (diagramCapture?.request?.request === requestId) diagramCapture = null;
-  }
-  function settleObjectCapture(requestId: string): void {
-    if (objectCapture?.request?.request === requestId) objectCapture = null;
-  }
-  function settleGroupCapture(requestId: string): void {
-    if (groupCapture?.request?.request === requestId) groupCapture = null;
+    if (settled.cleared.length === 0) return;
+    const locked = creationLocked(creationCaptures);
+    update({ creation: settledCreation(state.creation, settled.cleared, locked) });
   }
   function settleConnectionCapture(requestId: string): void {
     if (connectionCapture?.request?.request !== requestId) return;
@@ -1220,220 +1193,105 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   }
   /** Add keeps diagram and object creation on the existing Model → Authoring receipt path. */
   async function addDiagram(draft: AddDiagramDraft): Promise<Result<Receipt>> {
-    const active = state.active;
-    const draftError = diagramDraftError(active, state.snapshot, draft);
-    if (draftError !== null) return retainCreationFailure(draftError);
-    const title = draft.title.trim();
-    const captured = diagramTarget(active as ActiveDiagram);
+    const target = diagramTarget(state.active, state.snapshot, draft);
+    if (!target.ok) return retainCreationFailure(target);
+    const captured = capturedIn(captureCreation('diagram', target.value), target.value);
     if (!captured.ok) return retainCreationFailure(captured);
-    const capture = captured.value;
     update({
       creation: { ...state.creation, diagram: draft, problem: null, busy: true, adding: 'diagram' },
     });
-    const section = {
-      id: capture.id,
-      title,
-      mode: draft.mode,
-      order: capture.collection.sections.length,
-      layout: {
-        algorithm: 'grid' as const,
-        direction: 'right' as const,
-        gap: 'normal' as const,
-        constraints: [],
-      },
-      appearances: [],
-      groups: [],
-      wires: [],
-      sequence: [],
-    };
-    const result = await submitCreation(capture, [
-      { op: 'create', target: 'sections', value: section },
-    ]);
+    const changes = diagramChanges(captured.value, draft);
+    const result = await submitCreation('diagram', captured.value, changes);
     return finishCreation(result, 'diagram');
-  }
-  function diagramDraftError(
-    active: ActiveDiagram | null,
-    snapshot: WorkspaceView['snapshot'],
-    draft: AddDiagramDraft,
-  ): Extract<Result<never>, { ok: false }> | null {
-    if (active === null || snapshot === null) return creationFailure('Open a collection first.');
-    return draft.title.trim().length === 0
-      ? creationFailure('Give the diagram a name before adding it.')
-      : null;
-  }
-  function diagramTarget(active: ActiveDiagram): Result<NonNullable<typeof diagramCapture>> {
-    const capture =
-      diagramCapture ??
-      (diagramCapture = {
-        id: `section-${bindings.nextId()}` as Section['id'],
-        base: active.base,
-        collection: active.document.collection,
-        generation: active.generation,
-        request: null,
-      });
-    const error = captureCollectionError(capture.collection.id, active.document.collection.id);
-    return error === null ? { ok: true, value: capture } : error;
   }
   /** New objects are created once; reuse only adds a section-local appearance of the same ID. */
   async function addObject(draft: AddObjectDraft): Promise<Result<Receipt>> {
-    const context = creationContext(draft);
+    const context = creationContext(state.active, creationCaptures.object, draft.section);
     if (!context.ok) return retainCreationFailure(context);
-    objectCapture ??= {
-      id: `object-${bindings.nextId()}` as DiagramObject['id'],
-      base: context.value.active.base,
-      collection: context.value.active.document.collection,
-      generation: context.value.active.generation,
-      request: null,
-    };
+    const capture = captureCreation('object', context.value.active);
     update({
       creation: { ...state.creation, object: draft, problem: null, busy: true, adding: 'object' },
     });
-    const payload = creationPayload(context.value, draft);
-    if (!payload.ok) return retainCreationFailure(payload);
-    const changes = creationChanges(payload.value.object, draft.reuseObject, payload.value.section);
-    const result = await submitCreation(objectCapture, changes);
+    const changes = objectChanges(context.value, draft, capture.id, groupGrammar);
+    if (!changes.ok) return retainCreationFailure(changes);
+    const result = await submitCreation('object', capture, changes.value);
     return finishCreation(result, 'object');
   }
+  /** A group draft is checked before the form turns busy, so a refused draft never shows as adding. */
   async function addGroup(draft: AddGroupDraft): Promise<Result<Receipt>> {
-    const context = groupContext(draft);
+    const context = creationContext(state.active, creationCaptures.group, draft.section);
     if (!context.ok) return retainCreationFailure(context);
-    groupCapture ??= {
-      id: `group-${bindings.nextId()}` as Group['id'],
-      base: context.value.active.base,
-      collection: context.value.active.document.collection,
-      generation: context.value.active.generation,
-      request: null,
-    };
-    const problem = groupDraftProblem(draft, context.value.section);
-    if (problem !== null) return retainCreationFailure(creationFailure(problem));
+    const capture = captureCreation('group', context.value.active);
+    const changes = groupChanges(context.value.section, draft, capture.id);
+    if (!changes.ok) return retainCreationFailure(changes);
     update({
       creation: { ...state.creation, group: draft, problem: null, busy: true, adding: 'group' },
     });
-    const group: Group = {
-      id: groupCapture.id,
-      title: draft.title.trim(),
-      frame: 'panel' as const,
-      role: 'neutral',
-      layout: {
-        algorithm: context.value.section.layout.algorithm,
-        direction: context.value.section.layout.direction,
-        gap: context.value.section.layout.gap,
-        constraints: [],
-      },
-    };
-    const section = {
-      ...context.value.section,
-      groups: [...context.value.section.groups, group],
-    };
-    const result = await submitCreation(
-      groupCapture,
-      groupCreationChanges(section, draft.findRoom === true),
-    );
+    const result = await submitCreation('group', capture, changes.value);
     return finishCreation(result, 'group');
   }
+  /** The first submit builds the request and keeps it on the capture; a retry resends that same body. */
   async function submitCreation(
-    capture: {
-      readonly base: NonNullable<WorkspaceView['snapshot']>;
-      readonly collection: ActiveDiagram['document']['collection'];
-      readonly generation: string;
-      request: Request | null;
-    },
-    changes: readonly import('../../contract/records/owners.js').Change[],
+    kind: CreationKind,
+    capture: CreationCapture<unknown>,
+    changes: readonly Change[],
   ): Promise<Result<Receipt>> {
     const request =
       capture.request === null
         ? bindings.inputs.model(capture.base, capture.collection.id, changes, bindings.nextId())
         : { ok: true as const, value: capture.request };
     if (!request.ok) return retainCreationFailure(request);
-    capture.request ??= request.value;
-    return submit(capture.request, capture.generation, state.sourceEdit, null);
+    creationCaptures = withRequest(creationCaptures, kind, request.value);
+    return submit(request.value, capture.generation, state.sourceEdit, null);
   }
+  /** The capture's collection is read before settling, since settling may release the capture. */
   function finishCreation(
     result: Result<Receipt>,
-    kind: 'diagram' | 'object' | 'group',
+    kind: CreationKind,
   ): Result<Receipt> {
-    const origin = captureOf(kind)?.collection;
+    const origin = creationCaptures[kind]?.collection;
     settleCreation(result, kind);
     settleCreationElsewhere(origin, result);
     return result;
   }
+  /** A landed add empties its form; a refused one keeps the draft and shows why. */
   function settleCreation(
     result: Result<Receipt>,
-    kind: 'diagram' | 'object' | 'group',
+    kind: CreationKind,
   ): void {
     if (!result.ok) return settleRefusedCreation(result.error, kind);
-    clearCreationCapture(kind);
-    update({ creation: creationAfterSuccess(kind) });
+    creationCaptures = released(creationCaptures, kind);
+    update({ creation: addedCreation(state.creation, kind) });
   }
+  /** A refused or unsent add changed nothing, so the next submit rebuilds its request from the
+   * current draft; an uncertain request keeps its capture so a retry cannot add the item twice. */
   function settleRefusedCreation(
     error: Diagnostic,
-    kind: 'diagram' | 'object' | 'group',
+    kind: CreationKind,
   ): void {
-    releaseRefusedCreation(kind);
+    creationCaptures = refusedCaptures(creationCaptures, kind, state.pending);
+    const locked = creationLocked(creationCaptures);
     update({
-      creation: { ...state.creation, problem: plainMessage(error.message), busy: creationLocked() },
+      creation: { ...state.creation, problem: plainMessage(error.message), busy: locked },
     });
   }
   /** Another collection opened while this add was in flight: its forms start empty and its refusal is not shown there. */
   function settleCreationElsewhere(
-    origin: ActiveDiagram['document']['collection'] | undefined,
+    origin: Collection | undefined,
     result: Result<Receipt>,
   ): void {
-    if (!openedElsewhere(origin)) return;
+    if (!landedElsewhere(origin, state.active, creationCaptures)) return;
     update({ creation: freshCreation() });
     if (!result.ok) reportRefusedElsewhere(origin, result.error);
   }
-  function openedElsewhere(
-    origin: ActiveDiagram['document']['collection'] | undefined,
-  ): origin is ActiveDiagram['document']['collection'] {
-    return (
-      origin !== undefined &&
-      origin.id !== state.active?.document.collection.id &&
-      !creationLocked()
-    );
-  }
   function reportRefusedElsewhere(
-    origin: ActiveDiagram['document']['collection'],
+    origin: Collection,
     error: Diagnostic,
   ): void {
-    const note = `Add to "${origin.title}" was not applied: ${plainMessage(error.message)}`;
+    const note = refusedElsewhereNote(origin.title, error.message);
     // Clearing the bar first dismisses the refused request; the note then stays on the Add form.
     update({ problem: null });
     update({ status: note, creation: { ...state.creation, problem: note } });
-  }
-  function captureOf(kind: 'diagram' | 'object' | 'group') {
-    return { diagram: diagramCapture, object: objectCapture, group: groupCapture }[kind];
-  }
-  /** A refused or unsent creation changed nothing: the next submit builds a fresh request from the current draft.
-   * An uncertain request keeps its capture so a retry cannot create the item twice. */
-  function releaseRefusedCreation(kind: 'diagram' | 'object' | 'group'): void {
-    const id = captureOf(kind)?.request?.request;
-    const item = state.pending.find((entry) => entry.request.request === id);
-    if (item !== undefined && item.state !== 'rejected') return;
-    clearCreationCapture(kind);
-  }
-  function creationAfterSuccess(kind: 'diagram' | 'object' | 'group'): WorkspaceView['creation'] {
-    return {
-      diagram: successDiagramDraft(kind),
-      object: successObjectDraft(kind),
-      group: successGroupDraft(kind),
-      problem: null,
-      busy: false,
-      adding: null,
-    };
-  }
-  function successDiagramDraft(kind: 'diagram' | 'object' | 'group'): AddDiagramDraft {
-    return kind === 'diagram'
-      ? resetDiagramDraft('diagram', state.creation.diagram)
-      : state.creation.diagram;
-  }
-  function successObjectDraft(kind: 'diagram' | 'object' | 'group'): AddObjectDraft {
-    return kind === 'object'
-      ? resetObjectDraft('object', state.creation.object)
-      : state.creation.object;
-  }
-  function successGroupDraft(kind: 'diagram' | 'object' | 'group'): AddGroupDraft {
-    return kind === 'group' ? resetGroupDraft('group', state.creation.group) : state.creation.group;
   }
   function retainCreationFailure<T>(
     result: Extract<Result<T>, { ok: false }>,
@@ -1444,33 +1302,24 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     return result;
   }
   function setDiagramDraft(draft: AddDiagramDraft): void {
-    if (creationLocked()) return;
-    captureDiagramDraft();
+    if (creationLocked(creationCaptures)) return;
+    captureDraft('diagram');
     update({ creation: { ...state.creation, diagram: draft, problem: null } });
   }
   function setObjectDraft(draft: AddObjectDraft): void {
-    if (creationLocked()) return;
-    captureObjectDraft();
+    if (creationLocked(creationCaptures)) return;
+    captureDraft('object');
     update({ creation: { ...state.creation, object: draft, problem: null } });
   }
   function setGroupDraft(draft: AddGroupDraft): void {
-    if (creationLocked()) return;
-    captureGroupDraft();
+    if (creationLocked(creationCaptures)) return;
+    captureDraft('group');
     update({ creation: { ...state.creation, group: draft, problem: null } });
   }
-  function cancelCreation(kind: 'diagram' | 'object' | 'group'): void {
-    if (creationLocked()) return;
-    clearCreationCapture(kind);
-    update({
-      creation: {
-        ...state.creation,
-        diagram: resetDiagramDraft(kind, state.creation.diagram),
-        object: resetObjectDraft(kind, state.creation.object),
-        group: resetGroupDraft(kind, state.creation.group),
-        problem: null,
-        busy: false,
-      },
-    });
+  function cancelCreation(kind: CreationKind): void {
+    if (creationLocked(creationCaptures)) return;
+    creationCaptures = released(creationCaptures, kind);
+    update({ creation: cancelledCreation(state.creation, kind) });
   }
   function editConnection(edit: ConnectionEdit): void {
     const capture = connectionCapture;
@@ -1525,38 +1374,16 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     connectionCapture = null;
     update({ connection: null, problem: null, status: editStatus() });
   }
-  function creationLocked(): boolean {
-    return (
-      captureHasRequest(diagramCapture) ||
-      captureHasRequest(objectCapture) ||
-      captureHasRequest(groupCapture)
-    );
-  }
-  function captureHasRequest(capture: { readonly request: Request | null } | null): boolean {
-    return capture !== null && capture.request !== null;
-  }
+  /** A dismissed add or connection request unlocks the Add forms; the connection is tried only when no add sent it. */
   function releaseDismissedCreation(requestId: string): void {
-    const released =
-      releaseDiagramRequest(requestId) ||
-      releaseObjectRequest(requestId) ||
-      releaseGroupRequest(requestId) ||
-      releaseConnectionRequest(requestId);
-    if (!released) return;
-    clearDismissedCreationView();
+    if (releaseCreationRequest(requestId) || releaseConnectionRequest(requestId))
+      clearDismissedCreationView();
   }
-  function releaseDiagramRequest(requestId: string): boolean {
-    if (diagramCapture?.request?.request !== requestId) return false;
-    diagramCapture = null;
-    return true;
-  }
-  function releaseObjectRequest(requestId: string): boolean {
-    if (objectCapture?.request?.request !== requestId) return false;
-    objectCapture = null;
-    return true;
-  }
-  function releaseGroupRequest(requestId: string): boolean {
-    if (groupCapture?.request?.request !== requestId) return false;
-    groupCapture = null;
+  /** Releases the add capture that sent this request; false when none did. */
+  function releaseCreationRequest(requestId: string): boolean {
+    const dismissed = dismissedCaptures(creationCaptures, requestId);
+    if (dismissed === null) return false;
+    creationCaptures = dismissed;
     return true;
   }
   function releaseConnectionRequest(requestId: string): boolean {
@@ -1570,38 +1397,19 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   function clearDismissedCreationView(): void {
     update({ creation: { ...state.creation, problem: null, busy: false } });
   }
-  function captureDiagramDraft(): void {
-    const active = state.active;
-    if (diagramCapture === null && active !== null)
-      diagramCapture = {
-        id: `section-${bindings.nextId()}` as Section['id'],
-        base: active.base,
-        collection: active.document.collection,
-        generation: active.generation,
-        request: null,
-      };
+  /** The first edit of a form captures it against the open diagram; with nothing open there is nothing to capture. */
+  function captureDraft(kind: CreationKind): void {
+    const activeDiagram = state.active;
+    if (activeDiagram !== null) captureCreation(kind, activeDiagram);
   }
-  function captureObjectDraft(): void {
-    const active = state.active;
-    if (objectCapture === null && active !== null)
-      objectCapture = {
-        id: `object-${bindings.nextId()}` as DiagramObject['id'],
-        base: active.base,
-        collection: active.document.collection,
-        generation: active.generation,
-        request: null,
-      };
-  }
-  function captureGroupDraft(): void {
-    const active = state.active;
-    if (groupCapture !== null || active === null) return;
-    groupCapture = {
-      id: `group-${bindings.nextId()}` as Group['id'],
-      base: active.base,
-      collection: active.document.collection,
-      generation: active.generation,
-      request: null,
-    };
+  /** The form's capture, kept for later edits and submits; its ID is minted only when first made. */
+  function captureCreation<K extends CreationKind>(
+    kind: K,
+    activeDiagram: ActiveDiagram,
+  ) {
+    const capture = captureFor(creationCaptures, kind, activeDiagram, creationIds[kind]);
+    creationCaptures = holding(creationCaptures, kind, capture);
+    return capture;
   }
   /** Add forms belong to one collection: a newly opened one starts with empty forms and no error.
    * A newer revision of the same collection keeps them; a creation in flight keeps its form until it settles. */
@@ -1610,204 +1418,12 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     document: RenderDocument,
   ): WorkspaceView['creation'] {
     if (active?.document.collection.id === document.collection.id) return state.creation;
-    return creationLocked() ? state.creation : freshCreation();
+    return creationLocked(creationCaptures) ? state.creation : freshCreation();
   }
+  /** Every form released and emptied, for a collection the forms do not belong to yet. */
   function freshCreation(): WorkspaceView['creation'] {
-    creationKinds.forEach(clearCreationCapture);
-    return {
-      diagram: resetDiagramDraft('diagram', state.creation.diagram),
-      object: resetObjectDraft('object', state.creation.object),
-      group: resetGroupDraft('group', state.creation.group),
-      problem: null,
-      busy: false,
-      adding: null,
-    };
-  }
-  function clearCreationCapture(kind: 'diagram' | 'object' | 'group'): void {
-    const clearers: Readonly<Record<typeof kind, () => void>> = {
-      diagram: () => {
-        diagramCapture = null;
-      },
-      object: () => {
-        objectCapture = null;
-      },
-      group: () => {
-        groupCapture = null;
-      },
-    };
-    clearers[kind]();
-  }
-  function resetDiagramDraft(
-    kind: 'diagram' | 'object' | 'group',
-    current: AddDiagramDraft,
-  ): AddDiagramDraft {
-    return kind === 'diagram' ? { title: '', mode: 'grid' } : current;
-  }
-  function resetObjectDraft(
-    kind: 'diagram' | 'object' | 'group',
-    current: AddObjectDraft,
-  ): AddObjectDraft {
-    return kind === 'object'
-      ? { section: '', label: '', kind: 'module', reuseObject: null, group: null }
-      : current;
-  }
-  function resetGroupDraft(
-    kind: 'diagram' | 'object' | 'group',
-    current: AddGroupDraft,
-  ): AddGroupDraft {
-    return kind === 'group' ? { section: '', title: '' } : current;
-  }
-  function creationPayload(
-    context: { active: ActiveDiagram; section: Section },
-    draft: AddObjectDraft,
-  ): Result<{ object: DiagramObject; section: Section }> {
-    const object = creationObject(context.active.document.collection.objects, draft);
-    if (!object.ok) return object;
-    const checked = checkAppearance(context.section, object.value);
-    if (!checked.ok) return checked;
-    return {
-      ok: true,
-      value: {
-        object: object.value,
-        section: {
-          ...context.section,
-          appearances: [
-            ...context.section.appearances,
-            appearanceFor(object.value.id, draft.group),
-          ],
-        },
-      },
-    };
-  }
-  function appearanceFor(
-    object: DiagramObject['id'],
-    group: string | null,
-  ): Section['appearances'][number] {
-    return group === null
-      ? { object, detail: 'full' }
-      : { object, detail: 'full', group: group as Group['id'] };
-  }
-  function creationContext(
-    draft: AddObjectDraft,
-  ): Result<{ active: ActiveDiagram; section: Section }> {
-    const active = state.active;
-    if (active === null) return creationFailure('Open a collection first.');
-    const captureError = captureCollectionError(
-      objectCapture?.collection.id,
-      active.document.collection.id,
-    );
-    if (captureError !== null) return captureError;
-    const collection = objectCapture?.collection ?? active.document.collection;
-    const section = collection.sections.find((item) => item.id === draft.section);
-    return sectionResult(section, active, objectCapture, collection);
-  }
-  function groupContext(draft: AddGroupDraft): Result<{ active: ActiveDiagram; section: Section }> {
-    const active = state.active;
-    if (active === null) return creationFailure('Open a collection first.');
-    const captureError = captureCollectionError(
-      groupCapture?.collection.id,
-      active.document.collection.id,
-    );
-    if (captureError !== null) return captureError;
-    const collection = groupCapture?.collection ?? active.document.collection;
-    const section = collection.sections.find((item) => item.id === draft.section);
-    return sectionResult(section, active, groupCapture, collection);
-  }
-  function sectionResult(
-    section: Section | undefined,
-    active: ActiveDiagram,
-    capture: NonNullable<typeof objectCapture> | NonNullable<typeof groupCapture> | null,
-    collection: ActiveDiagram['document']['collection'],
-  ): Result<{ active: ActiveDiagram; section: Section }> {
-    if (section === undefined) return creationFailure('Choose an existing diagram.');
-    const target =
-      capture === null
-        ? active
-        : {
-            ...active,
-            base: capture.base,
-            generation: capture.generation,
-            document: { ...active.document, collection },
-          };
-    return { ok: true, value: { active: target, section } };
-  }
-  function captureCollectionError(
-    captured: string | undefined,
-    current: string,
-  ): Extract<Result<never>, { ok: false }> | null {
-    return captured !== undefined && captured !== current
-      ? creationFailure('This draft belongs to another collection. Reopen it there or cancel it.')
-      : null;
-  }
-  function creationObject(
-    objects: readonly DiagramObject[],
-    draft: AddObjectDraft,
-  ): Result<DiagramObject> {
-    if (draft.reuseObject !== null) {
-      return existingObject(objects, draft.reuseObject);
-    }
-    const label = draft.label.trim();
-    if (label.length === 0) return creationFailure('Give the object a name before adding it.');
-    return {
-      ok: true,
-      value: newObject(objectCapture?.id ?? bindings.nextId(), draft.kind, label),
-    };
-  }
-  function existingObject(
-    objects: readonly DiagramObject[],
-    id: string,
-  ): Result<DiagramObject> {
-    const object = objects.find((item) => item.id === id);
-    return object === undefined
-      ? creationFailure('Choose an existing object to reuse.')
-      : { ok: true, value: object };
-  }
-  function newObject(
-    id: string,
-    kind: AddObjectDraft['kind'],
-    label: string,
-  ): DiagramObject {
-    return {
-      id: `object-${id}` as DiagramObject['id'],
-      kind,
-      label,
-      role: 'neutral',
-      size: 'medium',
-      frame: 'auto',
-      composition: 'stack',
-      content: [],
-      ports: [],
-      sources: [],
-    };
-  }
-  function checkAppearance(
-    section: Section,
-    object: DiagramObject,
-  ): Result<void> {
-    return section.appearances.some((appearance) => appearance.object === object.id)
-      ? creationFailure('That object is already in this diagram.')
-      : { ok: true, value: undefined };
-  }
-  function creationChanges(
-    object: DiagramObject,
-    reuseObject: string | null,
-    section: Section,
-  ): readonly import('../../contract/records/owners.js').Change[] {
-    const appearance = { op: 'replace' as const, target: 'sections' as const, value: section };
-    return reuseObject === null
-      ? [{ op: 'create' as const, target: 'objects' as const, value: object }, appearance]
-      : [appearance];
-  }
-  function creationFailure<T = never>(message: string): Extract<Result<T>, { ok: false }> {
-    return {
-      ok: false,
-      error: {
-        code: 'invalid-creation',
-        message,
-        recovery: 'Correct the Add form and try again.',
-        owner: 'workspace',
-      },
-    };
+    creationCaptures = noCaptures;
+    return emptyCreation();
   }
   /** Library commands use the same durable request journal and captured catalog versions as diagram editing. */
   async function applyLibrary(
