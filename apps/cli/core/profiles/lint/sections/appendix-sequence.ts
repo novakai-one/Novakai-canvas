@@ -6,8 +6,8 @@
 import type {
   ProfileDeclarationIndex,
   ProfileFinding,
-} from '../../../contract/records/profiles.js';
-import { buildSpecProfile } from '../build-spec.js';
+} from '../../../../contract/records/profiles.js';
+import { buildSpecProfile } from '../../build-spec/starter.js';
 import {
   collectAppendices,
   fieldFinding,
@@ -18,7 +18,7 @@ import {
   text,
   type Appendix,
   type Declaration,
-} from './fields.js';
+} from '../declarations.js';
 
 /** A required slot whose section is present. */
 type RequiredSection = {

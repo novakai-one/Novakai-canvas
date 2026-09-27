@@ -6,7 +6,7 @@
 import type {
   ProfileDeclarationIndex,
   ProfileFinding,
-} from '../../../contract/records/profiles.js';
+} from '../../../../contract/records/profiles.js';
 import {
   field,
   fieldFinding,
@@ -18,7 +18,7 @@ import {
   shown,
   text,
   type Declaration,
-} from './fields.js';
+} from '../declarations.js';
 
 /** A parent edge: a wire's source and target object ids. */
 type ParentEdge = {

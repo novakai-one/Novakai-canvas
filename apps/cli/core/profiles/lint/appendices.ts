@@ -15,7 +15,7 @@ import {
   text,
   type Appendix,
   type Declaration,
-} from './fields.js';
+} from './declarations.js';
 
 /** The content findings of every appendix section, in document order. */
 export function lintAppendices(indexed: ProfileDeclarationIndex): ProfileFinding[] {

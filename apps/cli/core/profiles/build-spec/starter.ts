@@ -1,4 +1,4 @@
-import type { ProfileDescriptor } from '../../contract/records/profiles.js';
+import type { ProfileDescriptor } from '../../../contract/records/profiles.js';
 
 export const buildSpecProfile: ProfileDescriptor = {
   id: 'build-spec@1',

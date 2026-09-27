@@ -8,9 +8,9 @@ import type {
   ProfileLintResult,
   ProfileSource,
 } from '../../../contract/records/profiles.js';
-import { buildSpecProfile } from '../build-spec.js';
-import { lintSections } from './sections.js';
-import { lintRepo } from './repo.js';
+import { buildSpecProfile } from '../build-spec/starter.js';
+import { lintSections } from './sections/appendix-sequence.js';
+import { lintRepo } from './repo/tree.js';
 import { lintModules } from './modules.js';
 import { lintEntitiesAndCrud } from './crud.js';
 import { lintAppendices } from './appendices.js';

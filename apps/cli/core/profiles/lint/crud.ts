@@ -18,7 +18,7 @@ import {
   text,
   type Declaration,
   type SyntaxValue,
-} from './fields.js';
+} from './declarations.js';
 
 /** Entity findings first, then the CRUD table findings of the ownership section. */
 export function lintEntitiesAndCrud(indexed: ProfileDeclarationIndex): ProfileFinding[] {
