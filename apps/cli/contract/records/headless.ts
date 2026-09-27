@@ -1,8 +1,11 @@
+/*
+ * The headless render's request, report and failure records, plus the adapter-edge conversion of a
+ * thrown native error into `provider-failed` evidence. The schemas and nativeFault are pure;
+ * nativeStep runs one native step and returns its failure as a value.
+ */
 import { z } from 'zod';
 import type { Catalog } from '@novakai/canvas-templates';
-import type { readThemeConfig } from '../theme-reader.js';
-import type { createHeadlessBindings } from '@novakai/canvas-service';
-import type { Diagnostic } from '../errors.js';
+import type { Diagnostic, Result } from '../errors.js';
 import type { FailureSource } from './failure-source.js';
 /** Filesystem path at the native CLI edge; Node resolves it and resource owners enforce confinement. */
 export const filePath = z.string().min(1).brand<'HeadlessFilePath'>();
@@ -39,13 +42,23 @@ const providerDetail = z
   })
   .readonly();
 /** Untrusted native error evidence before checking; only data fields are read, never methods. */
-export const nativeErrorDetail = z
+const nativeErrorDetail = z
   .object({
     path: filePath.optional(),
     code: z.string().optional(),
     syscall: z.string().optional(),
   })
   .readonly();
+/** A native filesystem or wasm failure: the error's message, and its path, OS code and syscall. */
+const providerFault = z
+  .strictObject({
+    code: z.literal('provider-failed'),
+    message: z.string(),
+    detail: providerDetail,
+  })
+  .readonly();
+/** A thrown native error after conversion; render file and temp-directory steps fail with it. */
+export type ProviderFault = z.infer<typeof providerFault>;
 /** Local selection/provider failures are distinct from unchanged originating owner records. */
 export const headlessFault = z.discriminatedUnion('code', [
   z.strictObject({ code: z.literal('missing-theme'), theme: themeSelector }).readonly(),
@@ -65,13 +78,7 @@ export const headlessFault = z.discriminatedUnion('code', [
     })
     .readonly(),
   z.strictObject({ code: z.literal('collection-title-required') }).readonly(),
-  z
-    .strictObject({
-      code: z.literal('provider-failed'),
-      message: z.string(),
-      detail: providerDetail,
-    })
-    .readonly(),
+  providerFault,
 ]);
 /** Consumer-owned source union retains owner paths, diagnostic tuples and recursive source/cleanup chains. */
 export type HeadlessSource = FailureSource | Diagnostic | z.infer<typeof headlessFault>;
@@ -82,16 +89,47 @@ export type HeadlessFailure = Readonly<
     readonly source: HeadlessSource;
   }
 >;
-/** Only confined resource reads and the existing service/theme preparation operations are injected. */
-export interface HeadlessOwners {
-  readonly resourceFiles: import('./resources.js').ResourceFiles;
-  readonly service: Awaited<ReturnType<typeof createHeadlessBindings>>;
-  readonly readTheme: readThemeConfig;
-}
 /** Machine-readable export evidence; Layout validates scenes before they reach this report. */
 export interface HeadlessReport {
   readonly files: readonly FilePath[];
   readonly theme: import('@novakai/canvas-model').Collection['theme'];
   readonly inspection: import('@novakai/canvas-service').InspectionReport;
   readonly digests: readonly Pick<Catalog[number], 'id' | 'digest'>[];
+}
+
+/** A thrown native error as `provider-failed` evidence: message, path, OS code and syscall. */
+export function nativeFault(error: unknown): ProviderFault {
+  return providerFault.parse({
+    code: 'provider-failed',
+    message: providerMessage(error),
+    detail: nativeDetail(error),
+  });
+}
+
+/** Run one native filesystem or wasm step. A throw becomes a `provider-failed` failure value. */
+export async function nativeStep<T>(step: () => Promise<T>): Promise<Result<T, ProviderFault>> {
+  try {
+    return { ok: true, value: await step() };
+  } catch (error) {
+    return { ok: false, error: nativeFault(error) };
+  }
+}
+
+/** The error's message as human context; no machine-readable fields are invented. */
+function providerMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** The fault schema checks and freezes these renamed fields; absent OS evidence stays absent. */
+function nativeDetail(error: unknown): {
+  readonly path: string | undefined;
+  readonly systemCode: string | undefined;
+  readonly syscall: string | undefined;
+} {
+  const native = nativeErrorDetail.safeParse(error);
+  return {
+    path: native.data?.path,
+    systemCode: native.data?.code,
+    syscall: native.data?.syscall,
+  };
 }

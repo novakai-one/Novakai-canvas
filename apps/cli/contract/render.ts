@@ -18,7 +18,8 @@ import { composeTemplates, themeInput, type Templates } from '@novakai/canvas-te
 import { validateLibrarySnapshot, type LibrarySnapshot } from '@novakai/canvas-library';
 import type { Snapshot } from '@novakai/canvas-export';
 import { RenderFault, accepted, retainedResources } from './api.js';
-import type { HeadlessOptions, HeadlessOwners } from './records/headless.js';
+import type { HeadlessOptions } from './records/headless.js';
+import type { HeadlessOwners } from './ports/render.js';
 import type {
   Assets,
   Catalog,

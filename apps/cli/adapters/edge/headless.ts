@@ -2,21 +2,18 @@
  * The headless render boundary: one read-only render runs in a temporary directory — admission,
  * lowering, projection, layout, export — and stored collections are never touched. Pure render
  * rules live in core/render behind contract/api.js and capability wiring in contract/render.js;
- * this adapter owns the filesystem, the owner sequence, and the RenderFault boundary:
- * accepted() throws, renderHeadless converts the fault to a typed failure, and the temporary
- * directory is always removed.
+ * file I/O, the temporary asset store and raster start-up are injected (adapters/render/). This
+ * adapter owns the owner sequence and the RenderFault boundary: accepted() throws,
+ * renderHeadless converts the fault to a typed failure, and the temporary directory is always
+ * removed.
  */
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { createRequire } from 'node:module';
 import { z } from 'zod';
-import { openAssets, type Assets } from '@novakai/canvas-assets';
+import type { Assets } from '@novakai/canvas-assets';
 import type { RenderDocument } from '@novakai/canvas-service';
 import type { Catalog } from '@novakai/canvas-templates';
 import { validate, type Collection } from '@novakai/canvas-model';
 import { createReactBindings } from '@novakai/canvas-presentation';
-import { composeExport, initializeRaster, type Snapshot } from '@novakai/canvas-export';
+import { composeExport, type Snapshot } from '@novakai/canvas-export';
 import {
   filePath,
   headlessFault,
@@ -24,10 +21,11 @@ import {
   type FilePath,
   type HeadlessFailure,
   type HeadlessOptions,
-  type HeadlessOwners,
   type HeadlessReport,
+  type ProviderFault,
   type SourceFile,
 } from '../../contract/records/headless.js';
+import type { HeadlessOwners, TempDirectory } from '../../contract/ports/render.js';
 import type { Result } from '../../contract/errors.js';
 import type { LocalInput, ResourceRequest } from '../../contract/records/resources.js';
 import {
@@ -58,15 +56,16 @@ type StagedDigest = NonNullable<LocalInput['digest']>;
  *
  * Owner failures keep their structured evidence; unexpected filesystem failures become
  * `provider-failed`. Either way the render is `render-failed`, stored collections are
- * untouched, and the temporary admission directory is removed.
+ * untouched, and the temporary admission directory is removed. A failure to create or remove
+ * that directory is not a `render-failed` value: it escapes as an Error with the OS message.
  */
 export async function renderHeadless(
   options: HeadlessOptions,
   owners: HeadlessOwners,
 ): Promise<Result<HeadlessReport, HeadlessFailure>> {
-  const directory = filePath.parse(await mkdtemp(join(tmpdir(), 'canvas-render-')));
+  const temp = escaped(await owners.temp.create());
   try {
-    return { ok: true, value: await render(options, owners, directory) };
+    return { ok: true, value: await render(options, owners, temp) };
   } catch (error) {
     return {
       ok: false,
@@ -79,17 +78,26 @@ export async function renderHeadless(
       },
     };
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    escaped(await temp.remove());
   }
+}
+
+/**
+ * Unwrap a temporary-directory step. A failure throws a plain Error with the OS message, the
+ * same line the host printed when mkdtemp and rm threw here directly.
+ */
+function escaped<T>(result: Result<T, ProviderFault>): T {
+  if (!result.ok) throw new Error(result.error.message);
+  return result.value;
 }
 
 /** Owner sequence: admission, lowering, projection, layout, export; assets always close. */
 async function render(
   options: HeadlessOptions,
   owners: HeadlessOwners,
-  directory: FilePath,
+  temp: TempDirectory,
 ): Promise<HeadlessReport> {
-  const assets = accepted(openAssets(directory));
+  const assets = accepted(temp.openAssets());
   try {
     return await renderEnvironment(options, owners, await environment(options, owners, assets));
   } finally {
@@ -108,7 +116,7 @@ async function renderEnvironment(
   const job = renderJob(options, owners, env, catalog, collection);
   const document = accepted(await owners.service.produceDiagram(job, new AbortController().signal));
   const snapshot = renderSnapshot(collection, document, catalog, env);
-  const files = await output(options, snapshot, document, env, catalog);
+  const files = await output(options, owners, snapshot, document, env, catalog);
   return renderReport(files, collection, document, catalog);
 }
 
@@ -118,28 +126,28 @@ async function themes(
   env: Environment,
   owners: HeadlessOwners,
 ): Promise<Catalog> {
-  const root = join(options.root, 'resources');
-  const files = (await readdir(root)).filter((name) => name.endsWith('.theme')).sort();
+  const files = accepted(await owners.files.shippedThemes());
   const catalog = await files.reduce(
-    async (prior, name) => admitTheme(filePath.parse(join(root, name)), await prior, env, owners),
+    async (prior, file) => admitTheme(file, await prior, env, owners),
     Promise.resolve(env.installation.presets),
   );
   if (!options.themeFile) return catalog;
-  return admitTheme(filePath.parse(resolve(options.themeFile)), catalog, env, owners);
+  return admitTheme(options.themeFile, catalog, env, owners);
 }
 
 /** Admitted theme files reuse the service preparation path and actual font asset descriptors. */
 async function admitTheme(
-  file: FilePath,
+  path: FilePath,
   catalog: Catalog,
   env: Environment,
   owners: HeadlessOwners,
 ): Promise<Catalog> {
-  const source = accepted(owners.readTheme(await readFile(file, 'utf8')));
+  const theme = accepted(await owners.files.read(path));
+  const source = accepted(owners.readTheme(theme.source));
   const bindings = await Promise.all(
     source.resources.map(async (resource) => ({
       alias: resource.alias,
-      digest: await admitResource(file, resource, env.assets, owners),
+      digest: await admitResource(theme.file, resource, env.assets, owners),
     })),
   );
   const prepared = accepted(
@@ -167,7 +175,7 @@ async function input(
   catalog: Catalog,
   owners: HeadlessOwners,
 ): Promise<Collection> {
-  const originalSource = await collectionSource(options, env, catalog);
+  const originalSource = await collectionSource(options, env, catalog, owners);
   const source = await overrideSource(originalSource, options, owners, env);
   const pins = pinResources(catalog);
   const assets = await sourceAssets(source, env, owners, pins.themes.paper);
@@ -191,6 +199,7 @@ async function collectionSource(
   options: HeadlessOptions,
   env: Environment,
   catalog: Catalog,
+  owners: HeadlessOwners,
 ): Promise<SourceFile> {
   const recipe = catalog.find(
     (preset) => preset.kind === 'recipe' && preset.id === String(options.collection),
@@ -198,33 +207,20 @@ async function collectionSource(
   if (recipe?.kind === 'recipe')
     return {
       source: recipe.payload.source,
-      file: filePath.parse(
-        join(options.root, 'resources/recipes', recipe.payload.family + '.canvas'),
-      ),
+      file: owners.files.recipeFile(recipe.payload.family),
     };
   if (options.collection.endsWith('.canvas'))
-    return {
-      source: await readFile(resolve(options.collection), 'utf8'),
-      file: filePath.parse(resolve(options.collection)),
-    };
-  return sourceFromId(options, env);
+    return accepted(await owners.files.read(filePath.parse(options.collection)));
+  return sourceFromId(options, env, owners);
 }
 
 /** Bare collection ids resolve from shipped semantic sources; filesystem paths stay explicit. */
 async function sourceFromId(
   options: HeadlessOptions,
   env: Environment,
+  owners: HeadlessOwners,
 ): Promise<SourceFile> {
-  const root = join(options.root, 'resources');
-  const names = (await readdir(root, { recursive: true }))
-    .filter((name) => name.endsWith('.canvas'))
-    .sort();
-  const sources = await Promise.all(
-    names.map(async (name) => ({
-      source: await readFile(join(root, name), 'utf8'),
-      file: filePath.parse(join(root, name)),
-    })),
-  );
+  const sources = accepted(await owners.files.shippedCollections());
   const matches = sources.filter((source) =>
     sourceMatches(source.source, options.collection, env.language.parse),
   );
@@ -246,8 +242,8 @@ async function selectedTheme(
 ): Promise<Collection['theme']['id'] | null> {
   if (options.theme) return options.theme;
   if (!options.themeFile) return original;
-  const parsed = accepted(owners.readTheme(await readFile(resolve(options.themeFile), 'utf8')));
-  return themeSelection(parsed.admission);
+  const theme = accepted(await owners.files.read(options.themeFile));
+  return themeSelection(accepted(owners.readTheme(theme.source)).admission);
 }
 
 /** Source media uses normal confined reads, normalized bytes and Model-owned metadata validation. */
@@ -301,6 +297,7 @@ async function overrideSource(
 /** Export acquires one immutable scene and emits every section with filesystem-safe ids. */
 async function output(
   options: HeadlessOptions,
+  owners: HeadlessOwners,
   snapshot: Snapshot,
   document: RenderDocument,
   env: Environment,
@@ -320,11 +317,11 @@ async function output(
     documents: exportDocuments(env.language, catalog, snapshot.collection.assets),
     resources: resourceInspector(snapshot.resources),
   });
-  await raster(options);
-  await mkdir(options.out, { recursive: true });
+  await raster(options, owners);
+  accepted(await owners.files.prepareOutput());
   return Promise.all(
     document.scene.sections.map(async (section) =>
-      exportSection(options, exporter, snapshot, section.id),
+      exportSection(options, owners, exporter, snapshot, section.id),
     ),
   );
 }
@@ -332,6 +329,7 @@ async function output(
 /** Write one section's artifact to its deterministic file and return the path. */
 async function exportSection(
   options: HeadlessOptions,
+  owners: HeadlessOwners,
   exporter: ReturnType<typeof composeExport>,
   snapshot: Snapshot,
   sectionId: string,
@@ -346,18 +344,14 @@ async function exportSection(
       scope: { kind: 'section', id: sectionId },
     }),
   );
-  const file = join(options.out, sectionId.replace(/[^a-zA-Z0-9_-]/g, '-') + '.' + options.format);
-  await writeFile(file, artifact.bytes);
-  return filePath.parse(file);
+  return accepted(await owners.files.writeSection(sectionId, artifact.bytes));
 }
 
 /** Real raster engine initialization is needed only by PNG requests. */
-async function raster(options: HeadlessOptions): Promise<void> {
+async function raster(
+  options: HeadlessOptions,
+  owners: HeadlessOwners,
+): Promise<void> {
   if (options.format !== 'png') return;
-  const require = createRequire(join(options.root, 'capability/export/package.json'));
-  accepted(
-    await initializeRaster(
-      await WebAssembly.compile(await readFile(require.resolve('@resvg/resvg-wasm/index_bg.wasm'))),
-    ),
-  );
+  accepted(await owners.files.prepareRaster());
 }

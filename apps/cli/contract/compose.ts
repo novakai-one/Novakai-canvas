@@ -1,8 +1,8 @@
 /*
  * Composition root: binds each command to real infrastructure (agent credential, HTTP transport,
- * Language, local files, request journal, headless render bindings). Not pure: reads files, calls
- * HTTP, mints request IDs. Failures are returned as values; `cli/canvas.ts` prints them and sets
- * the exit code. Recovery after a sent request is `receipt` then `retry`.
+ * Language, local files, request journal, headless render bindings, render file I/O). Not pure:
+ * reads files, calls HTTP, mints request IDs. Failures are returned as values; `cli/canvas.ts`
+ * prints them and sets the exit code. Recovery after a sent request is `receipt` then `retry`.
  */
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
@@ -76,19 +76,28 @@ async function runProfile(
   return executeProfile(options.command, { files: createLocalFiles(), semantic });
 }
 
-/** Headless export binds the same theme grammar and service owners without starting an HTTP server. */
+/**
+ * Headless export binds the same theme grammar and service owners without starting an HTTP
+ * server, plus the render's temporary asset store and file I/O. The render adapters are imported
+ * lazily, like the headless adapter.
+ */
 export async function runHeadless(
   options: HeadlessOptions,
 ): Promise<Result<HeadlessReport, HeadlessFailure | Diagnostic>> {
   try {
-    const [adapter, service] = await Promise.all([
+    const [adapter, service, temp, files, raster] = await Promise.all([
       import('../adapters/edge/headless.js'),
       import('@novakai/canvas-service'),
+      import('../adapters/render/temp-assets.js'),
+      import('../adapters/render/render-files.js'),
+      import('../adapters/render/raster.js'),
     ]);
     return adapter.renderHeadless(options, {
       service: await service.createHeadlessBindings(),
       resourceFiles: createResourceFiles(),
       readTheme: readThemeConfig,
+      temp: temp.createTempAssets(),
+      files: { ...files.createRenderFiles(options), ...raster.createRaster(options.root) },
     });
   } catch {
     return failure(
