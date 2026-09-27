@@ -8,29 +8,38 @@
  */
 import { readFile, writeFile } from 'node:fs/promises';
 import type { RequestFiles } from '../../contract/ports/runtime.js';
-import type { Result } from '../../contract/errors.js';
+import type { LocalFailure, Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
+
+/** The largest source file a command reads. */
+const sourceByteLimit = 16 * 1024 * 1024;
 
 /** Source reads and --out writes; neither needs the workspace directory. */
 export function createLocalFiles(): Pick<RequestFiles, 'source' | 'output'> {
   return { source, output };
 }
-/** A bounded UTF-8 file is decoded strictly; unreadable inputs fail before any service request. */
-async function source(path: string): Promise<Result<string>> {
+/**
+ * The file's text, decoded as strict UTF-8, before any service request. Fails with
+ * `source-too-large` (over 16 MiB) or `source-unavailable` (cannot be opened, or is not UTF-8).
+ */
+async function source(path: string): Promise<Result<string, LocalFailure>> {
   try {
     const bytes = await readFile(path);
-    if (bytes.byteLength > 16 * 1024 * 1024)
+    if (bytes.byteLength > sourceByteLimit)
       return failure({ code: 'source-too-large', message: 'DSL source exceeds 16 MiB' });
     return success(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
   } catch {
     return failure({ code: 'source-unavailable', message: `Cannot read UTF-8 source: ${path}` });
   }
 }
-/** --out is an explicit destination, written after the command ran. Never changes service data. */
+/**
+ * Writes `text` to the explicit --out destination after the command ran. Never changes service
+ * data. Fails with `output-unavailable`.
+ */
 async function output(
   path: string,
   text: string,
-): Promise<Result<void>> {
+): Promise<Result<void, LocalFailure>> {
   try {
     await writeFile(path, text, 'utf8');
     return success(undefined);

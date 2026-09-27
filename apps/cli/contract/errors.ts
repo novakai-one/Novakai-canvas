@@ -37,7 +37,9 @@ import type { FailureSource, OperationSource } from './records/foreign.js';
  *
  * Source and preconditions:
  * - `invalid-source`: Language rejected the source; `source` holds its diagnostics.
- * - `invalid-input`: the Authoring request built from the source failed its schema.
+ * - `invalid-input`: an Authoring request failed its schema. Two sources: the request the CLI
+ *   built from the source, or the request the service's `/resources/freeze` answer returned. The
+ *   second is a bad service answer, not a user input error.
  * - `not-found`: the collection to change does not exist.
  * - `already-exists`: the collection to create already exists.
  * - `revision-required`: replace or patch without `--revision`.

@@ -25,13 +25,15 @@ export interface RequestDraft {
   readonly request: Request;
 }
 export interface RequestFiles {
-  source(path: string): Promise<Result<string>>;
+  /** Fails with `source-unavailable` or `source-too-large`. */
+  source(path: string): Promise<Result<string, LocalFailure>>;
   save(draft: RequestDraft): Promise<Result<void>>;
   read(id: string): Promise<Result<RequestDraft>>;
+  /** Fails with `output-unavailable`. */
   output(
     path: string,
     text: string,
-  ): Promise<Result<void>>;
+  ): Promise<Result<void, LocalFailure>>;
 }
 export interface SemanticInputs extends ResourceSyntax {
   profileParse(source: string): Result<ParsedSource>;

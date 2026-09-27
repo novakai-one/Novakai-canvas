@@ -1,9 +1,41 @@
+/*
+ * HTTP transport to the local service: one checked loopback origin, a bearer token, and the
+ * service's response envelope. Network I/O; each failure is returned as a value. A lost answer is
+ * `connection-uncertain`; for a write, `core/authoring/submit.ts` names the retained request so
+ * `receipt` then `retry` recover it. This file never retries.
+ */
 import { responseEnvelope } from '@novakai/canvas-service';
 import type { TransportResponse } from '@novakai/canvas-service';
 import type { Transport } from '../../contract/ports/runtime.js';
 import type { LocalFailure, Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
-/** Credentials can only be sent to the declared IPv4 loopback origin, never a redirect or user-provided remote host. */
+
+/** How long one request waits for the service's answer. */
+const answerTimeoutMs = 35_000;
+
+/** The HTTP methods the service routes accept. */
+type Method = 'GET' | 'POST';
+
+/**
+ * Binds the transport to `url`, which must be an `http://127.0.0.1` origin. The token comes from
+ * protected local storage and never appears in command output or failure details.
+ * Fails with `invalid-server`.
+ */
+export function createTransport(
+  url: string,
+  token: string,
+): Result<Transport, LocalFailure> {
+  const checked = origin(url);
+  if (!checked.ok) return checked;
+  return success({
+    get: (path) => send(checked.value, token, path, 'GET', undefined),
+    post: (path, body) => send(checked.value, token, path, 'POST', JSON.stringify(body)),
+  });
+}
+/**
+ * The origin of `input`. Credentials go only to the IPv4 loopback origin, never to a redirect or a
+ * remote host. Fails with `invalid-server`.
+ */
 function origin(input: string): Result<string, LocalFailure> {
   try {
     const url = new URL(input);
@@ -29,19 +61,23 @@ function localOrigin(url: URL): boolean {
     url.password === ''
   );
 }
-/** No redirected request receives the bearer token; timeout/connection failure remains uncertain until receipt reconciliation. */
+/**
+ * Sends one request; a redirect is refused so no other host receives the token. Fails with
+ * `invalid-response` (the answer is not a service envelope) or `connection-uncertain` (no
+ * confirmed answer: timeout, lost connection or unreadable body).
+ */
 async function send(
   origin: string,
   token: string,
   path: string,
-  method: string,
+  method: Method,
   body: string | undefined,
 ): Promise<Result<TransportResponse, LocalFailure>> {
   try {
     const response = await fetch(`${origin}${path}`, {
       method,
       redirect: 'error',
-      signal: AbortSignal.timeout(35000),
+      signal: AbortSignal.timeout(answerTimeoutMs),
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: body ?? null,
     });
@@ -60,16 +96,4 @@ async function send(
       recovery: 'Retain the request and reconcile its receipt before retrying.',
     });
   }
-}
-/** The token comes from protected local storage. It is never returned in command output or diagnostic details. */
-export function createTransport(
-  url: string,
-  token: string,
-): Result<Transport> {
-  const checked = origin(url);
-  if (!checked.ok) return checked;
-  return success({
-    get: (path) => send(checked.value, token, path, 'GET', undefined),
-    post: (path, body) => send(checked.value, token, path, 'POST', JSON.stringify(body)),
-  });
 }
