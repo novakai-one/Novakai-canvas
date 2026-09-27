@@ -1,4 +1,5 @@
 import type {
+  CapturedSourceBase,
   SourceBindings,
   SourceController,
   SourceView,
@@ -12,7 +13,7 @@ import type {
 } from '../../contract/records/owners.js';
 import type { Submission } from '../../contract/records/submission.js';
 import type { WorkspaceScope } from '../../contract/records/workspace-scope.js';
-import type { WorkspaceId } from '../../contract/brands.js';
+import type { TransportGeneration, WorkspaceId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import {
   encodeSourceRecovery,
@@ -28,9 +29,7 @@ export function createSourceController(bindings: SourceBindings): SourceControll
     sourceOpen: false,
     source: '',
     sourceDirty: false,
-    sourceBase: null,
-    sourceGeneration: '',
-    sourceCollection: '',
+    sourceBase: { kind: 'none' },
     sourceEdit: 0,
   };
   let sourceReceipt: Receipt | null = null;
@@ -55,18 +54,19 @@ export function createSourceController(bindings: SourceBindings): SourceControll
   /** Newer typing can advance its base only across its own confirmed commit, never across a foreign edit. */
   function rebaseConfirmedSource(
     snapshot: Snapshot,
-    generation: string,
+    generation: TransportGeneration,
   ): void {
     const receipt = sourceReceipt;
-    if (receipt === null) return;
+    const captured = state.sourceBase;
+    if (receipt === null || captured.kind === 'none') return;
     const version = receipt.versions.find(
-      (item) => item.key.kind === 'collection' && item.key.id === state.sourceCollection,
+      (item) => item.key.kind === 'collection' && item.key.id === captured.collection,
     );
     const record = snapshot.records.find(
-      (item) => item.key.kind === 'collection' && item.key.id === state.sourceCollection,
+      (item) => item.key.kind === 'collection' && item.key.id === captured.collection,
     );
     if (!matchingVersion(version, record)) return;
-    update({ sourceBase: snapshot, sourceGeneration: generation });
+    update({ sourceBase: { ...captured, base: snapshot, generation } });
     sourceReceipt = null;
     retainSource();
   }
@@ -80,10 +80,11 @@ export function createSourceController(bindings: SourceBindings): SourceControll
   }
   /** Source confirmation applies only to the collection whose editor owns the captured draft. */
   function isSourceSubmission(request: Request): boolean {
-    if (request.intent.kind !== 'change') return false;
+    const captured = state.sourceBase;
+    if (request.intent.kind !== 'change' || captured.kind === 'none') return false;
     return (
       request.intent.planner === 'dsl' &&
-      request.scope.some((key) => key.kind === 'collection' && key.id === state.sourceCollection)
+      request.scope.some((key) => key.kind === 'collection' && key.id === captured.collection)
     );
   }
   /** Opening source uses the exact admitted collection, retaining that snapshot as the editing base. */
@@ -110,9 +111,9 @@ export function createSourceController(bindings: SourceBindings): SourceControll
   }
   /** Readable DSL prints through Language; it is not reconstructed from visual node coordinates. */
   function loadSource(): void {
-    const current = bindings.current();
-    if (current.active === null) return;
-    const collection = current.active.document.collection;
+    const active = bindings.current();
+    if (active === null) return;
+    const collection = active.document.collection;
     const printed = bindings.inputs.source(collection);
     if (!printed.ok) {
       report(printed.error);
@@ -120,9 +121,12 @@ export function createSourceController(bindings: SourceBindings): SourceControll
     }
     update({
       source: printed.value,
-      sourceBase: current.active.base,
-      sourceGeneration: current.generation,
-      sourceCollection: collection.id,
+      sourceBase: {
+        kind: 'captured',
+        base: active.base,
+        generation: active.generation,
+        collection: collection.id,
+      },
     });
   }
   /** Form typing remains local and durable; it never triggers an implicit Authoring apply. */
@@ -132,29 +136,34 @@ export function createSourceController(bindings: SourceBindings): SourceControll
   }
   /** One checked recovery record includes the exact source base and edit generation. */
   function retainSource(): void {
-    if (state.sourceBase === null) return;
-    const saved = persistSource(state.sourceBase.workspace);
+    const captured = state.sourceBase;
+    if (captured.kind === 'none') return;
+    const saved = persistSource(captured);
     if (!saved.ok) report(saved.error);
   }
   /**
    * Clean source has no recoverable draft; dirty source persists its exact authoring base. A base
    * outside the admitted workspace is `recovery-unavailable`.
    */
-  function persistSource(workspace: WorkspaceId): Result<void> {
+  function persistSource(captured: CapturedSourceBase): Result<void> {
+    const workspace = captured.base.workspace;
     if (!inWorkspace(admitted, workspace))
       return failure(
         'recovery-unavailable',
         'Source recovery has not admitted this workspace; stored data was retained',
       );
-    return persistAdmittedSource(`source-draft.${workspace}`);
+    return persistAdmittedSource(`source-draft.${workspace}`, captured);
   }
-  function persistAdmittedSource(key: string): Result<void> {
+  function persistAdmittedSource(
+    key: string,
+    captured: CapturedSourceBase,
+  ): Result<void> {
     if (!state.sourceDirty) return bindings.retention.remove(key);
     const encoded = encodeSourceRecovery({
       source: state.source,
-      base: state.sourceBase,
-      generation: state.sourceGeneration,
-      collection: state.sourceCollection,
+      base: captured.base,
+      generation: captured.generation,
+      collection: captured.collection,
       edit: state.sourceEdit,
     });
     if (!encoded.ok) return encoded;
@@ -206,18 +215,21 @@ export function createSourceController(bindings: SourceBindings): SourceControll
     admitted = restoredWorkspace(workspace);
     update({
       source: value.source,
-      sourceBase: value.base,
-      sourceGeneration: value.generation,
-      sourceCollection: value.collection,
+      sourceBase: {
+        kind: 'captured',
+        base: value.base,
+        generation: value.generation,
+        collection: value.collection,
+      },
       sourceEdit: value.edit,
       sourceDirty: true,
       sourceOpen: true,
     });
   }
-  function admittedSourceBase(): NonNullable<SourceView['sourceBase']> | null {
-    const base = state.sourceBase;
-    if (base === null) return null;
-    if (inWorkspace(admitted, base.workspace)) return base;
+  function admittedSourceBase(): CapturedSourceBase | null {
+    const captured = state.sourceBase;
+    if (captured.kind === 'none') return null;
+    if (inWorkspace(admitted, captured.base.workspace)) return captured;
     report(
       failure(
         'recovery-unavailable',
@@ -228,11 +240,11 @@ export function createSourceController(bindings: SourceBindings): SourceControll
   }
   /** Apply uses captured source preconditions even if an agent has since committed a newer collection. */
   async function applySource(): Promise<void> {
-    const base = admittedSourceBase();
-    if (base === null) return;
+    const captured = admittedSourceBase();
+    if (captured === null) return;
     const request = bindings.inputs.dsl(
-      base,
-      state.sourceCollection,
+      captured.base,
+      captured.collection,
       state.source,
       'replace',
       bindings.nextId(),
@@ -241,7 +253,7 @@ export function createSourceController(bindings: SourceBindings): SourceControll
       report(request.error);
       return;
     }
-    await bindings.submit(request.value, state.sourceGeneration, state.sourceEdit, null);
+    await bindings.submit(request.value, captured.generation, state.sourceEdit, null);
   }
 
   return {

@@ -1,5 +1,6 @@
 import type { RelationshipKind } from '@novakai/canvas-model';
 import type { Collection, Section, Snapshot } from './owners.js';
+import type { TransportGeneration } from '../brands.js';
 
 export type { RelationshipKind };
 
@@ -14,7 +15,7 @@ export interface ConnectionEndpointView {
 export interface ConnectionDraft {
   readonly id: string;
   readonly base: Snapshot;
-  readonly generation: string;
+  readonly generation: TransportGeneration;
   readonly collection: Collection;
   readonly section: Section;
   readonly source: ConnectionEndpointView;

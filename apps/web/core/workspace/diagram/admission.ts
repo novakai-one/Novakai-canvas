@@ -2,16 +2,20 @@
  * Whether a delivered render may install. In order: the service answered from the ticket's
  * generation and the view is still on it; the document is the requested collection; the
  * workspace, generation and listed revision are still those the ticket captured, and the document
- * is at that revision; the checked snapshot lists the document's revision. A newer snapshot can
- * also invalidate a ticket before its response arrives. Pure; the session rereads the workspace
- * after a generation, admission or snapshot failure.
+ * is at that revision; the checked snapshot lists the document's revision. The admitted render
+ * carries that snapshot and the generation it was read in. A newer snapshot can also invalidate a
+ * ticket before its response arrives. Pure; the session rereads the workspace after a generation,
+ * admission or snapshot failure.
  */
 import { diagnostic, type Result, type WebDiagnostic } from '../../../contract/errors.js';
 import type { RenderCode } from '../../../contract/records/error-codes.js';
 import type { RenderDocument, Snapshot } from '../../../contract/records/owners.js';
 import type { WorkspaceView } from '../../../contract/records/workspace.js';
+import type { ReadGeneration } from '../../../contract/records/read-generation.js';
+import type { TransportGeneration } from '../../../contract/brands.js';
 import { listedRevision, type RenderTicket } from './ticket.js';
 import { inWorkspace } from '../workspace-scope.js';
+import { atGeneration, sameGeneration } from '../read-generation.js';
 
 /** A checked workspace snapshot with its collection catalogue. */
 export interface LatestSnapshot {
@@ -28,13 +32,23 @@ export type RenderFailure = WebDiagnostic & { readonly code: RenderCode };
 /** A failed step, whatever the success type. */
 export type Refusal = { readonly ok: false; readonly error: RenderFailure };
 
-/** The service answered from another generation than the ticket's, or the view has left it. */
+/** A delivered document, the checked snapshot it installs against and the generation that snapshot was read in. */
+export interface AdmittedRender {
+  readonly document: RenderDocument;
+  readonly base: Snapshot;
+  readonly generation: TransportGeneration;
+}
+
+/**
+ * The service answered from another generation than the ticket's, or the view has left it. A
+ * ticket taken before the first read names no generation, so every answer has changed it.
+ */
 export function generationChanged(
-  delivered: string,
+  delivered: TransportGeneration,
   ticket: RenderTicket,
-  current: string,
+  current: ReadGeneration,
 ): boolean {
-  return delivered !== ticket.generation || ticket.generation !== current;
+  return !atGeneration(ticket.generation, delivered) || !atGeneration(current, delivered);
 }
 
 /** `workspace-generation`: the service generation changed while the collection opened. */
@@ -75,25 +89,33 @@ export function renderAdmission(
 export function renderInvalidation(
   ticket: RenderTicket,
   latest: LatestSnapshot,
-  generation: string,
+  generation: TransportGeneration,
 ): RenderFailure | null {
   if (ticketMatches(ticket, latest, generation)) return null;
   return renderInputChanged();
 }
 
-/** The checked snapshot a document installs against, once it lists the document's revision; otherwise `snapshot-mismatch`. */
+/**
+ * The document with the checked snapshot it installs against and that snapshot's generation, once
+ * the snapshot lists the document's revision; otherwise `snapshot-mismatch`. Before the first read
+ * there is no snapshot, so it is `snapshot-mismatch` too.
+ */
 export function snapshotBase(
   view: AdmissionView,
   document: RenderDocument,
-): Result<Snapshot, RenderFailure> {
-  const snapshot = view.snapshot;
-  if (snapshot === null || !listsRevision(view.collections, document))
+): Result<AdmittedRender, RenderFailure> {
+  const { snapshot, generation } = view;
+  if (
+    snapshot === null ||
+    generation.kind === 'unread' ||
+    !listsRevision(view.collections, document)
+  )
     return refused(
       'snapshot-mismatch',
       'The collection changed while it was opening',
       'Refresh the library, then try the collection again.',
     );
-  return { ok: true, value: snapshot };
+  return { ok: true, value: { document, base: snapshot, generation: generation.generation } };
 }
 
 /**
@@ -106,7 +128,7 @@ function inputsMoved(
 ): boolean {
   return (
     !inWorkspace(ticket.workspace, view.snapshot?.workspace) ||
-    view.generation !== ticket.generation ||
+    !sameGeneration(view.generation, ticket.generation) ||
     view.collections.find((item) => item.id === ticket.id)?.revision !== ticket.revision
   );
 }
@@ -118,11 +140,11 @@ function inputsMoved(
 function ticketMatches(
   ticket: RenderTicket,
   latest: LatestSnapshot,
-  generation: string,
+  generation: TransportGeneration,
 ): boolean {
   return (
     inWorkspace(ticket.workspace, latest.snapshot.workspace) &&
-    ticket.generation === generation &&
+    atGeneration(ticket.generation, generation) &&
     ticket.revision === listedRevision(latest.collections, ticket.id)
   );
 }

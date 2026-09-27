@@ -6,7 +6,7 @@ import type {
 } from '../../contract/records/submission.js';
 import type { Receipt } from '../../contract/records/owners.js';
 import type { WorkspaceScope } from '../../contract/records/workspace-scope.js';
-import type { WorkspaceId } from '../../contract/brands.js';
+import type { TransportGeneration, WorkspaceId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import type { Diagnostic } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
@@ -91,7 +91,7 @@ export function createSubmissionSession(bindings: SubmissionBindings): Submissio
   /** A transport failure or malformed success is uncertain. Neither permits clearing the journal or draft. */
   async function transmit(
     item: Submission,
-    generation: string,
+    generation: TransportGeneration,
   ): Promise<Result<Receipt>> {
     const response = await bindings.client.post('/api/v1/authoring/apply', {
       version: 1,
@@ -200,7 +200,7 @@ export function createSubmissionSession(bindings: SubmissionBindings): Submissio
   /** Explicit retry rechecks the receipt first, then resends the exact body under the current transport generation. */
   async function retry(
     id: string,
-    generation: string,
+    generation: TransportGeneration,
   ): Promise<Result<Receipt>> {
     const item = pending.find((item) => item.request.request === id);
     if (!item) return failure('unknown-request', 'There is no retained request with this ID');
@@ -211,7 +211,7 @@ export function createSubmissionSession(bindings: SubmissionBindings): Submissio
   /** Reconnect changes authentication generation, never the semantic request's identity or captured preconditions. */
   async function retryChecked(
     item: Submission,
-    generation: string,
+    generation: TransportGeneration,
   ): Promise<Result<Receipt>> {
     const receipt = await lookup(item);
     if (!receipt.ok) return receipt;
@@ -222,7 +222,7 @@ export function createSubmissionSession(bindings: SubmissionBindings): Submissio
   /** Hold the recovery slot across lookup and transmission; rapid retry clicks cannot start a second request. */
   async function recoverExclusively(
     item: Submission,
-    generation: string,
+    generation: TransportGeneration,
   ): Promise<Result<Receipt>> {
     recovering.add(item.request.request);
     try {

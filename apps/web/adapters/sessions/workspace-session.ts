@@ -16,6 +16,7 @@ import type { Receipt } from '../../contract/records/owners.js';
 import type { WorkspaceController, WorkspaceView } from '../../contract/records/workspace.js';
 import type { ActiveDiagram } from '../../contract/records/active-diagram.js';
 import type { WorkspaceScope } from '../../contract/records/workspace-scope.js';
+import type { TransportGeneration } from '../../contract/brands.js';
 import type { WorkspaceBindings } from '../../contract/ports/workspace.js';
 import type {
   Request,
@@ -129,6 +130,10 @@ import {
   restoredWorkspace,
   snapshotScope,
   unrestoredWorkspace,
+  unreadGeneration,
+  readGeneration,
+  currentGeneration,
+  type AdmittedRender,
   type CaptureIds,
   type CollectionDraft,
   type ConnectionCapture,
@@ -161,14 +166,11 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     changed: (view) => update(view),
     report,
     submit,
-    current: () => ({
-      active: state.active,
-      generation: state.active?.generation ?? state.generation,
-    }),
+    current: () => state.active,
   });
   let state: WorkspaceView = {
     snapshot: null,
-    generation: '',
+    generation: unreadGeneration,
     collections: [],
     active: null,
     opening: null,
@@ -305,7 +307,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   /** Snapshot sequence prevents out-of-order reads from moving the sidebar backward. */
   function acceptSnapshot(
     input: unknown,
-    generation: string,
+    generation: TransportGeneration,
   ): void {
     const checked = bindings.inputs.snapshot(input);
     if (!checked.ok) {
@@ -318,14 +320,14 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   /** A restarted service keeps drafts visible; new-generation data never silently advances a draft's captured preconditions. */
   function acceptCurrent(
     latest: LatestSnapshot,
-    generation: string,
+    generation: TransportGeneration,
   ): void {
     if (staleSnapshot(state, latest.snapshot, generation)) return;
     settleChangedRender(latest, generation);
     update({
       snapshot: latest.snapshot,
       collections: latest.collections,
-      generation,
+      generation: readGeneration(generation),
       connected: true,
     });
     historyGate = observeSnapshot(historyGate, latest.snapshot.sequence);
@@ -339,7 +341,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   /** A checked snapshot can invalidate the current request before it is allowed to install. */
   function settleChangedRender(
     latest: LatestSnapshot,
-    generation: string,
+    generation: TransportGeneration,
   ): void {
     const request = rendering;
     if (request === null || !currentRequest(request)) return;
@@ -469,25 +471,21 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   }
   /** Reuse the existing Canvas session for edits; only admitted documents may replace the retained scene. */
   function install(document: RenderDocument): Result<void> {
-    const base = matchingSnapshot(document);
-    if (!base.ok) return base;
-    return installCurrent(document, base.value);
+    const admitted = matchingSnapshot(document);
+    if (!admitted.ok) return admitted;
+    return installCurrent(admitted.value);
   }
   /** Bind the displayed document to its matching canonical snapshot before any edit can use its preconditions. */
-  function installCurrent(
-    document: RenderDocument,
-    base: NonNullable<WorkspaceView['snapshot']>,
-  ): Result<void> {
+  function installCurrent(admitted: AdmittedRender): Result<void> {
     const active = state.active;
-    const reused = updateExisting(active, document, base);
+    const reused = updateExisting(active, admitted);
     if (!reused.ok) return reused;
     if (reused.value) return { ok: true, value: undefined };
-    return installNew(active, document, base);
+    return installNew(active, admitted);
   }
   function installNew(
     active: ActiveDiagram | null,
-    document: RenderDocument,
-    base: NonNullable<WorkspaceView['snapshot']>,
+    { document, base, generation }: AdmittedRender,
   ): Result<void> {
     const session = bindings.sessions.open(document, effects);
     if (!session.ok) return session;
@@ -496,7 +494,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
       installedPatch(
         state,
         {
-          generation: state.generation,
+          generation,
           document,
           base,
           canvas: bindings.sessions.canvas,
@@ -515,19 +513,18 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   /** Reuse is an explicit decision, not a type predicate: a valid active session may belong to another collection. */
   function updateExisting(
     active: ActiveDiagram | null,
-    document: RenderDocument,
-    base: NonNullable<WorkspaceView['snapshot']>,
+    admitted: AdmittedRender,
   ): Result<boolean> {
     if (active === null) return { ok: true, value: false };
-    if (!reusableSession(active, document, base)) return { ok: true, value: false };
-    return updateExistingSession(active, document, base);
+    if (!reusableSession(active, admitted.document, admitted.base))
+      return { ok: true, value: false };
+    return updateExistingSession(active, admitted);
   }
   function updateExistingSession(
     active: ActiveDiagram,
-    document: RenderDocument,
-    base: NonNullable<WorkspaceView['snapshot']>,
+    admitted: AdmittedRender,
   ): Result<boolean> {
-    const updated = updateCanvas(active, document, base);
+    const updated = updateCanvas(active, admitted);
     if (!updated.ok) return updated;
     return { ok: true, value: true };
   }
@@ -540,13 +537,12 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   /** Canvas admission and generation checks run before replacing the UI's document reference. */
   function updateCanvas(
     active: ActiveDiagram,
-    document: RenderDocument,
-    base: NonNullable<WorkspaceView['snapshot']>,
+    admitted: AdmittedRender,
   ): Result<void> {
-    const updated = bindings.sessions.update(active.session, document);
+    const updated = bindings.sessions.update(active.session, admitted.document);
     if (!updated.ok) return updated;
     releaseConfirmed(active.session);
-    update(reusedPatch(state, active, { document, base }, editStatus()));
+    update(reusedPatch(state, active, admitted, editStatus()));
     source.refreshReadout();
     updateMutationAvailability();
     return { ok: true, value: undefined };
@@ -922,7 +918,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   /** Submission owns the durable journal and receipt checks; UI retains all drafts on failure. */
   async function submit(
     request: Request,
-    generation: string,
+    generation: TransportGeneration,
     sourceEdit: number,
     gesture: string | null,
   ): Promise<Result<Receipt>> {
@@ -932,6 +928,15 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     const result = await submissions.submit({ request, generation, sourceEdit, gesture });
     if (!result.ok) handleSubmitFailure(result.error, gesture);
     return result;
+  }
+  /** Sends under the latest read generation; before the first read nothing is sent (`not-read`). */
+  async function submitCurrent(request: Request): Promise<Result<Receipt>> {
+    const generation = currentGeneration(state.generation);
+    if (!generation.ok) {
+      report(generation.error);
+      return generation;
+    }
+    return submit(request, generation.value, state.sourceEdit, null);
   }
   function handleSubmitFailure(
     error: Diagnostic,
@@ -1014,8 +1019,8 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   }
   /** An apply answer's carried snapshot is installed as a workspace read would be; a receipt lookup carries none, so reread. */
   function catchUp(carriedSnapshot: CarriedSnapshot | undefined): Promise<void> {
-    if (carriedSnapshot === undefined) return refresh();
-    acceptCurrent(carriedSnapshot, state.generation);
+    if (carriedSnapshot === undefined || state.generation.kind === 'unread') return refresh();
+    acceptCurrent(carriedSnapshot, state.generation.generation);
     return Promise.resolve();
   }
   /** Canvas is notified only when the receipt belongs to a submitted gesture. */
@@ -1037,9 +1042,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     }
   }
   /** A response racing a newer snapshot is discarded; old rendered data never gains new write preconditions. */
-  function matchingSnapshot(
-    document: RenderDocument,
-  ): Result<NonNullable<WorkspaceView['snapshot']>> {
+  function matchingSnapshot(document: RenderDocument): Result<AdmittedRender> {
     const base = snapshotBase(state, document);
     if (!base.ok) void refresh();
     return base;
@@ -1066,7 +1069,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     request: Request,
     id: string,
   ): Promise<void> {
-    const result = await submit(request, state.generation, state.sourceEdit, null);
+    const result = await submitCurrent(request);
     if (!result.ok) return;
     await open(id);
   }
@@ -1347,7 +1350,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   ): Promise<Result<Receipt>> {
     const request = bindings.inputs.library(base, changes, bindings.nextId());
     if (!request.ok) return request;
-    return submit(request.value, state.generation, state.sourceEdit, null);
+    return submitCurrent(request.value);
   }
   /** Opening the chooser is a presentation intent; it never disposes the retained Canvas session. */
   function beginCollectionSwitch(): void {
@@ -1474,10 +1477,16 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   }
   /** Retry retains the exact request body while using the current authenticated transport session. */
   async function retryRequest(id: string): Promise<void> {
-    const result = await submissions.retry(id, state.generation);
+    const result = await retryCurrent(id);
     if (!result.ok) report(result.error);
     else settleRetried(id);
     updateMovementRecovery(id);
+  }
+  /** Resends under the latest read generation; before the first read nothing is sent (`not-read`). */
+  async function retryCurrent(id: string): Promise<Result<Receipt>> {
+    const generation = currentGeneration(state.generation);
+    if (!generation.ok) return generation;
+    return submissions.retry(id, generation.value);
   }
   function settleRetried(id: string): void {
     clearSettledUncertainty();
@@ -1561,7 +1570,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     if (request.value !== null) await applyHistoryRequest(request.value);
   }
   async function applyHistoryRequest(request: Request): Promise<void> {
-    const result = await submit(request, state.generation, state.sourceEdit, null);
+    const result = await submitCurrent(request);
     if (!result.ok) await finishHistory();
   }
   async function reconcileHistory(): Promise<void> {

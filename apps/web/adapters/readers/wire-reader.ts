@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { objectId, descendantId, validate } from '@novakai/canvas-model';
 import { snapshotSchema } from '@novakai/canvas-authoring';
+import { transportGeneration } from '@novakai/canvas-service';
 import type { WireDraft, WireEdit } from '../../contract/records/wire-editor.js';
 import type {
   CapturedCollectionBase,
@@ -8,6 +9,7 @@ import type {
 } from '../../contract/records/editor-recovery.js';
 import type { Collection } from '../../contract/records/owners.js';
 import type { StoredRecord } from '../../contract/records/owners.js';
+import type { TransportGeneration } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
 import { captureCollectionBase, wireDraftKey } from '../../contract/api.js';
@@ -55,7 +57,7 @@ const command: z.ZodType<WireEdit> = z.discriminatedUnion('kind', [
 const legacyRecord = z.object({
   key: z.string(),
   base: snapshotSchema,
-  generation: z.string(),
+  generation: transportGeneration,
   collection: z.object({ id: z.string() }),
   section: z.object({ id: z.string() }),
   relationship: z.object({ id: z.string() }),
@@ -66,7 +68,7 @@ const currentRecord = z.strictObject({
   schemaVersion: z.literal(1),
   key: z.string(),
   base: capturedCollectionBaseSchema,
-  generation: z.string(),
+  generation: transportGeneration,
   collection: z.string(),
   section: z.string(),
   relationship: z.string(),
@@ -75,7 +77,7 @@ const currentRecord = z.strictObject({
 interface RecoveryRecord {
   readonly key: string;
   readonly base: EditingBase;
-  readonly generation: string;
+  readonly generation: TransportGeneration;
   readonly collection: string;
   readonly section: string;
   readonly relationship: string;

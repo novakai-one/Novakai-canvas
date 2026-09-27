@@ -17,6 +17,7 @@ import type {
 } from '../../contract/records/owners.js';
 import type { Submission } from '../../contract/records/submission.js';
 import type { ActiveDiagram } from '../../contract/records/active-diagram.js';
+import type { TransportGeneration } from '../../contract/brands.js';
 
 /** The ID type each form adds. */
 export interface CaptureIdMap {
@@ -30,7 +31,7 @@ export interface CreationCapture<Id> {
   readonly id: Id;
   readonly base: Snapshot;
   readonly collection: Collection;
-  readonly generation: string;
+  readonly generation: TransportGeneration;
   readonly request: Request | null;
 }
 

@@ -8,6 +8,9 @@
 import type { Snapshot } from '../../../contract/records/owners.js';
 import type { WorkspaceView } from '../../../contract/records/workspace.js';
 import type { ActiveDiagram } from '../../../contract/records/active-diagram.js';
+import type { ReadGeneration } from '../../../contract/records/read-generation.js';
+import type { TransportGeneration } from '../../../contract/brands.js';
+import { atGeneration, sameGeneration } from '../read-generation.js';
 import { renderChanged } from '../session-reuse.js';
 import { activeCollectionId, problemAfterRender, type ViewPatch } from './patches.js';
 import type { RenderTicket } from '../diagram/ticket.js';
@@ -31,9 +34,11 @@ export type RefreshView = Pick<
 export function staleSnapshot(
   view: Pick<WorkspaceView, 'generation' | 'snapshot'>,
   snapshot: Snapshot,
-  generation: string,
+  generation: TransportGeneration,
 ): boolean {
-  return view.generation === generation && snapshot.sequence < (view.snapshot?.sequence ?? 0);
+  return (
+    atGeneration(view.generation, generation) && snapshot.sequence < (view.snapshot?.sequence ?? 0)
+  );
 }
 
 /** What a snapshot does to the open collection; nothing while the collection switch is open. */
@@ -123,12 +128,12 @@ function refreshCovered(
 function requestCovers(
   rendering: RenderTicket | null,
   listed: WorkspaceView['collections'][number],
-  generation: string,
+  generation: ReadGeneration,
 ): boolean {
   return (
     rendering?.id === listed.id &&
     rendering.revision === listed.revision &&
-    rendering.generation === generation
+    sameGeneration(rendering.generation, generation)
   );
 }
 

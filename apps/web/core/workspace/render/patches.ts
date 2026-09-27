@@ -5,22 +5,16 @@
  * on the next render attempt. Pure; the session publishes each patch.
  */
 import type { Diagnostic } from '../../../contract/errors.js';
-import type { RenderDocument, Snapshot } from '../../../contract/records/owners.js';
 import type { WorkspaceView } from '../../../contract/records/workspace.js';
 import type { ActiveDiagram } from '../../../contract/records/active-diagram.js';
 import type { RenderTicket } from '../diagram/ticket.js';
+import type { AdmittedRender } from '../diagram/admission.js';
 
 /** The fields the session publishes in one update. */
 export type ViewPatch = Partial<WorkspaceView>;
 
 /** The parts of the workspace view the render patches read. */
-export type PatchView = Pick<WorkspaceView, 'active' | 'collections' | 'problem' | 'generation'>;
-
-/** A delivered document and the checked snapshot it installs against. */
-export interface Installation {
-  readonly document: RenderDocument;
-  readonly base: Snapshot;
-}
+export type PatchView = Pick<WorkspaceView, 'active' | 'collections' | 'problem'>;
 
 /** Opening starts: the target shows as opening; a chooser request also shows the switch loading. */
 export function openingPatch(
@@ -63,20 +57,20 @@ export function installedPatch(
   return { active, status, creation, ...problemAfterRender(view) };
 }
 
-/** The existing session now shows the newer document at the view's generation. */
+/** The existing session now shows the newer document, in the generation its snapshot was read in. */
 export function reusedPatch(
   view: PatchView,
   active: ActiveDiagram,
-  installation: Installation,
+  admitted: AdmittedRender,
   status: string,
 ): ViewPatch {
   return {
     opening: null,
     active: {
       ...active,
-      generation: view.generation,
-      document: installation.document,
-      base: installation.base,
+      generation: admitted.generation,
+      document: admitted.document,
+      base: admitted.base,
     },
     status,
     ...problemAfterRender(view),

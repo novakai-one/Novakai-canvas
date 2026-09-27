@@ -2,7 +2,7 @@ import type { Snapshot, Request, Receipt } from './owners.js';
 import type { EditingBase } from './editor-recovery.js';
 import type { ActiveDiagram } from './active-diagram.js';
 import type { Submission } from './submission.js';
-import type { WorkspaceId } from '../brands.js';
+import type { TransportGeneration, WorkspaceId } from '../brands.js';
 import type { Result, Diagnostic } from '../errors.js';
 import type { WorkspaceDecoders } from '../ports/workspace-decoders.js';
 import type { RequestBuilders } from '../ports/request-builders.js';
@@ -13,10 +13,21 @@ export interface SourceView {
   readonly sourceOpen: boolean;
   readonly source: string;
   readonly sourceDirty: boolean;
-  readonly sourceBase: EditingBase | null;
-  readonly sourceGeneration: string;
-  readonly sourceCollection: string;
+  readonly sourceBase: SourceBase;
   readonly sourceEdit: number;
+}
+/**
+ * What the source text was printed from or restored with: nothing before the first readout, or
+ * the collection, its editing base and the generation that base was read in. One field, so a base
+ * never exists without its generation and collection.
+ */
+export type SourceBase = { readonly kind: 'none' } | CapturedSourceBase;
+/** The collection, base and generation the source text belongs to. */
+export interface CapturedSourceBase {
+  readonly kind: 'captured';
+  readonly base: EditingBase;
+  readonly generation: TransportGeneration;
+  readonly collection: string;
 }
 export interface SourceController {
   getSnapshot(): SourceView;
@@ -32,16 +43,17 @@ export interface SourceController {
   ): void;
   reconcile(
     snapshot: Snapshot,
-    generation: string,
+    generation: TransportGeneration,
   ): void;
 }
 export interface SourceCallbacks {
-  current(): { readonly active: ActiveDiagram | null; readonly generation: string };
+  /** The diagram shown now; null in the library. */
+  current(): ActiveDiagram | null;
   changed(view: SourceView): void;
   report(error: Diagnostic): void;
   submit(
     request: Request,
-    generation: string,
+    generation: TransportGeneration,
     sourceEdit: number,
     gesture: string | null,
   ): Promise<Result<Receipt>>;

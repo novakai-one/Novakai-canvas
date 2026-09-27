@@ -39,6 +39,11 @@ export {
   snapshotScope,
   inWorkspace,
 } from '../core/workspace/workspace-scope.js';
+export {
+  unreadGeneration,
+  readGeneration,
+  currentGeneration,
+} from '../core/workspace/read-generation.js';
 export { editedObject, objectDraftKey } from '../core/inspector/object-edits.js';
 export { selectedObject } from '../core/inspector/selection.js';
 export { defaultPreferences } from '../core/preferences/defaults.js';
@@ -136,6 +141,7 @@ export {
   renderAdmission,
   renderInvalidation,
   snapshotBase,
+  type AdmittedRender,
   type LatestSnapshot,
 } from '../core/workspace/diagram/admission.js';
 export {

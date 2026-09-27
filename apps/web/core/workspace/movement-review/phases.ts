@@ -17,6 +17,7 @@ import { editsHeld } from '../history/journal.js';
 import { diagramCurrent } from '../render/navigation.js';
 import { staleReview } from './failures.js';
 import { inWorkspace } from '../workspace-scope.js';
+import { atGeneration } from '../read-generation.js';
 import type { MovementCapture, MovementHeld, MovementPhase, MovementSlot } from './types.js';
 
 /** The parts of the view a chosen option is checked against. */
@@ -171,7 +172,7 @@ function sameDiagram(
 ): boolean {
   return (
     capture.active === view.active &&
-    capture.active.generation === view.generation &&
+    atGeneration(view.generation, capture.active.generation) &&
     diagramCurrent(view.collections, capture.active) &&
     inWorkspace(capture.workspace, view.snapshot?.workspace)
   );

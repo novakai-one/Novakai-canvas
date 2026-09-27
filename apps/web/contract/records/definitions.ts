@@ -15,7 +15,7 @@ import type {
 } from '@novakai/canvas-model';
 import type { Snapshot, Receipt, Request, CanvasEvent, NodeTarget } from './owners.js';
 import type { EditingBase } from './editor-recovery.js';
-import type { WorkspaceId } from '../brands.js';
+import type { TransportGeneration, WorkspaceId } from '../brands.js';
 import type { Diagnostic, Result } from '../errors.js';
 import type { DraftRetention } from '../ports/draft-retention.js';
 
@@ -23,14 +23,14 @@ export type { Definition, DefinitionId, DefinitionUsage, TypeExpression };
 
 export interface DefinitionSelection {
   readonly base: Snapshot;
-  readonly generation: string;
+  readonly generation: TransportGeneration;
   readonly collection: Collection;
 }
 
 export interface DefinitionDraft {
   readonly key: string;
   readonly base: EditingBase;
-  readonly generation: string;
+  readonly generation: TransportGeneration;
   readonly collection: Collection;
   readonly definition: Definition;
   readonly operation: 'create' | 'replace' | 'remove';

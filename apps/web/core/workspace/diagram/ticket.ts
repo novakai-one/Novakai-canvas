@@ -7,6 +7,7 @@
 import type { Collection } from '../../../contract/records/owners.js';
 import type { WorkspaceView } from '../../../contract/records/workspace.js';
 import type { WorkspaceScope } from '../../../contract/records/workspace-scope.js';
+import type { ReadGeneration } from '../../../contract/records/read-generation.js';
 import { snapshotScope } from '../workspace-scope.js';
 
 /** Who asked for the render: ordinary navigation, or the collection chooser. */
@@ -19,7 +20,8 @@ export interface RenderTicket {
   readonly revision: number;
   /** The checked snapshot's workspace; unrestored before the first snapshot. */
   readonly workspace: WorkspaceScope;
-  readonly generation: string;
+  /** The view's read generation; unread before the first workspace read. */
+  readonly generation: ReadGeneration;
   readonly mode: RenderMode;
 }
 

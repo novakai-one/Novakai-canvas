@@ -9,6 +9,8 @@
 import type { Diagnostic } from '../../contract/errors.js';
 import type { WorkspaceView } from '../../contract/records/workspace.js';
 import type { ActiveDiagram } from '../../contract/records/active-diagram.js';
+import type { ReadGeneration } from '../../contract/records/read-generation.js';
+import { atGeneration } from './read-generation.js';
 
 /** An editor draft as the status reads it: only its collection matters. */
 export interface CollectionDraft {
@@ -48,13 +50,13 @@ export function restingStatus(
   return next;
 }
 
-/** Whether the scene may be edited now. */
+/** Whether the scene may be edited now: nothing holds edits and the view is read in the scene's generation. */
 export function mutationAvailable(
   active: ActiveDiagram,
-  generation: string,
+  generation: ReadGeneration,
   holds: EditHolds,
 ): boolean {
-  return !holds.movement && !holds.history && active.generation === generation;
+  return !holds.movement && !holds.history && atGeneration(generation, active.generation);
 }
 
 /** "Could not be confirmed" once no request remains uncertain; null while one does, or for any other problem. */

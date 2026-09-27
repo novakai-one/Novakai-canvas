@@ -10,7 +10,7 @@ export interface DefinitionDraftRecord {
   readonly schemaVersion: 1;
   readonly key: string;
   readonly base: DefinitionDraft['base'];
-  readonly generation: string;
+  readonly generation: DefinitionDraft['generation'];
   readonly collection: DefinitionDraft['collection']['id'];
   readonly definition: DefinitionDraft['definition'];
   readonly operation: DefinitionDraft['operation'];

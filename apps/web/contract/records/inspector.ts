@@ -7,7 +7,7 @@ import type {
 } from '@novakai/canvas-model';
 import type { Snapshot, Receipt } from './owners.js';
 import type { EditingBase } from './editor-recovery.js';
-import type { WorkspaceId } from '../brands.js';
+import type { TransportGeneration, WorkspaceId } from '../brands.js';
 import type { Result, Diagnostic } from '../errors.js';
 import type { DraftRetention } from '../ports/draft-retention.js';
 /** UI edit commands retain incomplete text without pretending it is an admitted Model record. */
@@ -52,7 +52,7 @@ export type ObjectEdit =
 export interface ObjectDraft {
   readonly key: string;
   readonly base: EditingBase;
-  readonly generation: string;
+  readonly generation: TransportGeneration;
   readonly collection: Collection;
   readonly object: DiagramObject;
   readonly edits: readonly ObjectEdit[];
@@ -63,7 +63,7 @@ export interface InspectorState {
 }
 export interface ObjectSelection {
   readonly base: Snapshot;
-  readonly generation: string;
+  readonly generation: TransportGeneration;
   readonly collection: Collection;
   readonly object: DiagramObject;
 }

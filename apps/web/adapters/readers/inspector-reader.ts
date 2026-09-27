@@ -1,12 +1,14 @@
 import { z } from 'zod';
 import { descendantId, objectId, definitionId, validate } from '@novakai/canvas-model';
 import { snapshotSchema } from '@novakai/canvas-authoring';
+import { transportGeneration } from '@novakai/canvas-service';
 import type { ObjectDraft, ObjectEdit } from '../../contract/records/inspector.js';
 import type {
   CapturedCollectionBase,
   EditingBase,
 } from '../../contract/records/editor-recovery.js';
 import type { StoredRecord } from '../../contract/records/owners.js';
+import type { TransportGeneration } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
 import { captureCollectionBase, objectDraftKey } from '../../contract/api.js';
@@ -78,7 +80,7 @@ const command: z.ZodType<ObjectEdit> = z.discriminatedUnion('kind', [
 const legacyDraftRecord = z.object({
   key: z.string(),
   base: snapshotSchema,
-  generation: z.string(),
+  generation: transportGeneration,
   collection: z.object({ id: z.string() }),
   object: z.object({ id: z.string() }),
   edits: z.array(command).readonly(),
@@ -88,7 +90,7 @@ const currentDraftRecord = z.strictObject({
   schemaVersion: z.literal(1),
   key: z.string(),
   base: capturedCollectionBaseSchema,
-  generation: z.string(),
+  generation: transportGeneration,
   collection: z.string(),
   object: z.string(),
   edits: z.array(command).readonly(),
@@ -96,7 +98,7 @@ const currentDraftRecord = z.strictObject({
 interface RecoveryRecord {
   readonly key: string;
   readonly base: EditingBase;
-  readonly generation: string;
+  readonly generation: TransportGeneration;
   readonly collection: string;
   readonly object: string;
   readonly edits: readonly ObjectEdit[];

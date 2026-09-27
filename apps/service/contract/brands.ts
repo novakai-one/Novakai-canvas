@@ -7,8 +7,8 @@
 import { z } from 'zod';
 
 /**
- * Checks and brands a transport generation: 1 to 128 characters, the same rule as the envelope
- * schemas in `records/protocol.ts`. Use `safeParse`; `parse` throws a `ZodError`.
+ * Checks and brands a transport generation: 1 to 128 characters. The envelope schemas in
+ * `records/protocol.ts` parse with it. Use `safeParse`; `parse` throws a `ZodError`.
  */
 export const transportGeneration = z.string().min(1).max(128).brand<'TransportGeneration'>();
 

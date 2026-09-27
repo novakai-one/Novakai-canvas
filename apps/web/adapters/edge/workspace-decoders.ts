@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { snapshotSchema } from '@novakai/canvas-authoring';
 import type { Snapshot } from '@novakai/canvas-authoring';
 import { validate } from '@novakai/canvas-model';
+import { transportGeneration } from '@novakai/canvas-service';
 import type { Collection } from '@novakai/canvas-model';
 import type { WorkspaceDecoders } from '../../contract/ports/workspace-decoders.js';
 import type { Result } from '../../contract/errors.js';
@@ -61,7 +62,7 @@ const currentSource = z.strictObject({
   schemaVersion: z.literal(1),
   source: z.string(),
   base: capturedCollectionBaseSchema,
-  generation: z.string(),
+  generation: transportGeneration,
   collection: z.string(),
   edit: z.number().int().nonnegative(),
 });
@@ -70,7 +71,7 @@ const currentSource = z.strictObject({
 const legacySource = z.strictObject({
   source: z.string(),
   snapshot: snapshotSchema,
-  generation: z.string(),
+  generation: transportGeneration,
   collection: z.string(),
   edit: z.number().int().nonnegative(),
 });

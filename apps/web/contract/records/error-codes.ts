@@ -25,10 +25,12 @@ export type RenderCode =
 
 /**
  * Sending requests and settling their answers. `wrong-workspace` also refuses a retained editor
- * draft or source draft that belongs to another workspace.
+ * draft or source draft that belongs to another workspace; `not-read` refuses a send that needs the
+ * current generation before the first workspace read.
  */
 export type JournalCode =
   | 'wrong-workspace'
+  | 'not-read'
   | 'unknown-request'
   | 'pending-request'
   | 'confirmation-required'

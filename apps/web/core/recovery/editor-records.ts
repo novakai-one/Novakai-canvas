@@ -9,6 +9,7 @@ import type {
 import type { ObjectDraft } from '../../contract/records/inspector.js';
 import type { WireDraft } from '../../contract/records/wire-editor.js';
 import type { Snapshot, StoredRecord } from '../../contract/records/owners.js';
+import type { TransportGeneration } from '../../contract/brands.js';
 
 /** `invalid-recovery`: a retained draft's captured collection cannot be used. */
 function rejected(message: string): Extract<Result<never>, { ok: false }> {
@@ -95,7 +96,7 @@ function isCapturedCollection(
 export interface SourceRecoveryInput {
   readonly source: string;
   readonly base: EditingBase | null;
-  readonly generation: string;
+  readonly generation: TransportGeneration;
   readonly collection: string;
   readonly edit: number;
 }

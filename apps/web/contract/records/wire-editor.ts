@@ -8,13 +8,13 @@ import type {
 } from './owners.js';
 import type { Snapshot, Receipt } from './owners.js';
 import type { EditingBase } from './editor-recovery.js';
-import type { WorkspaceId } from '../brands.js';
+import type { TransportGeneration, WorkspaceId } from '../brands.js';
 import type { Diagnostic, Result } from '../errors.js';
 import type { DraftRetention } from '../ports/draft-retention.js';
 /** The semantic relationship is shared; only the selected section owns the route controls. */
 export interface WireSelection {
   readonly base: Snapshot;
-  readonly generation: string;
+  readonly generation: TransportGeneration;
   readonly collection: Collection;
   readonly section: Section;
   readonly relationship: Relationship;

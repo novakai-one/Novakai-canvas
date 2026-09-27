@@ -1,5 +1,5 @@
 import type { Request, Receipt, Snapshot, Collection } from './owners.js';
-import type { WorkspaceId } from '../brands.js';
+import type { TransportGeneration, WorkspaceId } from '../brands.js';
 import type { Result, Diagnostic } from '../errors.js';
 import type { ServiceClient } from '../ports/client.js';
 import type { DraftRetention } from '../ports/draft-retention.js';
@@ -7,7 +7,7 @@ import type { DraftRetention } from '../ports/draft-retention.js';
 /** Immutable intent is retained before transmission; uncertain recovery always uses this exact request ID and body. */
 export interface Submission {
   readonly request: Request;
-  readonly generation: string;
+  readonly generation: TransportGeneration;
   readonly sourceEdit: number;
   readonly gesture: string | null;
   readonly state: 'sending' | 'uncertain' | 'retryable' | 'rejected';
@@ -41,7 +41,7 @@ export interface SubmissionSession {
   reconcile(id: string): Promise<Result<Receipt | null>>;
   retry(
     id: string,
-    generation: string,
+    generation: TransportGeneration,
   ): Promise<Result<Receipt>>;
 }
 export interface SubmissionBindings {

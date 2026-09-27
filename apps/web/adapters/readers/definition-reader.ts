@@ -3,6 +3,7 @@ import { definitionSchema, validate, type Collection } from '@novakai/canvas-mod
 import { capturedCollectionBaseSchema } from '../../contract/schemas/editor-recovery.js';
 import type { DefinitionDraft } from '../../contract/records/definitions.js';
 import { requestSchema } from '@novakai/canvas-authoring';
+import { transportGeneration } from '@novakai/canvas-service';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
 
@@ -11,7 +12,7 @@ const draftSchema = z.strictObject({
   schemaVersion: z.literal(1),
   key: z.string(),
   base: capturedCollectionBaseSchema,
-  generation: z.string(),
+  generation: transportGeneration,
   collection: z.string(),
   definition: z.unknown(),
   operation: z.enum(['create', 'replace', 'remove']),

@@ -5,6 +5,7 @@ import type { DefinitionSession } from './definitions.js';
 import type { SourceView } from './source.js';
 import type { Collection, Snapshot, RenderDocument } from './owners.js';
 import type { ActiveDiagram } from './active-diagram.js';
+import type { ReadGeneration } from './read-generation.js';
 import type { Submission } from './submission.js';
 import type { Diagnostic } from '../errors.js';
 import type { MoveReview } from './movement.js';
@@ -41,7 +42,7 @@ export interface WorkspaceView extends SourceView {
     readonly busy: boolean;
   };
   readonly snapshot: Snapshot | null;
-  readonly generation: string;
+  readonly generation: ReadGeneration;
   readonly collections: readonly Collection[];
   readonly active: ActiveDiagram | null;
   readonly opening: string | null;

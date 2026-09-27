@@ -3,10 +3,11 @@
  * The workspace session creates and replaces it; source, creation, connection and definitions read it.
  */
 import type { Snapshot, RenderDocument, Canvas, SessionStore } from './owners.js';
+import type { TransportGeneration } from '../brands.js';
 
-/** The installed diagram: render generation, snapshot drawn, document and Canvas session. */
+/** The installed diagram: the transport generation it was read in, snapshot drawn, document and Canvas session. */
 export interface ActiveDiagram {
-  readonly generation: string;
+  readonly generation: TransportGeneration;
   readonly base: Snapshot;
   readonly document: RenderDocument;
   readonly canvas: Canvas;

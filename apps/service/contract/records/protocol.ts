@@ -1,5 +1,6 @@
 import type { OperationSource } from './failure-source.js';
 import { operationSource } from './failure-source.js';
+import { transportGeneration } from '../brands.js';
 import { z } from 'zod';
 import type { Result } from '../errors.js';
 import type { Caller, HttpAdmission, HttpMetadata } from './http.js';
@@ -7,7 +8,7 @@ import type { Request } from './owners.js';
 /** A transport generation prevents a retained request from silently targeting a restarted/restored owner set. */
 export const mutationEnvelope = z.strictObject({
   version: z.literal(1),
-  generation: z.string().min(1).max(128),
+  generation: transportGeneration,
   request: z.unknown(),
   preview: z.boolean().default(false),
   options: z.unknown().default({}),
@@ -54,7 +55,7 @@ export interface CommandDecoder {
 /** HTTP consumers decode this envelope before handing success values to their respective capability readers. */
 export const responseEnvelope = z.strictObject({
   version: z.literal(1),
-  generation: z.string().min(1).max(128),
+  generation: transportGeneration,
   outcome: z.discriminatedUnion('ok', [
     z.strictObject({ ok: z.literal(true), value: z.unknown() }),
     z.strictObject({

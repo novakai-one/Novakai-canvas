@@ -6,6 +6,8 @@
 import type { RenderDocument, SessionStore } from '../../contract/records/owners.js';
 import type { WorkspaceView } from '../../contract/records/workspace.js';
 import type { ActiveDiagram } from '../../contract/records/active-diagram.js';
+import type { ReadGeneration } from '../../contract/records/read-generation.js';
+import { atGeneration } from './read-generation.js';
 
 /** Same-workspace monotonic revisions can update the existing session without losing its camera or selection. */
 export function reusableSession(
@@ -36,9 +38,11 @@ export function retainCamera(
 export function renderChanged(
   active: ActiveDiagram,
   revision: number,
-  generation: string,
+  generation: ReadGeneration,
 ): boolean {
-  return revision !== active.document.collection.revision || active.generation !== generation;
+  return (
+    revision !== active.document.collection.revision || !atGeneration(generation, active.generation)
+  );
 }
 
 /** Collection IDs are meaningful only within their workspace. */
