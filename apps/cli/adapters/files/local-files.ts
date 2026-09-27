@@ -1,7 +1,10 @@
 /*
  * Local text files named on the command line: the UTF-8 source a command reads and the --out file
- * it writes. Filesystem I/O; each failure is returned as a value and nothing is sent to the service.
- * The caller fixes the path and runs the command again.
+ * it writes. Filesystem I/O; each failure is returned as a value.
+ * `source` fails before anything is sent: fix the path and run the command again.
+ * `output` fails after the command already ran, so a write may have changed the workspace: fix the
+ * path, then fetch the result with `read ID` or `receipt REQUEST` (the --request value, or the
+ * file name in the workspace `requests` folder). Do not re-run a write command.
  */
 import { readFile, writeFile } from 'node:fs/promises';
 import type { RequestFiles } from '../../contract/ports/runtime.js';
@@ -23,7 +26,7 @@ async function source(path: string): Promise<Result<string>> {
     return failure('source-unavailable', `Cannot read UTF-8 source: ${path}`);
   }
 }
-/** --out is an explicit destination. Writing source output never changes canonical service data. */
+/** --out is an explicit destination, written after the command ran. Never changes service data. */
 async function output(
   path: string,
   text: string,

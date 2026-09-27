@@ -1,3 +1,9 @@
+/*
+ * Composition root: binds each command to real infrastructure (agent credential, HTTP transport,
+ * Language, local files, request journal, headless render bindings). Not pure: reads files, calls
+ * HTTP, mints request IDs. Failures are returned as values; `cli/canvas.ts` prints them and sets
+ * the exit code. Recovery after a sent request is `receipt` then `retry`.
+ */
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { readAgentCredential } from '@novakai/canvas-service';
