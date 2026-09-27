@@ -1,7 +1,7 @@
 import { historyStatusSchema } from '@novakai/canvas-authoring';
 import type { GeometryPreview } from '@novakai/canvas-canvas';
 import type { ObjectDraft } from '../../contract/records/inspector.js';
-import type { Change, Collection, DiagramObject } from '../../contract/records/owners.js';
+import type { Change, Collection, DiagramObject, Snapshot } from '../../contract/records/owners.js';
 import type {
   AddDiagramDraft,
   AddGroupDraft,
@@ -16,7 +16,7 @@ import type { Receipt } from '../../contract/records/owners.js';
 import type { WorkspaceController, WorkspaceView } from '../../contract/records/workspace.js';
 import type { ActiveDiagram } from '../../contract/records/active-diagram.js';
 import type { WorkspaceScope } from '../../contract/records/workspace-scope.js';
-import type { TransportGeneration } from '../../contract/brands.js';
+import type { CollectionId, TransportGeneration } from '../../contract/brands.js';
 import type { WorkspaceBindings } from '../../contract/ports/workspace.js';
 import type {
   Request,
@@ -366,12 +366,12 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     update(gonePatch());
   }
   /** One latest render request owns delivery. Cancelled/superseded jobs cannot mount their results. */
-  async function open(id: string): Promise<void> {
+  async function open(id: CollectionId): Promise<void> {
     await requestOpen(id, 'navigation');
   }
   /** Explicit choices supersede every older render; token checks decide delivery after transport aborts. */
   async function requestOpen(
-    id: string,
+    id: CollectionId,
     mode: RenderMode,
   ): Promise<void> {
     const request = beginRender(id, mode);
@@ -426,7 +426,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   }
   /** A request captures the checked revision and service generation used for its admission. */
   function beginRender(
-    id: string,
+    id: CollectionId,
     mode: RenderMode,
   ): RenderRequest | null {
     if (disposed) return null;
@@ -529,9 +529,9 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     return { ok: true, value: true };
   }
   /** A navigation failure is visible but does not undo a successfully opened diagram. */
-  function updateLocation(id: string): void {
+  function updateLocation(id: CollectionId): void {
     library.visit(id);
-    const result = bindings.navigation.opened(id);
+    const result = bindings.navigation.opened({ kind: 'collection', collection: id });
     if (!result.ok) report(result.error);
   }
   /** Canvas admission and generation checks run before replacing the UI's document reference. */
@@ -895,7 +895,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   ): Promise<Result<Receipt>> {
     const request = bindings.inputs.model(
       active.base,
-      intent.base.collectionId,
+      active.document.collection.id,
       changes,
       intent.id,
     );
@@ -1050,24 +1050,25 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   /** Human creation is an ordinary DSL creation with absent collection and observed catalog preconditions. */
   async function create(title: string): Promise<void> {
     if (state.snapshot === null) return;
-    const id = `collection-${bindings.nextId()}`;
-    const request = bindings.inputs.dsl(
-      state.snapshot,
-      id,
-      bindings.inputs.newSource(id, title),
-      'create',
-      bindings.nextId(),
-    );
-    if (!request.ok) {
-      report(request.error);
-      return;
-    }
+    const id = bindings.ids.collectionId();
+    if (!id.ok) return report(id.error);
+    await createCollection(state.snapshot, id.value, title);
+  }
+  /** The new collection's starter source, created against the catalogue `snapshot` read. */
+  async function createCollection(
+    snapshot: Snapshot,
+    id: CollectionId,
+    title: string,
+  ): Promise<void> {
+    const source = bindings.inputs.newSource(id, title);
+    const request = bindings.inputs.dsl(snapshot, id, source, 'create', bindings.nextId());
+    if (!request.ok) return report(request.error);
     await createSubmitted(request.value, id);
   }
   /** Open only after a confirmed creation, whose answer installed the snapshot listing it; a failed create keeps the current canvas. */
   async function createSubmitted(
     request: Request,
-    id: string,
+    id: CollectionId,
   ): Promise<void> {
     const result = await submitCurrent(request);
     if (!result.ok) return;
@@ -1367,7 +1368,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     void refreshHistory();
   }
   /** A newer explicit target always supersedes an older target, including an in-flight request. */
-  function chooseCollection(id: string): void {
+  function chooseCollection(id: CollectionId): void {
     const plan = choosePlan(state, id);
     if (plan === 'cancel') return cancelCollectionSwitch();
     if (plan === 'begin') beginCollectionSwitch();
@@ -1385,7 +1386,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     state.active?.session.dispose();
     source.close('keep');
     update({ active: null, opening: null });
-    const location = bindings.navigation.opened(null);
+    const location = bindings.navigation.opened({ kind: 'library' });
     if (!location.ok) report(location.error);
   }
   /** Connection hints affect controls, not saved state. A reconnect rereads owners and leaves pending requests untouched. */
@@ -1432,7 +1433,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
       report(location.error);
       return;
     }
-    if (location.value !== null) await open(location.value);
+    if (location.value.kind === 'collection') await open(location.value.collection);
   }
   /** Startup recovery is tied to the checked workspace identity; it makes no mutation request. */
   function restoreEdits(): void {

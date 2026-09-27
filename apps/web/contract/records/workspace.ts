@@ -6,6 +6,7 @@ import type { SourceView } from './source.js';
 import type { Collection, Snapshot, RenderDocument } from './owners.js';
 import type { ActiveDiagram } from './active-diagram.js';
 import type { ReadGeneration } from './read-generation.js';
+import type { CollectionId } from '../brands.js';
 import type { Submission } from './submission.js';
 import type { Diagnostic } from '../errors.js';
 import type { MoveReview } from './movement.js';
@@ -16,17 +17,17 @@ import type { Result } from '../errors.js';
 import type { BinaryResponse } from '../ports/client.js';
 import type { Diagnostic as CanvasDiagnostic } from '@novakai/canvas-canvas';
 export type CollectionSwitch =
-  | { readonly phase: 'idle'; readonly activeId: string | null }
-  | { readonly phase: 'choosing'; readonly activeId: string | null }
+  | { readonly phase: 'idle'; readonly activeId: CollectionId | null }
+  | { readonly phase: 'choosing'; readonly activeId: CollectionId | null }
   | {
       readonly phase: 'loading';
-      readonly activeId: string | null;
-      readonly targetId: string;
+      readonly activeId: CollectionId | null;
+      readonly targetId: CollectionId;
     }
   | {
       readonly phase: 'failed';
-      readonly activeId: string | null;
-      readonly targetId: string;
+      readonly activeId: CollectionId | null;
+      readonly targetId: CollectionId;
       readonly problem: Diagnostic;
     };
 export interface MovementReviewState {
@@ -45,7 +46,7 @@ export interface WorkspaceView extends SourceView {
   readonly generation: ReadGeneration;
   readonly collections: readonly Collection[];
   readonly active: ActiveDiagram | null;
-  readonly opening: string | null;
+  readonly opening: CollectionId | null;
   readonly collectionSwitch: CollectionSwitch;
   readonly status: string;
   readonly problem: Diagnostic | null;
@@ -66,10 +67,10 @@ export interface WorkspaceController {
   getSnapshot(): WorkspaceView;
   subscribe(listener: () => void): () => void;
   start(): Promise<void>;
-  open(id: string): Promise<void>;
+  open(id: CollectionId): Promise<void>;
   beginCollectionSwitch(): void;
   cancelCollectionSwitch(): void;
-  chooseCollection(id: string): void;
+  chooseCollection(id: CollectionId): void;
   retryCollectionSwitch(): void;
   showLibrary(): void;
   refresh(): Promise<void>;

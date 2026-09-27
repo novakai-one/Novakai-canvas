@@ -15,7 +15,9 @@ import type {
 import type { ObjectDraft } from '../../contract/records/inspector.js';
 import type { WireDraft } from '../../contract/records/wire-editor.js';
 import type { Snapshot, StoredRecord } from '../../contract/records/owners.js';
+import type { CollectionId } from '../../contract/brands.js';
 import { mapResults } from '../editing/results.js';
+import { isCollectionKey } from '../workspace/collection-key.js';
 
 /** Why a base without exactly one live record of the collection is refused. */
 const ONE_LIVE_COLLECTION = 'The captured base must contain exactly one live collection';
@@ -31,9 +33,9 @@ export function baseWorkspace(base: EditingBase): Snapshot['workspace'] {
  */
 export function collectionRecord(
   base: EditingBase,
-  collection: string,
+  collection: CollectionId,
 ): Result<StoredRecord> {
-  const matches = records(base).filter((item) => isCollection(item, collection));
+  const matches = records(base).filter((item) => isCollectionKey(item.key, collection));
   if (matches.length !== 1) return rejected(ONE_LIVE_COLLECTION);
   return liveRecord(matches[0]);
 }
@@ -45,7 +47,7 @@ export function collectionRecord(
  */
 export function captureCollectionBase(
   base: EditingBase,
-  collection: string,
+  collection: CollectionId,
 ): Result<CapturedCollectionBase> {
   if ('record' in base) return captureExisting(base, collection);
   return captureSnapshot(base, collection);
@@ -95,7 +97,7 @@ function records(base: EditingBase): readonly StoredRecord[] {
 /** A captured base is kept only when it is already the live record of `collection`. */
 function captureExisting(
   base: CapturedCollectionBase,
-  collection: string,
+  collection: CollectionId,
 ): Result<CapturedCollectionBase> {
   if (!isLiveCollection(base.record, collection))
     return rejected('The captured collection identity does not match the draft');
@@ -105,7 +107,7 @@ function captureExisting(
 /** A snapshot is narrowed to its one live record of `collection`. */
 function captureSnapshot(
   base: Snapshot,
-  collection: string,
+  collection: CollectionId,
 ): Result<CapturedCollectionBase> {
   const record = collectionRecord(base, collection);
   if (!record.ok) return record;
@@ -131,19 +133,10 @@ function liveRecord(record: StoredRecord | undefined): Result<StoredRecord> {
 /** Whether `record` is the live record of collection `collection`. */
 function isLiveCollection(
   record: StoredRecord,
-  collection: string,
+  collection: CollectionId,
 ): boolean {
-  if (!isCollection(record, collection)) return false;
+  if (!isCollectionKey(record.key, collection)) return false;
   return !record.deleted;
-}
-
-/** Whether `record` is keyed as collection `collection`, deleted or not. */
-function isCollection(
-  record: StoredRecord,
-  collection: string,
-): boolean {
-  if (record.key.kind !== 'collection') return false;
-  return record.key.id === collection;
 }
 
 /** One object draft's stored record. Fails with `invalid-recovery` when its base cannot be captured. */

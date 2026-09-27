@@ -40,6 +40,7 @@ export {
   snapshotScope,
   inWorkspace,
 } from '../core/workspace/workspace-scope.js';
+export { isCollectionKey } from '../core/workspace/collection-key.js';
 export {
   unreadGeneration,
   readGeneration,

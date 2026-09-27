@@ -10,11 +10,12 @@ import type { Diagnostic } from '../../contract/errors.js';
 import type { WorkspaceView } from '../../contract/records/workspace.js';
 import type { ActiveDiagram } from '../../contract/records/active-diagram.js';
 import type { ReadGeneration } from '../../contract/records/read-generation.js';
+import type { CollectionId } from '../../contract/brands.js';
 import { atGeneration } from './read-generation.js';
 
 /** An editor draft as the status reads it: only its collection matters. */
 export interface CollectionDraft {
-  readonly collection: { readonly id: string };
+  readonly collection: { readonly id: CollectionId };
 }
 
 /** What holds edits back: a movement review, and undo/redo or a request in the journal. */

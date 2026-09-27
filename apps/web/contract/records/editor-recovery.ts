@@ -1,5 +1,5 @@
 import type { Snapshot, StoredRecord } from './owners.js';
-import type { TransportGeneration } from '../brands.js';
+import type { CollectionId, TransportGeneration } from '../brands.js';
 
 /** A recovery base carries only the complete original collection record. */
 export interface CapturedCollectionBase {
@@ -18,7 +18,7 @@ export interface RecoveredSource {
   readonly source: string;
   readonly base: EditingBase;
   readonly generation: TransportGeneration;
-  readonly collection: string;
+  readonly collection: CollectionId;
   readonly edit: number;
 }
 
@@ -26,7 +26,7 @@ export interface SourceRecoveryV1 {
   readonly kind: 'source-draft';
   readonly schemaVersion: 1;
   readonly base: CapturedCollectionBase;
-  readonly collection: string;
+  readonly collection: CollectionId;
   readonly source: string;
   readonly generation: TransportGeneration;
   readonly edit: number;
@@ -37,7 +37,7 @@ export interface ObjectRecoveryV1 {
   readonly schemaVersion: 1;
   readonly base: CapturedCollectionBase;
   readonly key: string;
-  readonly collection: string;
+  readonly collection: CollectionId;
   readonly object: string;
   readonly generation: TransportGeneration;
   readonly edits: readonly unknown[];
@@ -48,7 +48,7 @@ export interface WireRecoveryV1 {
   readonly schemaVersion: 1;
   readonly base: CapturedCollectionBase;
   readonly key: string;
-  readonly collection: string;
+  readonly collection: CollectionId;
   readonly section: string;
   readonly relationship: string;
   readonly edits: readonly unknown[];

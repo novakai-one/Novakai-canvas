@@ -4,7 +4,13 @@
  * the stored data is kept.
  */
 import { z } from 'zod';
-import { descendantId, objectId, definitionId, validate } from '@novakai/canvas-model';
+import {
+  collectionId,
+  descendantId,
+  objectId,
+  definitionId,
+  validate,
+} from '@novakai/canvas-model';
 import { snapshotSchema } from '@novakai/canvas-authoring';
 import { transportGeneration } from '@novakai/canvas-service';
 import type { ObjectDraft, ObjectEdit } from '../../contract/records/inspector.js';
@@ -13,6 +19,7 @@ import type {
   EditingBase,
 } from '../../contract/records/editor-recovery.js';
 import type { StoredRecord } from '../../contract/records/owners.js';
+import type { CollectionId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
 import { captureCollectionBase, mapResults, objectDraftKey } from '../../contract/api.js';
@@ -93,7 +100,7 @@ const draftFields = {
 const legacyDraftRecord = z.object({
   ...draftFields,
   base: snapshotSchema,
-  collection: z.object({ id: z.string() }),
+  collection: z.object({ id: collectionId }),
   object: z.object({ id: z.string() }),
 });
 /** A tagged draft (schema version 1): a captured collection base and plain IDs. */
@@ -102,7 +109,7 @@ const currentDraftRecord = z.strictObject({
   schemaVersion: z.literal(1),
   ...draftFields,
   base: capturedCollectionBaseSchema,
-  collection: z.string(),
+  collection: collectionId,
   object: z.string(),
 });
 /** A stored draft in one shape: plain IDs, and either kind of base. */
@@ -177,7 +184,7 @@ function readCapturedCollection(record: CapturedRecord): Result<ObjectDraft> {
  */
 function admitCollection(
   record: StoredRecord,
-  id: string,
+  id: CollectionId,
 ): Result<ObjectDraft['collection']> {
   const collection = validate(record.value);
   if (!collection.ok) return invalid('The draft base is not a valid collection');
@@ -188,7 +195,7 @@ function admitCollection(
 /** Whether the collection has ID `id` at revision `version`. */
 function isVersionOf(
   collection: ObjectDraft['collection'],
-  id: string,
+  id: CollectionId,
   version: number,
 ): boolean {
   if (collection.id !== id) return false;

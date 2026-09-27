@@ -4,7 +4,13 @@
  * data is kept.
  */
 import { z } from 'zod';
-import { objectId, descendantId, relationshipKind, validate } from '@novakai/canvas-model';
+import {
+  collectionId,
+  objectId,
+  descendantId,
+  relationshipKind,
+  validate,
+} from '@novakai/canvas-model';
 import { snapshotSchema } from '@novakai/canvas-authoring';
 import { transportGeneration } from '@novakai/canvas-service';
 import type { WireDraft, WireEdit } from '../../contract/records/wire-editor.js';
@@ -13,6 +19,7 @@ import type {
   EditingBase,
 } from '../../contract/records/editor-recovery.js';
 import type { Collection, StoredRecord } from '../../contract/records/owners.js';
+import type { CollectionId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
 import { captureCollectionBase, mapResults, wireDraftKey } from '../../contract/api.js';
@@ -54,7 +61,7 @@ const draftFields = {
 const legacyRecord = z.object({
   ...draftFields,
   base: snapshotSchema,
-  collection: z.object({ id: z.string() }),
+  collection: z.object({ id: collectionId }),
   section: z.object({ id: z.string() }),
   relationship: z.object({ id: z.string() }),
 });
@@ -64,7 +71,7 @@ const currentRecord = z.strictObject({
   schemaVersion: z.literal(1),
   ...draftFields,
   base: capturedCollectionBaseSchema,
-  collection: z.string(),
+  collection: collectionId,
   section: z.string(),
   relationship: z.string(),
 });
@@ -137,7 +144,7 @@ function capturedDraft(value: CapturedRecord): Result<WireDraft> {
  */
 function admitCollection(
   record: StoredRecord,
-  id: string,
+  id: CollectionId,
 ): Result<Collection> {
   const collection = validate(record.value);
   if (!collection.ok) return invalid('The wire form has no valid captured collection');
@@ -148,7 +155,7 @@ function admitCollection(
 /** Whether the collection has ID `id` at revision `version`. */
 function isVersionOf(
   collection: Collection,
-  id: string,
+  id: CollectionId,
   version: number,
 ): boolean {
   if (collection.id !== id) return false;

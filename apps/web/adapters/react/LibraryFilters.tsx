@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { ComponentType, ReactElement } from 'react';
 import type { DesignSlots } from '../../contract/react-types.js';
 import type { LibraryFeatureProps } from '../../contract/library-react.js';
+import type { FolderId } from '../../contract/brands.js';
 import editorStyles from './ObjectEditor.module.css';
 import styles from './LibraryFilters.module.css';
 /** Search, folder scope and archive filters use Library's public query semantics. */
@@ -22,7 +23,7 @@ export function createLibraryFilters(
               {...props}
               value={filters.folder ?? ''}
               onChange={(event) =>
-                library.filter({ ...filters, folder: event.target.value || null })
+                library.filter({ ...filters, folder: listedFolder(state, event.target.value) })
               }
             >
               <option value="">All folders</option>
@@ -110,6 +111,13 @@ export function createLibraryFilters(
     );
   }
   return LibraryFilters;
+}
+/** The listed folder whose ID is `value`; null for "All folders". */
+function listedFolder(
+  state: LibraryFeatureProps['state'],
+  value: string,
+): FolderId | null {
+  return state.source?.organisation.folders.find((folder) => folder.id === value)?.id ?? null;
 }
 const archives = [
   { value: 'exclude', label: 'Active' },

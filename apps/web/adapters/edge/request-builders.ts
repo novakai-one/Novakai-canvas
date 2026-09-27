@@ -15,6 +15,7 @@ import { failure } from '../../contract/errors.js';
 import { languageFailure } from '../../contract/foreign-failures.js';
 import type { WebErrorCode } from '../../contract/records/error-codes.js';
 import type { EditingBase } from '../../contract/records/editor-recovery.js';
+import type { CollectionId } from '../../contract/brands.js';
 import { baseWorkspace, collectionRecord } from '../../contract/api.js';
 
 /**
@@ -67,7 +68,7 @@ function change(
   id: string,
   planner: string,
   payload: unknown,
-  collection: string,
+  collection: CollectionId,
   expectation: Expectation,
 ): Result<Request> {
   const expected = expectedVersions[expectation](snapshot, collection);
@@ -86,7 +87,10 @@ function change(
 
 /** The versions each expectation claims. Every expectation has a rule (checked by the type). */
 const expectedVersions: Readonly<
-  Record<Expectation, (base: EditingBase, collection: string) => Result<readonly ExpectedVersion[]>>
+  Record<
+    Expectation,
+    (base: EditingBase, collection: CollectionId) => Result<readonly ExpectedVersion[]>
+  >
 > = Object.freeze({ create: createVersions, replace: replaceVersions });
 
 /**
@@ -95,7 +99,7 @@ const expectedVersions: Readonly<
  */
 function createVersions(
   base: EditingBase,
-  collection: string,
+  collection: CollectionId,
 ): Result<readonly ExpectedVersion[]> {
   if ('record' in base)
     return failure(
@@ -109,7 +113,7 @@ function createVersions(
 /** A replaced collection must still have the version the base captured. Fails with `invalid-recovery`. */
 function replaceVersions(
   base: EditingBase,
-  collection: string,
+  collection: CollectionId,
 ): Result<readonly ExpectedVersion[]> {
   const record = collectionRecord(base, collection);
   if (!record.ok) return record;
@@ -218,7 +222,7 @@ function printSource(
  * path as agent source. Cannot fail.
  */
 function newSource(
-  id: string,
+  id: CollectionId,
   title: string,
 ): string {
   return `canvas 1\ncollection @${id} ${JSON.stringify(title)} theme=paper {\n  node @start start "Start" {}\n  node @step step "Describe the next step" {}\n  node @end end "Done" {}\n  wire @first @start -> @step "begin"\n  wire @next @step -> @end "complete"\n  section @process "Process" mode=flow layout=flow direction=right {\n    show @start @step @end\n    connect @first @next\n  }\n}`;

@@ -9,7 +9,7 @@ import type { Snapshot } from '../../../contract/records/owners.js';
 import type { WorkspaceView } from '../../../contract/records/workspace.js';
 import type { ActiveDiagram } from '../../../contract/records/active-diagram.js';
 import type { ReadGeneration } from '../../../contract/records/read-generation.js';
-import type { TransportGeneration } from '../../../contract/brands.js';
+import type { CollectionId, TransportGeneration } from '../../../contract/brands.js';
 import { atGeneration, sameGeneration } from '../read-generation.js';
 import { renderChanged } from '../session-reuse.js';
 import { activeCollectionId, problemAfterRender, type ViewPatch } from './patches.js';
@@ -19,7 +19,7 @@ import type { RenderTicket } from '../diagram/ticket.js';
 export type ActiveRefresh =
   | { readonly kind: 'none' }
   | { readonly kind: 'gone'; readonly active: ActiveDiagram }
-  | { readonly kind: 'reopen'; readonly id: string };
+  | { readonly kind: 'reopen'; readonly id: CollectionId };
 
 /** Choosing a collection: the open one cancels the switch; another opens, beginning the switch when idle. */
 export type ChoosePlan = 'cancel' | 'begin' | 'open';
@@ -68,7 +68,7 @@ export function choosingPatch(view: Pick<WorkspaceView, 'active' | 'problem'>): 
 /** What choosing `id` does. */
 export function choosePlan(
   view: Pick<WorkspaceView, 'active' | 'collectionSwitch'>,
-  id: string,
+  id: CollectionId,
 ): ChoosePlan {
   if (id === activeCollectionId(view)) return 'cancel';
   return view.collectionSwitch.phase === 'idle' ? 'begin' : 'open';

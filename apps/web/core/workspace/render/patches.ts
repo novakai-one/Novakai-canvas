@@ -9,6 +9,7 @@ import type { WorkspaceView } from '../../../contract/records/workspace.js';
 import type { ActiveDiagram } from '../../../contract/records/active-diagram.js';
 import type { RenderTicket } from '../diagram/ticket.js';
 import type { AdmittedRender } from '../diagram/admission.js';
+import type { CollectionId } from '../../../contract/brands.js';
 
 /** The fields the session publishes in one update. */
 export type ViewPatch = Partial<WorkspaceView>;
@@ -84,14 +85,14 @@ export function problemAfterRender(view: Pick<WorkspaceView, 'problem'>): ViewPa
 }
 
 /** The open collection's ID; null in the library. */
-export function activeCollectionId(view: Pick<WorkspaceView, 'active'>): string | null {
+export function activeCollectionId(view: Pick<WorkspaceView, 'active'>): CollectionId | null {
   return view.active?.document.collection.id ?? null;
 }
 
 /** A chooser request: the switch loads the target while the current diagram stays. */
 function chooserOpeningPatch(
   view: PatchView,
-  id: string,
+  id: CollectionId,
 ): ViewPatch {
   return {
     opening: id,
@@ -104,7 +105,7 @@ function chooserOpeningPatch(
 /** A failed chooser request: the switch fails on the target with the problem. */
 function chooserFailurePatch(
   view: PatchView,
-  id: string,
+  id: CollectionId,
   problem: Diagnostic,
 ): ViewPatch {
   return {
@@ -123,7 +124,7 @@ function chooserFailurePatch(
 /** A collection's title in the catalogue, or "this collection" when it is not listed. */
 function collectionTitle(
   view: PatchView,
-  id: string,
+  id: CollectionId,
 ): string {
   return view.collections.find((item) => item.id === id)?.title ?? 'this collection';
 }

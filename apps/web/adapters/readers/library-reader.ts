@@ -8,6 +8,7 @@ import {
 } from '@novakai/canvas-library';
 import { projectCollection } from '@novakai/canvas-service';
 import type { Collection } from '../../contract/records/owners.js';
+import type { FolderId, LibraryCursor } from '../../contract/brands.js';
 import type { LibraryReader } from '../../contract/records/library.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
@@ -74,12 +75,12 @@ const visits = z
   .max(10000)
   .readonly();
 /** Omitted folder means all folders, matching the Library contract. */
-function folderFilter(folder: string | null): Readonly<Record<string, unknown>> {
+function folderFilter(folder: FolderId | null): Readonly<Record<string, unknown>> {
   if (folder === null) return {};
   return { folder, descendants: true };
 }
 /** Pagination tokens are opaque Library data; hosts never decode or synthesize offsets. */
-function cursorFilter(cursor: string | null): Readonly<Record<string, unknown>> {
+function cursorFilter(cursor: LibraryCursor | null): Readonly<Record<string, unknown>> {
   if (cursor === null) return {};
   return { cursor };
 }

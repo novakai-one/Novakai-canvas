@@ -7,9 +7,10 @@
 import { z } from 'zod';
 import { snapshotSchema } from '@novakai/canvas-authoring';
 import type { Snapshot } from '@novakai/canvas-authoring';
-import { validate } from '@novakai/canvas-model';
+import { collectionId, validate } from '@novakai/canvas-model';
 import { transportGeneration } from '@novakai/canvas-service';
 import type { Collection } from '@novakai/canvas-model';
+import type { CollectionId } from '../../contract/brands.js';
 import type { WorkspaceDecoders } from '../../contract/ports/workspace-decoders.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
@@ -63,7 +64,7 @@ const currentSource = z.strictObject({
   source: z.string(),
   base: capturedCollectionBaseSchema,
   generation: transportGeneration,
-  collection: z.string(),
+  collection: collectionId,
   edit: z.number().int().nonnegative(),
 });
 
@@ -72,7 +73,7 @@ const legacySource = z.strictObject({
   source: z.string(),
   snapshot: snapshotSchema,
   generation: transportGeneration,
-  collection: z.string(),
+  collection: collectionId,
   edit: z.number().int().nonnegative(),
 });
 
@@ -152,7 +153,7 @@ function admittedCollection(input: CapturedSource): Result<Collection> {
 /** The captured record is the draft's collection at the captured revision. Fails with `invalid-recovery`. */
 function checkedSourceCollection(
   collection: Collection,
-  id: string,
+  id: CollectionId,
   version: number,
 ): Result<Collection> {
   if (collection.id !== id)

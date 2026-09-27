@@ -9,6 +9,7 @@ import type { InspectorFactory } from '../records/inspector.js';
 import type { DefinitionFactory } from '../records/definitions.js';
 import type { SourceFactory } from '../records/source.js';
 import type { WorkspaceNavigation } from './navigation.js';
+import type { IdSource } from './ids.js';
 import type { WorkspaceDecoders } from './workspace-decoders.js';
 import type { RequestBuilders } from './request-builders.js';
 import type { PanelController } from '../panel-types.js';
@@ -67,5 +68,7 @@ export interface WorkspaceBindings {
   readonly wires: WireEditorFactory;
   readonly library: LibraryFactory;
   readonly panels: Pick<PanelController, 'open' | 'restore'>;
+  /** New collection IDs; a failure is reported and nothing is sent. */
+  readonly ids: Pick<IdSource, 'collectionId'>;
   nextId(): string;
 }

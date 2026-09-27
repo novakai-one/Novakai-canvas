@@ -7,6 +7,7 @@ import type {
   Target,
 } from './owners.js';
 import type { Result } from '../errors.js';
+import type { CollectionId } from '../brands.js';
 import type { GeometryPreview } from '@novakai/canvas-canvas';
 import type { Box } from '@novakai/canvas-layout';
 
@@ -39,7 +40,7 @@ export interface MoveReview {
   readonly id: string;
   readonly intent: PlacementIntent;
   readonly stamp: SceneStamp;
-  readonly collectionId: string;
+  readonly collectionId: CollectionId;
   readonly revision: number;
   readonly options: readonly MoveOption[];
   readonly selectedOption: string | null;

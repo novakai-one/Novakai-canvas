@@ -18,6 +18,7 @@ import type { Result } from '../../contract/errors.js';
 import {
   encodeSourceRecovery,
   inWorkspace,
+  isCollectionKey,
   restoredWorkspace,
   unrestoredWorkspace,
 } from '../../contract/api.js';
@@ -59,12 +60,8 @@ export function createSourceController(bindings: SourceBindings): SourceControll
     const receipt = sourceReceipt;
     const captured = state.sourceBase;
     if (receipt === null || captured.kind === 'none') return;
-    const version = receipt.versions.find(
-      (item) => item.key.kind === 'collection' && item.key.id === captured.collection,
-    );
-    const record = snapshot.records.find(
-      (item) => item.key.kind === 'collection' && item.key.id === captured.collection,
-    );
+    const version = receipt.versions.find((item) => isCollectionKey(item.key, captured.collection));
+    const record = snapshot.records.find((item) => isCollectionKey(item.key, captured.collection));
     if (!matchingVersion(version, record)) return;
     update({ sourceBase: { ...captured, base: snapshot, generation } });
     sourceReceipt = null;
@@ -84,7 +81,7 @@ export function createSourceController(bindings: SourceBindings): SourceControll
     if (request.intent.kind !== 'change' || captured.kind === 'none') return false;
     return (
       request.intent.planner === 'dsl' &&
-      request.scope.some((key) => key.kind === 'collection' && key.id === captured.collection)
+      request.scope.some((key) => isCollectionKey(key, captured.collection))
     );
   }
   /** Opening source uses the exact admitted collection, retaining that snapshot as the editing base. */

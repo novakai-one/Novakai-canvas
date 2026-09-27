@@ -2,6 +2,7 @@ import type { ComponentType, ReactElement } from 'react';
 import { formatFailure } from '../../contract/api.js';
 import type { CollectionChooserProps, DesignSlots } from '../../contract/react-types.js';
 import type { LibraryBrowserProps } from '../../contract/library-react.js';
+import type { CollectionId } from '../../contract/brands.js';
 import styles from './CollectionChooser.module.css';
 
 /** The chooser owns presentation and recovery actions; navigation and admission remain controller-owned. */
@@ -141,7 +142,7 @@ function FailureState({
 
 function collectionTitle(
   view: CollectionChooserProps['view'],
-  id: string,
+  id: CollectionId,
 ): string {
   return view.collections.find((item) => item.id === id)?.title ?? 'this collection';
 }

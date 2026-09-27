@@ -4,15 +4,15 @@ import type {
   QueryPage,
   QueryRequest,
   RecentVisit,
-  FolderId,
 } from '@novakai/canvas-library';
+import type { CollectionId, FolderId, LibraryCursor, VisitTime } from '../brands.js';
 import type { Snapshot, Collection, Receipt } from './owners.js';
 import type { Result, Diagnostic } from '../errors.js';
 import type { DraftRetention } from '../ports/draft-retention.js';
 /** Browse filters are browser preferences; catalog structure remains Library-owned canonical data. */
 export interface LibraryFilters {
   readonly text: string;
-  readonly folder: string | null;
+  readonly folder: FolderId | null;
   readonly archived: QueryRequest['archived'];
   readonly sort: QueryRequest['sort'];
 }
@@ -38,7 +38,7 @@ export interface LibraryReader {
   query(
     snapshot: LibrarySnapshot,
     filters: LibraryFilters,
-    cursor: string | null,
+    cursor: LibraryCursor | null,
   ): Result<QueryPage>;
   visits(input: unknown): Result<readonly RecentVisit[]>;
   folderDraft(input: unknown): Result<FolderDraft>;
@@ -53,7 +53,7 @@ export interface LibraryController {
   ): void;
   filter(filters: LibraryFilters): void;
   next(): void;
-  visit(collection: string): void;
+  visit(collection: CollectionId): void;
   apply(
     changes: readonly OrganisationChange[],
     revision: number,
@@ -65,8 +65,10 @@ export interface LibraryController {
 export interface LibraryBindings {
   readonly reader: LibraryReader;
   readonly retention: DraftRetention;
-  now(): number;
-  nextFolderId(): FolderId;
+  /** The time a collection is opened, recorded as a Library visit. */
+  now(): VisitTime;
+  /** A new folder ID from the ID source. Fails with `id-unavailable`. */
+  nextFolderId(): Result<FolderId>;
   apply(
     base: Snapshot,
     changes: readonly OrganisationChange[],

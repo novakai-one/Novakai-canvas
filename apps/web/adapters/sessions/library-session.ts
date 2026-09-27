@@ -6,9 +6,9 @@ import type {
   FolderDraft,
 } from '../../contract/records/library.js';
 import type { Snapshot, Collection } from '../../contract/records/owners.js';
-import type { WorkspaceId } from '../../contract/brands.js';
-import type { OrganisationChange, RecentVisit } from '@novakai/canvas-library';
-import { diagnostic } from '../../contract/errors.js';
+import type { CollectionId, LibraryCursor, WorkspaceId } from '../../contract/brands.js';
+import type { LibrarySnapshot, OrganisationChange, RecentVisit } from '@novakai/canvas-library';
+import { diagnostic, type Result } from '../../contract/errors.js';
 /** The session owns browse filters and local visits; every catalog mutation goes to Authoring with a captured revision. */
 export function createLibraryController(bindings: LibraryBindings): LibraryController {
   let state: LibraryView = {
@@ -69,15 +69,22 @@ export function createLibraryController(bindings: LibraryBindings): LibraryContr
     publish({ folderDraft });
     if (!result.ok) publish({ problem: result.error });
   }
-  /** Identity and catalog revision are allocated on the first edit only. */
+  /** Identity and catalog revision are allocated on the first edit only; no ID, no draft. */
   function editFolderTitle(title: string): void {
     if (state.source === null) return;
-    const original = state.folderDraft ?? {
-      id: bindings.nextFolderId(),
-      title: '',
-      revision: state.source.organisation.revision,
+    const original = folderDraft(state.source);
+    if (!original.ok) return publish({ problem: original.error });
+    saveFolder({ ...original.value, title });
+  }
+  /** The open folder draft, or a new one. Fails with `id-unavailable` when no folder ID is made. */
+  function folderDraft(source: LibrarySnapshot): Result<FolderDraft> {
+    if (state.folderDraft !== null) return { ok: true, value: state.folderDraft };
+    const id = bindings.nextFolderId();
+    if (!id.ok) return id;
+    return {
+      ok: true,
+      value: { id: id.value, title: '', revision: source.organisation.revision },
     };
-    saveFolder({ ...original, title });
   }
   /** Confirmed creation clears only the exact submitted form; failed or newer typing remains retained. */
   async function createFolder(): Promise<void> {
@@ -123,7 +130,7 @@ export function createLibraryController(bindings: LibraryBindings): LibraryContr
     recent = checked.value;
   }
   /** Library owns matching, ranking and cursor consistency. */
-  function search(cursor: string | null): void {
+  function search(cursor: LibraryCursor | null): void {
     if (state.source === null) return;
     const result = bindings.reader.query(state.source, state.filters, cursor);
     if (!result.ok) {
@@ -138,7 +145,7 @@ export function createLibraryController(bindings: LibraryBindings): LibraryContr
     search(null);
   }
   /** A visit becomes a preference only for an existing collection; no fabricated ID enters the stored list. */
-  function visit(id: string): void {
+  function visit(id: CollectionId): void {
     const collection = state.source?.collections.find((item) => item.id === id);
     if (collection === undefined) return;
     storeVisit({ collection: collection.id, openedAt: bindings.now() });

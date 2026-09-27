@@ -6,6 +6,7 @@
  */
 import type { OrganisationChange } from '@novakai/canvas-library';
 import type { Result } from '../errors.js';
+import type { CollectionId } from '../brands.js';
 import type { EditingBase } from '../records/editor-recovery.js';
 import type { Collection, Snapshot, Request, Change } from '../records/owners.js';
 
@@ -17,7 +18,7 @@ export interface RequestBuilders {
    */
   model(
     snapshot: EditingBase,
-    collection: string,
+    collection: CollectionId,
     changes: readonly Change[],
     request: string,
   ): Result<Request>;
@@ -27,7 +28,7 @@ export interface RequestBuilders {
    */
   dsl(
     snapshot: EditingBase,
-    id: string,
+    id: CollectionId,
     source: string,
     mode: 'create' | 'replace',
     request: string,
@@ -51,7 +52,7 @@ export interface RequestBuilders {
   source(collection: Collection): Result<string>;
   /** The starter DSL for a new diagram `id` titled `title`. Cannot fail. */
   newSource(
-    id: string,
+    id: CollectionId,
     title: string,
   ): string;
 }

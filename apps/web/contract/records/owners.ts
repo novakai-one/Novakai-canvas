@@ -19,6 +19,7 @@ export type {
   Request,
   Receipt,
   StoredRecord,
+  RecordKey,
   ReadVersion,
 } from '@novakai/canvas-authoring';
 export type {

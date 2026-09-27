@@ -5,7 +5,6 @@
  * storage, navigation, clock, random text), so nothing here reads a browser global. The session
  * it returns owns recovery.
  */
-import { folderIdSchema } from '@novakai/canvas-library';
 import { createCanvas } from '@novakai/canvas-canvas';
 import { createLanguage } from '@novakai/canvas-language';
 import { validate, plan, stage } from '@novakai/canvas-model';
@@ -25,6 +24,7 @@ import { createSubmissionReaders } from '../../adapters/readers/submission-reade
 import { createWorkspaceController } from '../../adapters/sessions/workspace-session.js';
 import { viewport } from '../../adapters/edge/browser-host.js';
 import { previewModuleRoutes } from '../../adapters/readers/route-preview.js';
+import { createIdSource } from '../../adapters/edge/ids.js';
 import { planCanvasEdit, chooseMoveOption } from '../api.js';
 import type { ServiceClient } from '../ports/client.js';
 import type { DraftRetention } from '../ports/draft-retention.js';
@@ -32,6 +32,7 @@ import type { WorkspaceNavigation } from '../ports/navigation.js';
 import type { WorkspaceBindings } from '../ports/workspace.js';
 import type { PanelController } from '../panel-types.js';
 import type { WorkspaceController } from '../records/workspace.js';
+import type { VisitTime } from '../brands.js';
 import { createMovementReviewBinding } from './movement-review.js';
 import { createInspectorSession, createWireSession } from './sessions.js';
 
@@ -42,10 +43,10 @@ export interface WorkspaceParts {
   readonly panels: SidePanels;
   readonly retention: DraftRetention;
   readonly navigation: WorkspaceNavigation;
-  /** Fresh random text (a UUID) for request and folder IDs. */
+  /** Fresh random text (a UUID) for request, collection and folder IDs. */
   readonly random: () => string;
   /** The current time in epoch milliseconds, for Library visits. */
-  readonly now: () => number;
+  readonly now: () => VisitTime;
 }
 
 /** The panel methods the workspace uses. */
@@ -53,12 +54,12 @@ type SidePanels = Pick<PanelController, 'restore' | 'open' | 'selectTab'>;
 
 /**
  * The workspace controller. Native adapters receive narrow roles; every human mutation uses
- * captured Authoring preconditions. Cannot fail. `nextFolderId` parses `folder-<random>` with
- * Library's schema and would throw only if that grammar stopped accepting it (plan B3a wires
- * `IdSource.folderId`, which checks with `safeParse`).
+ * captured Authoring preconditions. Cannot fail: collection and folder IDs come from the ID
+ * source, which answers `id-unavailable` instead of throwing.
  */
 export function composeWorkspace(parts: WorkspaceParts): WorkspaceController {
   const { element, client, retention, random } = parts;
+  const ids = createIdSource(random);
   const canvas = createCanvas({ sceneAdmission: createSceneAdmission() });
   const language = createLanguage({ reader: { validate }, planner: { plan }, stage: { stage } });
   const inputs = { ...createWorkspaceDecoders(readDiagram), ...createRequestBuilders(language) };
@@ -72,7 +73,7 @@ export function composeWorkspace(parts: WorkspaceParts): WorkspaceController {
         retention,
         reader: createLibraryReader(),
         now: parts.now,
-        nextFolderId: () => folderIdSchema().parse(`folder-${random()}`),
+        nextFolderId: ids.folderId,
         ...callbacks,
       }),
     wires: (callbacks) => createWireSession({ retention, read: readWireDrafts, ...callbacks }),
@@ -99,6 +100,7 @@ export function composeWorkspace(parts: WorkspaceParts): WorkspaceController {
         readers: createSubmissionReaders(inputs),
         ...callbacks,
       }),
+    ids,
     nextId: random,
   });
 }

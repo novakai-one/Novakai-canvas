@@ -4,7 +4,7 @@
  * definitions session reports it and the stored data is kept.
  */
 import { z } from 'zod';
-import { definitionSchema, validate, type Collection } from '@novakai/canvas-model';
+import { collectionId, definitionSchema, validate, type Collection } from '@novakai/canvas-model';
 import { requestSchema } from '@novakai/canvas-authoring';
 import { transportGeneration } from '@novakai/canvas-service';
 import { capturedCollectionBaseSchema } from '../../contract/schemas/editor-recovery.js';
@@ -20,7 +20,7 @@ const draftSchema = z.strictObject({
   key: z.string(),
   base: capturedCollectionBaseSchema,
   generation: transportGeneration,
-  collection: z.string(),
+  collection: collectionId,
   definition: z.unknown(),
   operation: z.enum(['create', 'replace', 'remove']),
   request: requestSchema.optional(),
