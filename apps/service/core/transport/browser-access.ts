@@ -12,6 +12,7 @@ import type {
 import type { HttpMetadata } from '../../contract/records/transport/http.js';
 import type { BrowserGrant } from '../../contract/records/transport/server.js';
 import { success, type Result } from '../../contract/errors.js';
+import { headerMatches } from './request-head.js';
 
 /** The ingress checks and the session secret browser access relies on. */
 export interface BrowserAccessOwners {
@@ -37,7 +38,7 @@ function browserAccess(
   metadata: HttpMetadata,
   owners: BrowserAccessOwners,
 ): Result<BrowserGrant> {
-  if (metadata.mode !== 'navigate') return existingSession(metadata, owners);
+  if (!headerMatches(metadata.mode, 'navigate')) return existingSession(metadata, owners);
   return issuedSession(metadata, owners);
 }
 

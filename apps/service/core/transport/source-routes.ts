@@ -4,17 +4,18 @@
  * owners. A refused scope or print is the caller's to correct. A throw, Language's included,
  * reaches the HTTP server's `receive` (routes.ts).
  */
-import type { ApiCall } from '../../contract/records/transport/protocol.js';
+import type { ApiCall, RouteKey } from '../../contract/records/transport/protocol.js';
 import type { WireOutcome } from '../../contract/records/transport/wire-codes.js';
-import type { ApiRouter } from '../../contract/ports/transport.js';
 import type { Scope, Snapshot, StoredRecord } from '../../contract/records/capabilities.js';
 import type { WorkspaceSession } from '../../contract/types.js';
 import { failure, success, type Result } from '../../contract/errors.js';
 import { liveRecord } from '../workspace/records.js';
 import { sourceScope } from './source-scope.js';
+import { readLastValue } from './request-kind.js';
+import { answerJson, type RouteHandler } from './route-answer.js';
 
 /** A Language route, as `METHOD path`. */
-export type SourceRouteKey = 'GET /api/v1/language' | 'GET /api/v1/source';
+export type SourceRouteKey = Extract<RouteKey, 'GET /api/v1/language' | 'GET /api/v1/source'>;
 
 /** Language's vocabulary and DSL printing, as the source routes read them. */
 export interface SourceReadout {
@@ -31,13 +32,16 @@ export interface SourceRouteOwners {
   readonly source: SourceReadout;
 }
 
-/** The frozen Language route table. `language` cannot fail; `source` fails as `source` below. */
+/**
+ * The frozen Language route table; both answer JSON. `language` cannot fail; `source` fails as
+ * `source` below.
+ */
 export function sourceRoutes(
   owners: SourceRouteOwners,
-): Readonly<Record<SourceRouteKey, ApiRouter['invoke']>> {
+): Readonly<Record<SourceRouteKey, RouteHandler>> {
   return Object.freeze({
-    'GET /api/v1/language': async () => success(owners.source.describe()),
-    'GET /api/v1/source': (call) => source(call, owners),
+    'GET /api/v1/language': answerJson(async () => success(owners.source.describe())),
+    'GET /api/v1/source': answerJson((call) => source(call, owners)),
   });
 }
 
@@ -68,7 +72,7 @@ async function readSourceRecord(
 ): Promise<WireOutcome> {
   const snapshot = await owners.session.read();
   if (!snapshot.ok) return snapshot;
-  const record = sourceRecord(snapshot.value, call.query.id);
+  const record = sourceRecord(snapshot.value, readLastValue(call.query, 'id'));
   if (!record) return failure('not-found', 'collection', 'Collection was not found');
   return owners.source.print(record.value, scope);
 }

@@ -6,7 +6,7 @@
  */
 import type { Result } from '../errors.js';
 import type { AssetResult, StoredBlob } from '../records/capabilities.js';
-import type { RouteOutcome } from '../records/transport/protocol.js';
+import type { StaticFile } from '../records/transport/server.js';
 
 /**
  * The PNG rasterizer: Export encodes PNG only after it is initialized. The first `prepare` starts
@@ -24,7 +24,7 @@ export interface Rasterizer {
 /** A guarded read of one leased blob; a throwing lease is reported as a failed read. */
 export type LeaseRead = (digest: unknown, path: string) => AssetResult<StoredBlob>;
 
-/** The export route: unknown input in, a file or a typed failure out. */
+/** The export route: unknown input in, a file or a typed failure out; the HTTP route sends it. */
 export interface ExportHandler {
   /**
    * Answers one export file. Fails with `invalid-input` for a refused request or an Export
@@ -34,5 +34,5 @@ export interface ExportHandler {
   invoke(
     input: unknown,
     signal: AbortSignal,
-  ): Promise<RouteOutcome>;
+  ): Promise<Result<StaticFile>>;
 }

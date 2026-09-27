@@ -16,6 +16,7 @@ import type { PreparationInput } from '../../../contract/records/presets/prepara
 import { presetAdmission } from '../../../contract/records/planning/commands.js';
 import { requestSchema } from '../../../contract/schemas.js';
 import { EMPTY_RESOURCES } from '../../../contract/ports/capabilities.js';
+import { CLI_CALLER } from '../../../contract/records/transport/http.js';
 import { liveRecords } from '../../workspace/records.js';
 import { accepted } from './refusal.js';
 
@@ -40,7 +41,8 @@ export function storedCatalog(
 
 /**
  * Builds only a semantic selection envelope, never a persistence transaction or canonical binding.
- * Throws zod's error when the admission header or the envelope does not parse.
+ * The actor is the CLI caller, the one caller that may address the preset planner. Throws zod's
+ * error when the admission header or the envelope does not parse.
  */
 export function selectionRequest(
   value: PreparationInput,
@@ -51,7 +53,7 @@ export function selectionRequest(
     workspace: snapshot.workspace,
     request: 'resource-preparation',
     version: 1,
-    actor: { id: 'agent:cli', kind: 'agent' },
+    actor: CLI_CALLER,
     scope: [],
     expected: [],
     assets: value.assets,

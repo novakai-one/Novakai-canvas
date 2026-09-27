@@ -5,6 +5,7 @@
  */
 import type { AdmittedMutation } from '../../contract/records/transport/protocol.js';
 import type { CommandAdmission } from '../../contract/ports/transport.js';
+import type { PrepareMode } from '../../contract/records/workspace/session.js';
 import { mutationEnvelope } from '../../contract/records/transport/protocol.js';
 import { failure, success, type Result } from '../../contract/errors.js';
 import { jsonBody } from './json-body.js';
@@ -42,7 +43,7 @@ function admitEnvelope(
 /**
  * Fails with `conflict` at `generation` when the envelope names another transport generation;
  * otherwise as the ingress admission: `invalid-input` at `request`, `unauthorized` at `actor` or
- * `intent.planner`.
+ * `intent.planner`. The envelope's `preview` flag becomes the prepare mode.
  */
 function admitCurrent(
   input: MutationEnvelope,
@@ -56,5 +57,15 @@ function admitCurrent(
     );
   const request = context.ingress.mutation(input.request, context.caller);
   if (!request.ok) return request;
-  return success({ request: request.value, preview: input.preview, options: input.options });
+  return success({
+    request: request.value,
+    mode: prepareMode(input.preview),
+    options: input.options,
+  });
+}
+
+/** `with-preview` when the envelope asks for preview images, `without-preview` otherwise. */
+function prepareMode(preview: boolean): PrepareMode {
+  if (preview) return 'with-preview';
+  return 'without-preview';
 }

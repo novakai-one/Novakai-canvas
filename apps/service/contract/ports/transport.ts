@@ -20,6 +20,7 @@ import type {
 import type {
   AdmittedMutation,
   ApiCall,
+  ApiQuery,
   RouteOutcome,
   TransportResponse,
 } from '../records/transport/protocol.js';
@@ -71,7 +72,10 @@ export interface HttpAdmission {
 
 /** Answers one authenticated API call. */
 export interface ApiRouter {
-  /** Runs the handler of `METHOD path`. Fails with `not-found` at `route` when none matches. */
+  /**
+   * Runs the handler of `METHOD path`; its answer is JSON or a file. Fails with `not-found` at
+   * `route` when no route key matches.
+   */
   invoke(call: ApiCall): Promise<RouteOutcome>;
 }
 
@@ -112,8 +116,8 @@ export interface TransportPolicy {
     method: string,
     path: string,
   ): RequestKind;
-  /** The query values a route reads. */
-  query(params: URLSearchParams): ApiCall['query'];
+  /** Every value given for each query key, in order. */
+  query(params: URLSearchParams): ApiQuery;
   /** The HTTP status of an outcome. */
   status(outcome: WireOutcome): HttpStatus;
   /** The versioned JSON body of an outcome. */

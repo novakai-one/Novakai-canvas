@@ -1,12 +1,18 @@
 /*
- * The request head the ingress policy reads: the method and eight headers, still untrusted. Pure.
- * An absent header reads as empty text; a repeated one reads as `<duplicate>`, which no admission
- * check accepts, so an ambiguous request is refused and the caller corrects and resends it.
+ * The request head the ingress policy reads (the method and eight headers, still untrusted) and
+ * how a check reads one header. Pure. An absent header reads as empty text; a repeated one reads
+ * as no text at all, so no check accepts it and the caller corrects and resends the request.
  */
-import type { HeaderLists, HttpMetadata } from '../../contract/records/transport/http.js';
+import type {
+  HeaderLists,
+  HeaderValue,
+  HttpMetadata,
+} from '../../contract/records/transport/http.js';
 
-/** What a repeated header reads as. It never equals an admitted value. */
-const REPEATED = '<duplicate>';
+/** A header the request did not send. */
+const ABSENT: HeaderValue = Object.freeze({ kind: 'absent' });
+/** A header the request sent more than once. */
+const REPEATED: HeaderValue = Object.freeze({ kind: 'repeated' });
 
 /**
  * The method (empty when missing) and each header admission checks, from Node's lowercase header
@@ -16,7 +22,7 @@ export function requestHead(
   method: string | undefined,
   headers: HeaderLists,
 ): HttpMetadata {
-  const read = (name: string): string => headerValue(headers[name]);
+  const read = (name: string): HeaderValue => headerValue(headers[name]);
   return {
     method: method ?? '',
     host: read('host'),
@@ -30,9 +36,41 @@ export function requestHead(
   };
 }
 
-/** The only value; empty when there is none, `REPEATED` when there are several. */
-function headerValue(values: readonly string[] | undefined): string {
-  const [only = '', ...others] = values ?? [];
+/**
+ * The header's text: empty when absent, its value when sent once, `undefined` when repeated.
+ * Cannot fail.
+ */
+export function readHeader(header: HeaderValue): string | undefined {
+  switch (header.kind) {
+    case 'absent':
+      return '';
+    case 'single':
+      return header.value;
+    case 'repeated':
+      return undefined;
+    default:
+      return unsupported(header);
+  }
+}
+
+/** Whether the header reads as `text`. Absent reads as empty text; repeated never matches. */
+export function headerMatches(
+  header: HeaderValue,
+  text: string,
+): boolean {
+  return readHeader(header) === text;
+}
+
+/** `absent` when there is no value, `single` for one, `repeated` for several. */
+function headerValue(values: readonly string[] | undefined): HeaderValue {
+  const [only, ...others] = values ?? [];
+  if (only === undefined) return ABSENT;
   if (others.length > 0) return REPEATED;
-  return only;
+  return { kind: 'single', value: only };
+}
+
+/** Unreachable: `HeaderValue` has three kinds. Reads as no text, which no check accepts. */
+function unsupported(header: never): undefined {
+  void header;
+  return undefined;
 }

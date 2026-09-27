@@ -7,8 +7,8 @@
  * retry. A lease still held when the process dies stops protecting its bytes: Assets' collection
  * ignores leases whose owner process is gone.
  */
-import { failure } from '../../contract/errors.js';
-import type { RouteOutcome } from '../../contract/records/transport/protocol.js';
+import { failure, success, type Result } from '../../contract/errors.js';
+import type { StaticFile } from '../../contract/records/transport/server.js';
 import type {
   Collection,
   ExportResult,
@@ -39,7 +39,7 @@ export async function exportDsl(
   request: ExportRequest,
   owners: TextOwners,
   signal: AbortSignal,
-): Promise<RouteOutcome> {
+): Promise<Result<StaticFile>> {
   if (request.scope.kind !== 'all')
     return failure('invalid-input', 'scope', 'Canonical DSL export requires the whole collection');
   return exportText(request.identity, owners, signal, {
@@ -58,7 +58,7 @@ export async function exportMarkdown(
   request: ExportRequest,
   owners: TextOwners,
   signal: AbortSignal,
-): Promise<RouteOutcome> {
+): Promise<Result<StaticFile>> {
   return exportText(request.identity, owners, signal, {
     produce: (collection) => markdownText(signal, collection, request.scope, owners.export),
     file: (source) => markdownFile(request, source),
@@ -68,7 +68,7 @@ export async function exportMarkdown(
 /** One text format: how the leased collection becomes text, and how that text becomes a file. */
 interface TextFormat {
   readonly produce: (collection: Collection) => ExportResult<string>;
-  readonly file: (text: string) => RouteOutcome;
+  readonly file: (text: string) => StaticFile;
 }
 
 /**
@@ -80,12 +80,12 @@ async function exportText(
   owners: LeaseOwners,
   signal: AbortSignal,
   format: TextFormat,
-): Promise<RouteOutcome> {
+): Promise<Result<StaticFile>> {
   const acquired = await acquireSnapshot(identity, owners, signal);
   if (!acquired.ok) return exportRouteFailure(acquired);
   const settled = await settleText(format, acquired.value);
   if (!settled.ok) return exportRouteFailure(settled);
-  return format.file(settled.value);
+  return success(format.file(settled.value));
 }
 
 /**

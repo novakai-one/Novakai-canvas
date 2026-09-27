@@ -168,13 +168,17 @@ async function invokeApi(
     metadata: exchange.metadata,
     body: body.value,
   });
-  if (isFile(outcome)) return writeBytes(response, outcome.file);
-  writeJson(response, outcome, bindings);
+  writeAnswer(response, outcome, bindings);
 }
 
-/** Whether the route answered with a file to send as bytes. */
-function isFile(outcome: RouteOutcome): outcome is Extract<RouteOutcome, { kind: 'bytes' }> {
-  return 'kind' in outcome && outcome.kind === 'bytes';
+/** Writes a route's answer: a file as bytes, an outcome as JSON. */
+function writeAnswer(
+  response: ServerResponse,
+  answer: RouteOutcome,
+  bindings: ServerBindings,
+): void {
+  if (answer.kind === 'bytes') return writeBytes(response, answer.file);
+  writeJson(response, answer.outcome, bindings);
 }
 
 /** Serves the web app once the policy grants browser access; sets the cookie a navigation gets. */

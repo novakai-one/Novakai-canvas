@@ -9,9 +9,10 @@ import type { BuiltinResources } from '../../contract/records/presets/builtins.j
 import type { ResourceCommands, WorkspaceReader } from '../../contract/ports/workspace.js';
 import type { CollectionRenderer } from '../../contract/ports/rendering.js';
 import type { ChangeChannel } from '../../contract/ports/notifications.js';
-import type { RouteOutcome } from '../../contract/records/transport/protocol.js';
+import type { ExportHandler } from '../../contract/ports/export.js';
+import type { PrepareMode } from '../../contract/records/workspace/session.js';
 import type { WorkspaceId } from '../../contract/brands.js';
-import { failure } from '../../contract/errors.js';
+import { failure, type Result } from '../../contract/errors.js';
 import { renderCollection } from '../rendering/collection.js';
 import { inspectCollection } from '../rendering/inspection.js';
 import type { SessionLifetime } from './lifetime.js';
@@ -24,7 +25,7 @@ export interface SessionOwners {
   readonly resources: ResourceCommands;
   readonly views: WorkspaceReader;
   readonly renderer: CollectionRenderer;
-  readonly exporter: (input: unknown, signal: AbortSignal) => Promise<RouteOutcome>;
+  readonly exporter: ExportHandler['invoke'];
   readonly changes: Pick<ChangeChannel, 'subscribe'>;
   readonly lifetime: SessionLifetime;
   readonly readSignal: AbortSignal;
@@ -57,9 +58,12 @@ export function createWorkspaceSession(owners: SessionOwners): WorkspaceSession 
         () => owners.authoring(owners.readSignal).read(owners.workspace),
         owners.unavailable,
       ),
-    prepare: (request, signal, preview = false) =>
-      lifetime.run(() => owners.authoring(signal).prepare(request, preview), owners.unavailable),
-    apply: (request, signal, options = {}) =>
+    prepare: (request, signal, mode) =>
+      lifetime.run(
+        () => owners.authoring(signal).prepare(request, PREVIEW[mode]),
+        owners.unavailable,
+      ),
+    apply: (request, signal, options) =>
       lifetime.run(
         () => commitThenRead(owners.authoring(signal), owners.workspace, request, options),
         owners.unavailable,
@@ -89,8 +93,14 @@ export function createWorkspaceSession(owners: SessionOwners): WorkspaceSession 
   };
 }
 
+/** Authoring's `preview` flag for each prepare mode. */
+const PREVIEW: Readonly<Record<PrepareMode, boolean>> = Object.freeze({
+  'with-preview': true,
+  'without-preview': false,
+});
+
 /** The export answer while the session is closing or closed: `unavailable`, reconnect and retry. */
-function unavailableExport(): RouteOutcome {
+function unavailableExport(): Result<never> {
   return {
     ok: false,
     error: {

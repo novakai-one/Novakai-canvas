@@ -4,8 +4,7 @@
  * never hides the primary outcome; and the route turns the final diagnostic into the service
  * outcome, keeping the diagnostic as structured source evidence.
  */
-import { failure, type ErrorCode } from '../../contract/errors.js';
-import type { RouteOutcome } from '../../contract/records/transport/protocol.js';
+import { failure, type ErrorCode, type Result } from '../../contract/errors.js';
 import type { OperationSource } from '../../contract/records/transport/failure-source.js';
 import type {
   AssetResult,
@@ -74,7 +73,7 @@ export function settledFailure<T>(
  * The service failure of an export: its code mapped by `ROUTE_CODE` (`cancelled` or
  * `invalid-input`), with Export's diagnostic kept as source.
  */
-export function exportRouteFailure(result: ExportFailure): RouteOutcome {
+export function exportRouteFailure(result: ExportFailure): Result<never> {
   const { code, path, message } = result.error;
   return failure(ROUTE_CODE[code], path, message, exportSource(result.error));
 }

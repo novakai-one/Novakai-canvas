@@ -4,7 +4,9 @@
  * invalid UTF-8, so no route counts bytes again. A refused body is the caller's to correct and
  * resend.
  */
+import type { HeaderValue } from '../../contract/records/transport/http.js';
 import { failure, success, type Result } from '../../contract/errors.js';
+import { readHeader } from './request-head.js';
 
 /**
  * Which route family reads the body: `mutation` for the Authoring routes, `resource` for the
@@ -30,18 +32,25 @@ const messages: Readonly<Record<JsonBodyPurpose, BodyMessages>> = Object.freeze(
 });
 
 /**
- * The body parsed as JSON. Fails with `invalid-input` at `content-type` unless the media type is
- * `application/json` (parameters such as `charset` are ignored), and at `body` when the text is
- * not JSON.
+ * The body parsed as JSON. Fails with `invalid-input` at `content-type` unless one Content-Type
+ * header names `application/json` (parameters such as `charset` are ignored), and at `body` when
+ * the text is not JSON.
  */
 export function jsonBody(
   body: string,
-  contentType: string,
+  contentType: HeaderValue,
   purpose: JsonBodyPurpose,
 ): Result<unknown> {
-  if (mediaType(contentType) !== 'application/json')
+  if (!isJson(contentType))
     return failure('invalid-input', 'content-type', messages[purpose].contentType);
   return parsedJson(body, messages[purpose].syntax);
+}
+
+/** Whether the header, sent once, has the media type `application/json`. */
+function isJson(contentType: HeaderValue): boolean {
+  const text = readHeader(contentType);
+  if (text === undefined) return false;
+  return mediaType(text) === 'application/json';
 }
 
 /** The media type without its parameters: `application/json; charset=utf-8` → `application/json`. */

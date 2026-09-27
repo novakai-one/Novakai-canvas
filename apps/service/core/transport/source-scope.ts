@@ -3,80 +3,66 @@
  * or one object. Pure. IDs follow Model's ID grammar. A refused scope is the caller's to correct.
  */
 import type { Scope } from '../../contract/records/capabilities.js';
+import type { ApiQuery } from '../../contract/records/transport/protocol.js';
 import { objectId, sectionId } from '../../contract/schemas.js';
 import { failure, success, type Result } from '../../contract/errors.js';
+import { readAllValues } from './request-kind.js';
 
 /**
  * The print scope from the query. Fails with `invalid-input` at `scope` when both `section` and
  * `object` are given, when either is repeated, or when the ID is not canonical.
  */
-export function sourceScope(query: Readonly<Record<string, string>>): Result<Scope> {
-  const section = query.section;
-  const object = query.object;
-  if (bothScopes(section, object))
+export function sourceScope(query: ApiQuery): Result<Scope> {
+  const sections = readAllValues(query, 'section');
+  const objects = readAllValues(query, 'object');
+  if (sections.length > 0 && objects.length > 0)
     return failure('invalid-input', 'scope', 'Use either section or object, not both');
-  const selected = section ?? object;
-  return validSourceScope(section, selected);
-}
-
-/** Whether both scope keys were given. */
-function bothScopes(
-  section: string | undefined,
-  object: string | undefined,
-): boolean {
-  return section !== undefined && object !== undefined;
+  return parseSingleScope(sections, objects);
 }
 
 /**
  * Fails with `invalid-input` at `scope` when a scope key was repeated; otherwise as
- * `sourceScopeValue`.
+ * `parseScope`.
  */
-function validSourceScope(
-  section: string | undefined,
-  selected: string | undefined,
+function parseSingleScope(
+  sections: readonly string[],
+  objects: readonly string[],
 ): Result<Scope> {
-  if (hasDuplicateScopeValue(section) || hasDuplicateScopeValue(selected))
+  if (sections.length > 1 || objects.length > 1)
     return failure('invalid-input', 'scope', 'Each read scope query may be provided only once');
-  return sourceScopeValue(section, selected);
+  return parseScope(sections[0], objects[0]);
 }
 
-/** The HTTP server joins repeated `section`/`object` values with U+0000. */
-function hasDuplicateScopeValue(value: string | undefined): boolean {
-  return value?.includes('\u0000') ?? false;
-}
-
-/** The whole collection when no ID is given; otherwise as `sourceScopeChoice`. */
-function sourceScopeValue(
+/** A section scope when `section` was given; otherwise as `parseObjectOrAll`. */
+function parseScope(
   section: string | undefined,
-  id: string | undefined,
+  object: string | undefined,
 ): Result<Scope> {
-  if (id === undefined) return success({ kind: 'all' });
-  return sourceScopeChoice(section, id);
+  if (section !== undefined) return parseSectionScope(section);
+  return parseObjectOrAll(object);
 }
 
-/** A section scope when `section` was given; an object scope otherwise. */
-function sourceScopeChoice(
-  section: string | undefined,
-  id: string,
-): Result<Scope> {
-  return section === undefined ? objectScope(id) : sectionScope(id);
+/** The whole collection when no object ID is given; otherwise an object scope. */
+function parseObjectOrAll(object: string | undefined): Result<Scope> {
+  if (object === undefined) return success({ kind: 'all' });
+  return parseObjectScope(object);
 }
 
 /** Fails with `invalid-input` at `scope` when the ID breaks Model's object ID grammar. */
-function objectScope(id: string): Result<Scope> {
+function parseObjectScope(id: string): Result<Scope> {
   const parsed = objectId.safeParse(id);
-  if (!parsed.success) return nonCanonical();
+  if (!parsed.success) return nonCanonicalScope();
   return success({ kind: 'object', id: parsed.data });
 }
 
 /** Fails with `invalid-input` at `scope` when the ID breaks Model's section ID grammar. */
-function sectionScope(id: string): Result<Scope> {
+function parseSectionScope(id: string): Result<Scope> {
   const parsed = sectionId.safeParse(id);
-  if (!parsed.success) return nonCanonical();
+  if (!parsed.success) return nonCanonicalScope();
   return success({ kind: 'section', id: parsed.data });
 }
 
 /** `invalid-input` at `scope`: the ID is empty or not canonical. */
-function nonCanonical(): Result<Scope> {
+function nonCanonicalScope(): Result<Scope> {
   return failure('invalid-input', 'scope', 'Scope IDs must be non-empty canonical IDs');
 }

@@ -4,14 +4,19 @@
  * writes storage. A stale generation is the caller's to reconcile; Authoring owns commit and
  * receipt recovery. A throw reaches the HTTP server's `receive` (routes.ts).
  */
-import type { AdmittedMutation, ApiCall } from '../../contract/records/transport/protocol.js';
+import type {
+  AdmittedMutation,
+  ApiCall,
+  RouteKey,
+} from '../../contract/records/transport/protocol.js';
 import type { WireOutcome } from '../../contract/records/transport/wire-codes.js';
-import type { ApiRouter, CommandDecoder, HttpAdmission } from '../../contract/ports/transport.js';
+import type { CommandDecoder, HttpAdmission } from '../../contract/ports/transport.js';
 import type { WorkspaceSession } from '../../contract/types.js';
 import type { Generation } from '../../contract/brands.js';
+import { answerJson, type RouteHandler } from './route-answer.js';
 
-/** A mutation route, as `METHOD path`. */
-export type MutationRouteKey = 'POST /api/v1/authoring/preview' | 'POST /api/v1/authoring/apply';
+/** A mutation route, as `METHOD path`: every route under `/api/v1/authoring/`. */
+export type MutationRouteKey = Extract<RouteKey, `POST /api/v1/authoring/${string}`>;
 
 /** The owners the mutation routes forward to. `generation` is the current transport generation. */
 export interface MutationRouteOwners {
@@ -21,38 +26,31 @@ export interface MutationRouteOwners {
   readonly decoder: CommandDecoder;
 }
 
-/** The Authoring step run on an admitted mutation. */
-type MutationStep = (mutation: AdmittedMutation, signal: AbortSignal) => Promise<WireOutcome>;
+/** The Authoring step a mutation route runs: `prepare` previews or plans, `apply` commits. */
+type MutationRoute = 'prepare' | 'apply';
 
 /**
- * The frozen mutation route table. Both routes fail as `admitted`; Authoring outcomes pass
- * through.
+ * The frozen mutation route table; both answer JSON. Both routes fail as `admitted`; Authoring
+ * outcomes pass through.
  */
 export function mutationRoutes(
   owners: MutationRouteOwners,
-): Readonly<Record<MutationRouteKey, ApiRouter['invoke']>> {
-  const { session } = owners;
+): Readonly<Record<MutationRouteKey, RouteHandler>> {
   return Object.freeze({
-    'POST /api/v1/authoring/preview': (call) =>
-      admitted(call, owners, (mutation, signal) =>
-        session.prepare(mutation.request, signal, mutation.preview),
-      ),
-    'POST /api/v1/authoring/apply': (call) =>
-      admitted(call, owners, (mutation, signal) =>
-        session.apply(mutation.request, signal, mutation.options),
-      ),
+    'POST /api/v1/authoring/preview': answerJson((call) => admitted(call, owners, 'prepare')),
+    'POST /api/v1/authoring/apply': answerJson((call) => admitted(call, owners, 'apply')),
   });
 }
 
 /**
- * Decodes the mutation envelope, then runs `step` on it. Fails as the decoder: `invalid-input` at
- * `content-type`, `body` or `request`, `conflict` at `generation`, `unauthorized` at `actor` or
- * `intent.planner`.
+ * Decodes the mutation envelope, then runs the route's step on it. Fails as the decoder:
+ * `invalid-input` at `content-type`, `body` or `request`, `conflict` at `generation`,
+ * `unauthorized` at `actor` or `intent.planner`.
  */
 async function admitted(
   call: ApiCall,
   owners: MutationRouteOwners,
-  step: MutationStep,
+  route: MutationRoute,
 ): Promise<WireOutcome> {
   const mutation = owners.decoder.read(call.body, {
     caller: call.caller,
@@ -61,5 +59,21 @@ async function admitted(
     ingress: owners.admission,
   });
   if (!mutation.ok) return mutation;
-  return step(mutation.value, call.signal);
+  return STEPS[route](mutation.value, call.signal, owners.session);
 }
+
+/** Runs one Authoring step on an admitted mutation. */
+type MutationStep = (
+  mutation: AdmittedMutation,
+  signal: AbortSignal,
+  session: MutationRouteOwners['session'],
+) => Promise<WireOutcome>;
+
+/**
+ * The session call of each step. `prepare` passes the envelope's prepare mode; `apply` its
+ * options. Authoring outcomes pass through.
+ */
+const STEPS: Readonly<Record<MutationRoute, MutationStep>> = Object.freeze({
+  prepare: (mutation, signal, session) => session.prepare(mutation.request, signal, mutation.mode),
+  apply: (mutation, signal, session) => session.apply(mutation.request, signal, mutation.options),
+});

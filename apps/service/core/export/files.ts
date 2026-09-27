@@ -3,33 +3,29 @@
  * <collection>-<revision>[-<scope>].<extension> and stamped with the exported revision; an
  * artifact also carries its digest. A failed artifact becomes the route failure.
  */
-import type { RouteOutcome } from '../../contract/records/transport/protocol.js';
+import { success, type Result } from '../../contract/errors.js';
 import type { StaticFile } from '../../contract/records/transport/server.js';
 import type { ExportRequest } from '../../contract/records/export/request.js';
 import type { Artifact, ExportResult } from '../../contract/records/capabilities.js';
 import { exportRouteFailure } from './faults.js';
 
-/** The artifact as a download, or its failure as the route failure. */
-export function artifactOutcome(artifact: ExportResult<Artifact>): RouteOutcome {
-  return artifact.ok
-    ? { kind: 'bytes', file: artifactFile(artifact.value) }
-    : exportRouteFailure(artifact);
+/** The artifact as a download, or its failure as the route failure (`exportRouteFailure`). */
+export function artifactOutcome(artifact: ExportResult<Artifact>): Result<StaticFile> {
+  if (!artifact.ok) return exportRouteFailure(artifact);
+  return success(artifactFile(artifact.value));
 }
 
 /** Markdown as a UTF-8 download named by collection, revision and scope. */
 export function markdownFile(
   request: Pick<ExportRequest, 'identity' | 'scope'>,
   source: string,
-): RouteOutcome {
+): StaticFile {
   const scope = request.scope.kind === 'all' ? 'all' : request.scope.id;
   return {
-    kind: 'bytes',
-    file: {
-      bytes: Buffer.from(source, 'utf8'),
-      mediaType: 'text/markdown; charset=utf-8',
-      filename: `${request.identity.collectionId}-${request.identity.revision}-${scope}.md`,
-      headers: { 'X-Novakai-Export-Revision': String(request.identity.revision) },
-    },
+    bytes: Buffer.from(source, 'utf8'),
+    mediaType: 'text/markdown; charset=utf-8',
+    filename: `${request.identity.collectionId}-${request.identity.revision}-${scope}.md`,
+    headers: { 'X-Novakai-Export-Revision': String(request.identity.revision) },
   };
 }
 
@@ -37,15 +33,12 @@ export function markdownFile(
 export function dslFile(
   identity: ExportRequest['identity'],
   source: string,
-): RouteOutcome {
+): StaticFile {
   return {
-    kind: 'bytes',
-    file: {
-      bytes: Buffer.from(source, 'utf8'),
-      mediaType: 'text/plain; charset=utf-8',
-      filename: `${identity.collectionId}-${identity.revision}.canvas`,
-      headers: { 'X-Novakai-Export-Revision': String(identity.revision) },
-    },
+    bytes: Buffer.from(source, 'utf8'),
+    mediaType: 'text/plain; charset=utf-8',
+    filename: `${identity.collectionId}-${identity.revision}.canvas`,
+    headers: { 'X-Novakai-Export-Revision': String(identity.revision) },
   };
 }
 

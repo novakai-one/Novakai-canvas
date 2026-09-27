@@ -5,18 +5,18 @@
  * constant-time equality (`HttpSecurity`). A refusal performs no owner mutation, so the caller
  * corrects its request and resends it; Authoring owns commit and receipt recovery.
  */
-import type { Caller, HttpMetadata } from '../../contract/records/transport/http.js';
+import type { Caller, HeaderValue, HttpMetadata } from '../../contract/records/transport/http.js';
 import type { HttpAdmission, HttpSecurity } from '../../contract/ports/transport.js';
-import { browserCookieName } from '../../contract/records/transport/http.js';
+import {
+  BROWSER_CALLER,
+  CLI_CALLER,
+  browserCookieName,
+} from '../../contract/records/transport/http.js';
 import type { Request } from '../../contract/records/capabilities.js';
 import type { PlannerId } from '../../contract/brands.js';
 import { plannerId, requestSchema } from '../../contract/schemas.js';
 import { failure, success, type Result } from '../../contract/errors.js';
-
-/** The identity the browser session cookie grants. */
-const BROWSER_CALLER: Caller = Object.freeze({ id: 'human:browser', kind: 'human' });
-/** The identity the local agent credential grants. */
-const CLI_CALLER: Caller = Object.freeze({ id: 'agent:cli', kind: 'agent' });
+import { headerMatches, readHeader } from './request-head.js';
 
 /**
  * The public semantic planners each caller may address. Installation stays internal, and the agent
@@ -71,13 +71,13 @@ function bootstrap(
 
 /**
  * Rejects DNS rebinding before credentials, paths or body content reach an owner. Fails with
- * `unauthorized` at `host` unless the Host header is the configured loopback host.
+ * `unauthorized` at `host` unless the one Host header is the configured loopback host.
  */
 function admitHost(
   metadata: HttpMetadata,
   security: HttpSecurity,
 ): Result<void> {
-  if (metadata.host !== security.address.host)
+  if (!headerMatches(metadata.host, security.address.host))
     return failure('unauthorized', 'host', 'Open the configured loopback address');
   return success(undefined);
 }
@@ -92,18 +92,19 @@ function admitNavigation(
 ): Result<void> {
   const allowed =
     metadata.method === 'GET' &&
-    metadata.mode === 'navigate' &&
-    metadata.destination === 'document' &&
-    NAVIGATION_SITES.includes(metadata.site) &&
+    headerMatches(metadata.mode, 'navigate') &&
+    headerMatches(metadata.destination, 'document') &&
+    NAVIGATION_SITES.some((site) => headerMatches(metadata.site, site)) &&
     trustedOrigin(metadata, security);
   if (!allowed) return failure('unauthorized', 'navigation', 'Navigate directly to this workspace');
   return success(undefined);
 }
 
 /**
- * The authenticated caller: the agent when an Authorization header is present, the browser
- * otherwise. Fails with `unauthorized` at `host` as `admitHost`, at `session` as `browserCaller`
- * and at `credential` as `agentCaller`.
+ * The authenticated caller: the browser when the Authorization header is absent or empty, the
+ * agent otherwise (a repeated header included, which the agent check refuses). Fails with
+ * `unauthorized` at `host` as `admitHost`, at `session` as `browserCaller` and at `credential` as
+ * `agentCaller`.
  */
 function authenticate(
   metadata: HttpMetadata,
@@ -111,7 +112,7 @@ function authenticate(
 ): Result<Caller> {
   const host = admitHost(metadata, security);
   if (!host.ok) return host;
-  if (metadata.authorization.length === 0) return browserCaller(metadata, security);
+  if (headerMatches(metadata.authorization, '')) return browserCaller(metadata, security);
   return agentCaller(metadata, security);
 }
 
@@ -125,27 +126,43 @@ function browserCaller(
   security: HttpSecurity,
 ): Result<Caller> {
   const allowed =
-    metadata.site === 'same-origin' &&
+    headerMatches(metadata.site, 'same-origin') &&
     trustedOrigin(metadata, security) &&
-    security.equal(sessionCookie(metadata.cookie, security.address.host), security.browserSession);
+    security.equal(
+      readSessionCookie(metadata.cookie, security.address.host),
+      security.browserSession,
+    );
   if (!allowed)
     return failure('unauthorized', 'session', 'Reload this workspace from its loopback address');
   return success(BROWSER_CALLER);
 }
 
-/** Whether the Origin header is absent (empty) or exactly this server's origin. */
+/** Whether the Origin header is absent (empty) or exactly this server's origin; never repeated. */
 function trustedOrigin(
   metadata: HttpMetadata,
   security: HttpSecurity,
 ): boolean {
-  return metadata.origin === '' || metadata.origin === security.address.origin;
+  return (
+    headerMatches(metadata.origin, '') || headerMatches(metadata.origin, security.address.origin)
+  );
+}
+
+/** The session cookie's value, as `findSessionCookie`; empty when the Cookie header is repeated. */
+function readSessionCookie(
+  header: HeaderValue,
+  host: string,
+): string {
+  const text = readHeader(header);
+  if (text === undefined) return '';
+  return findSessionCookie(text, host);
 }
 
 /**
- * The session cookie's value from the Cookie header; empty when it is absent or repeated. A
- * repeated cookie is ambiguous, so neither a prefix nor a later injected value is accepted.
+ * The session cookie's value from the Cookie header text; empty when the cookie is absent or
+ * repeated. A repeated cookie is ambiguous, so neither a prefix nor a later injected value is
+ * accepted.
  */
-function sessionCookie(
+function findSessionCookie(
   header: string,
   host: string,
 ): string {
@@ -161,18 +178,28 @@ function sessionCookie(
 /**
  * The agent caller. The local credential is for the filesystem CLI, so a request carrying browser
  * metadata (Origin or `Sec-Fetch-Site`) is refused. Fails with `unauthorized` at `credential`
- * unless the bearer token matches.
+ * unless the one Authorization header is the bearer token.
  */
 function agentCaller(
   metadata: HttpMetadata,
   security: HttpSecurity,
 ): Result<Caller> {
   const allowed =
-    metadata.origin === '' &&
-    metadata.site === '' &&
-    security.equal(metadata.authorization, `Bearer ${security.agentToken}`);
+    headerMatches(metadata.origin, '') &&
+    headerMatches(metadata.site, '') &&
+    isAgentBearer(metadata.authorization, security);
   if (!allowed) return failure('unauthorized', 'credential', 'Use the local agent credential');
   return success(CLI_CALLER);
+}
+
+/** Whether the header, sent once, is the agent bearer token (compared in constant time). */
+function isAgentBearer(
+  header: HeaderValue,
+  security: HttpSecurity,
+): boolean {
+  const text = readHeader(header);
+  if (text === undefined) return false;
+  return security.equal(text, `Bearer ${security.agentToken}`);
 }
 
 /**

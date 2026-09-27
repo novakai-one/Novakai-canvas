@@ -43,6 +43,9 @@ export async function startWorkspace(owners: StartupOwners): Promise<Result<void
   return started(await owners.adopt());
 }
 
+/** The installation apply's options: none, so Authoring checks no candidate hash. */
+const NO_APPLY_OPTIONS = Object.freeze({});
+
 /** `existing` when the snapshot holds a live workspace record, otherwise `new`. Never fails. */
 function workspaceState(snapshot: Snapshot): WorkspaceState {
   if (liveRecords(snapshot, 'workspace').length > 0) return 'existing';
@@ -85,7 +88,7 @@ async function initializeNew(owners: StartupOwners): Promise<Result<void>> {
   if (!request.ok) {
     return failure('invalid-input', request.error.path, request.error.message, request.error);
   }
-  return started(await owners.session.apply(request.value, owners.signal));
+  return started(await owners.session.apply(request.value, owners.signal, NO_APPLY_OPTIONS));
 }
 
 /** An owner's answer as startup's: a refusal is `unavailable`, with the owner's diagnostic kept. */

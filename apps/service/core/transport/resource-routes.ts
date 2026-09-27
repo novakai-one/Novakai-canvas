@@ -5,21 +5,15 @@
  * Authoring owns commit and receipt recovery. A throw reaches the HTTP server's `receive`
  * (routes.ts).
  */
-import type { ApiCall } from '../../contract/records/transport/protocol.js';
+import type { ApiCall, RouteKey } from '../../contract/records/transport/protocol.js';
 import type { WireOutcome } from '../../contract/records/transport/wire-codes.js';
-import type { ApiRouter } from '../../contract/ports/transport.js';
 import type { ResourceCommands } from '../../contract/ports/workspace.js';
 import type { WorkspaceSession } from '../../contract/types.js';
 import { jsonBody } from './json-body.js';
+import { answerJson, type RouteHandler } from './route-answer.js';
 
-/** A resource route, as `METHOD path`. */
-export type ResourceRouteKey =
-  | 'POST /api/v1/resources/stage'
-  | 'POST /api/v1/resources/restore'
-  | 'POST /api/v1/resources/blob'
-  | 'POST /api/v1/resources/freeze'
-  | 'POST /api/v1/resources/prepare'
-  | 'POST /api/v1/resources/instantiate';
+/** A resource route, as `METHOD path`: every route under `/api/v1/resources/`. */
+export type ResourceRouteKey = Extract<RouteKey, `POST /api/v1/resources/${string}`>;
 
 /** The owners the resource routes forward to. */
 export interface ResourceRouteOwners {
@@ -33,31 +27,33 @@ type ResourceHandler = (input: unknown) => Promise<WireOutcome>;
 type SnapshotCommand = 'freeze' | 'preparePreset' | 'instantiate';
 
 /**
- * The frozen resource route table. Every route fails as `resource`; freeze, prepare and
- * instantiate also as `onSnapshot`. Resource command outcomes pass through.
+ * The frozen resource route table; every route answers JSON. Every route fails as `resource`;
+ * freeze, prepare and instantiate also as `onSnapshot`. Resource command outcomes pass through.
  */
 export function resourceRoutes(
   owners: ResourceRouteOwners,
-): Readonly<Record<ResourceRouteKey, ApiRouter['invoke']>> {
+): Readonly<Record<ResourceRouteKey, RouteHandler>> {
   const { resources } = owners;
-  const freeze = onSnapshot(owners, 'freeze');
-  const prepare = onSnapshot(owners, 'preparePreset');
-  const instantiate = onSnapshot(owners, 'instantiate');
   return Object.freeze({
-    'POST /api/v1/resources/stage': (call) => resource(call, (input) => resources.stage(input)),
-    'POST /api/v1/resources/restore': (call) => resource(call, (input) => resources.restore(input)),
-    'POST /api/v1/resources/blob': (call) => resource(call, async (input) => resources.blob(input)),
-    'POST /api/v1/resources/freeze': (call) => resource(call, freeze),
-    'POST /api/v1/resources/prepare': (call) => resource(call, prepare),
-    'POST /api/v1/resources/instantiate': (call) => resource(call, instantiate),
+    'POST /api/v1/resources/stage': resource((input) => resources.stage(input)),
+    'POST /api/v1/resources/restore': resource((input) => resources.restore(input)),
+    'POST /api/v1/resources/blob': resource(async (input) => resources.blob(input)),
+    'POST /api/v1/resources/freeze': resource(onSnapshot(owners, 'freeze')),
+    'POST /api/v1/resources/prepare': resource(onSnapshot(owners, 'preparePreset')),
+    'POST /api/v1/resources/instantiate': resource(onSnapshot(owners, 'instantiate')),
   });
+}
+
+/** The route that runs `handler` on the body read as JSON (`jsonInput`). */
+function resource(handler: ResourceHandler): RouteHandler {
+  return answerJson((call) => jsonInput(call, handler));
 }
 
 /**
  * Runs `handler` on the body read as JSON. Fails with `invalid-input` at `content-type` or `body`
  * as `jsonBody` (json-body.ts). The server authenticates before reading the body.
  */
-async function resource(
+async function jsonInput(
   call: ApiCall,
   handler: ResourceHandler,
 ): Promise<WireOutcome> {

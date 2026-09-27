@@ -6,7 +6,7 @@
  * format throws (text.ts). Pure over the owners compose injects; the caller owns retry.
  */
 import type { Result } from '../../contract/errors.js';
-import type { RouteOutcome } from '../../contract/records/transport/protocol.js';
+import type { StaticFile } from '../../contract/records/transport/server.js';
 import type { PresentationBindings } from '../../contract/records/capabilities.js';
 import type { ExportRules } from '../../contract/ports/capabilities.js';
 import type { ExportHandler, Rasterizer } from '../../contract/ports/export.js';
@@ -44,7 +44,7 @@ async function invokeExport(
   input: unknown,
   signal: AbortSignal,
   owners: ExportRouteOwners,
-): Promise<RouteOutcome> {
+): Promise<Result<StaticFile>> {
   const request = readExportRequest(input);
   if (!request.ok) return request;
   return dispatchExport(request.value, owners, signal);
@@ -58,7 +58,7 @@ async function dispatchExport(
   request: ExportRequest,
   owners: ExportRouteOwners,
   signal: AbortSignal,
-): Promise<RouteOutcome> {
+): Promise<Result<StaticFile>> {
   switch (request.format) {
     case 'dsl':
       return exportDsl(request, owners, signal);
@@ -77,7 +77,7 @@ async function nativeExport(
   request: ExportRequest,
   owners: ExportRouteOwners,
   signal: AbortSignal,
-): Promise<RouteOutcome> {
+): Promise<Result<StaticFile>> {
   const prepared = await prepareFormat(request.format, owners);
   if (!prepared.ok) return prepared;
   return encodeNative(request, owners, signal);
@@ -103,7 +103,7 @@ async function encodeNative(
   request: ExportRequest,
   owners: ExportRouteOwners,
   signal: AbortSignal,
-): Promise<RouteOutcome> {
+): Promise<Result<StaticFile>> {
   const exporter = owners.export.compose({
     presentation: owners.presentation,
     readerCss: '',
