@@ -1,8 +1,8 @@
 /*
  * A `.theme` file as the theme grammar reads it: the Templates theme admission and its three font
- * declarations. Pure declarations and the frozen font role list. core/themes/grammar.ts builds it;
- * `theme admit` and render:png read it. Design System checks the token names and values later; the
- * grammar only types them.
+ * declarations. Pure declarations and the frozen font role list. core/themes/grammar.ts builds it
+ * (one body line at a time in core/themes/lines.ts); `theme admit` and render:png read it. Design
+ * System checks the token names and values later; the grammar only types them.
  */
 import type { ChromeName } from '../brands.js';
 import type { Admission, ResourceRequest } from './foreign.js';
@@ -13,29 +13,32 @@ export const fontRoles = Object.freeze(['body', 'mono', 'strong'] as const);
 /** One of the three theme font roles. */
 export type FontRole = (typeof fontRoles)[number];
 
-/** One `font ROLE source="PATH"` line: a Language font request named by its role. */
+/**
+ * One `font ROLE source="PATH"` line: a Language font request named by its role. Its span covers
+ * the line's text without surrounding whitespace, with real offsets into the file.
+ */
 export type FontRequest = ResourceRequest & { readonly kind: 'font'; readonly alias: FontRole };
 
-/** One `set color|number|dimension TOKEN=VALUE` line, with the line it was written on. */
+/** A theme's fonts: one body, one mono and one strong font, in file order. */
+export type FontTriple = readonly [FontRequest, FontRequest, FontRequest];
+
+/** A `set dimension` value: a finite pixel length, as Design System's dimension token takes it. */
+export interface PixelDimension {
+  readonly value: number;
+  readonly unit: 'px';
+}
+
+/** What every token override carries: the token it sets and the 1-based line it is written on. */
+interface OverrideLine {
+  readonly token: string;
+  readonly line: number;
+}
+
+/** One `set color|number|dimension TOKEN=VALUE` line, tagged by its `type`. */
 export type TokenOverride =
-  | {
-      readonly type: 'color';
-      readonly token: string;
-      readonly value: string;
-      readonly line: number;
-    }
-  | {
-      readonly type: 'number';
-      readonly token: string;
-      readonly value: number;
-      readonly line: number;
-    }
-  | {
-      readonly type: 'dimension';
-      readonly token: string;
-      readonly value: { readonly value: number; readonly unit: 'px' };
-      readonly line: number;
-    };
+  | (OverrideLine & { readonly type: 'color'; readonly value: string })
+  | (OverrideLine & { readonly type: 'number'; readonly value: number })
+  | (OverrideLine & { readonly type: 'dimension'; readonly value: PixelDimension });
 
 /** The theme's `raw` input: the base theme, the optional chrome and each override's value by token. */
 export interface ThemeRaw {
@@ -52,5 +55,5 @@ export type ThemeAdmission = Extract<Admission, { readonly kind: 'theme' }> & {
 /** A checked theme file: its admission and its body, mono and strong fonts, in file order. */
 export interface ThemeSource {
   readonly admission: ThemeAdmission;
-  readonly fonts: readonly [FontRequest, FontRequest, FontRequest];
+  readonly fonts: FontTriple;
 }
