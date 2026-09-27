@@ -5,7 +5,6 @@
     gap: var(--nv-space-4);
     min-block-size: 0;
     max-block-size: calc(100dvh * var(--nv-sheet-maximum));
-    overflow: hidden;
   }
 
   .browser {
