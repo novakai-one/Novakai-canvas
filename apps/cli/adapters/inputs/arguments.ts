@@ -4,12 +4,13 @@ import type { CliOptions, Command } from '../../contract/records/command.js';
 import type { LocalFailure, Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 import { z } from 'zod';
+import { collectionRevision } from '../../contract/brands.js';
 const mode = z.enum(['create', 'replace', 'patch']);
 const revision = z
   .string()
   .regex(/^[0-9]+$/)
   .transform(Number)
-  .pipe(z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER));
+  .pipe(collectionRevision);
 /** The flag values the command grammar reads. */
 interface CommandFlags {
   readonly preset?: Command['preset'];

@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import { requestSchema } from '@novakai/canvas-authoring';
 import type { Snapshot, Request } from '@novakai/canvas-authoring';
+import { recipeFamily, requestSchema } from '../../contract/schemas.js';
+import type { AssetDigest } from '../../contract/brands.js';
 import type { PresetInputs, ResourceSyntax } from '../../contract/records/resources.js';
 import type { Command } from '../../contract/records/command.js';
 import type { Result } from '../../contract/errors.js';
@@ -8,7 +9,7 @@ import { failure, success } from '../../contract/errors.js';
 const flags = z.object({
   id: z.string().min(1),
   version: z.string().min(1),
-  family: z.enum(['er', 'modules', 'sop', 'mindmap', 'sequence', 'infographic']),
+  family: recipeFamily,
   title: z.string().min(1),
 });
 const prepared = z.looseObject({
@@ -39,7 +40,7 @@ function request(
   input: unknown,
   snapshot: Snapshot,
   id: string,
-  assets: readonly { readonly alias: string; readonly digest: string }[],
+  assets: readonly { readonly alias: string; readonly digest: AssetDigest }[],
 ): Result<Request> {
   const parsed = prepared.safeParse(input);
   if (!parsed.success)

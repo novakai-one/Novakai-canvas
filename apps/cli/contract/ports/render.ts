@@ -7,11 +7,12 @@
 import type { createHeadlessBindings } from '@novakai/canvas-service';
 import type { AssetError, Assets } from '@novakai/canvas-assets';
 import type { Diagnostic as ExportDiagnostic } from '@novakai/canvas-export';
-import type { Catalog } from '@novakai/canvas-templates';
-import type { SectionId } from '@novakai/canvas-model';
 import type { readThemeConfig } from '../theme-reader.js';
 import type { ResourceFiles } from '../records/resources.js';
-import type { FilePath, ProviderFault, SourceFile } from '../records/headless.js';
+import type { ProviderFault } from '../records/headless.js';
+import type { SourceFile } from '../records/source-file.js';
+import type { RecipeFamily } from '../records/foreign.js';
+import type { FilePath, SectionId } from '../brands.js';
 import type { Result } from '../errors.js';
 
 /** Everything compose injects into one headless render. */
@@ -39,9 +40,6 @@ export interface TempDirectory {
    */
   remove(): Promise<Result<void, ProviderFault>>;
 }
-
-/** A shipped recipe's diagram family, as Templates declares it. */
-type RecipeFamily = Extract<Catalog[number], { readonly kind: 'recipe' }>['payload']['family'];
 
 /**
  * File I/O of one render, bound to its repo root, output directory and format. Every method

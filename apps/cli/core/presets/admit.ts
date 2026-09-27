@@ -4,7 +4,10 @@
  * Authoring owns the commit; the retained request file is the recovery record for `retry`.
  */
 import type { Command } from '../../contract/records/command.js';
-import type { CliDependencies } from '../../contract/ports/runtime.js';
+import type { CliDependencies, ServiceAnswer } from '../../contract/ports/runtime.js';
+import type { ByteBackup, ResourceRequest } from '../../contract/records/resources.js';
+import type { Snapshot } from '../../contract/records/foreign.js';
+import type { AssetDigest, FilePath, Generation } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { rejected } from '../../contract/errors.js';
 import { resourceCall, stageResources } from '../resources/stage.js';
@@ -17,20 +20,21 @@ export async function admitPreset(
 ): Promise<Result<string>> {
   const source = await dependencies.files.source(command.target);
   if (!source.ok) return source;
-  const parsed = dependencies.presets.source(command, source.value);
+  const parsed = dependencies.presets.source(command, source.value.source);
   if (!parsed.ok) return parsed;
-  return stagePreset(command, parsed.value, dependencies);
+  return stagePreset(command, source.value.file, parsed.value, dependencies);
 }
-/** Byte admission settles before immutable Templates preparation. */
+/** Byte admission, relative to the preset file, settles before immutable Templates preparation. */
 async function stagePreset(
   command: Command,
+  file: FilePath,
   parsed: {
     readonly admission: unknown;
-    readonly resources: readonly import('../../contract/records/resources.js').ResourceRequest[];
+    readonly resources: readonly ResourceRequest[];
   },
   dependencies: CliDependencies,
 ): Promise<Result<string>> {
-  const staged = await stageResources(command.target, parsed.resources, dependencies);
+  const staged = await stageResources(file, parsed.resources, dependencies);
   if (!staged.ok) return staged;
   const assets = staged.value.map((item) => ({ alias: item.alias, digest: item.backup.digest }));
   const prepared = await resourceCall(
@@ -51,8 +55,8 @@ async function stagePreset(
 async function retain(
   command: Command,
   prepared: unknown,
-  assets: readonly { readonly alias: string; readonly digest: string }[],
-  backups: readonly import('../../contract/records/resources.js').ByteBackup[],
+  assets: readonly { readonly alias: string; readonly digest: AssetDigest }[],
+  backups: readonly ByteBackup[],
   dependencies: CliDependencies,
 ): Promise<Result<string>> {
   const current = await dependencies.transport.get('/api/v1/workspace');
@@ -64,9 +68,9 @@ async function retain(
 async function retainedSnapshot(
   command: Command,
   prepared: unknown,
-  assets: readonly { readonly alias: string; readonly digest: string }[],
-  backups: readonly import('../../contract/records/resources.js').ByteBackup[],
-  current: import('../../contract/records/foreign.js').TransportResponse,
+  assets: readonly { readonly alias: string; readonly digest: AssetDigest }[],
+  backups: readonly ByteBackup[],
+  current: ServiceAnswer,
   dependencies: CliDependencies,
 ): Promise<Result<string>> {
   if (!current.outcome.ok) return rejected('service-rejected', current.outcome.error);
@@ -86,10 +90,10 @@ async function retainedSnapshot(
 async function retainRequest(
   command: Command,
   prepared: unknown,
-  assets: readonly { readonly alias: string; readonly digest: string }[],
-  backups: readonly import('../../contract/records/resources.js').ByteBackup[],
-  snapshot: import('../../contract/records/foreign.js').Snapshot,
-  generation: string,
+  assets: readonly { readonly alias: string; readonly digest: AssetDigest }[],
+  backups: readonly ByteBackup[],
+  snapshot: Snapshot,
+  generation: Generation,
   dependencies: CliDependencies,
 ): Promise<Result<string>> {
   const request = dependencies.presets.request(

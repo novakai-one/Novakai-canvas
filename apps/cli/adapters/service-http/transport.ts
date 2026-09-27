@@ -5,10 +5,15 @@
  * `receipt` then `retry` recover it. This file never retries.
  */
 import { responseEnvelope } from '@novakai/canvas-service';
-import type { TransportResponse } from '@novakai/canvas-service';
-import type { Transport } from '../../contract/ports/runtime.js';
+import type { ServiceAnswer, Transport } from '../../contract/ports/runtime.js';
 import type { LocalFailure, Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
+import {
+  generation,
+  loopbackOrigin,
+  type AgentToken,
+  type LoopbackOrigin,
+} from '../../contract/brands.js';
 
 /** How long one request waits for the service's answer. */
 const answerTimeoutMs = 35_000;
@@ -17,15 +22,15 @@ const answerTimeoutMs = 35_000;
 type Method = 'GET' | 'POST';
 
 /**
- * Binds the transport to `url`, which must be an `http://127.0.0.1` origin. The token comes from
- * protected local storage and never appears in command output or failure details.
+ * Binds the transport to `server`, which must be an `http://127.0.0.1` origin. The token comes
+ * from protected local storage and never appears in command output or failure details.
  * Fails with `invalid-server`.
  */
 export function createTransport(
-  url: string,
-  token: string,
+  server: string,
+  token: AgentToken,
 ): Result<Transport, LocalFailure> {
-  const checked = origin(url);
+  const checked = origin(server);
   if (!checked.ok) return checked;
   return success({
     get: (path) => send(checked.value, token, path, 'GET', undefined),
@@ -33,33 +38,20 @@ export function createTransport(
   });
 }
 /**
- * The origin of `input`. Credentials go only to the IPv4 loopback origin, never to a redirect or a
- * remote host. Fails with `invalid-server`.
+ * Mints the origin credentials may go to: the IPv4 loopback origin, never a redirect or a remote
+ * host. Fails with `invalid-server`: text that is not a URL first, then a URL that is not a
+ * loopback origin.
  */
-function origin(input: string): Result<string, LocalFailure> {
-  try {
-    const url = new URL(input);
-    if (!localOrigin(url))
-      return failure({
-        code: 'invalid-server',
-        message: 'Server must be an IPv4 loopback HTTP origin',
-      });
-    return success(url.origin);
-  } catch {
+function origin(input: string): Result<LoopbackOrigin, LocalFailure> {
+  if (!URL.canParse(input))
     return failure({ code: 'invalid-server', message: 'Server URL is invalid' });
-  }
-}
-/** Origin-only loopback addressing excludes URL credentials, alternate paths and redirect destinations. */
-function localOrigin(url: URL): boolean {
-  return (
-    url.protocol === 'http:' &&
-    url.hostname === '127.0.0.1' &&
-    url.pathname === '/' &&
-    url.search === '' &&
-    url.hash === '' &&
-    url.username === '' &&
-    url.password === ''
-  );
+  const checked = loopbackOrigin.safeParse(input);
+  if (!checked.success)
+    return failure({
+      code: 'invalid-server',
+      message: 'Server must be an IPv4 loopback HTTP origin',
+    });
+  return success(checked.data);
 }
 /**
  * Sends one request; a redirect is refused so no other host receives the token. Fails with
@@ -67,12 +59,12 @@ function localOrigin(url: URL): boolean {
  * confirmed answer: timeout, lost connection or unreadable body).
  */
 async function send(
-  origin: string,
-  token: string,
+  origin: LoopbackOrigin,
+  token: AgentToken,
   path: string,
   method: Method,
   body: string | undefined,
-): Promise<Result<TransportResponse, LocalFailure>> {
+): Promise<Result<ServiceAnswer, LocalFailure>> {
   try {
     const response = await fetch(`${origin}${path}`, {
       method,
@@ -81,14 +73,7 @@ async function send(
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: body ?? null,
     });
-    const input: unknown = await response.json();
-    const checked = responseEnvelope.safeParse(input);
-    if (!checked.success)
-      return failure({
-        code: 'invalid-response',
-        message: 'Service returned an invalid transport envelope',
-      });
-    return success(checked.data);
+    return answer(await response.json());
   } catch {
     return failure({
       code: 'connection-uncertain',
@@ -96,4 +81,22 @@ async function send(
       recovery: 'Retain the request and reconcile its receipt before retrying.',
     });
   }
+}
+/**
+ * The service envelope's generation, minted, and its outcome, kept whole. Fails with
+ * `invalid-response` when the body is not a service envelope.
+ */
+function answer(input: unknown): Result<ServiceAnswer, LocalFailure> {
+  const envelope = responseEnvelope.safeParse(input);
+  if (!envelope.success) return invalidEnvelope();
+  const sent = generation.safeParse(envelope.data.generation);
+  if (!sent.success) return invalidEnvelope();
+  return success({ generation: sent.data, outcome: envelope.data.outcome });
+}
+/** The answer is not a service envelope. */
+function invalidEnvelope(): Result<never, LocalFailure> {
+  return failure({
+    code: 'invalid-response',
+    message: 'Service returned an invalid transport envelope',
+  });
 }

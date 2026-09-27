@@ -3,6 +3,7 @@
  * keep CLI core, contract ports and the render factories inside every capability's public entry.
  */
 import type { TransportResponse } from '@novakai/canvas-service';
+import type { Admission } from '@novakai/canvas-templates';
 export type { Collection } from '@novakai/canvas-model';
 export type { Language, ResolvedResources } from '@novakai/canvas-language';
 export type { RenderDocument } from '@novakai/canvas-service';
@@ -26,3 +27,6 @@ export type OperationSource = Extract<
 
 /** Evidence under a failure: Language or Model validation diagnostics, or a nested operation failure. */
 export type FailureSource = NonNullable<OperationSource['source']>;
+
+/** A recipe's diagram family, as Templates' admission declares it. */
+export type RecipeFamily = Extract<Admission, { readonly kind: 'recipe' }>['family'];

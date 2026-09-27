@@ -5,8 +5,9 @@
  * request is sent; staged bytes left behind are collectable Assets orphans.
  */
 import type { CliDependencies, RequestDraft } from '../../contract/ports/runtime.js';
-import type { ByteBackup, LocalInput } from '../../contract/records/resources.js';
-import type { Command } from '../../contract/records/command.js';
+import type { ByteBackup, LocalInput, ResourceRequest } from '../../contract/records/resources.js';
+import type { SourceFile } from '../../contract/records/source-file.js';
+import type { AssetDigest, FilePath } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { rejected, success } from '../../contract/errors.js';
 import { combined } from '../shared/results.js';
@@ -55,7 +56,7 @@ function stagedBackup(
 /** Every referenced byte, including already-pinned resources, is retained before the Authoring request can be sent. */
 async function backup(
   alias: string,
-  digest: string,
+  digest: AssetDigest,
   dependencies: ResourceDependencies,
 ): Promise<Result<{ readonly alias: string; readonly backup: ByteBackup }>> {
   const blob = await resourceCall('blob', digest, dependencies);
@@ -64,16 +65,18 @@ async function backup(
   if (!bytes.ok) return bytes;
   return success({ alias, backup: bytes.value });
 }
-/** Stage each declaration before freezing aliases; failure leaves only collectable Assets orphans. */
+/**
+ * Stage each declaration of `source`, read relative to its file, before freezing aliases; failure
+ * leaves only collectable Assets orphans.
+ */
 export async function prepareResources(
-  command: Command,
-  source: string,
+  source: SourceFile,
   draft: RequestDraft,
   dependencies: ResourceDependencies,
 ): Promise<Result<RequestDraft>> {
-  const requests = dependencies.semantic.requests(source);
+  const requests = dependencies.semantic.requests(source.source);
   if (!requests.ok) return requests;
-  const staged = await stageResources(command.target, requests.value, dependencies);
+  const staged = await stageResources(source.file, requests.value, dependencies);
   if (!staged.ok) return staged;
   return freezeDraft(draft, staged.value, dependencies);
 }
@@ -95,8 +98,8 @@ async function freezeDraft(
 }
 /** Stage a semantic declaration list; a failed member prevents any canonical request submission. */
 export async function stageResources(
-  file: string,
-  requests: readonly import('../../contract/records/resources.js').ResourceRequest[],
+  file: FilePath,
+  requests: readonly ResourceRequest[],
   dependencies: ResourceDependencies,
 ): Promise<Result<readonly { readonly alias: string; readonly backup: ByteBackup }[]>> {
   const inputs = await Promise.all(

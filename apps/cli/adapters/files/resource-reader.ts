@@ -1,3 +1,10 @@
+/*
+ * Confined, bounded reads of the fonts and images a source declares: the path stays inside the
+ * source file's directory, the extension matches the declared kind, and at most 16 MiB is read. A
+ * `sha256:` source pins stored bytes and reads nothing. Filesystem I/O; each failure is a value
+ * whose message starts with `file:line:column asset @alias`. The caller fixes that declaration or
+ * file and runs the command again.
+ */
 import { open, realpath } from 'node:fs/promises';
 import type { FileHandle } from 'node:fs/promises';
 import { dirname, resolve, relative, isAbsolute, extname, sep } from 'node:path';
@@ -5,7 +12,10 @@ import type { ResourceRequest } from '@novakai/canvas-language';
 import type { ResourceFiles, LocalInput } from '../../contract/records/resources.js';
 import type { LocalFailure, Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
+import { assetDigest, type AssetDigest, type FilePath } from '../../contract/brands.js';
 const byteLimit = 16 * 1024 * 1024;
+/** The prefix of a declaration that pins stored bytes by digest instead of naming a file. */
+const pinPrefix = 'sha256:';
 const media: Readonly<Record<string, string>> = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
@@ -19,7 +29,7 @@ const media: Readonly<Record<string, string>> = {
 };
 /** A path is admitted only beneath the real source directory; absolute and symlink escapes are explicit outcomes. */
 async function confined(
-  file: string,
+  file: FilePath,
   source: string,
 ): Promise<Result<string, LocalFailure>> {
   if (isAbsolute(source))
@@ -132,18 +142,18 @@ function mediaType(
 }
 /** Pinned digests deliberately bypass filesystem reads; local failures retain source/span/alias context. */
 async function read(
-  file: string,
+  file: FilePath,
   request: ResourceRequest,
 ): Promise<Result<LocalInput, LocalFailure>> {
-  if (/^sha256:[a-f0-9]{64}$/.test(request.source))
-    return success({ alias: request.alias, digest: request.source.slice(7), stage: null });
+  const pinned = pinnedDigest(request.source);
+  if (pinned !== undefined) return success({ alias: request.alias, digest: pinned, stage: null });
   const path = await confined(file, request.source);
   if (!path.ok) return contextual(file, request, path.error);
   return readLocated(file, request, path.value);
 }
 /** A resolved location proceeds through typed media and bounded-byte admission. */
 async function readLocated(
-  file: string,
+  file: FilePath,
   request: ResourceRequest,
   path: string,
 ): Promise<Result<LocalInput, LocalFailure>> {
@@ -179,7 +189,7 @@ function localInput(
 }
 /** Add source location without replacing the stable failure code or recovery instruction. */
 function contextual<T>(
-  file: string,
+  file: FilePath,
   request: ResourceRequest,
   error: LocalFailure,
 ): Result<T, LocalFailure> {
@@ -194,4 +204,11 @@ export function createResourceFiles(): ResourceFiles {
 /** Font declarations select font media; other resource declarations select images. */
 function expectedMedia(kind: ResourceRequest['kind']): string {
   return kind === 'font' ? 'font/' : 'image/';
+}
+
+/** The Assets digest a `sha256:<64 lowercase hex>` source pins; any other source names a file. */
+function pinnedDigest(source: string): AssetDigest | undefined {
+  const digest = assetDigest.safeParse(source.slice(pinPrefix.length));
+  if (!source.startsWith(pinPrefix) || !digest.success) return undefined;
+  return digest.data;
 }

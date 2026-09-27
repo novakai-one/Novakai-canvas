@@ -6,10 +6,10 @@
  */
 import { createReactBindings } from '@novakai/canvas-presentation';
 import { composeExport, type Snapshot } from '@novakai/canvas-export';
-import { sectionId, type SectionId } from '@novakai/canvas-model';
 import { accepted, resourceInspector } from './api.js';
 import { exportDocuments, type Environment } from './render.js';
-import type { FilePath, HeadlessOptions, HeadlessReport } from './records/headless.js';
+import { sectionId, type FilePath, type SectionId } from './brands.js';
+import type { HeadlessOptions, HeadlessReport } from './records/headless.js';
 import type { RenderFiles } from './ports/render.js';
 import type { Catalog, RenderDocument } from './records/foreign.js';
 

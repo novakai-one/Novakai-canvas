@@ -1,5 +1,7 @@
-import { snapshotSchema, requestSchema, receiptSchema } from '@novakai/canvas-authoring';
+import { snapshotSchema, receiptSchema } from '@novakai/canvas-authoring';
 import type { Request, Snapshot, StoredRecord } from '@novakai/canvas-authoring';
+import { requestSchema } from '../../contract/schemas.js';
+import { assetDigest, type CollectionRevision } from '../../contract/brands.js';
 import { validate } from '@novakai/canvas-model';
 import type { Language } from '@novakai/canvas-language';
 import { byteBackup } from '../../contract/records/resources.js';
@@ -39,7 +41,7 @@ function snapshot(input: unknown): Result<Snapshot> {
 /** Existing edits require the revision the agent actually read; storage preconditions remain tied to the same snapshot. */
 function existingVersion(
   record: StoredRecord | undefined,
-  revision: number | null,
+  revision: CollectionRevision | null,
 ): Result<number> {
   if (!record) return failure({ code: 'not-found', message: 'The collection does not exist' });
   const collection = validate(record.value);
@@ -56,7 +58,7 @@ function existingVersion(
 function matchedRevision(
   record: StoredRecord,
   current: number,
-  requested: number | null,
+  requested: CollectionRevision | null,
 ): Result<number> {
   if (requested === null)
     return failure({
@@ -238,7 +240,7 @@ export function createSemanticInputs(language: Pick<Language, 'parse'>): Semanti
     },
     admissionDigest: (input) => {
       const result = z
-        .looseObject({ descriptor: z.looseObject({ digest: z.string().regex(/^[a-f0-9]{64}$/) }) })
+        .looseObject({ descriptor: z.looseObject({ digest: assetDigest }) })
         .safeParse(input);
       if (!result.success) return invalidResponse('Invalid Assets admission');
       return success(result.data.descriptor.digest);

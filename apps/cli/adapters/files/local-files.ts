@@ -8,8 +8,10 @@
  */
 import { readFile, writeFile } from 'node:fs/promises';
 import type { RequestFiles } from '../../contract/ports/runtime.js';
+import type { SourceFile } from '../../contract/records/source-file.js';
 import type { LocalFailure, Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
+import { filePath, type FilePath } from '../../contract/brands.js';
 
 /** The largest source file a command reads. */
 const sourceByteLimit = 16 * 1024 * 1024;
@@ -19,18 +21,31 @@ export function createLocalFiles(): Pick<RequestFiles, 'source' | 'output'> {
   return { source, output };
 }
 /**
- * The file's text, decoded as strict UTF-8, before any service request. Fails with
- * `source-too-large` (over 16 MiB) or `source-unavailable` (cannot be opened, or is not UTF-8).
+ * The file's checked path and its text, before any service request. The path is minted here, as
+ * the file that was read. Fails with `source-unavailable` (an empty path) or as {@link read}.
  */
-async function source(path: string): Promise<Result<string, LocalFailure>> {
+async function source(path: string): Promise<Result<SourceFile, LocalFailure>> {
+  const file = filePath.safeParse(path);
+  if (!file.success) return unreadable(path);
+  return read(file.data);
+}
+/**
+ * The file's text, decoded as strict UTF-8. Fails with `source-too-large` (over 16 MiB) or
+ * `source-unavailable` (cannot be opened, or is not UTF-8).
+ */
+async function read(file: FilePath): Promise<Result<SourceFile, LocalFailure>> {
   try {
-    const bytes = await readFile(path);
+    const bytes = await readFile(file);
     if (bytes.byteLength > sourceByteLimit)
       return failure({ code: 'source-too-large', message: 'DSL source exceeds 16 MiB' });
-    return success(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+    return success({ file, source: new TextDecoder('utf-8', { fatal: true }).decode(bytes) });
   } catch {
-    return failure({ code: 'source-unavailable', message: `Cannot read UTF-8 source: ${path}` });
+    return unreadable(file);
   }
+}
+/** The source cannot be read as UTF-8 text. */
+function unreadable(path: string): Result<never, LocalFailure> {
+  return failure({ code: 'source-unavailable', message: `Cannot read UTF-8 source: ${path}` });
 }
 /**
  * Writes `text` to the explicit --out destination after the command ran. Never changes service

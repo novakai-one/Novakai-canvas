@@ -20,6 +20,7 @@ import { executeCommand, executeProfile, isProfileCommand, readThemeConfig, usag
 import type { LocalFailure, Result } from './errors.js';
 import type { HeadlessFailure, HeadlessOptions, HeadlessReport } from './records/headless.js';
 import { failure, rejected, success } from './errors.js';
+import { agentToken, requestId, type AgentToken, type RequestId } from './brands.js';
 /** Bind the actual CLI to protected credentials and real HTTP; failed setup cannot submit a diagram mutation. */
 export async function runCli(
   args: readonly string[],
@@ -39,11 +40,9 @@ export async function runCli(
 }
 /** One owner-composed Language parser drives scope discovery; there is no second DSL implementation in the CLI. */
 async function run(options: import('./records/command.js').CliOptions): Promise<Result<string>> {
-  const credential = await readAgentCredential(
-    resolve(options.workspaceDirectory, 'agent-credential.json'),
-  );
-  if (!credential.ok) return rejected('credential-unavailable', credential.error);
-  const transport = createTransport(options.server, credential.value);
+  const token = await readToken(options.workspaceDirectory);
+  if (!token.ok) return token;
+  const transport = createTransport(options.server, token.value);
   if (!transport.ok) return transport;
   const language = createLanguage({ reader: { validate }, planner: { plan }, stage: { stage } });
   const semantic = createSemanticInputs(language);
@@ -56,8 +55,29 @@ async function run(options: import('./records/command.js').CliOptions): Promise<
     },
     semantic,
     presets: createPresetInputs(semantic, readThemeConfig),
-    nextRequestId: randomUUID,
+    nextRequestId,
   });
+}
+
+/**
+ * The agent token from the workspace credential. Fails with `credential-unavailable` (the
+ * service's reader failed; its record is kept whole) or `invalid-response` (it returned no token).
+ */
+async function readToken(workspace: string): Promise<Result<AgentToken>> {
+  const credential = await readAgentCredential(resolve(workspace, 'agent-credential.json'));
+  if (!credential.ok) return rejected('credential-unavailable', credential.error);
+  const token = agentToken.safeParse(credential.value);
+  if (!token.success)
+    return failure({ code: 'invalid-response', message: 'Agent credential holds no token' });
+  return success(token.data);
+}
+
+/**
+ * A fresh request ID. A UUID always matches Authoring's request ID grammar, so the parse cannot
+ * fail; runCli's catch would report `cli-unavailable` before anything was sent.
+ */
+function nextRequestId(): RequestId {
+  return requestId.parse(randomUUID());
 }
 
 /** Local help needs no infrastructure; authoring commands bind their real runtime before executing. */

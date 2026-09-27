@@ -6,15 +6,13 @@
  */
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import type { SectionId } from '@novakai/canvas-model';
 import {
-  filePath,
   nativeFault,
-  type FilePath,
   type HeadlessOptions,
   type ProviderFault,
-  type SourceFile,
 } from '../../contract/records/headless.js';
+import { filePath, type FilePath, type SectionId } from '../../contract/brands.js';
+import type { SourceFile } from '../../contract/records/source-file.js';
 import type { RenderFiles } from '../../contract/ports/render.js';
 import type { Result } from '../../contract/errors.js';
 

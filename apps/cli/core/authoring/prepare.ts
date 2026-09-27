@@ -6,7 +6,10 @@
  */
 import { prepareResources } from '../resources/stage.js';
 import type { Command } from '../../contract/records/command.js';
-import type { CliDependencies, RequestDraft } from '../../contract/ports/runtime.js';
+import type { CliDependencies, RequestDraft, ServiceAnswer } from '../../contract/ports/runtime.js';
+import type { Snapshot } from '../../contract/records/foreign.js';
+import type { SourceFile } from '../../contract/records/source-file.js';
+import type { Generation } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { rejected, success } from '../../contract/errors.js';
 
@@ -24,19 +27,19 @@ export async function prepare(
 /** Capture and resource preparation finish before retention or canonical submission. */
 async function prepareCaptured(
   command: Command,
-  source: string,
-  current: import('../../contract/records/foreign.js').TransportResponse,
+  source: SourceFile,
+  current: ServiceAnswer,
   dependencies: CliDependencies,
 ): Promise<Result<RequestDraft>> {
-  const draft = captured(command, source, current, dependencies);
+  const draft = captured(command, source.source, current, dependencies);
   if (!draft.ok) return draft;
-  return prepareResources(command, source, draft.value, dependencies);
+  return prepareResources(source, draft.value, dependencies);
 }
 /** Owner readers give transported snapshots their type before request construction. */
 function captured(
   command: Command,
   source: string,
-  current: import('../../contract/records/foreign.js').TransportResponse,
+  current: ServiceAnswer,
   dependencies: CliDependencies,
 ): Result<RequestDraft> {
   if (!current.outcome.ok) return rejected('service-rejected', current.outcome.error);
@@ -48,8 +51,8 @@ function captured(
 function draft(
   command: Command,
   source: string,
-  snapshot: import('../../contract/records/foreign.js').Snapshot,
-  generation: string,
+  snapshot: Snapshot,
+  generation: Generation,
   dependencies: CliDependencies,
 ): Result<RequestDraft> {
   const request = dependencies.semantic.request(
@@ -59,5 +62,5 @@ function draft(
     command.request ?? dependencies.nextRequestId(),
   );
   if (!request.ok) return request;
-  return success({ generation, request: request.value });
+  return success({ generation, request: request.value, backups: [] });
 }

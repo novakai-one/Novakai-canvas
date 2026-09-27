@@ -7,12 +7,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openAssets } from '@novakai/canvas-assets';
-import {
-  filePath,
-  nativeFault,
-  type FilePath,
-  type ProviderFault,
-} from '../../contract/records/headless.js';
+import { nativeFault, type ProviderFault } from '../../contract/records/headless.js';
+import { filePath, type FilePath } from '../../contract/brands.js';
 import type { TempAssets, TempDirectory } from '../../contract/ports/render.js';
 import type { Result } from '../../contract/errors.js';
 

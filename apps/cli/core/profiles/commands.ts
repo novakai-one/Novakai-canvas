@@ -134,7 +134,7 @@ async function lintSourceFile(
   dependencies: ProfileDependencies,
 ): Promise<Result<string>> {
   const source = await dependencies.files.source(target);
-  return source.ok ? parseProfileSource(source.value, dependencies) : source;
+  return source.ok ? parseProfileSource(source.value.source, dependencies) : source;
 }
 
 function parseProfileSource(

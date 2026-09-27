@@ -5,18 +5,22 @@
  */
 import { readFile, mkdir, open } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { requestSchema, requestId } from '@novakai/canvas-authoring';
-import { byteBackup } from '../../contract/records/resources.js';
 import { z } from 'zod';
+import { requestSchema } from '../../contract/schemas.js';
+import { generation, requestId } from '../../contract/brands.js';
+import { byteBackup } from '../../contract/records/resources.js';
 import type { RequestFiles, RequestDraft } from '../../contract/ports/runtime.js';
 import type { Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 
-/** One journal file: the generation it was sent under, the Authoring request and its byte backups. */
+/**
+ * One journal file: the generation it was sent under, the Authoring request and its byte backups.
+ * A file written before backups were always retained has no `backups` key; it reads as `[]`.
+ */
 const retained = z.strictObject({
-  generation: z.string(),
+  generation,
   request: requestSchema,
-  backups: z.array(byteBackup).optional(),
+  backups: z.array(byteBackup).readonly().default([]),
 });
 /** Bind one local request directory; each operation reports its own I/O failure and recovery. */
 export function createRequestJournal(root: string): Pick<RequestFiles, 'save' | 'read'> {

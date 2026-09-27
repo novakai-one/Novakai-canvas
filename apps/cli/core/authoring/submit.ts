@@ -7,7 +7,8 @@
 import { restoreResources } from '../resources/restore.js';
 import { prepare } from './prepare.js';
 import type { Command } from '../../contract/records/command.js';
-import type { CliDependencies, RequestDraft } from '../../contract/ports/runtime.js';
+import type { CliDependencies, RequestDraft, ServiceAnswer } from '../../contract/ports/runtime.js';
+import type { RequestId } from '../../contract/brands.js';
 import type { LocalFailure, Result } from '../../contract/errors.js';
 import { rejected, success } from '../../contract/errors.js';
 
@@ -40,8 +41,8 @@ async function transmit(
 }
 /** Network uncertainty names the retained request instead of suggesting a new request ID. */
 function submitted(
-  result: Result<import('../../contract/records/foreign.js').TransportResponse, LocalFailure>,
-  id: string,
+  result: Result<ServiceAnswer, LocalFailure>,
+  id: RequestId,
   preview: boolean,
   dependencies: CliDependencies,
 ): Result<string> {
@@ -59,7 +60,7 @@ function submitted(
 /** Preview prints reviewable owner output and a stable apply command; successful writes use the apply-answer reader. */
 function confirmed(
   value: unknown,
-  id: string,
+  id: RequestId,
   preview: boolean,
   dependencies: CliDependencies,
 ): Result<string> {

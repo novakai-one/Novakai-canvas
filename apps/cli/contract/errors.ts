@@ -51,7 +51,7 @@ import type { FailureSource, OperationSource } from './records/foreign.js';
  * Transport:
  * - `connection-uncertain`: no confirmed answer. Check the receipt before retrying.
  * - `invalid-response`: a service answer did not match its schema or lacks what the command
- *   needs, such as a committed receipt.
+ *   needs, such as a committed receipt; or the service's credential reader returned no token.
  *
  * Setup: `cli-unavailable` and `render-unavailable` (an unexpected throw at the entry point).
  */

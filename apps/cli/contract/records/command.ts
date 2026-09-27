@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { Scope } from '@novakai/canvas-language';
+import type { CollectionRevision } from '../brands.js';
 /** Replacement and patch commands require an explicit read revision; omission cannot become a blind latest-version overwrite. */
 export const commandName = z.enum([
   'help',
@@ -25,7 +26,7 @@ export type CommandName = z.infer<typeof commandName>;
 export interface Command {
   readonly name: CommandName;
   readonly target: string;
-  readonly revision: number | null;
+  readonly revision: CollectionRevision | null;
   readonly mode: 'create' | 'replace' | 'patch';
   readonly request: string | null;
   readonly output: string | null;

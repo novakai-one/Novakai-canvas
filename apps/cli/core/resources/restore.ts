@@ -16,7 +16,7 @@ export async function restoreResources(
   draft: RequestDraft,
   dependencies: Pick<ResourceDependencies, 'transport'>,
 ): Promise<Result<void>> {
-  return restoreBackups(draft.backups ?? [], dependencies);
+  return restoreBackups(draft.backups, dependencies);
 }
 /** Restore failures stop before canonical admission, while successful backups remain safe to replay. */
 async function restoreBackups(

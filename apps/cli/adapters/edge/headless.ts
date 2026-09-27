@@ -12,19 +12,17 @@ import type { Assets } from '@novakai/canvas-assets';
 import type { Catalog } from '@novakai/canvas-templates';
 import { validate, type Collection } from '@novakai/canvas-model';
 import {
-  filePath,
   headlessFault,
-  sourceFile,
-  type FilePath,
   type HeadlessFailure,
   type HeadlessOptions,
   type HeadlessReport,
   type ProviderFault,
-  type SourceFile,
 } from '../../contract/records/headless.js';
+import { filePath, type AssetDigest, type FilePath } from '../../contract/brands.js';
+import type { SourceFile } from '../../contract/records/source-file.js';
 import type { HeadlessOwners, TempDirectory } from '../../contract/ports/render.js';
 import type { Result } from '../../contract/errors.js';
-import type { LocalInput, ResourceRequest } from '../../contract/records/resources.js';
+import type { ResourceRequest } from '../../contract/records/resources.js';
 import {
   RenderFault,
   accepted,
@@ -43,9 +41,6 @@ import {
   themeSelection,
   type Environment,
 } from '../../contract/render.js';
-
-/** A staged resource's content digest. */
-type StagedDigest = NonNullable<LocalInput['digest']>;
 
 /**
  * Render every section of one collection to files, read-only.
@@ -158,7 +153,7 @@ async function admitResource(
   request: ResourceRequest,
   assets: Pick<Assets, 'stage' | 'resolve'>,
   owners: HeadlessOwners,
-): Promise<StagedDigest> {
+): Promise<AssetDigest> {
   const resource = accepted(await owners.resourceFiles.read(file, request));
   if (resource.digest !== null) return resource.digest;
   return accepted(await assets.stage(resource.stage)).descriptor.digest;
@@ -227,7 +222,7 @@ async function sourceFromId(
       id: options.collection,
       matches: matches.length,
     });
-  return sourceFile.parse(match);
+  return match;
 }
 
 /** A file selector names the prepared theme; --theme takes precedence when both are supplied. */
