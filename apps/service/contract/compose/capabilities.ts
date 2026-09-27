@@ -1,7 +1,8 @@
 /*
  * The one construction site for Language, Design System, the Templates factory and the Model,
- * Library and Export rule tables. Templates is composed from the core preset codecs. installation.ts
- * and wiring.ts each call it once; serve.ts builds only Language here. Core reaches these only
+ * Library and Export rule tables. Templates is composed from the core recipe and theme codecs,
+ * bound here (headless.ts shares the binding). installation.ts and wiring.ts each call
+ * `createServiceCapabilities` once; serve.ts builds only Language here. Core reaches these only
  * through ServiceCapabilities; adapters import capability schemas and runtimes (render worker, PNG
  * runtime, shipped resources) directly. Constructing starts no I/O; each capability owns its own
  * failures and recovery.
@@ -18,7 +19,9 @@ import type {
   ModelRules,
   ServiceCapabilities,
 } from '../ports/capabilities.js';
-import { createPresetCodecs } from '../../core/presets/theme-codec.js';
+import type { PresetCodecs, PresetContext } from '../records/presets/codecs.js';
+import { createRecipeCodec } from '../../core/presets/recipe-codec.js';
+import { createThemeCodec } from '../../core/presets/theme-codec.js';
 
 /**
  * Binds every capability the service uses. `sources` is the installation's raw token source
@@ -37,6 +40,11 @@ export function createServiceCapabilities(sources: unknown): ServiceCapabilities
     templates: (resources) =>
       composeTemplates(createPresetCodecs({ system, language, sources, resources })),
   };
+}
+
+/** Binds the recipe and theme codecs to one preset context. Never fails. */
+export function createPresetCodecs(context: PresetContext): PresetCodecs {
+  return { recipe: createRecipeCodec(context), theme: createThemeCodec(context) };
 }
 
 /** Binds Language to Model as its reader, planner and stage. Never fails. */

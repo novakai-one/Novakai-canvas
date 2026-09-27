@@ -8,19 +8,18 @@ import type {
   Catalog,
   DesignSystem,
   LoweredIntent,
-  Preset,
   RecipePayload,
   ResolvedResources,
   Templates,
 } from '../../contract/records/capabilities.js';
 import type { BuiltinSources, BuiltinResources } from '../../contract/records/presets/builtins.js';
-import type { ModelRules } from '../../contract/ports/capabilities.js';
 import { failure, type Result } from '../../contract/errors.js';
 import { EMPTY_RESOURCES } from '../../contract/ports/capabilities.js';
+import { themeBinding, type BindingModel } from './theme-binding.js';
 
 /** The slice of ServiceCapabilities builtin preparation uses: theme binding, UI token resolution and preset admission. */
 export interface BuiltinPresetOwners {
-  readonly model: Pick<ModelRules, 'validate'>;
+  readonly model: BindingModel;
   readonly system: Pick<DesignSystem, 'resolve'>;
   templates(resources: ResolvedResources): Pick<Templates<LoweredIntent>, 'planAdmission'>;
 }
@@ -144,7 +143,7 @@ function addRecipe(
     themes: Object.fromEntries(
       catalog
         .filter((item) => item.kind === 'theme')
-        .map((item) => [item.id, themeBinding(item, owners)]),
+        .map((item) => [item.id, accepted(themeBinding(item, owners.model))]),
     ),
     assets: {},
   };
@@ -161,33 +160,6 @@ function addRecipe(
       family: recipe.family,
     }),
   ).candidate;
-}
-
-/**
- * The diagram theme binding Model mints for a checked theme preset, read from a one-off grid
- * collection pinned to it. Throws `PresetFault` when the preset is not a theme or Model rejects
- * the pin.
- */
-function themeBinding(
-  preset: Preset,
-  owners: BuiltinPresetOwners,
-): ResolvedResources['themes'][string] {
-  if (preset.kind !== 'theme') throw new PresetFault('Recipe is not a theme');
-  return accepted(
-    owners.model.validate({
-      schemaVersion: 1,
-      id: 'resource-binding',
-      revision: 0,
-      title: 'Resource binding',
-      theme: {
-        id: preset.id,
-        version: preset.version,
-        digest: `sha256:${preset.digest}`,
-        roles: preset.payload.roles,
-      },
-      arrangement: { algorithm: 'grid' },
-    }),
-  ).theme;
 }
 
 /**

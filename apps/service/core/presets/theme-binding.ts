@@ -1,21 +1,14 @@
 /*
- * One theme or asset binding in Model's checked form. Model validates each binding inside the
- * smallest possible collection, so selection never copies Model's rules. Pure over Model and
- * Assets; a refusal throws ResourceFault (select.ts turns it into `missing-asset`), and Authoring
- * owns recovery.
- * Planned: the service `core/presets/theme-binding.ts` PR merges this file with the copy in
- * `core/presets/builtin.ts` ('Resource binding') and deletes this file.
+ * Theme and asset bindings in Model's checked form. Model checks each binding inside the smallest
+ * possible collection, so no caller copies Model's rules; only the checked `theme` or `assets` is
+ * read back. Pure over Model. Each function returns Model's own refusal: resource selection turns
+ * it into `missing-asset`, built-in preparation into `invalid-input` at `builtins`. Authoring owns
+ * recovery.
  */
-import type {
-  Assets,
-  Collection,
-  Preset,
-  Request,
-  ResourceRequest,
-} from '../../contract/records/capabilities.js';
+import type { Collection, ThemePreset } from '../../contract/records/capabilities.js';
+import type { FailureSource } from '../../contract/records/transport/failure-source.js';
 import type { ModelRules } from '../../contract/ports/capabilities.js';
-import { prefixed } from '../resources/selection/digests.js';
-import { ResourceFault, accepted } from '../resources/selection/refusal.js';
+import { success, type Result } from '../../contract/errors.js';
 
 /** The one Model rule a binding needs. */
 export type BindingModel = Pick<ModelRules, 'validate'>;
@@ -23,71 +16,58 @@ export type BindingModel = Pick<ModelRules, 'validate'>;
 export type ThemeBinding = Collection['theme'];
 /** One asset binding of a collection, as Model checks it. */
 export type AssetBinding = Collection['assets'][number];
-/** One supplied upload: an alias and the Assets digest of its bytes. */
-export type Upload = Request['assets'][number];
 
-/** The owners asset binding reads: Assets for the bytes' media type, Model for the check. */
-export interface AssetOwners {
-  readonly model: BindingModel;
-  readonly assets: Pick<Assets, 'resolve'>;
+/** An asset binding before Model checks it; `digest` is pinned as `sha256:<hex>`. */
+export interface AssetDraft {
+  readonly id: string;
+  readonly digest: string;
+  readonly mediaType: string;
+  readonly alt: string;
+  readonly license?: string;
+  readonly attribution?: string;
 }
 
 /**
- * A theme preset as Model's checked theme binding. Throws ResourceFault for a preset that is not a
- * theme, or with Model's failure in `source`.
+ * A theme preset as Model's checked theme binding: its ID, version, `sha256:`-pinned digest and
+ * roles. Fails with Model's `validation-failed` when Model rejects the pin.
  */
 export function themeBinding(
-  preset: Preset,
+  preset: ThemePreset,
   model: BindingModel,
-): ThemeBinding {
-  if (preset.kind !== 'theme') throw new ResourceFault('Selected preset is not a theme');
+): Result<ThemeBinding, FailureSource> {
   const theme = {
     id: preset.id,
     version: preset.version,
-    digest: prefixed(preset.digest),
+    digest: `sha256:${preset.digest}`,
     roles: preset.payload.roles,
   };
-  return validBinding({ title: 'Resource binding', theme }, model).theme;
+  const checked = bindingCollection({ title: 'Resource binding', theme }, model);
+  if (!checked.ok) return checked;
+  return success(checked.value.theme);
 }
 
 /**
- * Assets resolves the bytes and their media type; Model checks the authored metadata. Throws
- * ResourceFault with the Assets or Model failure in `source`, or when Model returns no binding.
+ * Asset drafts as Model's checked asset bindings, in draft order, each checked against one
+ * admitted theme binding. Fails with Model's `validation-failed` when Model rejects a draft.
  */
-export function newAsset(
-  upload: Upload,
-  metadata: ResourceRequest,
+export function assetBindings(
+  drafts: readonly AssetDraft[],
   theme: ThemeBinding,
-  owners: AssetOwners,
-): AssetBinding {
-  const blob = accepted(owners.assets.resolve(upload.digest));
-  const asset = {
-    id: upload.alias,
-    digest: prefixed(upload.digest),
-    mediaType: blob.descriptor.mediaType,
-    alt: metadata.alt ?? upload.alias,
-    ...optionalMetadata(metadata),
-  };
-  const validated = validBinding({ title: 'Asset binding', theme, assets: [asset] }, owners.model)
-    .assets[0];
-  if (!validated) throw new ResourceFault('Asset binding is missing after owner validation');
-  return validated;
+  model: BindingModel,
+): Result<Collection['assets'], FailureSource> {
+  const checked = bindingCollection({ title: 'Asset binding', theme, assets: drafts }, model);
+  if (!checked.ok) return checked;
+  return success(checked.value.assets);
 }
 
-/** Model checks the bindings inside the smallest possible collection, so this file never copies Model's rules. */
-function validBinding(
+/**
+ * The smallest collection Model checks: ID `binding`, revision 0, grid arrangement, plus the
+ * binding fields. Model's result unchanged; Model never throws.
+ */
+function bindingCollection(
   fields: Readonly<Record<string, unknown>>,
   model: BindingModel,
-): Collection {
+): ReturnType<BindingModel['validate']> {
   const base = { schemaVersion: 1, id: 'binding', revision: 0, arrangement: { algorithm: 'grid' } };
-  return accepted(model.validate({ ...base, ...fields }));
-}
-
-/** Licence and attribution stay absent unless the source writes them; none is invented. */
-function optionalMetadata(metadata: ResourceRequest): Readonly<Record<string, string>> {
-  return Object.fromEntries(
-    Object.entries({ license: metadata.license, attribution: metadata.attribution }).filter(
-      (item): item is [string, string] => typeof item[1] === 'string',
-    ),
-  );
+  return model.validate({ ...base, ...fields });
 }

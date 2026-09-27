@@ -7,12 +7,13 @@
 import type {
   Catalog,
   LoweredIntent,
+  Preset,
   ResolvedResources,
   Templates,
   ThemePreset,
 } from '../../../contract/records/capabilities.js';
-import type { Intent } from './intent.js';
 import { themeBinding, type BindingModel, type ThemeBinding } from '../../presets/theme-binding.js';
+import type { Intent } from './intent.js';
 import { prefixed } from './digests.js';
 import { ResourceFault, accepted } from './refusal.js';
 
@@ -38,7 +39,7 @@ export function availableThemes(
     (item) =>
       [
         `${item.id}@${item.version}#${prefixed(item.digest)}`,
-        themeBinding(item, owners.model),
+        accepted(themeBinding(item, owners.model)),
       ] as const,
   );
   const aliases = [...new Set(records.map((item) => item.id))].map(
@@ -67,16 +68,24 @@ export function themePresets(catalog: Catalog): readonly ThemePreset[] {
   return catalog.filter((item) => item.kind === 'theme');
 }
 
-/** The binding for a theme id's latest version; Templates decides which version is latest. */
+/**
+ * The binding for a theme id's latest version; Templates decides which version is latest. Throws
+ * ResourceFault with the Templates or Model failure in `source`, or when Templates returns a preset
+ * that is not a theme.
+ */
 function latestBinding(
   catalog: Catalog,
   id: string,
   owners: ThemeOwners,
 ): ThemeBinding {
-  return themeBinding(
-    accepted(owners.templates.read(catalog, { kind: 'theme', id })),
-    owners.model,
-  );
+  const latest = selectedTheme(accepted(owners.templates.read(catalog, { kind: 'theme', id })));
+  return accepted(themeBinding(latest, owners.model));
+}
+
+/** The preset Templates selected, which must be a theme. Throws ResourceFault when it is not. */
+function selectedTheme(preset: Preset): ThemePreset {
+  if (preset.kind !== 'theme') throw new ResourceFault('Selected preset is not a theme');
+  return preset;
 }
 
 /** The theme a retained pin names, which must still be in the current catalog. */

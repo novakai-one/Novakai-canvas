@@ -5,25 +5,33 @@
  * error (`invalid-input`). Authoring owns recovery.
  */
 import type {
+  Assets,
   Request,
   ResolvedResources,
   ResourceRequest,
   Snapshot,
 } from '../../../contract/records/capabilities.js';
 import { authoringDigest } from '../../../contract/schemas.js';
+import {
+  assetBindings,
+  type AssetBinding,
+  type BindingModel,
+  type ThemeBinding,
+} from '../../presets/theme-binding.js';
 import { liveRecord } from '../../workspace/records.js';
 import type { Declared } from './intent.js';
 import type { Themes } from './themes.js';
-import {
-  newAsset,
-  type AssetBinding,
-  type AssetOwners,
-  type BindingModel,
-  type ThemeBinding,
-  type Upload,
-} from '../../presets/theme-binding.js';
 import { PIN_PREFIX, bare, prefixed } from './digests.js';
 import { ResourceFault, accepted } from './refusal.js';
+
+/** The owners asset binding reads: Assets for the bytes' media type, Model for the check. */
+export interface AssetOwners {
+  readonly model: BindingModel;
+  readonly assets: Pick<Assets, 'resolve'>;
+}
+
+/** One supplied upload: an alias and the Assets digest of its bytes. */
+type Upload = Request['assets'][number];
 
 /**
  * Binds each supplied asset over the collection's earlier bindings; an alias replaces only its own.
@@ -92,6 +100,38 @@ function suppliedAsset(
   );
   if (!existing) throw new ResourceFault(`Missing authored asset metadata: ${upload.alias}`);
   return existing;
+}
+
+/**
+ * Assets resolves the bytes and their media type; Model checks the authored metadata. Throws
+ * ResourceFault with the Assets or Model failure in `source`, or when Model returns no binding.
+ */
+function newAsset(
+  upload: Upload,
+  metadata: ResourceRequest,
+  theme: ThemeBinding,
+  owners: AssetOwners,
+): AssetBinding {
+  const blob = accepted(owners.assets.resolve(upload.digest));
+  const draft = {
+    id: upload.alias,
+    digest: prefixed(upload.digest),
+    mediaType: blob.descriptor.mediaType,
+    alt: metadata.alt ?? upload.alias,
+    ...optionalMetadata(metadata),
+  };
+  const [validated] = accepted(assetBindings([draft], theme, owners.model));
+  if (!validated) throw new ResourceFault('Asset binding is missing after owner validation');
+  return validated;
+}
+
+/** Licence and attribution stay absent unless the source writes them; none is invented. */
+function optionalMetadata(metadata: ResourceRequest): Readonly<Record<string, string>> {
+  return Object.fromEntries(
+    Object.entries({ license: metadata.license, attribution: metadata.attribution }).filter(
+      (item): item is [string, string] => typeof item[1] === 'string',
+    ),
+  );
 }
 
 /** Asset bindings keyed by id; a later binding replaces an earlier one with the same id. */

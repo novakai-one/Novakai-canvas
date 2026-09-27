@@ -1,132 +1,38 @@
 /*
- * The recipe and theme codecs Templates admits presets with. Recipes are lowered and printed by
- * Language; themes are resolved by Design System against an exact base; Templates brands are
- * minted after the owner has checked the data. Pure over the injected context. Every failure is
- * Templates' `invalid-input` at `preset`: the caller keeps the source, corrects it and prepares
- * again; Authoring owns commit.
+ * The theme codec Templates admits themes with. Design System resolves the theme against an exact
+ * base; Templates brands are minted after Design System has checked the tokens. Pure over the
+ * injected context. Every failure is Templates' `invalid-input` at `preset` (codec-refusal.ts):
+ * the caller keeps the source, corrects it and prepares again; Authoring owns commit.
  */
-import type { FailureSource } from '../../contract/records/transport/failure-source.js';
-import { presetId, presetVersion, presetDigest } from '../../contract/schemas.js';
+import { presetDigest } from '../../contract/schemas.js';
 import type {
-  LanguageResult,
-  LoweredIntent,
+  DesignSystem,
   PortableTheme,
   PortableToken,
-  RecipePayload,
   TemplatesResult,
   ThemePayload,
   ThemePreset,
 } from '../../contract/records/capabilities.js';
-import type { PresetCodecs, PresetContext } from '../../contract/records/presets/codecs.js';
+import type { PresetCodecs } from '../../contract/records/presets/codecs.js';
 import { themeInput, type ThemeInput } from '../../contract/records/presets/theme-input.js';
+import { success } from '../../contract/errors.js';
+import { guarded, rejected } from './codec-refusal.js';
+import { brandedThemePin } from './theme-pin.js';
 
-/**
- * Binds the recipe and theme codecs to one preset context. `recipe.inspect` and `theme.resolve`
- * never throw: a throw inside them becomes `invalid-input` at `preset` ("Preset provider returned
- * invalid identity or token data"). `recipe.expand` fails with `invalid-input` at `preset` when
- * Language rejects the source (Language's failure kept as source).
- */
-export function createPresetCodecs(context: PresetContext): PresetCodecs {
-  return {
-    recipe: {
-      inspect: (source, family) => guarded(() => inspected(source, family, context)),
-      expand: (source, namespace) =>
-        translated(context.language.expand({ source, namespace, resources: context.resources })),
-    },
-    theme: { resolve: (raw, available) => guarded(() => theme(raw, available, context)) },
-  };
+/** What the theme codec reads: Design System to resolve a theme, and the token sources. */
+export interface ThemeCodecContext {
+  readonly system: Pick<DesignSystem, 'resolveTheme'>;
+  /** The raw token source envelope; Design System revalidates it on every call. */
+  readonly sources: unknown;
 }
 
 /**
- * The recipe payload for one source: lowered in create mode, then printed canonically; the
- * dependency pins come from the lowered collection. Fails with `invalid-input` at `preset` when
- * Language rejects the source or its printing (Language's failure kept as source). Throws when a
- * pinned identity is not a Templates brand.
+ * Binds the theme codec to one context. `resolve` never throws: a throw inside it becomes
+ * `invalid-input` at `preset` ("Preset provider returned invalid identity or token data"). Other
+ * failures are listed on `theme`.
  */
-function inspected(
-  source: string,
-  family: RecipePayload['family'],
-  context: PresetContext,
-): TemplatesResult<RecipePayload> {
-  const lowered = translated(
-    context.language.lower({
-      source,
-      mode: 'create',
-      snapshot: null,
-      resources: context.resources,
-    }),
-  );
-  if (!lowered.ok) return lowered;
-  const printed = translated(
-    context.language.print({ collection: lowered.value.collection, scope: { kind: 'all' } }),
-  );
-  if (!printed.ok) return printed;
-  return recipePayload(lowered.value, printed.value.source, family);
-}
-
-/**
- * Language's value unchanged, or `invalid-input` at `preset` ("Language rejected the preset
- * source") with Language's failure kept as source.
- */
-function translated<T>(result: LanguageResult<T>): TemplatesResult<T> {
-  if (result.ok) return result;
-  return rejected('Language rejected the preset source', result.error);
-}
-
-/**
- * The recipe payload from a lowered collection: its asset digests and its one theme pin, each
- * with the `sha256:` prefix removed. Templates later checks digest syntax and dependency closure.
- * Never fails; throws when a pinned identity is not a Templates brand.
- */
-function recipePayload(
-  intent: LoweredIntent,
-  source: string,
-  family: RecipePayload['family'],
-): TemplatesResult<RecipePayload> {
-  const theme = intent.collection.theme;
-  const payload = {
-    languageVersion: 1,
-    source,
-    family,
-    assets: intent.collection.assets.map((item) => item.digest.slice(7)),
-    themes: [
-      { kind: 'theme', id: theme.id, version: theme.version, digest: theme.digest.slice(7) },
-    ],
-  };
-  return checkedPayload(payload);
-}
-
-/**
- * Mints the Templates brands for the payload's asset digests and theme pins (language version
- * 1). Never fails; throws when an identity does not match its Templates schema.
- */
-function checkedPayload(input: {
-  readonly languageVersion: number;
-  readonly source: string;
-  readonly family: RecipePayload['family'];
-  readonly assets: readonly string[];
-  readonly themes: readonly {
-    readonly kind: string;
-    readonly id: string;
-    readonly version: string;
-    readonly digest: string;
-  }[];
-}): TemplatesResult<RecipePayload> {
-  return {
-    ok: true,
-    value: {
-      languageVersion: 1,
-      source: input.source,
-      family: input.family,
-      assets: input.assets.map((value) => presetDigest.parse(value)),
-      themes: input.themes.map((pin) => ({
-        kind: 'theme',
-        id: presetId.parse(pin.id),
-        version: presetVersion.parse(pin.version),
-        digest: presetDigest.parse(pin.digest),
-      })),
-    },
-  };
+export function createThemeCodec(context: ThemeCodecContext): PresetCodecs['theme'] {
+  return { resolve: (raw, available) => guarded(() => theme(raw, available, context)) };
 }
 
 /**
@@ -137,7 +43,7 @@ function checkedPayload(input: {
 function theme(
   raw: unknown,
   available: readonly ThemePreset[],
-  context: PresetContext,
+  context: ThemeCodecContext,
 ): TemplatesResult<ThemePayload> {
   const input = themeInput.safeParse(raw);
   if (!input.success) return rejected('Theme admission requires a base, fonts and overrides');
@@ -153,7 +59,7 @@ function theme(
 function resolvedTheme(
   input: ThemeInput,
   available: readonly ThemePreset[],
-  context: PresetContext,
+  context: ThemeCodecContext,
 ): TemplatesResult<ThemePayload> {
   const base = selectedBase(input.base, available);
   if (!base.ok) return base;
@@ -175,7 +81,7 @@ function selectedBase(
   input: ThemeInput['base'],
   available: readonly ThemePreset[],
 ): TemplatesResult<unknown> {
-  if (input.kind === 'ui') return { ok: true, value: input };
+  if (input.kind === 'ui') return success(input);
   const found = available.find(
     (item) =>
       item.id === input.pin.id &&
@@ -183,10 +89,12 @@ function selectedBase(
       item.digest === input.pin.digest,
   );
   if (!found) return rejected('The exact base theme is unavailable');
-  return {
-    ok: true,
-    value: { kind: 'preset', pin: input.pin, payload: found.payload, fonts: baseFonts(found) },
-  };
+  return success({
+    kind: 'preset',
+    pin: input.pin,
+    payload: found.payload,
+    fonts: baseFonts(found),
+  });
 }
 
 /** The stored theme's font tokens as approved font pins; they already passed owner admission. */
@@ -203,62 +111,28 @@ function baseFonts(
  * base pin; token values are unchanged. Never fails; throws when an identity does not match its
  * Templates schema.
  */
-function checkedThemePayload(value: PortableTheme): TemplatesResult<ThemePayload> {
-  return {
-    ok: true,
-    value: {
-      ...value,
-      tokens: Object.fromEntries(
-        Object.entries(value.tokens).map(([id, value]) => [id, token(value)]),
-      ),
-      fonts: [...new Set(value.fonts.map((value) => presetDigest.parse(value)))].toSorted(),
-      base: basePin(value.base),
-    },
-  };
+function checkedThemePayload(resolved: PortableTheme): TemplatesResult<ThemePayload> {
+  return success({
+    ...resolved,
+    tokens: Object.fromEntries(
+      Object.entries(resolved.tokens).map(([id, entry]) => [id, token(entry)]),
+    ),
+    fonts: [...new Set(resolved.fonts.map((font) => presetDigest.parse(font)))].toSorted(),
+    base: basePin(resolved.base),
+  });
 }
 
 /** A font token with its digest branded; other tokens unchanged. Throws on a malformed digest. */
-function token(value: PortableToken): ThemePayload['tokens'][string] {
-  if (value.type !== 'font') return value;
-  return { ...value, digest: presetDigest.parse(value.digest) };
-}
-
-/** The exact base pin with Templates brands, or `null` for no base. Throws on a malformed identity. */
-function basePin(base: PortableTheme['base']): ThemePayload['base'] {
-  if (base === null) return null;
-  return {
-    kind: 'theme',
-    id: presetId.parse(base.id),
-    version: presetVersion.parse(base.version),
-    digest: presetDigest.parse(base.digest),
-  };
+function token(entry: PortableToken): ThemePayload['tokens'][string] {
+  if (entry.type !== 'font') return entry;
+  return { ...entry, digest: presetDigest.parse(entry.digest) };
 }
 
 /**
- * The operation's result, or `invalid-input` at `preset` ("Preset provider returned invalid
- * identity or token data") when it throws.
+ * The exact base pin with Templates brands, or `null` for no base. Throws on a malformed
+ * identity.
  */
-function guarded<T>(operation: () => TemplatesResult<T>): TemplatesResult<T> {
-  try {
-    return operation();
-  } catch {
-    return rejected('Preset provider returned invalid identity or token data');
-  }
-}
-
-/** The codec failure: `invalid-input` at `preset` with this message and the owner's failure, if any. */
-function rejected<T>(
-  message: string,
-  source?: FailureSource,
-): TemplatesResult<T> {
-  return {
-    ok: false,
-    error: {
-      code: 'invalid-input',
-      source,
-      path: 'preset',
-      message,
-      recovery: 'Retain the source; correct the named preset input and prepare again.',
-    },
-  };
+function basePin(base: PortableTheme['base']): ThemePayload['base'] {
+  if (base === null) return null;
+  return brandedThemePin(base);
 }
