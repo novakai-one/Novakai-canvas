@@ -1,6 +1,6 @@
 /*
  * Foreign vocabulary: the capability and service records the CLI speaks in. Type-only re-exports
- * keep core/render and the render factories inside every capability's public entry.
+ * keep CLI core, contract ports and the render factories inside every capability's public entry.
  */
 export type { Collection } from '@novakai/canvas-model';
 export type { Language, ResolvedResources } from '@novakai/canvas-language';
