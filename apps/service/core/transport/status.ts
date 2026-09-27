@@ -39,8 +39,9 @@ function wireValue(outcome: WireOutcome): WireOutcome {
 
 /**
  * The status of each wire code: 401 refused credentials, 403 refused permission, 404 missing,
- * 409 a conflict or cancellation to reconcile, 503 an unavailable dependency, and 422 for every
- * other refusal (the caller corrects its input).
+ * 409 a generation, revision or request-ID conflict (`conflict`, `revision-conflict`,
+ * `request-reused`) or a cancellation (`cancelled`), 503 an unavailable dependency, and 422 for
+ * every other code, including `constraint-conflict` (the caller corrects its input).
  */
 const FAILURE_STATUS: Readonly<Record<WireErrorCode, FailureStatus>> = Object.freeze({
   'invalid-input': 422,

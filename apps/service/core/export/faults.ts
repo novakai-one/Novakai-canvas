@@ -9,6 +9,7 @@ import type { RouteOutcome } from '../../contract/records/transport/protocol.js'
 import type { OperationSource } from '../../contract/records/transport/failure-source.js';
 import type {
   AssetResult,
+  AuthoringErrorCode,
   ExportDiagnostic,
   ExportErrorCode,
   ExportResult,
@@ -37,9 +38,12 @@ export function cancelledExport(): ExportResult<never> {
   return exportRejection('cancelled', 'export', 'Export was cancelled');
 }
 
+/** An Authoring read or service render failure; the codes `ownerRejection` translates. */
+type OwnerFailure = { readonly code: AuthoringErrorCode | ErrorCode; readonly message: string };
+
 /** An owner failure at `path`: cancellation stays cancellation, anything else failed encoding. */
 export function ownerRejection(
-  error: { readonly code: string; readonly message: string },
+  error: OwnerFailure,
   path: string,
 ): ExportResult<never> {
   return exportRejection(
