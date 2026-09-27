@@ -8,13 +8,8 @@ import { readNestedProjectionSupports } from './nested-lane-projection.js';
 import { axes, contains } from './prototype-road-geometry.js';
 import { nestedLanePitch } from './prototype-nested-placement.js';
 import type { retainSupportInput } from './nested-support-input.js';
-import {
-  anchor,
-  reject,
-  required,
-  type Anchor,
-  type SupportGraph,
-} from './nested-support-graph.js';
+import { anchor, reject, required } from './nested-support-graph.js';
+import type { Anchor, SupportGraph } from './nested-support-graph.js';
 import { directedRelation } from './nested-support-structure.js';
 
 type Input = ReturnType<typeof retainSupportInput>;

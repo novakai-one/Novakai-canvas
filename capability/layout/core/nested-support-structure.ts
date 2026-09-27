@@ -2,15 +2,8 @@ import type { PrototypeBounds, PrototypeRoad } from '../contract/records/road-pr
 import type { NestedSupportConstraint } from '../contract/records/nested-support.js';
 import type { SectionPlacement } from './prototype-nested-placement.js';
 import { axes } from './prototype-road-geometry.js';
-import {
-  anchor,
-  equate,
-  relate,
-  reject,
-  required,
-  type Anchor,
-  type SupportGraph,
-} from './nested-support-graph.js';
+import { anchor, equate, relate, reject, required } from './nested-support-graph.js';
+import type { Anchor, SupportGraph } from './nested-support-graph.js';
 import type { retainSupportInput } from './nested-support-input.js';
 
 type Input = ReturnType<typeof retainSupportInput>;

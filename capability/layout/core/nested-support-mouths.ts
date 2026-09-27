@@ -8,15 +8,8 @@ import { terminalDepth } from './nested-terminal-pins.js';
 import { axes } from './prototype-road-geometry.js';
 import { nestedLanePitch } from './prototype-nested-placement.js';
 import type { retainSupportInput } from './nested-support-input.js';
-import {
-  anchor,
-  equate,
-  equateOffset,
-  reject,
-  required,
-  type Anchor,
-  type SupportGraph,
-} from './nested-support-graph.js';
+import { anchor, equate, equateOffset, reject, required } from './nested-support-graph.js';
+import type { Anchor, SupportGraph } from './nested-support-graph.js';
 import { directedRelation } from './nested-support-structure.js';
 
 type Input = ReturnType<typeof retainSupportInput>;
