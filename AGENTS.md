@@ -3,6 +3,11 @@
 A local React diagram workspace. Humans and agents author semantic DSL; the app measures, lays out and routes it.
 Start with [README.md](README.md) for the walkthrough and running instructions.
 
+# Mandatory REQUIREMENT
+
+Upon reading this file - you must state explicitly which of the standards and mandatory reading documents you have read.
+You must stats the command that you executed to verify you have read the files listed in ## Standards and mandatory reading for agents
+
 ## Standards and Mandatory Reading for Agents:
 
 CODING-STANDARDS.md
@@ -13,6 +18,7 @@ AGENTS-AUTHORING-GUIDE-1OF2.md
 AGENTS-AUTHORING-GUIDE-2OF2.md
 AGENTS-TYPESCRIPT-CODING-STANDARDS
 AGENTS-SPEC-AUTHORING.md
+
 
 ## Find the code
 
@@ -49,3 +55,4 @@ AGENTS-SPEC-AUTHORING.md
 - Follow [coding standards](CODING-STANDARDS.md) and [folder structure](docs/standards/REPO-FOLDER-STRUCTURE.md) for engineering rules and responsibility boundaries.
 - Run `pnpm check`; inspect visual changes in the app. Report existing failures rather than claiming a clean check.
 - Only use subagents when the user requests them.
+

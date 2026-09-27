@@ -100,7 +100,12 @@ export {
   type ConnectionReview,
 } from '../core/editing/connection/draft.js';
 export { connectionRequest } from '../core/editing/connection/request.js';
-export type { ConnectionPolicy } from '../core/editing/connection/types.js';
+export type { ConnectionPolicy, IdGrammar } from '../core/editing/connection/types.js';
+export {
+  connectionProblem,
+  releasedConnection,
+  withRequestState,
+} from '../core/editing/connection/capture.js';
 export { definitionRequest } from '../core/editing/definition-request.js';
 export { reusableSession, retainCamera, renderChanged } from '../core/workspace/session-reuse.js';
 export { bindHistoryKeys } from '../core/workspace/history-keys.js';
@@ -161,3 +166,63 @@ export {
   submissionAllowed,
   unresolvedInverses,
 } from '../core/workspace/history/journal.js';
+export {
+  reviewableMovement,
+  reviewOutcome,
+  type ReviewOutcome,
+} from '../core/workspace/movement-review/outcome.js';
+export {
+  applicable,
+  awaitingChoice,
+  currentChoice,
+  failedPhase,
+  heldFor,
+  heldMovement,
+  inPhase,
+  moveSubmissionBlocked,
+  offeredOption,
+  recoveryPhase,
+  requestedIn,
+  savingRequest,
+  sendingMove,
+  withOption,
+} from '../core/workspace/movement-review/phases.js';
+export {
+  alreadySaving,
+  movementActive,
+  operationBusy,
+  optionPreviewRefused,
+  previewGone,
+  previewRefused,
+} from '../core/workspace/movement-review/failures.js';
+export type { MovementHeld, MovementSlot } from '../core/workspace/movement-review/types.js';
+export {
+  captureFor,
+  creationLocked,
+  dismissedCaptures,
+  holding,
+  landedElsewhere,
+  noCaptures,
+  refusedCaptures,
+  released,
+  settledCaptures,
+  withRequest,
+  type CaptureIds,
+  type CreationCapture,
+  type CreationCaptures,
+} from '../core/creation/captures.js';
+export {
+  addedCreation,
+  cancelledCreation,
+  emptyCreation,
+  refusedElsewhereNote,
+  settledCreation,
+} from '../core/creation/drafts.js';
+export {
+  capturedIn,
+  creationContext,
+  diagramChanges,
+  diagramTarget,
+  groupChanges,
+  objectChanges,
+} from '../core/creation/records.js';

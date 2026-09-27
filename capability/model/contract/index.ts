@@ -27,6 +27,8 @@ export {
   assetId,
   definitionId,
   relationshipId,
+  sectionId,
+  groupId,
 } from './brands.js';
 export type { ObjectId, SectionId, DescendantId, DefinitionId } from './brands.js';
 
