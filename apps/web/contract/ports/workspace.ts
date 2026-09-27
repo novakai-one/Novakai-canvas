@@ -9,7 +9,8 @@ import type { InspectorFactory } from '../records/inspector.js';
 import type { DefinitionFactory } from '../records/definitions.js';
 import type { SourceFactory } from '../records/source.js';
 import type { WorkspaceNavigation } from './navigation.js';
-import type { WorkspaceInputs } from './workspace-inputs.js';
+import type { WorkspaceDecoders } from './workspace-decoders.js';
+import type { RequestBuilders } from './request-builders.js';
 import type { PanelController } from '../panel-types.js';
 import type { SubmissionFactory } from '../records/submission.js';
 import type { Result } from '../errors.js';
@@ -40,10 +41,8 @@ export interface CanvasSessions {
 export interface WorkspaceBindings {
   readonly client: Pick<ServiceClient, 'get' | 'changes'> & Partial<Pick<ServiceClient, 'bytes'>>;
   readonly navigation: WorkspaceNavigation;
-  readonly inputs: Pick<
-    WorkspaceInputs,
-    'snapshot' | 'diagram' | 'model' | 'dsl' | 'newSource' | 'library' | 'history'
-  >;
+  readonly inputs: Pick<WorkspaceDecoders, 'snapshot' | 'diagram'> &
+    Pick<RequestBuilders, 'model' | 'dsl' | 'newSource' | 'library' | 'history'>;
   readonly sessions: CanvasSessions;
   readonly edits: EditPlanner;
   readonly moveReview?: (

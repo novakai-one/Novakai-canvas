@@ -1,3 +1,8 @@
+/*
+ * Panel layout rules: the mode for a viewport width, which side panels show, the default
+ * preferences, the side each tab sits on, and each panel's width. Pure; nothing is stored here.
+ * The panel store (`adapters/sessions/panel-session.ts`) holds the state and publishes it to React.
+ */
 import type {
   PanelId,
   PanelMode,

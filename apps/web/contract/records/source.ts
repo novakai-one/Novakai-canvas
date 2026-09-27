@@ -3,7 +3,8 @@ import type { EditingBase } from './editor-recovery.js';
 import type { ActiveDiagram } from './active-diagram.js';
 import type { Submission } from './submission.js';
 import type { Result, Diagnostic } from '../errors.js';
-import type { WorkspaceInputs } from '../ports/workspace-inputs.js';
+import type { WorkspaceDecoders } from '../ports/workspace-decoders.js';
+import type { RequestBuilders } from '../ports/request-builders.js';
 import type { DraftRetention } from '../ports/draft-retention.js';
 /** All retained source fields belong to one editor session, independent of rendered diagram updates. */
 export interface SourceView {
@@ -45,7 +46,8 @@ export interface SourceCallbacks {
   ): Promise<Result<Receipt>>;
 }
 export interface SourceBindings extends SourceCallbacks {
-  readonly inputs: Pick<WorkspaceInputs, 'source' | 'dsl' | 'sourceRecovery'>;
+  readonly inputs: Pick<WorkspaceDecoders, 'sourceRecovery'> &
+    Pick<RequestBuilders, 'source' | 'dsl'>;
   readonly retention: DraftRetention;
   nextId(): string;
 }

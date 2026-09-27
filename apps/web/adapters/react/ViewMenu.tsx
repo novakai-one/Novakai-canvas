@@ -5,10 +5,16 @@ import type { ViewMenuProps, DesignSlots } from '../../contract/react-types.js';
 import type { PanelController } from '../../contract/panel-types.js';
 import type { InterfaceControl, PanelId, PanelState } from '../../contract/records/panels.js';
 
+/** The panel store parts the View menu reads and drives. */
+type ViewPanels = Pick<
+  PanelController,
+  'subscribe' | 'getSnapshot' | 'open' | 'setInterfaceVisibility' | 'hideInterface'
+>;
+
 /** View owns temporary interface visibility while the workspace retains diagram and draft state. */
 export function createViewMenu(
   { Button, Menu }: Pick<DesignSlots, 'Button' | 'Menu'>,
-  panels: PanelController,
+  panels: ViewPanels,
   portal: HTMLElement,
 ): ComponentType<ViewMenuProps> {
   function ViewMenu({ controller, view }: ViewMenuProps): ReactElement {
@@ -33,7 +39,7 @@ function viewItems(
   view: ViewMenuProps['view'],
   state: PanelState,
   controller: ViewMenuProps['controller'],
-  panels: PanelController,
+  panels: ViewPanels,
 ) {
   const visibility = state.interfaceVisibility;
   return [
@@ -67,7 +73,7 @@ function controlItem(
   control: InterfaceControl,
   visible: boolean,
   label: string,
-  panels: PanelController,
+  panels: ViewPanels,
 ) {
   return {
     id: control,

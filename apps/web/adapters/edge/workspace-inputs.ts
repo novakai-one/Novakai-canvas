@@ -4,7 +4,8 @@ import type { Snapshot, Request } from '@novakai/canvas-authoring';
 import { validate } from '@novakai/canvas-model';
 import type { Collection, Change } from '@novakai/canvas-model';
 import type { Language } from '@novakai/canvas-language';
-import type { WorkspaceInputs } from '../../contract/ports/workspace-inputs.js';
+import type { WorkspaceDecoders } from '../../contract/ports/workspace-decoders.js';
+import type { RequestBuilders } from '../../contract/ports/request-builders.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
 import type {
@@ -26,7 +27,7 @@ function collections(snapshot: Snapshot): Result<readonly Collection[]> {
   return { ok: true, value: candidates.flatMap((item) => (item.ok ? [item.value] : [])) };
 }
 /** Authoring owns snapshot shape; Model owns each live collection document. */
-function snapshot(input: unknown): ReturnType<WorkspaceInputs['snapshot']> {
+function snapshot(input: unknown): ReturnType<WorkspaceDecoders['snapshot']> {
   const checked = snapshotSchema.safeParse(input);
   if (!checked.success) return failure('invalid-workspace', 'Workspace response was invalid');
   const content = collections(checked.data);
@@ -104,9 +105,9 @@ function newSource(
 }
 /** Inputs are owner-based translators. Diagram readout and Language printing are supplied at composition, avoiding sibling imports. */
 export function createWorkspaceInputs(
-  diagram: WorkspaceInputs['diagram'],
+  diagram: WorkspaceDecoders['diagram'],
   language: Pick<Language, 'print'>,
-): WorkspaceInputs {
+): WorkspaceDecoders & RequestBuilders {
   return {
     snapshot,
     history,
@@ -154,7 +155,7 @@ interface SourceInput {
   readonly collection: string;
   readonly edit: number;
 }
-function sourceRecovery(input: unknown): ReturnType<WorkspaceInputs['sourceRecovery']> {
+function sourceRecovery(input: unknown): ReturnType<WorkspaceDecoders['sourceRecovery']> {
   const parsed = sourceInput(input);
   if (!parsed.ok) return parsed;
   const base = captureCollectionBase(parsed.value.base, parsed.value.collection);
@@ -192,7 +193,7 @@ function legacySourceValue(input: z.infer<typeof legacySource>): Result<SourceIn
 }
 function admitSource(
   input: SourceInput & { readonly base: CapturedCollectionBase },
-): ReturnType<WorkspaceInputs['sourceRecovery']> {
+): ReturnType<WorkspaceDecoders['sourceRecovery']> {
   const collection = admittedCollection(input);
   if (!collection.ok) return collection;
   return {

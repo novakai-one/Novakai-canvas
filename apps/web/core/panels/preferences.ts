@@ -1,3 +1,8 @@
+/*
+ * Panel preference rules: move, show or hide a section, match saved preferences to the registered
+ * sections, and bound a width. Pure; nothing is stored here. The panel store
+ * (`adapters/sessions/panel-session.ts`) saves the result and reports a storage failure.
+ */
 import type {
   PanelId,
   PanelPreferences,
@@ -68,7 +73,7 @@ export function reconcilePanelPreferences(
     },
   };
 }
-/** The IDs of the definitions whose default side is `side`, in registration order. New registrations do not overwrite existing user order. */
+/** The IDs of the definitions whose default side is `side`, in registration order. */
 export function sectionsOnSide(
   definitions: readonly PanelSectionDefinition[],
   side: PanelId,

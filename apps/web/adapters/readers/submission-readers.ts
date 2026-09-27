@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { requestSchema, receiptSchema } from '@novakai/canvas-authoring';
 import type { AppliedCommit, SubmissionReaders } from '../../contract/records/submission.js';
-import type { WorkspaceInputs } from '../../contract/ports/workspace-inputs.js';
+import type { WorkspaceDecoders } from '../../contract/ports/workspace-decoders.js';
 import type { Receipt, Request } from '../../contract/records/owners.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
@@ -18,7 +18,7 @@ const appliedAnswer = z.strictObject({ receipt: receiptSchema, snapshot: z.unkno
  * An apply answer's snapshot goes through the same checked reader as a workspace read.
  */
 export function createSubmissionReaders(
-  inputs: Pick<WorkspaceInputs, 'snapshot'>,
+  inputs: Pick<WorkspaceDecoders, 'snapshot'>,
 ): SubmissionReaders {
   return {
     pending: (input) => {
@@ -46,7 +46,7 @@ function readReceipt(
 function readApplied(
   input: unknown,
   request: Request,
-  inputs: Pick<WorkspaceInputs, 'snapshot'>,
+  inputs: Pick<WorkspaceDecoders, 'snapshot'>,
 ): Result<AppliedCommit> {
   const answer = appliedAnswer.safeParse(input);
   if (!answer.success)
@@ -61,7 +61,7 @@ function readApplied(
 function checkedApplied(
   receipt: Result<Receipt>,
   snapshot: unknown,
-  inputs: Pick<WorkspaceInputs, 'snapshot'>,
+  inputs: Pick<WorkspaceDecoders, 'snapshot'>,
 ): Result<AppliedCommit> {
   if (!receipt.ok) return receipt;
   const carried = inputs.snapshot(snapshot);

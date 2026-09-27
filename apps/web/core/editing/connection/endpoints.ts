@@ -15,12 +15,18 @@ import type { ConnectionEndpointView } from '../../../contract/records/connectio
 import type { ConnectionIntent, ConnectionPolicy, ResolvedEndpoints } from './types.js';
 import { connectionFailure } from './failure.js';
 
+/** The policy parts endpoint resolution reads: the member ID grammar and the endpoint tables. */
+type EndpointPolicy = Pick<
+  ConnectionPolicy,
+  'descendantId' | 'memberEndpoints' | 'genericMemberEndpoints'
+>;
+
 /** The scene node a gesture endpoint can point at. */
 type SceneNode = ActiveDiagram['document']['scene']['sections'][number]['nodes'][number];
 
 /** Both gesture endpoints resolved to canonical addresses. */
 export function resolveEndpoints(
-  policy: ConnectionPolicy,
+  policy: EndpointPolicy,
   active: ActiveDiagram,
   intent: ConnectionIntent,
 ): Result<ResolvedEndpoints> {
@@ -37,7 +43,7 @@ export function resolveEndpoints(
 
 /** One endpoint as Model addresses it; the member ID is checked against the grammar. */
 export function relationshipEndpoint(
-  policy: ConnectionPolicy,
+  policy: EndpointPolicy,
   endpoint: ConnectionEndpointView,
 ): Result<Endpoint> {
   if (endpoint.member === undefined) {
@@ -56,7 +62,7 @@ export function relationshipEndpoint(
 
 /** One endpoint: its node and object must still exist, then its member must be addressable. */
 function resolveEndpoint(
-  policy: ConnectionPolicy,
+  policy: EndpointPolicy,
   active: ActiveDiagram,
   endpoint: ConnectionIntent['source'],
 ): Result<ConnectionEndpointView> {
@@ -103,7 +109,7 @@ function endpointObject(
 
 /** The member address of an endpoint; no member addresses the whole object. */
 function endpointMember(
-  policy: ConnectionPolicy,
+  policy: EndpointPolicy,
   object: DiagramObject,
   node: SceneNode,
   member: string | null,
@@ -116,7 +122,7 @@ function endpointMember(
 
 /** A member must exist in the node's measured anchors and be a legal endpoint on the object. */
 function addressMember(
-  policy: ConnectionPolicy,
+  policy: EndpointPolicy,
   object: DiagramObject,
   node: SceneNode,
   member: string,
@@ -158,7 +164,7 @@ function endpointView(
 
 /** A member is a legal endpoint when its kind is allowed on this kind of object. */
 function canonicalMemberAllowed(
-  policy: ConnectionPolicy,
+  policy: EndpointPolicy,
   object: DiagramObject,
   member: string,
 ): boolean {
