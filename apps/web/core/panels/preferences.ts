@@ -7,18 +7,18 @@
 import type { WorkspaceId } from '../../contract/brands.js';
 import type {
   PanelId,
-  PanelLayout,
   PanelPreferences,
+  StoredPanelPreferences,
   PanelSectionDefinition,
   PanelSizing,
 } from '../../contract/records/panels.js';
 /** Moving removes the stable ID from both sides first, preventing duplicate sections after repeated moves. */
 export function movePanelSection(
-  preferences: PanelLayout,
+  preferences: PanelPreferences,
   id: string,
   side: PanelId,
   index: number,
-): PanelLayout {
+): PanelPreferences {
   const sections = {
     left: preferences.sections.left.filter((item) => item !== id),
     right: preferences.sections.right.filter((item) => item !== id),
@@ -44,10 +44,10 @@ export function panelMembership(
 }
 /** Unknown/removed saved IDs are ignored; newly registered sections appear in their declared default location. */
 export function reconcilePanelPreferences(
-  saved: PanelLayout,
+  saved: PanelPreferences,
   definitions: readonly PanelSectionDefinition[],
   sizing: PanelSizing,
-): PanelLayout {
+): PanelPreferences {
   const known = new Set(definitions.map((item) => item.id));
   const ordered = [...new Set([...saved.sections.left, ...saved.sections.right])];
   const left = ordered.filter((id) =>
@@ -77,21 +77,21 @@ export function reconcilePanelPreferences(
   };
 }
 /**
- * The record stored for `workspace`: its layout under schema version 1. Built field by field, so
- * a layout value that carries other keys still stores a record the strict reader accepts.
+ * The record stored for `workspace`: its preferences under schema version 1. Built field by
+ * field, so a value that carries other keys still stores a record the strict reader accepts.
  */
 export function storedPanels(
-  layout: PanelLayout,
+  preferences: PanelPreferences,
   workspace: WorkspaceId,
-): PanelPreferences {
+): StoredPanelPreferences {
   return {
     schemaVersion: 1,
     workspace,
-    tabs: layout.tabs,
-    sections: layout.sections,
-    collapsed: layout.collapsed,
-    hidden: layout.hidden,
-    widths: layout.widths,
+    tabs: preferences.tabs,
+    sections: preferences.sections,
+    collapsed: preferences.collapsed,
+    hidden: preferences.hidden,
+    widths: preferences.widths,
   };
 }
 /** The IDs of the definitions whose default side is `side`, in registration order. */

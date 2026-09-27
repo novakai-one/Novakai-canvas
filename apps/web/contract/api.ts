@@ -34,8 +34,8 @@ export {
   storedPanels,
 } from '../core/panels/preferences.js';
 export {
-  unknownWorkspace,
-  knownWorkspace,
+  unrestoredWorkspace,
+  restoredWorkspace,
   snapshotScope,
   inWorkspace,
 } from '../core/workspace/workspace-scope.js';

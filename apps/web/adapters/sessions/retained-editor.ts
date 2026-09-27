@@ -8,13 +8,13 @@ import type { WorkspaceId } from '../../contract/brands.js';
 import type { WorkspaceScope } from '../../contract/records/workspace-scope.js';
 import type { Result, Diagnostic } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
-import { inWorkspace, knownWorkspace, unknownWorkspace } from '../../contract/api.js';
+import { inWorkspace, restoredWorkspace, unrestoredWorkspace } from '../../contract/api.js';
 /** Browser forms share persistence and acknowledgement policy; feature bindings own command replay and admission. */
 export function createRetainedEditor<Selection, Command, Draft extends RetainedDraft>(
   bindings: RetainedEditorBindings<Selection, Command, Draft>,
 ): RetainedEditor<Selection, Command, Draft> {
   let state: RetainedEditorState<Draft> = { drafts: [], problem: null };
-  let scope: WorkspaceScope = unknownWorkspace;
+  let scope: WorkspaceScope = unrestoredWorkspace;
   const listeners = new Set<() => void>();
   /** Cached immutable snapshots satisfy React external-store identity requirements. */
   function publish(next: RetainedEditorState<Draft>): void {
@@ -29,7 +29,7 @@ export function createRetainedEditor<Selection, Command, Draft extends RetainedD
   }
   /** Failed local retention remains visible; the in-memory form is never silently discarded. */
   function save(drafts: readonly Draft[]): Result<void> {
-    if (scope.phase === 'unknown')
+    if (scope.phase === 'unrestored')
       return reject(
         failure('unavailable', 'Recover this workspace before changing retained forms').error,
       );
@@ -49,7 +49,7 @@ export function createRetainedEditor<Selection, Command, Draft extends RetainedD
   }
   /** Read failure blocks all writes while preserving previous forms and both workspaces' stored data. */
   function restore(id: WorkspaceId): Result<void> {
-    scope = unknownWorkspace;
+    scope = unrestoredWorkspace;
     const stored = bindings.retention.read(`${bindings.namespace}.${id}`);
     if (!stored.ok) return reject(stored.error);
     return restoreValue(stored.value, id);
@@ -76,7 +76,7 @@ export function createRetainedEditor<Selection, Command, Draft extends RetainedD
           'Stored forms belong to a different workspace; data was retained',
         ).error,
       );
-    scope = knownWorkspace(id);
+    scope = restoredWorkspace(id);
     publish({ drafts, problem: null });
     return { ok: true, value: undefined };
   }

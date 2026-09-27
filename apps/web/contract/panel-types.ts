@@ -9,7 +9,7 @@ import type { DraftRetention } from './ports/draft-retention.js';
 import type {
   InterfaceControl,
   PanelId,
-  PanelPreferences,
+  StoredPanelPreferences,
   PanelSectionDefinition,
   PanelSizing,
   PanelState,
@@ -62,7 +62,7 @@ export interface PanelBindings {
   read(
     input: unknown,
     workspace: WorkspaceId,
-  ): Result<PanelPreferences>;
+  ): Result<StoredPanelPreferences>;
   /** Show a panel-layout failure (`panel-preferences`); it stays shown across renders. */
   report(problem: Diagnostic): void;
 }

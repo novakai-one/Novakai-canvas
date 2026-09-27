@@ -5,7 +5,7 @@
 import { z } from 'zod';
 import { workspaceId } from '@novakai/canvas-authoring';
 import type { WorkspaceId } from '../../contract/brands.js';
-import type { PanelPreferences } from '../../contract/records/panels.js';
+import type { StoredPanelPreferences } from '../../contract/records/panels.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
 const ids = z.array(z.string().min(1)).max(100);
@@ -30,7 +30,7 @@ const preferences = z.strictObject({
 export function readPanelPreferences(
   input: unknown,
   workspace: WorkspaceId,
-): Result<PanelPreferences> {
+): Result<StoredPanelPreferences> {
   const checked = preferences.safeParse(input);
   if (!checked.success)
     return failure(

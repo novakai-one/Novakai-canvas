@@ -10,7 +10,10 @@ import type { MovementReviewState } from '../../../contract/records/workspace.js
 import type { ActiveDiagram } from '../../../contract/records/active-diagram.js';
 import type { WorkspaceScope } from '../../../contract/records/workspace-scope.js';
 
-/** The gesture under review: its diagram, intent, Model's review and the workspace it was made in (unknown before the first snapshot). */
+/**
+ * The gesture under review: its diagram, intent, Model's review and the workspace it was made in
+ * (unrestored before the first snapshot).
+ */
 export interface MovementCapture {
   readonly active: ActiveDiagram;
   readonly intent: PlacementIntent;

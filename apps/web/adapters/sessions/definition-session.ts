@@ -12,8 +12,7 @@
  *
  * restore forgets the workspace before it reads. After a failed restore the old drafts stay and
  * edits are refused. With no workspace there is no storage key, so discard, Apply and
- * settleRequest change the drafts in memory only (plan I39; before B2a they wrote to the key
- * `definitions.`, which nothing reads).
+ * settleRequest change the drafts in memory only.
  *
  * Kept as HEAD behaves (tracker quirks):
  * - #10 An Apply result that arrives after a workspace switch acts on the new workspace's drafts.
@@ -43,8 +42,8 @@ import {
   unlocked,
   unlockedWithoutRequest,
   withoutDraft,
-  knownWorkspace,
-  unknownWorkspace,
+  restoredWorkspace,
+  unrestoredWorkspace,
   type DefinitionEdit,
   type RequestOutcome,
 } from '../../contract/api.js';
@@ -52,7 +51,7 @@ import {
 /** The definition session over injected storage, reader, Apply and report bindings. */
 export function createDefinitionSession(bindings: DefinitionBindings): DefinitionSession {
   let state: DefinitionState = { drafts: [], pending: [], problem: null };
-  let scope: WorkspaceScope = unknownWorkspace;
+  let scope: WorkspaceScope = unrestoredWorkspace;
   const listeners = new Set<() => void>();
   /** Each change replaces the immutable snapshot, then calls every listener. */
   function publish(next: DefinitionState): void {
@@ -65,9 +64,12 @@ export function createDefinitionSession(bindings: DefinitionBindings): Definitio
     bindings.report(error);
     return { ok: false, error };
   }
-  /** Stores the drafts, then publishes them with the pending keys; returns storage's own result. With no workspace it only publishes (see the file header). */
+  /**
+   * Stores the drafts, then publishes them with the pending keys; returns storage's own result.
+   * With no workspace it only publishes (see the file header).
+   */
   function write(drafts: readonly DefinitionDraft[]): Result<void> {
-    if (scope.phase === 'unknown') return published(drafts);
+    if (scope.phase === 'unrestored') return published(drafts);
     const result = bindings.retention.write(
       retentionKey(scope.workspace),
       encodeDefinitionDrafts(drafts),
@@ -82,7 +84,7 @@ export function createDefinitionSession(bindings: DefinitionBindings): Definitio
   }
   /** Reads a workspace's stored drafts. The workspace is forgotten first (see the file header). */
   function restore(id: WorkspaceId): Result<void> {
-    scope = unknownWorkspace;
+    scope = unrestoredWorkspace;
     const stored = bindings.retention.read(retentionKey(id));
     if (!stored.ok) return reject(stored.error);
     if (stored.value === null) return install(id, []);
@@ -104,7 +106,7 @@ export function createDefinitionSession(bindings: DefinitionBindings): Definitio
   ): Result<void> {
     const restored = restoredState(drafts, id);
     if (!restored.ok) return reject(restored.error);
-    scope = knownWorkspace(id);
+    scope = restoredWorkspace(id);
     publish(restored.value);
     return { ok: true, value: undefined };
   }

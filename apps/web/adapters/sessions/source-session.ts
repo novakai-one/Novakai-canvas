@@ -17,8 +17,8 @@ import type { Result } from '../../contract/errors.js';
 import {
   encodeSourceRecovery,
   inWorkspace,
-  knownWorkspace,
-  unknownWorkspace,
+  restoredWorkspace,
+  unrestoredWorkspace,
 } from '../../contract/api.js';
 import { failure } from '../../contract/errors.js';
 /** Source editor owns its draft, captured base and recovery record. It cannot commit without the injected submission owner. */
@@ -34,7 +34,7 @@ export function createSourceController(bindings: SourceBindings): SourceControll
     sourceEdit: 0,
   };
   let sourceReceipt: Receipt | null = null;
-  let admitted: WorkspaceScope = unknownWorkspace;
+  let admitted: WorkspaceScope = unrestoredWorkspace;
   /** Every update publishes an immutable editor snapshot; other workspace state has a different owner. */
   function update(patch: Partial<SourceView>): void {
     state = { ...state, ...patch };
@@ -136,7 +136,10 @@ export function createSourceController(bindings: SourceBindings): SourceControll
     const saved = persistSource(state.sourceBase.workspace);
     if (!saved.ok) report(saved.error);
   }
-  /** Clean source has no recoverable draft; dirty source persists its exact authoring base. A base outside the admitted workspace is `recovery-unavailable`. */
+  /**
+   * Clean source has no recoverable draft; dirty source persists its exact authoring base. A base
+   * outside the admitted workspace is `recovery-unavailable`.
+   */
   function persistSource(workspace: WorkspaceId): Result<void> {
     if (!inWorkspace(admitted, workspace))
       return failure(
@@ -171,14 +174,14 @@ export function createSourceController(bindings: SourceBindings): SourceControll
   }
   /** Browser recovery never rewrites a draft's captured revision to the latest remote version. */
   function restoreSource(workspace: WorkspaceId): void {
-    admitted = unknownWorkspace;
+    admitted = unrestoredWorkspace;
     const stored = bindings.retention.read(`source-draft.${workspace}`);
     if (!stored.ok) {
       report(stored.error);
       return;
     }
     if (stored.value === null) {
-      admitted = knownWorkspace(workspace);
+      admitted = restoredWorkspace(workspace);
       return;
     }
     restoreCheckedSource(stored.value, workspace);
@@ -200,7 +203,7 @@ export function createSourceController(bindings: SourceBindings): SourceControll
       return;
     }
     const value = checked.value;
-    admitted = knownWorkspace(workspace);
+    admitted = restoredWorkspace(workspace);
     update({
       source: value.source,
       sourceBase: value.base,

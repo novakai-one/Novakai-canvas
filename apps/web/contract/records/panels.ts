@@ -1,6 +1,6 @@
 /*
  * Panel state vocabulary: which side panels are open, their tabs, sizes and sections, the panel
- * layout and the preferences stored for a workspace, and which interface controls show. Records
+ * preferences and the record stored for a workspace, and which interface controls show. Records
  * only: no behaviour, no I/O. Web core reads them to lay out the shell; `panel-types.ts` names
  * them in the panel controller.
  */
@@ -47,8 +47,8 @@ export interface InterfaceVisibility {
   readonly outline: boolean;
 }
 
-/** Panel layout: section order and state, panel widths and each panel's tab. */
-export interface PanelLayout {
+/** The panel layout a person chose: section order and state, panel widths and each panel's tab. */
+export interface PanelPreferences {
   readonly sections: Readonly<Record<PanelId, readonly string[]>>;
   readonly collapsed: readonly string[];
   readonly hidden: readonly string[];
@@ -56,8 +56,8 @@ export interface PanelLayout {
   readonly tabs: Readonly<{ left: 'add' | 'browse'; right: 'inspect' | 'settings' }>;
 }
 
-/** The layout stored for one workspace. Only a restored workspace has stored preferences. */
-export interface PanelPreferences extends PanelLayout {
+/** The preferences stored for one workspace. Only a restored workspace has stored preferences. */
+export interface StoredPanelPreferences extends PanelPreferences {
   readonly schemaVersion: 1;
   readonly workspace: WorkspaceId;
 }
@@ -70,6 +70,6 @@ export interface PanelState {
   readonly overlay: PanelId | null;
   readonly lastOpened: PanelId;
   readonly customize: boolean;
-  readonly preferences: PanelLayout;
+  readonly preferences: PanelPreferences;
   readonly interfaceVisibility: InterfaceVisibility;
 }

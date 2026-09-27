@@ -96,7 +96,10 @@ export function snapshotBase(
   return { ok: true, value: snapshot };
 }
 
-/** Workspace, generation or listed revision moved since the ticket; an unlisted collection has moved, and so has a ticket taken before the first snapshot. */
+/**
+ * Workspace, generation or listed revision moved since the ticket. An unlisted collection has
+ * moved, and so has a ticket taken before the first snapshot.
+ */
 function inputsMoved(
   view: AdmissionView,
   ticket: RenderTicket,
@@ -108,7 +111,10 @@ function inputsMoved(
   );
 }
 
-/** The snapshot still names the ticket's workspace, generation and revision; unlisted reads as -1. A ticket taken before the first snapshot never matches. */
+/**
+ * The snapshot still names the ticket's workspace, generation and revision; unlisted reads as -1.
+ * A ticket taken before the first snapshot never matches.
+ */
 function ticketMatches(
   ticket: RenderTicket,
   latest: LatestSnapshot,

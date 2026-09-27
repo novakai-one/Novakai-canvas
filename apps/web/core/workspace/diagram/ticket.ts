@@ -17,7 +17,7 @@ export interface RenderTicket {
   readonly id: string;
   /** The collection's revision in the catalogue; -1 when it was not listed. */
   readonly revision: number;
-  /** The checked snapshot's workspace; unknown before the first snapshot. */
+  /** The checked snapshot's workspace; unrestored before the first snapshot. */
   readonly workspace: WorkspaceScope;
   readonly generation: string;
   readonly mode: RenderMode;

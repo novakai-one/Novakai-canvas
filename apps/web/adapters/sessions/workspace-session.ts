@@ -126,9 +126,9 @@ import {
   withOption,
   withRequestState,
   inWorkspace,
-  knownWorkspace,
+  restoredWorkspace,
   snapshotScope,
-  unknownWorkspace,
+  unrestoredWorkspace,
   type CaptureIds,
   type CollectionDraft,
   type ConnectionCapture,
@@ -191,7 +191,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   let requestToken = 0;
   let disposed = false;
   let snapshotRead = 0;
-  let restoredScope: WorkspaceScope = unknownWorkspace;
+  let restoredScope: WorkspaceScope = unrestoredWorkspace;
   let historyGate: HistorySlot = historyIdle;
   /** The held movement review; its phase says whether it is being applied. */
   let movementSlot: MovementSlot = null;
@@ -1435,7 +1435,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   function restoreEdits(): void {
     if (state.snapshot === null) return;
     if (inWorkspace(restoredScope, state.snapshot.workspace)) return;
-    restoredScope = knownWorkspace(state.snapshot.workspace);
+    restoredScope = restoredWorkspace(state.snapshot.workspace);
     bindings.panels.restore(state.snapshot.workspace);
     submissions.restore(state.snapshot.workspace);
     void reconcileHistory();

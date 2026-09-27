@@ -7,7 +7,7 @@ import type {
   PanelId,
   PanelMode,
   PanelState,
-  PanelLayout,
+  PanelPreferences,
   PanelSizing,
   PanelSectionDefinition,
   PanelTab,
@@ -56,11 +56,11 @@ export function panelVisible(
   if (state.mode === 'docked') return state.docked[side];
   return state.overlay === side;
 }
-/** The default layout, from registered feature definitions and resolved dimensions. Any workspace. */
+/** Default preferences, from registered feature definitions and resolved dimensions. */
 export function defaultPanels(
   definitions: readonly PanelSectionDefinition[],
   sizing: PanelSizing,
-): PanelLayout {
+): PanelPreferences {
   return {
     tabs: { left: 'browse', right: 'inspect' },
     sections: {

@@ -16,20 +16,24 @@ import {
   submissionStatus,
   refused,
   inWorkspace,
-  knownWorkspace,
-  unknownWorkspace,
+  restoredWorkspace,
+  unrestoredWorkspace,
 } from '../../contract/api.js';
 
 /** Durable browser recovery coordinates transmission only; Authoring remains the sole commit/idempotency authority.
  * Consumers keep drafts on every failure and call reconcile before an explicit retry.
  */
 export function createSubmissionSession(bindings: SubmissionBindings): SubmissionSession {
-  let scope: WorkspaceScope = unknownWorkspace;
+  let scope: WorkspaceScope = unrestoredWorkspace;
   let pending: readonly Submission[] = [];
   const recovering = new Set<string>();
-  /** Save the recovery journal before publishing its immutable view. A proven refusal changed nothing, so it is not kept across reload. With no restored workspace nothing is kept (`recovery-unavailable`). */
+  /**
+   * Save the recovery journal before publishing its immutable view. A proven refusal changed
+   * nothing, so it is not kept across reload. With no restored workspace nothing is kept
+   * (`recovery-unavailable`).
+   */
   function retain(next: readonly Submission[]): Result<void> {
-    if (scope.phase === 'unknown')
+    if (scope.phase === 'unrestored')
       return failure('recovery-unavailable', 'No workspace is restored; the request was not kept');
     const stored = bindings.retention.write(
       `pending.${scope.workspace}`,
@@ -46,7 +50,7 @@ export function createSubmissionSession(bindings: SubmissionBindings): Submissio
   }
   /** Restore is read-only with respect to the service; interrupted sending is uncertain, never automatically replayed. */
   function restore(id: WorkspaceId): void {
-    scope = knownWorkspace(id);
+    scope = restoredWorkspace(id);
     const stored = bindings.retention.read(`pending.${id}`);
     if (!stored.ok) {
       bindings.report(stored.error);
