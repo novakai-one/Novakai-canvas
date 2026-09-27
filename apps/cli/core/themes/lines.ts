@@ -40,7 +40,7 @@ export function themeLines(source: string): readonly ThemeLine[] {
 /**
  * What one body line declares: `font ROLE source="PATH"`, or `set color|number|dimension
  * TOKEN=VALUE`. Fails with `invalid-theme` when the line is neither, its font role is not body,
- * mono or strong, or its number is not finite.
+ * mono or strong, or its `set number` value is not finite.
  */
 export function bodyLine(line: ThemeLine): Result<BodyEntry> {
   const [matched] = lineRules.flatMap((rule) => ruleMatch(rule, line.text));
@@ -166,16 +166,19 @@ function numberEntry(
   );
 }
 
-/** A pixel dimension override. Fails with `invalid-theme` when the number is not finite. */
+/**
+ * A pixel dimension override. Nothing fails here: a value too large to be finite is kept, and
+ * admission rejects it later. Only `set number` checks finiteness in the grammar.
+ */
 function dimensionEntry(
   captures: Captures,
   line: ThemeLine,
 ): Result<BodyEntry> {
-  return mapped(finite(captures.value), (value) =>
+  return success(
     overrideEntry({
       type: 'dimension',
       token: captures.name,
-      value: { value, unit: 'px' },
+      value: { value: Number(captures.value), unit: 'px' },
       line: lineOf(line),
     }),
   );

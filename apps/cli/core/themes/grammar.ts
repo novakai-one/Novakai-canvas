@@ -71,7 +71,10 @@ function headerText(line: ThemeLine | undefined): Result<HeaderText> {
   return headerParts(match);
 }
 
-/** The header's four required captures, then its chrome when written. */
+/**
+ * The header's four required captures, then its chrome when written. Fails with `invalid-theme`
+ * when a required capture is missing.
+ */
 function headerParts(match: RegExpExecArray): Result<HeaderText> {
   const [, id, title, versionText, base, chrome] = match;
   if (id === undefined || title === undefined || versionText === undefined || base === undefined)
