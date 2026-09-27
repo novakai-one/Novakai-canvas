@@ -15,6 +15,8 @@ const manualTarget = z
     locked: z.boolean(),
   })
   .readonly();
+/** The snapshot half is the browser's; the CLI checks only that a receipt is present. */
+const appliedCommit = z.looseObject({ receipt: z.unknown() });
 const readout = z.looseObject({
   source: z.string(),
   collection: z.string(),
@@ -193,6 +195,20 @@ function absentReceipt(expected: ReceiptExpectation): Result<string> {
     `Check canvas receipt ${expected.request} before retrying.`,
   );
 }
+/** An apply answer without its receipt half is as unconfirmed as a missing receipt. */
+function appliedReceipt(
+  input: unknown,
+  request: string,
+): Result<string> {
+  const parsed = appliedCommit.safeParse(input);
+  if (!parsed.success)
+    return failure(
+      'invalid-response',
+      'Service returned an invalid apply confirmation',
+      `Check canvas receipt ${request} before retrying.`,
+    );
+  return receipt(parsed.data.receipt, { kind: 'committed', request });
+}
 /** Malformed receipts cannot release a pending request or be reported as a successful write. */
 function receiptReadout(
   input: unknown,
@@ -254,6 +270,7 @@ export function createSemanticInputs(language: Pick<Language, 'parse'>): Semanti
       return { ok: true, value: checked.data };
     },
     receipt,
+    applied: appliedReceipt,
     readout: sourceReadout,
     request: (command, source, state, id) => request(command, source, state, id, language),
     collections: (input) => {

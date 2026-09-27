@@ -10,6 +10,7 @@ import type { RenderDocument } from './records/rendering.js';
 import type { InspectionReport } from './records/inspection.js';
 import type { Result } from './errors.js';
 import type { RouteOutcome } from './records/protocol.js';
+import type { AppliedCommit } from './records/applied-commit.js';
 /** Session transport authenticates each caller before forwarding the explicit Authoring envelope. */
 export interface WorkspaceSession {
   readonly workspace: string;
@@ -26,7 +27,7 @@ export interface WorkspaceSession {
     request: unknown,
     signal: AbortSignal,
     options?: unknown,
-  ): Promise<AuthoringResult<Receipt>>;
+  ): Promise<AuthoringResult<AppliedCommit>>;
   receipt(request: unknown): Promise<AuthoringResult<Receipt | null>>;
   render(
     collection: string,

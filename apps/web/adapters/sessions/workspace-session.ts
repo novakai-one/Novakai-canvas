@@ -11,7 +11,7 @@ import type {
 import type { ConnectionDraft, ConnectionEdit } from '../../contract/records/connection.js';
 import type { MoveOption, MoveReview } from '../../contract/records/movement.js';
 import type { DefinitionDraft } from '../../contract/records/definitions.js';
-import type { Submission } from '../../contract/records/submission.js';
+import type { CarriedSnapshot, Submission } from '../../contract/records/submission.js';
 import type { Receipt } from '../../contract/records/owners.js';
 import type {
   WorkspaceController,
@@ -28,7 +28,7 @@ import type {
   TransportResponse,
 } from '../../contract/records/owners.js';
 import type { Diagnostic, Result } from '../../contract/errors.js';
-import type { BinaryResponse } from '../../contract/ports/client.js';
+import type { BinaryResponse, CommitNotice } from '../../contract/ports/client.js';
 import {
   plainMessage,
   emptyRefusalOrder,
@@ -969,6 +969,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   function confirmed(
     submission: Submission,
     receipt: Receipt,
+    carriedSnapshot?: CarriedSnapshot,
   ): void {
     source.confirmed(submission, receipt);
     update({ status: editStatus() });
@@ -976,7 +977,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     confirmGesture(submission.gesture);
     clearConfirmedMovement(submission.gesture);
     settleConfirmedCreation(submission.request.request);
-    finishConfirmedSubmission(submission, receipt);
+    finishConfirmedSubmission(submission, receipt, carriedSnapshot);
   }
   /** A confirmed request empties the Add forms that sent it; the connection it sent closes too. */
   function settleConfirmedCreation(requestId: string): void {
@@ -997,12 +998,21 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     showMovement(null);
     updateMutationAvailability();
   }
+  /** Installs after the confirmation above, so a source draft rebases across its own receipt. */
   function finishConfirmedSubmission(
     submission: Submission,
     receipt: Receipt,
+    carriedSnapshot: CarriedSnapshot | undefined,
   ): void {
-    if (submission.request.intent.kind !== 'change') void finishHistory(receipt.sequence);
-    else void refresh();
+    if (submission.request.intent.kind !== 'change')
+      void finishHistory(receipt.sequence, carriedSnapshot);
+    else void catchUp(carriedSnapshot);
+  }
+  /** An apply answer's carried snapshot is installed as a workspace read would be; a receipt lookup carries none, so reread. */
+  function catchUp(carriedSnapshot: CarriedSnapshot | undefined): Promise<void> {
+    if (carriedSnapshot === undefined) return refresh();
+    acceptCurrent(carriedSnapshot, state.generation);
+    return Promise.resolve();
   }
   /** Canvas is notified only when the receipt belongs to a submitted gesture. */
   function confirmGesture(gesture: string | null): void {
@@ -1047,14 +1057,13 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     }
     await createSubmitted(request.value, id);
   }
-  /** Open only after a confirmed creation and matching snapshot; a failed create keeps the current canvas. */
+  /** Open only after a confirmed creation, whose answer installed the snapshot listing it; a failed create keeps the current canvas. */
   async function createSubmitted(
     request: Request,
     id: string,
   ): Promise<void> {
     const result = await submit(request, state.generation, state.sourceEdit, null);
     if (!result.ok) return;
-    await refresh();
     await open(id);
   }
   /** The inspector supplies a captured base and typed replacement; the same Authoring request journal owns its write. */
@@ -1391,11 +1400,23 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     removeHistoryKeys = bindHistoryKeys(navigateHistory);
     await startWorkspace();
     if (disposed) return;
-    unsubscribe = bindings.client.changes(() => {
-      // The local receipt refresh includes every commit made while its submission was in flight.
-      if (!state.busy) void refresh();
-    }, connection);
+    unsubscribe = bindings.client.changes(committedChange, connection);
     markReady();
+  }
+  /** A (re)connect names no commit, so it rereads. A commit rereads only past the installed sequence and when it is not
+   * this browser's request still awaiting its answer; that answer installs it, even if the event arrives first.
+   */
+  function committedChange(commit: CommitNotice | null): void {
+    if (commit === null || unseenForeignCommit(commit)) void refresh();
+  }
+  function unseenForeignCommit(commit: CommitNotice): boolean {
+    return commit.sequence > (state.snapshot?.sequence ?? -1) && !awaitingAnswer(commit.request);
+  }
+  /** Only a request still sending gets an answer; an uncertain one's commit is installed by nobody else. */
+  function awaitingAnswer(request: CommitNotice['request']): boolean {
+    return state.pending.some(
+      (item) => item.request.request === request && item.state === 'sending',
+    );
   }
   /** A saved collection link restores the actual canonical diagram, including human placement records. */
   async function restoreLocation(): Promise<void> {
@@ -1544,12 +1565,16 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
       await reconcileRequest(item.request.request);
   }
   /** A receipt does not release editing until the canonical scene and targets have caught up. */
-  async function finishHistory(sequence = state.snapshot?.sequence ?? 0): Promise<void> {
+  async function finishHistory(
+    sequence = state.snapshot?.sequence ?? 0,
+    carriedSnapshot?: CarriedSnapshot,
+  ): Promise<void> {
     historyRead += 1;
     // Cleared with the hold the gate had; the settling gate then holds and publishes again.
     clearHistory();
+    // The gate settles before the snapshot installs, so the install is the snapshot it sees.
     setHistoryGate(settlingHistory(sequence));
-    await refresh();
+    await catchUp(carriedSnapshot);
     await refreshHistory();
     releaseHistory();
   }

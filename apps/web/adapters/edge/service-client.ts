@@ -1,8 +1,21 @@
 import { responseEnvelope } from '@novakai/canvas-service';
 import type { TransportResponse } from '@novakai/canvas-service';
-import type { BinaryResponse, ServiceClient } from '../../contract/ports/client.js';
+import { z } from 'zod';
+import { receiptSchema } from '@novakai/canvas-authoring';
+import type { BinaryResponse, CommitNotice, ServiceClient } from '../../contract/ports/client.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
+/** Only the receipt's identity is read from a committed event; the rest stays a hint the snapshot read supersedes. */
+const committedEvent = z.looseObject({
+  change: z.looseObject({
+    receipt: z
+      .looseObject({
+        request: receiptSchema.shape.request,
+        sequence: receiptSchema.shape.sequence,
+      })
+      .transform(({ request, sequence }): CommitNotice => ({ request, sequence })),
+  }),
+});
 /** Same-origin cookies authenticate each request. Redirects and non-versioned results are rejected, preserving uncertain drafts. */
 async function request(
   path: string,
@@ -28,19 +41,35 @@ async function request(
     return failure('connection-uncertain', 'The service response could not be confirmed');
   }
 }
-/** Events only prompt a fresh snapshot. Event payloads never become canonical UI records. */
+/** Events only prompt a fresh snapshot. A committed event names its request and sequence so the consumer
+ * can skip commits it already installed; a (re)connect names none.
+ */
 function changes(
-  changed: () => void,
+  changed: (commit: CommitNotice | null) => void,
   connection: (connected: boolean) => void,
 ): () => void {
   const stream = new EventSource('/api/v1/events', { withCredentials: true });
   stream.addEventListener('connected', () => {
     connection(true);
-    changed();
+    changed(null);
   });
-  stream.addEventListener('committed', changed);
+  stream.addEventListener('committed', (event) => changed(committedNotice(event.data)));
   stream.onerror = () => connection(false);
   return () => stream.close();
+}
+/** An unreadable committed event still prompts a reread; it just cannot be recognized as already installed. */
+function committedNotice(data: unknown): CommitNotice | null {
+  const checked = committedEvent.safeParse(eventJson(data));
+  return checked.success ? checked.data.change.receipt : null;
+}
+
+function eventJson(data: unknown): unknown {
+  if (typeof data !== 'string') return null;
+  try {
+    return JSON.parse(data);
+  } catch {
+    return null;
+  }
 }
 
 async function bytes(

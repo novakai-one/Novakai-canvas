@@ -7,7 +7,6 @@ import type { Submission } from '../contract/records/submission.js';
 import type { Result } from '../contract/index.js';
 import { failure } from '../contract/index.js';
 import { createSubmissionSession } from '../adapters/sessions/submission-session.js';
-import { createSubmissionReaders } from '../adapters/readers/submission-readers.js';
 import {
   controller,
   memoryRetention,
@@ -16,6 +15,7 @@ import {
   response,
   deferred,
   submitted,
+  submissionReaders,
 } from './recovery-fixtures.js';
 
 it('host 7 retains newer source generations, foreign-commit bases and uncertain requests across reconnect', async () => {
@@ -103,7 +103,7 @@ it('host 7 retains newer source generations, foreign-commit bases and uncertain 
   expect(original.expected).toEqual([{ key: { kind: 'collection', id: 'demo' }, version: 0 }]);
   human.editSource('newer typing while first edit saves');
   latest = snapshot(1);
-  first.resolve(response(receipt(original, 1)));
+  first.resolve(response({ receipt: receipt(original, 1), snapshot: snapshot(1) }));
   await applying;
   await human.refresh();
   expect(human.getSnapshot()).toMatchObject({
@@ -157,7 +157,7 @@ it('host 7 retains newer source generations, foreign-commit bases and uncertain 
   const bindings = {
     client: recoveryClient,
     retention: journal,
-    readers: createSubmissionReaders(),
+    readers: submissionReaders(),
     changed: (items: readonly Submission[]) => {
       pending = items;
     },

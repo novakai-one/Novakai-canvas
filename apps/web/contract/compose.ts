@@ -263,7 +263,7 @@ function controller(
       createSubmissionSession({
         client,
         retention,
-        readers: createSubmissionReaders(),
+        readers: createSubmissionReaders(inputs),
         ...callbacks,
       }),
     nextId: () => crypto.randomUUID(),

@@ -237,9 +237,8 @@ it('rejects missing and extra preview targets before producing a movement option
 });
 
 import { createSubmissionSession } from '../adapters/sessions/submission-session.js';
-import { createSubmissionReaders } from '../adapters/readers/submission-readers.js';
 import { failure } from '../contract/index.js';
-import { memoryRetention, snapshot } from './recovery-fixtures.js';
+import { memoryRetention, snapshot, submissionReaders } from './recovery-fixtures.js';
 import type { TransportResponse } from '../contract/records/owners.js';
 
 it('retains a movement draft when journaling fails before transmission', async () => {
@@ -269,7 +268,7 @@ it('retains a movement draft when journaling fails before transmission', async (
       ...memoryRetention(),
       write: () => failure('storage-unavailable', 'journal unavailable'),
     },
-    readers: createSubmissionReaders(),
+    readers: submissionReaders(),
     changed: () => {
       changed += 1;
     },

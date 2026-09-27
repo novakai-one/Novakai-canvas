@@ -120,7 +120,8 @@ it('shows one refusal at a time and clears it when a later edit starts', slow, a
     expect(refused[0]).toMatchObject({ state: 'rejected', request: { request: sent[1]?.request } });
     expect(await human.addObject({ ...module, label: 'Emitter' })).toMatchObject({ ok: true });
     expect(human.getSnapshot().pending).toEqual([]);
-    expect(human.getSnapshot().status).toBe('Saved');
+    // The answer's snapshot starts the re-render at once; Saved shows once it settles.
+    await vi.waitFor(() => expect(human.getSnapshot().status).toBe('Saved'));
     human.dispose();
   });
 });

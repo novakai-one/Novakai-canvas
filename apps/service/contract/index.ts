@@ -16,6 +16,7 @@ export { readAgentCredential } from './compose.js';
 export type { ServerOptions, LocalServer, BodyStream } from './records/server.js';
 export { createWorkspaceSession } from './api.js';
 export type { WorkspaceSession, SessionDependencies } from './types.js';
+export type { AppliedCommit } from './records/applied-commit.js';
 export type { WorkspaceOptions } from './records/startup.js';
 export { createHttpAdmission } from './api.js';
 export type {

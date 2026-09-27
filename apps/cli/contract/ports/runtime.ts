@@ -47,6 +47,11 @@ export interface SemanticInputs extends ResourceSyntax {
     input: unknown,
     expected: ReceiptExpectation,
   ): Result<string>;
+  /** An apply answer carries the receipt beside the committed snapshot; the CLI reports only the receipt. */
+  applied(
+    input: unknown,
+    request: string,
+  ): Result<string>;
 }
 /** Narrow effects are bound once at CLI composition. Tests exercise the same flow without booting a process or server. */
 export interface CliDependencies {

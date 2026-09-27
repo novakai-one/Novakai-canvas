@@ -99,7 +99,7 @@ function submitted(
   if (!result.value.outcome.ok) return result.value.outcome;
   return confirmed(result.value.outcome.value, id, preview, dependencies);
 }
-/** Preview prints reviewable owner output and a stable apply command; successful writes use the receipt reader. */
+/** Preview prints reviewable owner output and a stable apply command; successful writes use the apply-answer reader. */
 function confirmed(
   value: unknown,
   id: string,
@@ -111,7 +111,7 @@ function confirmed(
       ok: true,
       value: `Preview request ${id}\n${JSON.stringify(value, null, 2)}\nApply with: canvas apply ${id}`,
     };
-  return dependencies.semantic.receipt(value, { kind: 'committed', request: id });
+  return dependencies.semantic.applied(value, id);
 }
 /** Agent authoring consumes readable source only. JSON envelopes and coordinates are never required user input. */
 export async function author(

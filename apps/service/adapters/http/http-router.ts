@@ -10,6 +10,7 @@ import { httpBodyLimit } from '../../contract/records/http.js';
 import { failure } from '../../contract/errors.js';
 import type { Result } from '../../contract/errors.js';
 import type { ResourceCommands } from '../../contract/records/resource-commands.js';
+import { historyVersionsOnly } from '../../contract/api.js';
 type ResourceHandler = (input: unknown) => Promise<WireOutcome>;
 /** Read one current collection without reinterpreting its semantic shape; Language/Presentation validate before their use. */
 async function source(
@@ -147,17 +148,6 @@ function semanticResource(
   };
 }
 /** Fixed route registration keeps method/path dispatch separate from handler behavior; unsupported operations fail explicitly. */
-/** The browser needs history versions, not history contents (which grow with every edit). */
-function historyVersionsOnly(snapshot: Snapshot): Snapshot {
-  return {
-    ...snapshot,
-    records: snapshot.records.map((record) =>
-      record.key.kind === 'history' && record.key.id !== 'navigation'
-        ? { ...record, value: null }
-        : record,
-    ),
-  };
-}
 export function createHttpRouter(owners: RouterBindings): ApiRouter {
   const freeze = semanticResource(owners, (commands, input, snapshot) =>
     commands.freeze(input, snapshot),

@@ -1,4 +1,5 @@
 import type {
+  CarriedSnapshot,
   Submission,
   SubmissionBindings,
   SubmissionSession,
@@ -105,34 +106,24 @@ export function createSubmissionSession(bindings: SubmissionBindings): Submissio
     const status = refused(code) ? 'rejected' : 'uncertain';
     mark(item, status);
   }
-  /** Decode a claimed success through Authoring before clearing any local state. */
+  /** Decode a claimed success through Authoring before clearing any local state; it must carry its receipt and workspace. */
   function readAppliedReceipt(
     input: unknown,
     item: Submission,
   ): Result<Receipt> {
-    const receipt = bindings.readers.receipt(input, item.request);
-    if (!receipt.ok) {
+    const appliedCommit = bindings.readers.applied(input, item.request);
+    if (!appliedCommit.ok) {
       mark(item, 'uncertain');
-      return receipt;
+      return appliedCommit;
     }
-    return receivedReceipt(receipt.value, item);
-  }
-  /** Apply success must contain a receipt. Null is only meaningful in the separate receipt lookup operation. */
-  function receivedReceipt(
-    receipt: Receipt | null,
-    item: Submission,
-  ): Result<Receipt> {
-    if (receipt === null) {
-      mark(item, 'uncertain');
-      return failure('invalid-receipt', 'Apply returned no confirmation');
-    }
-    complete(item, receipt);
-    return { ok: true, value: receipt };
+    complete(item, appliedCommit.value.receipt, appliedCommit.value.carried);
+    return { ok: true, value: appliedCommit.value.receipt };
   }
   /** Confirmation releases its slot even when journal cleanup fails; a later recovery lookup is idempotent. */
   function complete(
     item: Submission,
     receipt: Receipt,
+    carriedSnapshot?: CarriedSnapshot,
   ): void {
     const remaining = pending.filter((other) => other.request.request !== item.request.request);
     const saved = retain(remaining);
@@ -140,7 +131,7 @@ export function createSubmissionSession(bindings: SubmissionBindings): Submissio
       publish(remaining);
       bindings.report(saved.error);
     }
-    bindings.confirmed(item, receipt);
+    bindings.confirmed(item, receipt, carriedSnapshot);
   }
   /** Persist status transitions without changing the immutable semantic request. */
   function mark(

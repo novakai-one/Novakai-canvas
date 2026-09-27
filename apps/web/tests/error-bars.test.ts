@@ -2,10 +2,9 @@ import { it, expect } from 'vitest';
 import { requestSchema } from '@novakai/canvas-authoring';
 import { failure, plainMessage } from '../contract/index.js';
 import { createSubmissionSession } from '../adapters/sessions/submission-session.js';
-import { createSubmissionReaders } from '../adapters/readers/submission-readers.js';
 import type { Submission } from '../contract/records/submission.js';
 import type { TransportResponse } from '../contract/records/owners.js';
-import { memoryRetention } from './recovery-fixtures.js';
+import { memoryRetention, submissionReaders } from './recovery-fixtures.js';
 
 it('maps serialized owner codes to plain English and keeps readable text', () => {
   expect(plainMessage('{"code":"unroutable-leg","leg":3}')).toBe(
@@ -47,7 +46,7 @@ it('never persists or restores a proven refusal', async () => {
       }),
     },
     retention,
-    readers: createSubmissionReaders(),
+    readers: submissionReaders(),
     changed: (items: readonly Submission[]) => {
       pending = items;
     },

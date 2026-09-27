@@ -18,6 +18,7 @@ import { createCanvasSessions } from '../adapters/sessions/canvas-session.js';
 import type { ServiceClient } from '../contract/ports/client.js';
 import type { DraftRetention } from '../contract/ports/workspace.js';
 import type { Request, Receipt, TransportResponse } from '../contract/records/owners.js';
+import type { SubmissionReaders } from '../contract/records/submission.js';
 import type { Result } from '../contract/index.js';
 import { failure } from '../contract/index.js';
 import { createWorkspaceController } from '../adapters/sessions/workspace-session.js';
@@ -107,10 +108,9 @@ export function controller(
   client: ServiceClient,
   retention: DraftRetention,
 ) {
-  const language = createLanguage({ reader: { validate }, planner: { plan }, stage: { stage } });
   const canvas = createCanvas({ sceneAdmission: createSceneAdmission() });
   let identity = 0;
-  const inputs = createWorkspaceInputs(readDiagram, language);
+  const inputs = workspaceInputs();
   return createWorkspaceController({
     client,
     navigation: {
@@ -146,10 +146,14 @@ export function controller(
       createSubmissionSession({
         client,
         retention,
-        readers: createSubmissionReaders(),
+        readers: createSubmissionReaders(inputs),
         ...callbacks,
       }),
   });
+}
+/** Submission readers bound to the real workspace snapshot reader, exactly as composition binds them. */
+export function submissionReaders(): SubmissionReaders {
+  return createSubmissionReaders(workspaceInputs());
 }
 /** Controlled response completion exposes the newer-typing race without clocks or timers. */
 export function deferred<T>() {
@@ -165,4 +169,9 @@ export function deferred<T>() {
 export function submitted(input: unknown): Request {
   assert(typeof input === 'object' && input !== null && 'request' in input);
   return requestSchema.parse(input.request);
+}
+/** Real Language and Model owners check every transported snapshot, diagram and request. */
+function workspaceInputs() {
+  const language = createLanguage({ reader: { validate }, planner: { plan }, stage: { stage } });
+  return createWorkspaceInputs(readDiagram, language);
 }

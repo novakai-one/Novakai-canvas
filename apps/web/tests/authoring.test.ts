@@ -23,7 +23,7 @@ it('host 2 atomically registers DSL collections, rejects stale changes and retur
     const accepted = await session.apply(create, signal);
     assert(accepted.ok, JSON.stringify(accepted));
     expect(
-      accepted.value.versions
+      accepted.value.receipt.versions
         .filter((item) => item.key.kind !== 'history')
         .map((item) => item.key.kind)
         .sort(),
@@ -42,7 +42,10 @@ it('host 2 atomically registers DSL collections, rejects stale changes and retur
       value: { id: 'sample', revision: 0, objects: expect.any(Array) },
     });
     expect(await session.apply(create, signal)).toEqual(accepted);
-    expect(await session.receipt(create.request)).toEqual(accepted);
+    expect(await session.receipt(create.request)).toEqual({
+      ok: true,
+      value: accepted.value.receipt,
+    });
     const replace = request(after.value, 'replace-sample', 'sample', 'dsl', {
       source: source.replace('"First"', '"Revised first"'),
       mode: 'replace',
@@ -222,7 +225,7 @@ it('PR3 admits immutable themes and editable recipes through shared metadata CAS
     const winner = outcomes[0]?.ok ? left.value : right.value;
     const noop = await session.apply(make(winner, current.value, 'harbor-identical'), signal);
     assert(noop.ok, JSON.stringify(noop));
-    expect(noop.value.outcome.status).toBe('no-op');
+    expect(noop.value.receipt.outcome.status).toBe('no-op');
     const unchanged = await session.read();
     assert(unchanged.ok);
     expect(
@@ -275,7 +278,10 @@ it('PR3 admits immutable themes and editable recipes through shared metadata CAS
     expect(expanded.value).not.toContain('collection @sample ');
     expect(await session.apply(recipeRequest, signal)).toEqual(committed);
     const reopened = await fixture.reopen();
-    expect(await reopened.receipt(recipeRequest.request)).toEqual(committed);
+    expect(await reopened.receipt(recipeRequest.request)).toEqual({
+      ok: true,
+      value: committed.value.receipt,
+    });
     expect(await reopened.apply(recipeRequest, signal)).toEqual(committed);
     expect(await reopened.read()).toEqual(after);
     const drift = requestSchema.parse({
