@@ -21,7 +21,7 @@ export interface SessionInputs {
   readonly installation: BuiltinResources;
   readonly options: Pick<WorkspaceOptions, 'workspace'>;
   readonly roles: Pick<WorkspaceRoles, 'commands' | 'views' | 'renderer'>;
-  readonly changes: ChangeChannel;
+  readonly changes: Pick<ChangeChannel, 'subscribe' | 'close'>;
 }
 
 /**
