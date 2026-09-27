@@ -10,7 +10,6 @@ import type { Result } from '../errors.js';
 import { failure } from '../errors.js';
 import { createAdmission as createHttpAdmission } from '../../core/transport/admission.js';
 import { readCommand } from '../../core/transport/command.js';
-import { readAuthoringRequest } from '../../core/transport/authoring-request.js';
 import { createHttpRouter } from '../../core/transport/routes.js';
 import { createPresetCodecs } from '../../core/presets/codecs.js';
 import { prepareTheme } from '../../core/presets/theme-admission.js';
@@ -32,7 +31,7 @@ export async function serveWorkspace(
     ]);
     const security = await credentials.createLocalSecurity(options.port, options.credentialFile);
     if (!security.ok) return security;
-    const admission = createHttpAdmission(security.value, { read: readAuthoringRequest });
+    const admission = createHttpAdmission(security.value);
     return server.startHttpServer(options, {
       security: security.value,
       admission,
