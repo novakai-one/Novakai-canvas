@@ -1,11 +1,11 @@
 # CLI host
 
-Two executables. Neither decides a domain rule: capabilities and the local service do. The CLI parses argv, binds ports and prints.
+Two executables. The CLI parses argv, binds ports and prints. Capabilities and the local service decide domain rules, with two exceptions in `core/`: the build-spec@1 lint rules (`core/profiles/lint/`; a follow-up moves them into a capability) and the `.theme` grammar (`core/themes/`).
 
-| Run                                                      | Entry           | Does                                                                                                                                           |
-| -------------------------------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm canvas COMMAND`                                    | `cli/canvas.ts` | Reads and changes collections through the local service (`pnpm dev`). Every change crosses Authoring. `pnpm canvas --help` lists all commands. |
-| `pnpm render:png --collection ID\|FILE.canvas --out DIR` | `cli/render.ts` | Draws a collection to SVG or PNG files. Local and read-only.                                                                                   |
+| Run                                                      | Entry           | Does                                                                                                                                                                                                         |
+| -------------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pnpm canvas COMMAND`                                    | `cli/canvas.ts` | Reads and changes collections through the local service (`pnpm dev`). Every change crosses Authoring. `profile` commands and `--help` run locally, with no service. `pnpm canvas --help` lists all commands. |
+| `pnpm render:png --collection ID\|FILE.canvas --out DIR` | `cli/render.ts` | Draws a collection: writes one SVG or PNG file per section into `--out`. Changes no stored collection.                                                                                                       |
 
 ## Command → owning core file
 
@@ -50,14 +50,15 @@ Add a command: its member in `contract/records/command.ts` → its row in `table
 
 ## Import rules
 
-| From                                                    | May import                                                                       | Checked by `pnpm architecture` |
-| ------------------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------ |
-| `core/`                                                 | `core/`, `contract/{records,ports,brands,schemas,errors}`. No packages, no Node. | yes                            |
-| `adapters/`                                             | `contract/`, Node, packages. Never `core/` or another adapter.                   | yes                            |
-| `contract/` outside compose                             | Never `adapters/`.                                                               | yes                            |
-| `contract/records/`, `ports/`, `brands.ts`, `errors.ts` | Never `core/`, `adapters/`, `api.ts`, `index.ts` or compose.                     | yes                            |
-| `contract/` except `api.ts`                             | Never `core/`.                                                                   | no                             |
-| `cli/`                                                  | `contract/index.ts` and Node only.                                               | no                             |
+| From                                                    | May import                                                                                          | Checked by `pnpm architecture` |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------ |
+| `core/`                                                 | `core/`, `contract/{records,ports,brands,schemas,errors}`. No packages, no Node.                    | yes                            |
+| `adapters/`                                             | `contract/{records,ports,brands,schemas,errors}`, Node, packages. Never `core/` or another adapter. | yes                            |
+| `adapters/`                                             | Never `contract/api.ts`, `index.ts` or compose.                                                     | no                             |
+| `contract/` outside compose                             | Never `adapters/`.                                                                                  | yes                            |
+| `contract/records/`, `ports/`, `brands.ts`, `errors.ts` | Never `core/`, `adapters/`, `api.ts`, `index.ts` or compose.                                        | yes                            |
+| `contract/` except `api.ts`                             | Never `core/`.                                                                                      | no                             |
+| `cli/`                                                  | `contract/index.ts` and Node only.                                                                  | no                             |
 
 ## Failures
 
