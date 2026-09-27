@@ -26,7 +26,7 @@ import { authoringFailure } from '../../../contract/errors.js';
 export interface CollectionProposalOwners {
   readonly library: Pick<LibraryRules, 'planMembership'>;
   readonly workspace: WorkspaceReader;
-  readonly resources: ResourceSelector;
+  readonly resources: Pick<ResourceSelector, 'forCollection'>;
 }
 
 /**

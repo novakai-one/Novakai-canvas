@@ -24,8 +24,8 @@ import { authoringFailure } from '../../../contract/errors.js';
 
 /** What candidate validation reads; no validator can commit or alter the candidate it inspects. */
 export interface CandidateValidatorOwners {
-  readonly workspace: WorkspaceReader;
-  readonly resources: ResourceSelector;
+  readonly workspace: Pick<WorkspaceReader, 'read'>;
+  readonly resources: Pick<ResourceSelector, 'forCollection'>;
   readonly assets: Pick<Assets, 'resolve'>;
 }
 

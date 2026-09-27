@@ -18,7 +18,9 @@ import { authoringFailure } from '../../../contract/errors.js';
 /**
  * Binds the private `bootstrap` planner to trusted installation data; HTTP never exposes it.
  * `plan` answers the installation proposal, or `invalid-input` at `bootstrap` when the request
- * is not a change or its payload is not the initialize command.
+ * is not a change or its payload is not the initialize command. Building the proposal throws
+ * only when the trusted installation breaks Authoring's proposal limits; Authoring's planner
+ * boundary turns that into a failure.
  */
 export function createInstallationPlanner(installation: Installation): IntentPlanner {
   return { id: plannerId.parse('bootstrap'), plan: async (request) => plan(request, installation) };
@@ -26,7 +28,8 @@ export function createInstallationPlanner(installation: Installation): IntentPla
 /**
  * The deterministic installation request: it expects every installation record to be absent,
  * so it never replaces or upserts an existing workspace. Fails with `invalid-input` at
- * `bootstrap` when Authoring's request schema rejects it.
+ * `bootstrap` when Authoring's request schema rejects it. The same proposal throw as `plan` is
+ * caught by compose startup, which answers `unavailable` and keeps the workspace files.
  */
 export function installationRequest(installation: Installation): AuthoringResult<Request> {
   const writes = proposal(installation).writes;

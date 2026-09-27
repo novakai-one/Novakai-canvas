@@ -16,6 +16,7 @@ export type DslCommand = z.infer<typeof dslCommand>;
 export const modelCommand = z
   .strictObject({ collection: z.string().min(1).max(128), changes: z.array(z.unknown()).max(1000) })
   .readonly();
+export type ModelCommand = z.infer<typeof modelCommand>;
 /** A preset admission's header: the kind it admits and, for a recipe, its DSL source. Templates checks the rest. */
 export const presetAdmission = z.looseObject({
   kind: z.enum(['theme', 'recipe']),

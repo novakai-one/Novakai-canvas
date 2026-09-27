@@ -19,7 +19,7 @@ import type {
   ResourceSelection,
   ResourceSelector,
 } from '../../../contract/records/planning/planning.js';
-import type { DslCommand } from '../../../contract/records/planning/commands.js';
+import type { DslCommand, ModelCommand } from '../../../contract/records/planning/commands.js';
 import { dslCommand, modelCommand } from '../../../contract/records/planning/commands.js';
 import { plannerId } from '../../../contract/schemas.js';
 import { authoringFailure } from '../../../contract/errors.js';
@@ -28,8 +28,8 @@ import { authoringFailure } from '../../../contract/errors.js';
 export interface DiagramPlannerOwners {
   readonly model: Pick<ModelRules, 'plan'>;
   readonly language: Pick<Language, 'parse' | 'lower'>;
-  readonly workspace: WorkspaceReader;
-  readonly resources: ResourceSelector;
+  readonly workspace: Pick<WorkspaceReader, 'read'>;
+  readonly resources: Pick<ResourceSelector, 'select'>;
   readonly collections: CollectionPlanner;
 }
 
@@ -160,7 +160,7 @@ function model(
 }
 /** Missing or invalid changed records never become raw JSON writes. */
 function modelCollection(
-  command: { readonly collection: string; readonly changes: readonly unknown[] },
+  command: ModelCommand,
   snapshot: Snapshot,
   owners: DiagramPlannerOwners,
 ): AuthoringResult<Proposal> {

@@ -19,7 +19,7 @@ import { authoringFailure } from '../../../contract/errors.js';
 /** What the library planner uses; compose passes Library from ServiceCapabilities. */
 export interface LibraryPlannerOwners {
   readonly library: Pick<LibraryRules, 'planOrganisation'>;
-  readonly workspace: WorkspaceReader;
+  readonly workspace: Pick<WorkspaceReader, 'read'>;
 }
 
 /**
