@@ -5,6 +5,7 @@
  * current-request variable is used.
  */
 import { composeAuthoring } from '@novakai/canvas-authoring';
+import { createReactBindings } from '@novakai/canvas-presentation';
 import type {
   Authoring,
   CandidateValidator,
@@ -36,7 +37,7 @@ import { createDiagramPlanners } from '../../core/authoring-roles/planners/diagr
 import { createLibraryPlanner } from '../../core/authoring-roles/planners/library.js';
 import { createPresetPlanner } from '../../core/authoring-roles/planners/preset.js';
 import { prepareTheme } from '../../core/presets/theme-admission.js';
-import { createWorkspaceExporter } from '../../adapters/workspace/export.js';
+import { createExportRoute } from '../../core/export/route.js';
 import { createPngRuntime } from '../../adapters/raster/png-runtime.js';
 import { cacheRenders } from '../../core/rendering/cache.js';
 import { createRenderJobs } from '../../core/rendering/jobs.js';
@@ -51,7 +52,12 @@ export interface WiredWorkspace {
   readonly initialize: AuthoringResult<Request>;
 }
 
-/** All concrete bridges are wired here; adapters never import siblings or reach another capability's private implementation. */
+/**
+ * Wire one workspace's adapters, core and capabilities into its session facade. Fails with
+ * `unavailable` at `startup` ("Workspace composition failed") when the Presentation bindings
+ * cannot be created from the installation fonts. A rejected adapter import reaches `startOpened`
+ * in startup.ts, which answers the same failure and closes the native handles.
+ */
 export async function wireWorkspace(
   native: NativeWorkspace,
   installation: BuiltinResources,
@@ -129,20 +135,23 @@ export async function wireWorkspace(
     producer,
     resources,
   });
-  const exporter = await createWorkspaceExporter({
+  const presentation = await createReactBindings(installation.fonts);
+  if (!presentation.ok) {
+    return failure('unavailable', 'startup', 'Workspace composition failed');
+  }
+  const exporter = createExportRoute({
     workspace: options.workspace,
-    installation,
-    assets: native.assets,
+    model,
     language,
+    export: capabilities.export,
+    presentation: presentation.value,
+    assets: native.assets,
     views,
     resources,
     renderer,
     png: createPngRuntime(),
     authoring: (signal) => requestAuthoring(runtime, signal),
   });
-  if (!exporter.ok) {
-    return failure('unavailable', 'startup', 'Workspace composition failed');
-  }
   const session = createWorkspaceSession({
     workspace: options.workspace,
     installation,
@@ -155,7 +164,7 @@ export async function wireWorkspace(
       authoringFailure('storage-unavailable', 'session', 'Workspace is closing or closed'),
     authoring: (signal) => requestAuthoring(runtime, signal),
     renderer,
-    exporter: exporter.value.invoke,
+    exporter: exporter.invoke,
   });
   const adopt = () =>
     requestAuthoring(runtime, new AbortController().signal).initializeHistory(options.workspace);

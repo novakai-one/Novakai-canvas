@@ -1,9 +1,10 @@
 /*
  * The one construction site for Language, Design System, the Templates factory and the Model,
  * Library and Export rule tables. Templates is composed from the core preset codecs. installation.ts
- * and wiring.ts each call it once; serve.ts builds only Language here. Some adapters still import
- * Model and Export rules directly until later PRs move those rules into core. Constructing starts
- * no I/O; each capability owns its own failures and recovery.
+ * and wiring.ts each call it once; serve.ts builds only Language here. Core reaches these only
+ * through ServiceCapabilities; adapters import capability schemas and runtimes (render worker, PNG
+ * runtime, shipped resources) directly. Constructing starts no I/O; each capability owns its own
+ * failures and recovery.
  */
 import { composeDesignSystem } from '@novakai/canvas-design-system';
 import { composeExport, formatMarkdown } from '@novakai/canvas-export';

@@ -1,8 +1,8 @@
 /*
  * The capability seam: the capability behaviour service rules may call. Core cannot import a
  * capability package, so compose/capabilities.ts builds ServiceCapabilities and compose passes
- * slices of it on. Today builtin preset preparation, the workspace reader, resource selection
- * and the Authoring planners take slices; core modules in later PRs take
+ * slices of it on. Today builtin preset preparation, the workspace reader, resource selection,
+ * the Authoring planners and the export route take slices; core modules in later PRs take
  * `Pick<ServiceCapabilities, …>` of what they use.
  * Declarations only, plus the frozen empty resource set; the capabilities own their failures and
  * recovery.

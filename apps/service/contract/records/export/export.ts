@@ -1,19 +1,15 @@
 /*
- * Export vocabulary: the request the service boundary parses, the narrowed owners one export
- * reads through, the handler the workspace publishes, and the capability types core/export
- * speaks in. The request schema is plain zod replicating the service's own grammar; capability
- * types arrive as type-only re-exports so core stays inside every capability's public entry.
+ * Export vocabulary: the request the service boundary parses, the handler the workspace
+ * publishes, and the capability types core/export speaks in. The request schema is plain zod
+ * replicating the service's own grammar; capability types arrive as type-only re-exports so core
+ * stays inside every capability's public entry. Declarations only; core/export owns the rules.
  */
 import { z } from 'zod';
-import type { Assets, Result as AssetResult, StoredBlob } from '@novakai/canvas-assets';
+import type { Result as AssetResult, StoredBlob } from '@novakai/canvas-assets';
 import type { Diagnostic as ExportDiagnostic } from '@novakai/canvas-export';
-import type { Authoring, Collection, Language } from '../capabilities.js';
-import type { BuiltinResources } from '../presets/builtins.js';
-import type { ResourceSelector } from '../planning/planning.js';
-import type { WorkspaceContents, WorkspaceReader } from '../workspace/contents.js';
+import type { Collection } from '../capabilities.js';
+import type { WorkspaceContents } from '../workspace/contents.js';
 import type { RouteOutcome } from '../transport/protocol.js';
-import type { CollectionRenderer } from '../../ports/collection-renderer.js';
-import type { PngRuntime } from '../../ports/export.js';
 
 export type { ReadLease, Result as AssetResult, StoredBlob } from '@novakai/canvas-assets';
 export type {
@@ -72,19 +68,6 @@ export interface SelectedCollection {
 
 /** A guarded read of one leased blob; a throwing lease is reported as a failed read. */
 export type LeaseRead = (digest: unknown, path: string) => AssetResult<StoredBlob>;
-
-/** Everything one export reads through: each owner narrowed to the members export calls. */
-export interface ExportOwners {
-  readonly workspace: string;
-  readonly installation: Pick<BuiltinResources, 'fonts'>;
-  readonly assets: Pick<Assets, 'acquire'>;
-  readonly language: Pick<Language, 'print'>;
-  readonly views: Pick<WorkspaceReader, 'read'>;
-  readonly resources: Pick<ResourceSelector, 'forCollection'>;
-  readonly renderer: CollectionRenderer;
-  readonly png: PngRuntime;
-  readonly authoring: (signal: AbortSignal) => Pick<Authoring, 'read'>;
-}
 
 /** The export route: unknown input in, a file or a typed failure out. */
 export interface ExportHandler {

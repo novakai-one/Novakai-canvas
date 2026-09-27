@@ -9,7 +9,6 @@ export type {
   StoredRecord,
   RecordKey,
   ReadVersion,
-  Write,
   Request,
   Receipt,
   Proposal,
@@ -19,7 +18,6 @@ export type {
   SnapshotReader,
   ReceiptReader,
   Committer,
-  CommitRequest,
   IntentPlanner,
   CandidateValidator,
   Feasibility,
@@ -32,8 +30,7 @@ export type {
   Digest,
   Json,
 } from '@novakai/canvas-authoring';
-export type { Collection, Change, ChangePlan } from '@novakai/canvas-model';
-export type { Persistence } from '@novakai/canvas-persistence';
+export type { Collection, Change } from '@novakai/canvas-model';
 export type {
   Language,
   LoweredIntent,
@@ -59,6 +56,10 @@ export type {
   ChromeName,
 } from '@novakai/canvas-design-system';
 export type { Assets, WriteLease } from '@novakai/canvas-assets';
-export type { FontSource, VisualAsset } from '@novakai/canvas-presentation';
+export type {
+  FontSource,
+  VisualAsset,
+  ReactBindings as PresentationBindings,
+} from '@novakai/canvas-presentation';
 export type { Scene } from '@novakai/canvas-layout';
 export type { Organisation, LibrarySnapshot } from '@novakai/canvas-library';
