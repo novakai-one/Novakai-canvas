@@ -6,22 +6,23 @@
  * owns commit, receipts and recovery.
  */
 import { composeAuthoring } from '@novakai/canvas-authoring';
+import type { Assets } from '@novakai/canvas-assets';
 import type {
   Authoring,
   CandidateValidator,
   HistoryStatus,
   IntentPlanner,
+  Notifications,
   Request,
   ResourceAdmission,
   Result as AuthoringResult,
 } from '@novakai/canvas-authoring';
-import type { NativeWorkspace, WorkspaceOptions } from '../records/workspace/startup.js';
+import type { WorkspaceOptions } from '../records/workspace/startup.js';
 import type { Installation } from '../records/workspace/installation.js';
 import type { BuiltinResources } from '../records/presets/builtins.js';
 import type { ServiceCapabilities } from '../ports/capabilities.js';
-import type { ChangeChannel } from '../ports/notifications.js';
 import type { FeasibilityOwners } from '../ports/render-jobs.js';
-import type { AuthoringStore } from '../ports/storage.js';
+import type { AuthoringStore, ConditionalStorage } from '../ports/storage.js';
 import { createResourceAdmission } from '../../core/authoring-roles/resource-leases.js';
 import { createFeasibility } from '../../core/authoring-roles/feasibility.js';
 import { createCandidateValidator } from '../../core/authoring-roles/validation/candidate.js';
@@ -41,12 +42,16 @@ export const UNCANCELLED: AbortSignal = new AbortController().signal;
 
 /** What Authoring is bound over: the open workspace, its installation and the shared roles. */
 export interface AuthoringInputs {
-  readonly native: NativeWorkspace;
-  readonly installation: BuiltinResources;
-  readonly options: WorkspaceOptions;
-  readonly capabilities: ServiceCapabilities;
-  readonly roles: WorkspaceRoles;
-  readonly changes: ChangeChannel;
+  readonly native: {
+    readonly storage: ConditionalStorage;
+    readonly assets: Pick<Assets, 'resolve' | 'acquire'>;
+  };
+  readonly installation: Pick<BuiltinResources, 'presets'>;
+  readonly options: Pick<WorkspaceOptions, 'workspace' | 'title' | 'createdAt'>;
+  readonly capabilities: Pick<ServiceCapabilities, 'model' | 'library' | 'language'>;
+  readonly roles: Pick<WorkspaceRoles, 'views' | 'resources' | 'commands' | 'jobs' | 'producer'>;
+  /** Where Authoring publishes committed changes. */
+  readonly changes: Notifications;
 }
 
 /** One workspace's Authoring, plus what startup validates, applies and adopts. */
@@ -66,7 +71,7 @@ interface AdmissionRuntime {
   readonly planners: readonly IntentPlanner[];
   readonly validation: CandidateValidator;
   readonly resources: ResourceAdmission;
-  readonly changes: ChangeChannel;
+  readonly changes: Notifications;
   readonly feasibility: FeasibilityOwners;
 }
 
@@ -81,12 +86,12 @@ export async function wireAuthoring(inputs: AuthoringInputs): Promise<WiredAutho
   const installation = installationRecords(inputs);
   const store = storeModule.createAuthoringStore(inputs.native.storage);
   const runtime = admissionRuntime(inputs, installation, store);
-  const workspace = inputs.options.workspace;
+  const startup = requestAuthoring(runtime, UNCANCELLED);
   return {
     authoring: (signal) => requestAuthoring(runtime, signal),
     validation: runtime.validation,
     initialize: installationRequest(installation),
-    adopt: () => requestAuthoring(runtime, UNCANCELLED).initializeHistory(workspace),
+    adopt: () => startup.initializeHistory(inputs.options.workspace),
   };
 }
 

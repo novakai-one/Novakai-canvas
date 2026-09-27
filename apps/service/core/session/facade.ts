@@ -25,7 +25,7 @@ export interface SessionOwners {
   readonly views: WorkspaceReader;
   readonly renderer: CollectionRenderer;
   readonly exporter: (input: unknown, signal: AbortSignal) => Promise<RouteOutcome>;
-  readonly changes: ChangeChannel;
+  readonly changes: Pick<ChangeChannel, 'subscribe'>;
   readonly lifetime: SessionLifetime;
   readonly readSignal: AbortSignal;
   unavailable(): AuthoringResult<never>;

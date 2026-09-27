@@ -17,7 +17,7 @@ import { UNCANCELLED, wireAuthoring } from './authoring.js';
 import { wireExport } from './export.js';
 import { wireSession } from './session.js';
 
-/** The workspace after wiring: its session, plus what core startup validates, applies and adopts. */
+/** The wired workspace: its session, plus what core startup validates, applies and adopts. */
 export interface WiredWorkspace extends StartupOwners {
   readonly session: WorkspaceSession;
 }
@@ -49,7 +49,7 @@ export async function wireWorkspace(
   const exporter = await wireExport(parts, authoring.authoring);
   if (!exporter.ok) return exporter;
   return success({
-    session: wireSession(parts, authoring, exporter.value),
+    session: wireSession(parts, authoring.authoring, exporter.value),
     validation: authoring.validation,
     initialize: authoring.initialize,
     signal: UNCANCELLED,

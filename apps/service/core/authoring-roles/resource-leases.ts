@@ -20,8 +20,8 @@ import { authoringFailure } from '../../contract/errors.js';
  * source) when the bytes cannot be leased. `release` answers `storage-unavailable` (source kept).
  */
 export function createResourceAdmission(
-  selector: ResourceSelector,
-  assets: Assets,
+  selector: Pick<ResourceSelector, 'select'>,
+  assets: Pick<Assets, 'acquire'>,
 ): ResourceAdmission {
   return { acquire: async (request, snapshot) => acquire(request, snapshot, selector, assets) };
 }
@@ -29,8 +29,8 @@ export function createResourceAdmission(
 function acquire(
   request: Request,
   snapshot: Snapshot,
-  selector: ResourceSelector,
-  assets: Assets,
+  selector: Pick<ResourceSelector, 'select'>,
+  assets: Pick<Assets, 'acquire'>,
 ): AuthoringResult<ResourceLease> {
   const selected = selector.select(request, snapshot);
   if (!selected.ok) return selected;

@@ -4,8 +4,9 @@
  * snapshot; the caller owns the retry.
  */
 import { createReactBindings } from '@novakai/canvas-presentation';
+import type { Assets } from '@novakai/canvas-assets';
 import type { Authoring } from '@novakai/canvas-authoring';
-import type { NativeWorkspace, WorkspaceOptions } from '../records/workspace/startup.js';
+import type { WorkspaceOptions } from '../records/workspace/startup.js';
 import type { BuiltinResources } from '../records/presets/builtins.js';
 import type { ExportHandler } from '../records/export/export.js';
 import type { ServiceCapabilities } from '../ports/capabilities.js';
@@ -17,11 +18,11 @@ import type { WorkspaceRoles } from './workspace.js';
 
 /** What the export route reads through, besides Authoring. */
 export interface ExportInputs {
-  readonly native: Pick<NativeWorkspace, 'assets'>;
-  readonly installation: BuiltinResources;
+  readonly native: { readonly assets: Pick<Assets, 'acquire'> };
+  readonly installation: Pick<BuiltinResources, 'fonts'>;
   readonly options: Pick<WorkspaceOptions, 'workspace'>;
-  readonly capabilities: ServiceCapabilities;
-  readonly roles: WorkspaceRoles;
+  readonly capabilities: Pick<ServiceCapabilities, 'model' | 'language' | 'export'>;
+  readonly roles: Pick<WorkspaceRoles, 'views' | 'resources' | 'renderer'>;
 }
 
 /**

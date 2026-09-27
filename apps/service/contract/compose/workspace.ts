@@ -25,10 +25,13 @@ import { libavoidWasm } from './producer.js';
 
 /** What the shared roles are built from: the open assets, the installation and the capabilities. */
 export interface WorkspaceRoleInputs {
-  readonly assets: Assets;
-  readonly installation: BuiltinResources;
+  readonly assets: Pick<Assets, 'stage' | 'resolve' | 'reserve' | 'acquire'>;
+  readonly installation: Pick<BuiltinResources, 'presets' | 'tokens'>;
   readonly resourceRoot: string;
-  readonly capabilities: ServiceCapabilities;
+  readonly capabilities: Pick<
+    ServiceCapabilities,
+    'model' | 'library' | 'language' | 'system' | 'templates'
+  >;
   /** The worker-backed producer; the roles render through a cache over it. */
   readonly worker: DiagramProducer;
 }
