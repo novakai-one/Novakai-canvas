@@ -1,24 +1,26 @@
-.tools {
-  display: grid;
-  gap: 18px;
-}
-.form {
-  display: grid;
-  gap: 12px;
-}
-.hint {
-  margin: 0;
-  color: var(--nv-color-text-muted);
-  font-size: 0.82rem;
-  line-height: 1.45;
-}
-.actions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-}
-.empty {
-  margin: 0;
-  color: var(--nv-color-text-muted);
-  font-size: 0.85rem;
+@layer components {
+  .tools {
+    display: grid;
+    gap: var(--nv-space-4);
+  }
+  .form {
+    display: grid;
+    gap: var(--nv-space-3);
+  }
+  .hint {
+    margin: 0;
+    color: var(--nv-color-subtle);
+    font-size: var(--nv-font-caption);
+    line-height: var(--nv-line-height-body);
+  }
+  .actions {
+    display: flex;
+    gap: var(--nv-space-2);
+    justify-content: flex-end;
+  }
+  .empty {
+    margin: 0;
+    color: var(--nv-color-subtle);
+    font-size: var(--nv-font-caption);
+  }
 }

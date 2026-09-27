@@ -1,25 +1,70 @@
 @layer components {
+  /* The change list is the one flexible row: it scrolls so the actions stay inside the panel. */
   .review {
     position: absolute;
     inset: var(--nv-space-4) var(--nv-space-4) auto auto;
-    z-index: 40;
-    width: min(27rem, calc(100% - var(--nv-space-8)));
-    max-height: min(75vh, 42rem);
+    z-index: var(--nv-layer-popover);
+    width: min(var(--nv-panel-right-maximum), calc(100% - var(--nv-space-8)));
+    max-height: calc(100dvh * var(--nv-sheet-maximum));
     overflow: hidden;
     display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
     gap: var(--nv-space-4);
     padding: var(--nv-space-4);
     background: var(--nv-color-panel);
     border: var(--nv-stroke-base) solid var(--nv-border-default);
     border-radius: var(--nv-radius-panel);
   }
-  .options { display: flex; flex-wrap: wrap; gap: var(--nv-space-2); }
-  .header { display: flex; gap: var(--nv-space-3); justify-content: space-between; align-items: start; }
-  .header p { margin: var(--nv-space-1) 0 0; color: var(--nv-color-subtle); font-size: var(--nv-font-caption); }
-  .count { color: var(--nv-color-subtle); white-space: nowrap; font-size: var(--nv-font-caption); }
-  .changes { max-height: min(52vh, 28rem); overflow: auto; display: grid; gap: var(--nv-space-3); margin: 0; padding: 0; list-style: none; }
-  .changes li { display: grid; gap: var(--nv-space-1); padding-bottom: var(--nv-space-3); border-bottom: var(--nv-stroke-base) solid var(--nv-border-default); }
-  .changes span { color: var(--nv-color-subtle); font-size: var(--nv-font-caption); overflow-wrap: anywhere; }
-  .actions { display: flex; justify-content: flex-end; gap: var(--nv-space-3); }
-  @media (max-width: 42rem) { .review { inset: var(--nv-space-3) var(--nv-space-3) auto; width: auto; max-height: 60vh; } }
+  .options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nv-space-2);
+  }
+  .header {
+    display: flex;
+    gap: var(--nv-space-3);
+    justify-content: space-between;
+    align-items: start;
+  }
+  .header p {
+    margin: var(--nv-space-1) 0 0;
+    color: var(--nv-color-subtle);
+    font-size: var(--nv-font-caption);
+  }
+  .count {
+    color: var(--nv-color-subtle);
+    white-space: nowrap;
+    font-size: var(--nv-font-caption);
+  }
+  .changes {
+    min-height: 0;
+    overflow: auto;
+    display: grid;
+    gap: var(--nv-space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .changes li {
+    display: grid;
+    gap: var(--nv-space-1);
+    padding-bottom: var(--nv-space-3);
+    border-bottom: var(--nv-stroke-base) solid var(--nv-border-default);
+  }
+  .changes span {
+    color: var(--nv-color-subtle);
+    font-size: var(--nv-font-caption);
+    overflow-wrap: anywhere;
+  }
+  .actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--nv-space-3);
+  }
+  @media (max-width: 42rem) {
+    .review {
+      inset: var(--nv-space-3) var(--nv-space-3) auto;
+      width: auto;
+    }
+  }
 }

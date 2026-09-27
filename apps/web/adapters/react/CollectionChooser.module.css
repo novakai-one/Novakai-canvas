@@ -4,7 +4,7 @@
     flex-direction: column;
     gap: var(--nv-space-4);
     min-block-size: 0;
-    max-block-size: min(60dvh, 36rem);
+    max-block-size: calc(100dvh * var(--nv-sheet-maximum));
     overflow: hidden;
   }
 
@@ -15,16 +15,12 @@
     padding-inline-end: var(--nv-space-2);
   }
 
-  .content > .browser {
-    min-block-size: 0;
-  }
-
   .pending {
     margin: 0;
     padding: var(--nv-space-3);
     border-inline-start: var(--nv-stroke-base) solid var(--nv-action-accent);
     color: var(--nv-color-subtle);
-    background: var(--nv-color-canvas);
+    background: var(--nv-surface-base);
   }
 
   .failure {
@@ -38,7 +34,7 @@
     margin: 0;
   }
 
-  .failure p:first-of-type {
+  .error {
     color: var(--nv-status-error);
   }
 

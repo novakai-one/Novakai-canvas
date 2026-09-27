@@ -124,7 +124,7 @@ function FailureState({
   return (
     <section className={styles.failure} aria-labelledby="collection-chooser-failure">
       <h2 id="collection-chooser-failure">Could not open {title}</h2>
-      <p>{problem.message}</p>
+      <p className={styles.error}>{problem.message}</p>
       {activeTitle && <p role="status">{activeTitle} is still open.</p>}
       <details>
         <summary>Technical details</summary>
