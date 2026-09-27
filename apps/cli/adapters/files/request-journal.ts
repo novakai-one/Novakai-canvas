@@ -7,18 +7,19 @@ import { readFile, mkdir, open } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { z } from 'zod';
 import { requestSchema } from '../../contract/schemas.js';
-import { generation, requestId } from '../../contract/brands.js';
+import { requestId } from '../../contract/brands.js';
 import { byteBackup } from '../../contract/records/resources.js';
-import type { RequestFiles, RequestDraft } from '../../contract/ports/runtime.js';
+import type { JournalRecord, RequestFiles, RequestDraft } from '../../contract/ports/runtime.js';
 import type { Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 
 /**
  * One journal file: the generation it was sent under, the Authoring request and its byte backups.
- * A file written before backups were always retained has no `backups` key; it reads as `[]`.
+ * A file written before backups were always retained has no `backups` key; it reads as `[]`. The
+ * generation is only checked to be text: nothing reads it back (see {@link JournalRecord}).
  */
 const retained = z.strictObject({
-  generation,
+  generation: z.string(),
   request: requestSchema,
   backups: z.array(byteBackup).readonly().default([]),
 });
@@ -81,15 +82,20 @@ async function save(
     });
   }
 }
-/** Retained JSON is host data, never agent-authored syntax; it is checked again before replay. */
+/**
+ * Retained JSON is host data, never agent-authored syntax; it is checked again before replay.
+ * Fails with `invalid-request` (the ID) or `request-unavailable` (missing, unreadable or not a
+ * journal file).
+ */
 async function read(
   root: string,
   id: string,
-): Promise<Result<RequestDraft>> {
+): Promise<Result<JournalRecord>> {
   try {
     const path = location(root, id);
     if (!path.ok) return path;
-    return success(retained.parse(JSON.parse(await readFile(path.value, 'utf8'))));
+    const file = retained.parse(JSON.parse(await readFile(path.value, 'utf8')));
+    return success({ request: file.request, backups: file.backups });
   } catch {
     return failure({
       code: 'request-unavailable',

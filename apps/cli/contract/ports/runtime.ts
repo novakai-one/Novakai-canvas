@@ -31,17 +31,26 @@ export interface Transport {
     body: unknown,
   ): Promise<Result<ServiceAnswer, LocalFailure>>;
 }
-/** A request as retained: the generation it was sent under, the Authoring request and its byte backups (`[]` when none). */
-export interface RequestDraft {
-  readonly generation: Generation;
+/**
+ * A request as the journal returns it: the Authoring request and its byte backups (`[]` when
+ * none). The generation it was first sent under is not returned: a replay is always sent under
+ * the service's current generation.
+ */
+export interface JournalRecord {
   readonly request: Request;
   readonly backups: readonly ByteBackup[];
+}
+/** A request ready to retain and send: a journal record and the service generation it goes under. */
+export interface RequestDraft extends JournalRecord {
+  readonly generation: Generation;
 }
 export interface RequestFiles {
   /** The file's checked path and its text. Fails with `source-unavailable` or `source-too-large`. */
   source(path: string): Promise<Result<SourceFile, LocalFailure>>;
+  /** Fails with `invalid-request`, `request-reused` or `retention-unavailable`. */
   save(draft: RequestDraft): Promise<Result<void>>;
-  read(id: string): Promise<Result<RequestDraft>>;
+  /** Fails with `invalid-request` or `request-unavailable`. */
+  read(id: string): Promise<Result<JournalRecord>>;
   /** Fails with `output-unavailable`. */
   output(
     path: string,

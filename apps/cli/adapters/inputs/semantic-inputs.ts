@@ -1,3 +1,11 @@
+/*
+ * Checks service answers and builds the text and requests the service commands need: snapshots,
+ * Authoring requests from DSL, Assets byte backups, receipts, source read-outs and `list` lines.
+ * Pure apart from the injected Language parser. Fails with `invalid-source` (fix the DSL),
+ * `invalid-input` (the built request fails Authoring's schema), `invalid-response` (the service's
+ * answer did not match), or a precondition code: `not-found`, `already-exists`,
+ * `revision-required`, `revision-conflict`. The caller fixes the named input and runs again.
+ */
 import { snapshotSchema, receiptSchema } from '@novakai/canvas-authoring';
 import type { Request, Snapshot, StoredRecord } from '@novakai/canvas-authoring';
 import { requestSchema } from '../../contract/schemas.js';

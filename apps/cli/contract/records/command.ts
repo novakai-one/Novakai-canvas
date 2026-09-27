@@ -1,3 +1,7 @@
+/*
+ * The parsed `pnpm canvas` command: its name, operand, flags and service options. Pure
+ * declarations. The argument adapter builds it; commands read it.
+ */
 import { z } from 'zod';
 import type { Scope } from '@novakai/canvas-language';
 import type { CollectionRevision } from '../brands.js';

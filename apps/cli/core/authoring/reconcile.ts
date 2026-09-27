@@ -5,7 +5,11 @@
  */
 import { submit } from './submit.js';
 import type { Command } from '../../contract/records/command.js';
-import type { CliDependencies, RequestDraft, ServiceAnswer } from '../../contract/ports/runtime.js';
+import type {
+  CliDependencies,
+  JournalRecord,
+  ServiceAnswer,
+} from '../../contract/ports/runtime.js';
 import type { Result } from '../../contract/errors.js';
 import { rejected } from '../../contract/errors.js';
 
@@ -24,7 +28,7 @@ export async function retry(
 }
 /** Receipt absence permits explicit caller-requested replay; changed Authoring preconditions remain rejected by the owner. */
 async function reconciled(
-  draft: RequestDraft,
+  record: JournalRecord,
   response: ServiceAnswer,
   dependencies: CliDependencies,
 ): Promise<Result<string>> {
@@ -32,7 +36,7 @@ async function reconciled(
   if (response.outcome.value !== null)
     return dependencies.semantic.receipt(response.outcome.value, {
       kind: 'committed',
-      request: draft.request.request,
+      request: record.request.request,
     });
-  return submit({ ...draft, generation: response.generation }, false, dependencies);
+  return submit({ ...record, generation: response.generation }, false, dependencies);
 }

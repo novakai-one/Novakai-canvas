@@ -12,9 +12,14 @@ import type { ResourceRequest } from '@novakai/canvas-language';
 import type { ResourceFiles, LocalInput } from '../../contract/records/resources.js';
 import type { LocalFailure, Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
-import { assetDigest, type AssetDigest, type FilePath } from '../../contract/brands.js';
+import {
+  assetDigest,
+  pinnedDigest,
+  type AssetDigest,
+  type FilePath,
+} from '../../contract/brands.js';
 const byteLimit = 16 * 1024 * 1024;
-/** The prefix of a declaration that pins stored bytes by digest instead of naming a file. */
+/** What Model's pinned digest puts before the hex; stripped only after Model's schema passed. */
 const pinPrefix = 'sha256:';
 const media: Readonly<Record<string, string>> = {
   '.png': 'image/png',
@@ -145,7 +150,7 @@ async function read(
   file: FilePath,
   request: ResourceRequest,
 ): Promise<Result<LocalInput, LocalFailure>> {
-  const pinned = pinnedDigest(request.source);
+  const pinned = pinnedAsset(request.source);
   if (pinned !== undefined) return success({ alias: request.alias, digest: pinned, stage: null });
   const path = await confined(file, request.source);
   if (!path.ok) return contextual(file, request, path.error);
@@ -206,9 +211,13 @@ function expectedMedia(kind: ResourceRequest['kind']): string {
   return kind === 'font' ? 'font/' : 'image/';
 }
 
-/** The Assets digest a `sha256:<64 lowercase hex>` source pins; any other source names a file. */
-function pinnedDigest(source: string): AssetDigest | undefined {
+/**
+ * The Assets digest a source pins: the hex of a source that passes Model's {@link pinnedDigest}.
+ * Any other source names a file.
+ */
+function pinnedAsset(source: string): AssetDigest | undefined {
+  if (!pinnedDigest.safeParse(source).success) return undefined;
   const digest = assetDigest.safeParse(source.slice(pinPrefix.length));
-  if (!source.startsWith(pinPrefix) || !digest.success) return undefined;
+  if (!digest.success) return undefined;
   return digest.data;
 }

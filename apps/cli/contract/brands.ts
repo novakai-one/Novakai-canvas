@@ -11,6 +11,8 @@ export { requestId, workspaceId } from '@novakai/canvas-authoring';
 export type { RequestId, WorkspaceId } from '@novakai/canvas-authoring';
 export { collectionId, sectionId, objectId } from '@novakai/canvas-model';
 export type { SectionId, ObjectId } from '@novakai/canvas-model';
+/** Model's pinned content identity, `sha256:` then 64 lowercase hex digits (syntax only, unbranded). */
+export { digest as pinnedDigest } from '@novakai/canvas-model';
 export { presetId, version, digest as presetDigest } from '@novakai/canvas-templates';
 export type { PresetId, Version, Digest as PresetDigest } from '@novakai/canvas-templates';
 export { digest as assetDigest } from '@novakai/canvas-assets';
@@ -40,8 +42,8 @@ export const agentToken = z.string().min(1).brand<'AgentToken'>();
 
 /**
  * The service generation an answer came from; a retained request replays under the newest one.
- * Minted by the HTTP transport (`invalid-response`) and by the request journal when it reads a
- * retained request (`request-unavailable`).
+ * Minted by the HTTP transport (`invalid-response`). The request journal does not mint it: a
+ * journal read returns no generation.
  */
 export const generation = z.string().min(1).max(128).brand<'ServiceGeneration'>();
 

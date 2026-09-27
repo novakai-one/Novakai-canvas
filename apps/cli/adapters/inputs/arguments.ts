@@ -1,3 +1,10 @@
+/*
+ * `pnpm canvas` argv → CliOptions: Node parses the flags, then the command grammar checks the
+ * command word, operand count, mode, --revision and the profile/read-scope flags. Pure apart from
+ * Node's argument parser; nothing is read or sent. Fails with `invalid-command`,
+ * `invalid-arguments`, `invalid-mode` or `invalid-revision`: the caller corrects the named argument
+ * and runs the command again.
+ */
 import { parseArgs } from 'node:util';
 import { commandName } from '../../contract/records/command.js';
 import type { CliOptions, Command } from '../../contract/records/command.js';

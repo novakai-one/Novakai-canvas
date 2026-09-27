@@ -1,3 +1,9 @@
+/*
+ * Preset commands' owner inputs: the recipe admission record from `recipe admit` flags, the
+ * Authoring request for a prepared preset, and the expansion request for `recipe instantiate`.
+ * Pure; the theme grammar is injected. Fails with `invalid-arguments` (the caller fixes the
+ * flags) or `invalid-response` (the service's preparation did not form a request).
+ */
 import { z } from 'zod';
 import type { Snapshot, Request } from '@novakai/canvas-authoring';
 import { recipeFamily, requestSchema } from '../../contract/schemas.js';
