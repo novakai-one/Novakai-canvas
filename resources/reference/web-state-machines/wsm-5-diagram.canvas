@@ -1,0 +1,303 @@
+canvas 1
+collection @wsm-diagram "Web state machines · 5 · The diagram: open, choose, render, install" theme=paper {
+
+  node @root concept "apps/web/" size=small {}
+  node @d-core concept "core/" size=small {}
+  node @d-ws concept "workspace/" size=small {}
+  node @d-diagram concept "diagram/" size=small {}
+  node @d-render concept "render/" size=small {}
+  node @d-gesture concept "gesture/" size=small {}
+  node @d-connection concept "connection/" size=small {}
+  node @d-forms concept "forms/" size=small {}
+  node @d-contract concept "contract/" size=small {}
+  node @d-records concept "records/" size=small {}
+  node @d-recwf concept "workflow/" size=small {}
+  node @d-compose concept "compose/" size=small {}
+  node @d-adapters concept "adapters/" size=small {}
+  node @d-effects concept "effects/" size=small {}
+  node @d-sessions concept "sessions/" size=small {}
+  node @d-react concept "react/" size=small {}
+
+  node @g-state module "state.ts [NEW]" {}
+  node @g-session module "session.ts [NEW]" { signature @sig "updateDiagram" parameters=["state: DiagramSession", "event: DiagramEvent", "context: DiagramContext", "deps: WorkflowDeps"] returns="Step<DiagramSession, DiagramOut, DiagramEffect>" }
+  node @g-children module "children.ts [NEW]" { signature @sig "lowerToChild" parameters=["state: DiagramSession", "event: ChildEvent", "context: DiagramContext", "deps: WorkflowDeps"] returns="Step<DiagramSession, DiagramOut, DiagramEffect>" }
+  node @g-navigation module "navigation.ts [NEW]" { signature @sig "navigate" parameters=["state: DiagramSession", "event: NavigationEvent", "context: DiagramContext"] returns="Step<DiagramSession, DiagramOut, DiagramEffect>" }
+  node @g-render module "render.ts [NEW]" {
+    signature @sig "renderAnswered" parameters=["state: DiagramSession", "render: RenderId", "answer: RenderAnswer", "context: DiagramContext"] returns="Step<DiagramSession, DiagramOut, DiagramEffect>"
+    signature @installed "sceneInstalled" parameters=["state: DiagramSession", "render: RenderId", "stamp: SceneStamp"] returns="Step<DiagramSession, DiagramOut, DiagramEffect>"
+  }
+  node @g-refresh module "refresh.ts [NEW]" { signature @sig "refreshOnSnapshot" parameters=["state: DiagramSession", "latest: Latest"] returns="Step<DiagramSession, DiagramOut, DiagramEffect>" }
+  node @g-create module "create.ts [NEW]" { signature @sig "createRequested" parameters=["state: DiagramSession", "event: CreateEvent", "context: DiagramContext", "deps: WorkflowDeps"] returns="Step<DiagramSession, DiagramOut, DiagramEffect>" }
+  node @g-ticket module "ticket.ts [MOVE · P8]" { signature @sig "renderTicket" parameters=["target: CollectionId", "latest: Latest", "render: RenderId"] returns="RenderTicket" }
+  node @g-admission module "admission.ts [MOVE · P8]" {
+    signature @sig "admitRender" parameters=["ticket: RenderTicket", "answer: RenderAnswer", "latest: Latest"] returns="Result<RenderDocument, RenderCode>"
+    signature @inval "renderInvalidation" parameters=["ticket: RenderTicket", "latest: Latest"] returns="'invalidated' | 'current'"
+  }
+  node @r-patches module "patches.ts [DELETE]" {}
+  node @r-navigation module "navigation.ts [DELETE]" {}
+  node @w-reuse module "session-reuse.ts [CHANGE]" { signature @sig "reusableSession" parameters=["open: OpenDiagram", "document: RenderDocument"] returns="'reuse' | 'open'" }
+  node @u-gesture module "gesture.ts [NEW · collection 6]" { signature @sig "updateGesture" parameters=["state: Gesture", "event: GestureEvent", "context: SceneContext", "deps: WorkflowDeps"] returns="Step<Gesture, GestureOut, GestureEffect>" }
+  node @u-connection module "connection.ts [NEW · collection 7]" { signature @sig "updateConnection" parameters=["state: Connection", "event: ConnectionEvent", "context: SceneContext", "deps: WorkflowDeps"] returns="Step<Connection, ConnectionOut, never>" }
+  node @u-forms module "forms.ts [NEW · collection 7]" { signature @sig "updateForms" parameters=["state: Forms", "event: FormsEvent", "context: SceneContext", "deps: WorkflowDeps"] returns="Step<Forms, FormsOut, never>" }
+  node @c-diagram interface "diagram.ts [NEW]" {}
+  node @x-executors module "executors.ts [collection 1]" { signature @sig "composeExecutors" parameters=["handles: ExecutorHandles"] returns="Execute" }
+  node @x-scene module "scene.ts [NEW]" { signature @sig "createSceneExecutor" parameters=["canvas: CanvasHandles", "intake: CanvasIntake"] returns="Executor<SceneEffect, SceneAnswer>" }
+  node @x-intake module "canvas-intake.ts [NEW]" { signature @sig "createCanvasIntake" parameters=["ids: IdSource", "legacy: LegacySession (until M28)"] returns="CanvasIntake" }
+  node @x-canvas-session module "canvas-session.ts [DELETE]" {}
+  node @x-chooser module "CollectionChooser.tsx [CHANGE]" {}
+  node @x-chooser-css module "CollectionChooser.module.css [CHANGE]" {}
+
+  wire @t1 @root -> @d-core "contains" kind=parent
+  wire @t1b @d-core -> @d-ws "contains" kind=parent
+  wire @t2 @d-ws -> @d-diagram "contains" kind=parent
+  wire @t3 @d-ws -> @d-render "contains" kind=parent
+  wire @t4 @d-ws -> @d-gesture "contains" kind=parent
+  wire @t5 @d-ws -> @d-connection "contains" kind=parent
+  wire @t6 @d-ws -> @d-forms "contains" kind=parent
+  wire @t7 @root -> @d-contract "contains" kind=parent
+  wire @t7b @d-contract -> @d-records "contains" kind=parent
+  wire @t7c @d-records -> @d-recwf "contains" kind=parent
+  wire @t8 @d-contract -> @d-compose "contains" kind=parent
+  wire @t9 @root -> @d-adapters "contains" kind=parent
+  wire @t9b @d-adapters -> @d-effects "contains" kind=parent
+  wire @t10 @d-adapters -> @d-sessions "contains" kind=parent
+  wire @t11 @d-adapters -> @d-react "contains" kind=parent
+  wire @t12 @d-diagram -> @g-state "contains" kind=parent
+  wire @t13 @d-diagram -> @g-session "contains" kind=parent
+  wire @t14 @d-diagram -> @g-children "contains" kind=parent
+  wire @t15 @d-diagram -> @g-navigation "contains" kind=parent
+  wire @t16 @d-diagram -> @g-render "contains" kind=parent
+  wire @t17 @d-diagram -> @g-refresh "contains" kind=parent
+  wire @t18 @d-diagram -> @g-create "contains" kind=parent
+  wire @t19 @d-diagram -> @g-ticket "contains" kind=parent
+  wire @t20 @d-diagram -> @g-admission "contains" kind=parent
+  wire @t21 @d-render -> @r-patches "contains" kind=parent
+  wire @t22 @d-render -> @r-navigation "contains" kind=parent
+  wire @t23 @d-ws -> @w-reuse "contains" kind=parent
+  wire @t24 @d-gesture -> @u-gesture "contains" kind=parent
+  wire @t25 @d-connection -> @u-connection "contains" kind=parent
+  wire @t26 @d-forms -> @u-forms "contains" kind=parent
+  wire @t27 @d-recwf -> @c-diagram "contains" kind=parent
+  wire @t28 @d-compose -> @x-executors "contains" kind=parent
+  wire @t29 @d-effects -> @x-scene "contains" kind=parent
+  wire @t30 @d-effects -> @x-intake "contains" kind=parent
+  wire @t31 @d-sessions -> @x-canvas-session "contains" kind=parent
+  wire @t32 @d-react -> @x-chooser "contains" kind=parent
+  wire @t33 @d-react -> @x-chooser-css "contains" kind=parent
+
+  section @repo "1 · Target repo tree — the diagram ([collection N] = specified there; render/ticket.ts and admission.ts move into diagram/ in P8)" mode=tree direction=down gap=compact order=1 {
+    show @root @d-core @d-ws @d-diagram @d-render @d-gesture @d-connection @d-forms @d-contract @d-records @d-recwf @d-compose @d-adapters @d-effects @d-sessions @d-react detail=label size=small
+    show @g-state @g-session @g-children @g-navigation @g-render @g-refresh @g-create @g-ticket @g-admission @r-patches @r-navigation @w-reuse detail=label size=small
+    show @u-gesture @u-connection @u-forms @c-diagram @x-executors @x-scene @x-intake @x-canvas-session @x-chooser @x-chooser-css detail=label size=small
+    connect @t1 @t1b @t2 @t3 @t4 @t5 @t6 @t7 @t7b @t7c @t8 @t9 @t9b @t10 @t11 @t12 @t13 @t14 @t15 @t16 @t17 @t18 @t19 @t20 @t21 @t22 @t23 @t24 @t25 @t26 @t27 @t28 @t29 @t30 @t31 @t32 @t33 source-side=bottom target-side=left
+    root @root
+  }
+
+  node @e-session entity "DiagramSession" {
+    field @shown "shown" type="{ phase: 'library' } | { phase: 'open', diagram: OpenDiagram }"
+    field @navigation "navigation" type="Navigation"
+    field @renders "renders" type="RenderId (last issued)"
+    text @i1 "invariant DG1: gesture, connection and forms exist only while shown.phase = 'open' (by type)"
+    text @i2 "invariant DG5: every render failure keeps shown unchanged"
+  }
+  node @e-navigation entity "Navigation" {
+    field @phase "phase" type="'idle' | 'opening' | 'choosing' | 'switching' | 'installing' | 'switch-failed'"
+    field @ticket "ticket" type="RenderTicket (opening, switching, installing)"
+    field @by "by" type="'person' | 'system' (opening)"
+    field @via "via, next" type="Via, NextOpen: none | open{CollectionId, by} (installing only)"
+    field @target "target, problem" type="CollectionId, Diagnostic (switch-failed)"
+    text @i1 "invariant DG3: at most one render ticket in flight (one union field)"
+    text @i2 "invariant: only by = 'person' opens and chooser actions clear the problem bar (keep panel-preferences)"
+    text @i3 "invariant DG6: every exit from opening sends navigation-settled; an open asked for while installing runs right after the install"
+  }
+  node @e-ticket entity "RenderTicket" {
+    field @render "render" type="RenderId" key=primary
+    field @collection "collection" type="CollectionId"
+    field @listing "listing" type="{ kind: 'listed', revision: CollectionRevision } | { kind: 'unlisted' }"
+    field @workspace "workspace" type="WorkspaceId"
+    field @generation "generation" type="TransportGeneration"
+    text @i1 "invariant DG4: render-answered is applied only when answer.render = ticket.render"
+    text @i2 "invariant: a new ticket aborts the old render; a snapshot that invalidates it restarts it with a fresh ticket"
+  }
+  node @e-open entity "OpenDiagram" {
+    field @scene "scene" type="RenderId" key=foreign references=@e-ticket.@render
+    field @generation "generation" type="TransportGeneration"
+    field @base "base" type="Snapshot"
+    field @document "document" type="RenderDocument (document.collection.id: CollectionId)"
+    field @stamp "stamp" type="SceneStamp"
+    field @released "released" type="readonly ReleasedGesture[]"
+    field @children "gesture, connection, forms" type="Gesture, Connection, Forms"
+    text @i1 "invariant DG2: a reinstall keeps gesture, connection and forms only for the same collection"
+    text @i2 "invariant: install mode 'open' => released = []"
+  }
+  node @e-released entity "ReleasedGesture" {
+    field @gesture "gesture" type="GestureId" key=primary
+    field @base "base" type="CollectionRevision"
+    text @i1 "invariant: settle-gesture 'confirmed' is emitted once stamp.revision > base; until then the preview stays"
+  }
+
+  wire @er1 @e-session.@navigation -> @e-navigation "has" kind=association from=1 to=1
+  wire @er2 @e-navigation.@ticket -> @e-ticket.@render "in flight" kind=association from=1 to=0..1
+  wire @er3 @e-session.@shown -> @e-open "shows" kind=association from=1 to=0..1
+  wire @er4 @e-open.@scene -> @e-ticket.@render "installed from" kind=association from=0..1 to=1
+  wire @er5 @e-open.@released -> @e-released.@gesture "holds" kind=association from=1 to=0..many
+
+  section @entities "2 · Entities and invariants — the diagram parent" mode=er direction=right order=2 {
+    show @e-session @e-navigation @e-ticket @e-open @e-released
+    connect @er1 @er2 @er3 @er4 @er5
+  }
+
+  wire @m1 @g-session -> @g-navigation.@sig "navigate(): Step<DiagramSession, DiagramOut, DiagramEffect>" kind=imports
+  wire @m2 @g-session -> @g-render "renderAnswered · sceneInstalled" kind=imports
+  wire @m3 @g-session -> @g-refresh.@sig "refreshOnSnapshot(): Step<DiagramSession, DiagramOut, DiagramEffect>" kind=imports
+  wire @m4 @g-session -> @g-create.@sig "createRequested(): Step<DiagramSession, DiagramOut, DiagramEffect>" kind=imports
+  wire @m5 @g-session -> @g-children.@sig "lowerToChild(): Step<DiagramSession, DiagramOut, DiagramEffect>" kind=imports
+  wire @m6 @g-navigation -> @g-ticket.@sig "renderTicket(): RenderTicket" kind=imports
+  wire @m7 @g-refresh -> @g-ticket.@sig "renderTicket(): RenderTicket" kind=imports
+  wire @m8 @g-refresh -> @g-admission.@inval "renderInvalidation(): 'invalidated' | 'current'" kind=imports
+  wire @m9 @g-render -> @g-admission.@sig "admitRender(): Result<RenderDocument, RenderCode>" kind=imports
+  wire @m10 @g-render -> @w-reuse.@sig "reusableSession(): 'reuse' | 'open'" kind=imports
+  wire @m11 @g-children -> @u-gesture.@sig "updateGesture(): Step<Gesture, GestureOut, GestureEffect>" kind=imports
+  wire @m12 @g-children -> @u-connection.@sig "updateConnection(): Step<Connection, ConnectionOut, never>" kind=imports
+  wire @m13 @g-children -> @u-forms.@sig "updateForms(): Step<Forms, FormsOut, never>" kind=imports
+  wire @m14 @x-executors -> @x-scene.@sig "createSceneExecutor(): Executor<SceneEffect>" kind=imports
+  wire @m15 @x-executors -> @x-intake.@sig "createCanvasIntake(): CanvasIntake" kind=imports
+
+  section @modules "3.1 · Module imports — the diagram parent" mode=modules layout=layered direction=right order=3 {
+    group @g-ws "core/workspace/" {
+      group @g-diagram "diagram/" {
+        show @g-session @g-navigation @g-render @g-refresh @g-create @g-ticket @g-admission
+      }
+      show @w-reuse
+    }
+    connect @m1 @m2 @m3 @m4 @m6 @m7 @m8 @m9 @m10
+  }
+
+  section @modules-children "3.2 · Module imports — children live only inside an open diagram" mode=modules layout=layered direction=right order=4 {
+    group @g-ws2 "core/workspace/" {
+      group @g-diagram2 "diagram/" {
+        show @g-session @g-children
+      }
+      group @g-kgesture "gesture/" {
+        show @u-gesture
+      }
+      group @g-kconnection "connection/" {
+        show @u-connection
+      }
+      group @g-kforms "forms/" {
+        show @u-forms
+      }
+    }
+    group @g-compose "contract/compose/" {
+      show @x-executors
+    }
+    group @g-effects "adapters/effects/" layout=grid columns=1 {
+      show @x-scene @x-intake
+    }
+    connect @m5 @m11 @m12 @m13 @m14 @m15
+  }
+
+  node @summary concept "4 · Modules summary — collection 5" size=large {
+    table @summary-t columns=["Module", "Current Line Count", "Lines Added", "Lines Removed", "Net", "Expected final line count (estimate)", "What the module does"] {
+      row @sm-1 cells=["core/workspace/diagram/state.ts", "0", "+110", "0", "+110", "110", "NEW · DiagramSession, Navigation (via and next on installing), OpenDiagram, Install, DiagramContext, SceneContext."]
+      row @sm-2 cells=["core/workspace/diagram/session.ts", "0", "+120", "0", "+120", "120", "NEW · updateDiagram: own events or children; lifts child outs."]
+      row @sm-3 cells=["core/workspace/diagram/children.ts", "0", "+110", "0", "+110", "110", "NEW · Lowers gesture, connection and forms events to the open diagram only."]
+      row @sm-4 cells=["core/workspace/diagram/navigation.ts", "0", "+160", "0", "+160", "160", "NEW · Open (from any phase once read), chooser (also from opening and switch-failed), choose, retry, close."]
+      row @sm-5 cells=["core/workspace/diagram/render.ts", "0", "+140", "0", "+140", "140", "NEW · Render answer checks in order; reuse or new session; install."]
+      row @sm-6 cells=["core/workspace/diagram/refresh.ts", "0", "+110", "0", "+110", "110", "NEW · Accepted snapshot: restart the render, reopen, or collection gone."]
+      row @sm-7 cells=["core/workspace/diagram/create.ts", "0", "+70", "0", "+70", "70", "NEW · New collection request; opens after its receipt (O2)."]
+      row @sm-8 cells=["core/workspace/diagram/ticket.ts", "48", "+30", "-18", "+12", "60", "MOVE (P8), then CHANGE (M17) · RenderTicket with the Listing union, no via. Moved from render/ticket.ts."]
+      row @sm-9 cells=["core/workspace/diagram/admission.ts", "145", "+25", "-40", "-15", "130", "MOVE (P8), then CHANGE (M17) · Generation, identity, revision and snapshot checks. Moved from render/admission.ts."]
+      row @sm-10 cells=["core/workspace/render/patches.ts", "140", "0", "-140", "-140", "0", "DELETE · Partial view patches; replaced by transitions."]
+      row @sm-11 cells=["core/workspace/render/navigation.ts", "141", "0", "-141", "-141", "0", "DELETE · Checks move to diagram/navigation.ts and diagram/refresh.ts."]
+      row @sm-12 cells=["core/workspace/session-reuse.ts", "53", "+5", "-23", "-18", "35", "CHANGE · reusableSession and renderChanged stay; retainCamera moves to the scene executor."]
+      row @sm-13 cells=["contract/records/workflow/diagram.ts", "0", "+110", "0", "+110", "110", "NEW · RenderTicket, Listing, RenderAnswer, ShownFacts and DiagramEvent."]
+      row @sm-14 cells=["adapters/effects/scene.ts", "0", "+150", "0", "+150", "150", "NEW · Canvas open, update, close, settle, preview and flags; camera carry-over."]
+      row @sm-15 cells=["adapters/effects/canvas-intake.ts", "0", "+90", "0", "+90", "90", "NEW · Canvas effects to events; mints a RequestId per edit intent. Forwards intents not yet moved to the old session (M17 to M28)."]
+      row @sm-16 cells=["adapters/sessions/canvas-session.ts", "76", "0", "-76", "-76", "0", "DELETE · Replaced by the scene executor."]
+      row @sm-17 cells=["adapters/react/CollectionChooser.tsx", "147", "+10", "-17", "-7", "140", "CHANGE · Reads DiagramView (collectionSwitch incl. choosing) and its command set; CollectionId."]
+      row @sm-18 cells=["adapters/react/CollectionChooser.module.css", "62", "+3", "-8", "-5", "57", "CHANGE · P1: pending strip visible; list scrolls."]
+      row @sm-total cells=["TOTAL · 18 files", "812", "+1243", "-463", "+780", "1592", "Estimates, not gates. Paths are under apps/web/ unless they start with capability/, apps/service/ or name the repo root."]
+    }
+  }
+  section @s-summary "4 · Modules summary — the diagram" mode=grid columns=1 order=5 {
+    show @summary
+  }
+
+  node @crud note "5 · Capability ownership — the diagram" size=large {
+    table @crud-t columns=["Object", "Create", "Read", "Update", "Delete"] {
+      row @e-session-row cells=["DiagramSession", "core/workspace/state.ts (library, idle)", "contexts.ts; view/diagram-view.ts; rules/history-release.ts", "diagram/session.ts — updateDiagram()", "never"]
+      row @e-navigation-row cells=["Navigation", "core/workspace/state.ts (idle)", "view/diagram-view.ts — opening, collectionSwitch; view/status.ts", "diagram/navigation.ts, render.ts, refresh.ts", "never; returns to idle"]
+      row @e-ticket-row cells=["RenderTicket", "diagram/ticket.ts — renderTicket()", "adapters/effects/service.ts (read-render); diagram/admission.ts", "never", "diagram/render.ts on install or fail; navigation.ts on a newer ticket"]
+      row @e-open-row cells=["OpenDiagram", "diagram/render.ts — sceneInstalled()", "diagram/children.ts (SceneContext); view/*; rules/flags.ts", "diagram/render.ts (reuse); children.ts (child slices)", "diagram/refresh.ts — collection gone (shown = library)"]
+      row @e-released-row cells=["ReleasedGesture", "diagram/session.ts — lift of gesture 'confirmed'", "diagram/render.ts — sceneInstalled()", "never", "diagram/render.ts — settled once the scene is newer; cleared on a new session"]
+    }
+  }
+  section @ownership "5 · Capability ownership — the diagram" mode=grid columns=1 order=6 {
+    show @crud
+  }
+
+  node @n-start start "Workspace read" {}
+  node @n-idle state "idle" {}
+  node @n-opening state "opening" { text @d "status 'Rendering diagram…'" }
+  node @n-choosing state "choosing" { text @d "chooser open; problem bar hidden" }
+  node @n-switching state "switching" { text @d "status 'Opening {title}…'" }
+  node @n-installing state "installing" { text @d "Canvas open or update running" }
+  node @n-failed state "switch-failed" { text @d "status 'Could not open {title}'; Retry" }
+
+  wire @n1 @n-start -> @n-idle "ready" kind=transition
+  wire @n2 @n-idle -> @n-opening "open-requested or created" kind=transition guard="catalogue read" effect="read-render (new ticket)"
+  wire @n3 @n-opening -> @n-installing "render-answered" kind=transition guard="all 5 checks pass" effect="scene open or update"
+  wire @n4 @n-installing -> @n-idle "scene-installed" kind=transition effect="new session: record-visit, write-location; a kept next open starts"
+  wire @n5 @n-opening -> @n-idle "fail" kind=transition effect="report; the shown diagram stays; navigation-settled"
+  wire @n14 @n-opening -> @n-opening "newer open, or a snapshot invalidates the ticket" kind=transition effect="abort; fresh ticket"
+  wire @n15 @n-installing -> @n-installing "open-requested" kind=transition effect="kept as next"
+  wire @n16 @n-opening -> @n-choosing "chooser-opened" kind=transition effect="abort-render; navigation-settled"
+
+  section @state-51 "7.1 · Navigation: open and install (the chooser is 7.3)" mode=state layout=layered direction=down order=7 {
+    show @n-start @n-idle @n-opening @n-installing @n-choosing
+    connect @n1 @n2 @n3 @n4 @n5 @n14 @n15 @n16
+  }
+
+  wire @n6 @n-idle -> @n-choosing "chooser-opened" kind=transition
+  wire @n7 @n-choosing -> @n-switching "collection-chosen" kind=transition guard="not the shown one" effect="read-render"
+  wire @n8 @n-switching -> @n-installing "render-answered" kind=transition guard="all 5 checks pass"
+  wire @n9 @n-switching -> @n-failed "fail" kind=transition
+  wire @n10 @n-failed -> @n-switching "chooser-retried" kind=transition effect="fresh ticket"
+  wire @n17 @n-failed -> @n-choosing "Choose another collection" kind=transition effect="chooser-opened"
+  wire @n11 @n-choosing -> @n-idle "chooser-closed (also from switching, switch-failed)" kind=transition effect="refresh active; read history"
+  wire @n13 @n-switching -> @n-switching "snapshot invalidates the ticket" kind=transition guard="target still listed" effect="abort; restart with a fresh ticket"
+  wire @n18 @n-choosing -> @n-opening "open-requested or created" kind=transition effect="closes the chooser"
+
+  section @state-53 "7.3 · The chooser: choose, switch, retry, close" mode=state layout=layered direction=down order=9 {
+    show @n-idle @n-choosing @n-switching @n-installing @n-failed @n-opening
+    connect @n6 @n7 @n8 @n9 @n10 @n17 @n11 @n13 @n18
+  }
+
+  node @c-start start "A render answer arrives with the current ticket" {}
+  node @c-gen decision "1 · Service generation changed?" {}
+  node @c-coll decision "2 · Wrong collection?" {}
+  node @c-adm decision "3 · Workspace, generation or revision moved since the ticket?" {}
+  node @c-base decision "4 · Catalogue lists this revision?" {}
+  node @c-reuse decision "5 · Same workspace and collection, revision >= shown?" {}
+  node @c-fail end "Fail: keep the shown diagram" { text @d "codes: workspace-generation, stale-diagram, render-input-changed, snapshot-mismatch; all but stale-diagram reread first" }
+  node @c-update end "Reuse the Canvas session (update)" {}
+  node @c-open end "Open a new Canvas session" { text @d "camera kept for the same workspace and collection" }
+
+  wire @c1 @c-start -> @c-gen "check" kind=flow step=1
+  wire @c2 @c-gen -> @c-fail "yes" kind=flow style=dashed
+  wire @c3 @c-gen -> @c-coll "no" kind=flow step=2
+  wire @c4 @c-coll -> @c-fail "yes" kind=flow style=dashed
+  wire @c5 @c-coll -> @c-adm "no" kind=flow step=3
+  wire @c6 @c-adm -> @c-fail "yes" kind=flow style=dashed
+  wire @c7 @c-adm -> @c-base "no" kind=flow step=4
+  wire @c8 @c-base -> @c-fail "no" kind=flow style=dashed
+  wire @c9 @c-base -> @c-reuse "yes" kind=flow step=5
+  wire @c10 @c-reuse -> @c-update "yes" kind=flow
+  wire @c11 @c-reuse -> @c-open "no" kind=flow
+
+  section @flow-52 "7.2 · Render answer checks, in order (diagram/render.ts + admission.ts)" mode=flow layout=layered direction=down order=8 {
+    show @c-start @c-gen @c-coll @c-adm @c-base @c-reuse @c-fail @c-update @c-open
+    connect @c1 @c2 @c3 @c4 @c5 @c6 @c7 @c8 @c9 @c10 @c11
+  }
+}

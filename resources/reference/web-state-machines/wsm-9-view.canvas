@@ -1,0 +1,323 @@
+canvas 1
+collection @wsm-view "Web state machines · 9 · What React sees: projection, permissions, facade, editor stores" theme=paper {
+
+  node @root concept "apps/web/" size=small {}
+  node @d-core concept "core/" size=small {}
+  node @d-ws concept "workspace/" size=small {}
+  node @d-view concept "view/" size=small {}
+  node @d-rules concept "rules/" size=small {}
+  node @d-contract concept "contract/" size=small {}
+  node @d-compose concept "compose/" size=small {}
+  node @d-records concept "records/" size=small {}
+  node @d-recwf concept "workflow/" size=small {}
+  node @d-adapters concept "adapters/" size=small {}
+  node @d-facade concept "facade/" size=small {}
+  node @d-react concept "react/" size=small {}
+  node @d-sessions concept "sessions/" size=small {}
+  node @d-ds concept "capability/design-system/adapters/react/" size=small {}
+
+  node @v-project module "project.ts [NEW]" { signature @sig "projectWorkspace" parameters=["state: Workspace"] returns="ProjectedView" }
+  node @v-diagram module "diagram-view.ts [NEW]" { signature @sig "diagramView" parameters=["state: Workspace"] returns="DiagramView" }
+  node @v-editing module "editing-view.ts [NEW]" { signature @sig "editingView" parameters=["state: Workspace"] returns="EditingView" }
+  node @v-journal module "journal-view.ts [NEW]" { signature @sig "journalView" parameters=["state: Workspace"] returns="JournalView" }
+  node @v-status module "status.ts [NEW]" { signature @sig "statusText" parameters=["state: Workspace"] returns="string (display text)" }
+  node @r-permissions module "permissions.ts [NEW]" { signature @sig "permissions" parameters=["state: Workspace"] returns="Permissions" }
+  node @w-status module "status.ts [DELETE]" {}
+  node @c-compose module "compose.ts [collection 1]" { signature @sig "startWeb" parameters=["element: HTMLElement"] returns="Promise<Result<Mounted>>" }
+  node @c-workspace module "workspace.ts [collection 1]" { signature @sig "composeWorkspace" parameters=["parts: WorkspaceParts"] returns="WorkspaceController" }
+  node @c-records interface "workspace.ts [CHANGE]" {}
+  node @c-commands interface "commands.ts [NEW]" {
+    member @sets "NavigationCommands · JournalCommands · HistoryCommands · FormCommands · ConnectionCommands · MovementCommands · SourceCommands · EditorSends" type="one command set per React feature (plan 8.4)"
+  }
+  node @c-view interface "view.ts [NEW]" {}
+  node @c-perms interface "permissions.ts [NEW]" {}
+  node @c-reacttypes interface "react-types.ts [CHANGE · M33]" {}
+  node @c-libreact interface "library-react.ts [CHANGE · M33]" {}
+  node @c-defmodel module "definitions-model.ts [CHANGE · M33]" {}
+  node @f-navigation module "navigation.ts [NEW · M17, M18]" { signature @sig "navigationCommands" parameters=["dispatch: Dispatch", "ids: IdSource"] returns="NavigationCommands" }
+  node @f-journal module "journal.ts [NEW · M7, M8]" { signature @sig "journalCommands" parameters=["dispatch: Dispatch"] returns="JournalCommands" }
+  node @f-history module "history.ts [NEW · M20]" { signature @sig "historyCommands" parameters=["dispatch: Dispatch", "ids: IdSource", "canvas: () => CanvasActivity"] returns="HistoryCommands" }
+  node @f-forms module "forms.ts [NEW · M23]" { signature @sig "formCommands" parameters=["dispatch: Dispatch", "ids: IdSource"] returns="FormCommands" }
+  node @f-connection module "connection.ts [NEW · M25]" { signature @sig "connectionCommands" parameters=["dispatch: Dispatch", "ids: IdSource"] returns="ConnectionCommands" }
+  node @f-movement module "movement.ts [NEW · M28]" { signature @sig "movementCommands" parameters=["dispatch: Dispatch", "ids: IdSource"] returns="MovementCommands" }
+  node @f-source module "source.ts [NEW · M32]" { signature @sig "sourceCommands" parameters=["dispatch: Dispatch", "ids: IdSource"] returns="SourceCommands" }
+  node @f-sends module "editor-sends.ts [NEW · M30]" { signature @sig "createEditorSends" parameters=["dispatch: Dispatch", "ids: IdSource", "waiters: Waiters"] returns="EditorSends" }
+  node @f-view module "view.ts [NEW · M17]" { signature @sig "workspaceView" parameters=["runner: Runner<ProjectedView>", "scene: () => ActiveDiagram | null"] returns="() => WorkspaceView" }
+  node @x-dialog-css module "Dialog.module.css [CHANGE · P1]" {}
+  node @x-shell module "WorkspaceShell.tsx [CHANGE · P5 split]" { signature @sig "createWorkspaceShell" parameters=["slots: ChromeSlots"] returns="ComponentType<WorkspaceProps>" }
+  node @x-alerts module "ShellAlerts.tsx [NEW · moved]" { signature @sig "createShellAlerts" parameters=["slots: AlertSlots"] returns="ShellAlerts" }
+  node @x-hooks module "shell-hooks.ts [NEW · moved]" { signature @sig "useControllerLifetime" parameters=["controller: WorkspaceController"] returns="void" }
+  node @x-object module "ObjectEditor.tsx [CHANGE]" {}
+  node @x-wire module "WireEditor.tsx [CHANGE]" {}
+  node @x-library module "LibraryBrowser.tsx [CHANGE]" {}
+  node @x-definitions module "Definitions.tsx [CHANGE]" {}
+  node @x-export-css module "ExportPanel.module.css [CHANGE]" {}
+  node @s-retained module "retained-editor.ts [CHANGE]" { signature @sig "createRetainedEditor" parameters=["bindings: RetainedEditorBindings"] returns="RetainedEditor" }
+  node @s-definition module "definition-session.ts [CHANGE]" { signature @sig "createDefinitionSession" parameters=["bindings: DefinitionBindings"] returns="DefinitionSession" }
+  node @s-library module "library-session.ts [CHANGE]" { signature @sig "createLibraryController" parameters=["bindings: LibraryBindings"] returns="LibraryController" }
+  node @s-panel module "panel-session.ts [CHANGE]" { signature @sig "createPanelController" parameters=["bindings: PanelBindings"] returns="PanelController" }
+
+  wire @t1 @root -> @d-core "contains" kind=parent
+  wire @t1b @d-core -> @d-ws "contains" kind=parent
+  wire @t2 @d-ws -> @d-view "contains" kind=parent
+  wire @t3 @d-ws -> @d-rules "contains" kind=parent
+  wire @t4 @root -> @d-contract "contains" kind=parent
+  wire @t5 @d-contract -> @d-compose "contains" kind=parent
+  wire @t6 @d-contract -> @d-records "contains" kind=parent
+  wire @t7 @d-records -> @d-recwf "contains" kind=parent
+  wire @t8 @root -> @d-adapters "contains" kind=parent
+  wire @t8b @d-adapters -> @d-facade "contains" kind=parent
+  wire @t9 @d-adapters -> @d-react "contains" kind=parent
+  wire @t10 @d-adapters -> @d-sessions "contains" kind=parent
+  wire @t11 @d-view -> @v-project "contains" kind=parent
+  wire @t12 @d-view -> @v-diagram "contains" kind=parent
+  wire @t13 @d-view -> @v-editing "contains" kind=parent
+  wire @t14 @d-view -> @v-journal "contains" kind=parent
+  wire @t15 @d-view -> @v-status "contains" kind=parent
+  wire @t16 @d-rules -> @r-permissions "contains" kind=parent
+  wire @t17 @d-ws -> @w-status "contains" kind=parent
+  wire @t18 @d-contract -> @c-compose "contains" kind=parent
+  wire @t18b @d-contract -> @c-reacttypes "contains" kind=parent
+  wire @t18c @d-contract -> @c-libreact "contains" kind=parent
+  wire @t18d @d-contract -> @c-defmodel "contains" kind=parent
+  wire @t19 @d-compose -> @c-workspace "contains" kind=parent
+  wire @t20 @d-records -> @c-records "contains" kind=parent
+  wire @t20b @d-records -> @c-commands "contains" kind=parent
+  wire @t21 @d-recwf -> @c-view "contains" kind=parent
+  wire @t21b @d-recwf -> @c-perms "contains" kind=parent
+  wire @t22 @d-facade -> @f-navigation "contains" kind=parent
+  wire @t22b @d-facade -> @f-journal "contains" kind=parent
+  wire @t22c @d-facade -> @f-history "contains" kind=parent
+  wire @t22d @d-facade -> @f-forms "contains" kind=parent
+  wire @t22e @d-facade -> @f-connection "contains" kind=parent
+  wire @t22f @d-facade -> @f-movement "contains" kind=parent
+  wire @t22g @d-facade -> @f-source "contains" kind=parent
+  wire @t23 @d-facade -> @f-sends "contains" kind=parent
+  wire @t23b @d-facade -> @f-view "contains" kind=parent
+  wire @t24 @d-react -> @x-shell "contains" kind=parent
+  wire @t25 @d-react -> @x-alerts "contains" kind=parent
+  wire @t26 @d-react -> @x-hooks "contains" kind=parent
+  wire @t27 @d-react -> @x-object "contains" kind=parent
+  wire @t28 @d-react -> @x-wire "contains" kind=parent
+  wire @t29 @d-react -> @x-library "contains" kind=parent
+  wire @t30 @d-react -> @x-definitions "contains" kind=parent
+  wire @t31 @d-react -> @x-export-css "contains" kind=parent
+  wire @t32 @d-sessions -> @s-retained "contains" kind=parent
+  wire @t33 @d-sessions -> @s-definition "contains" kind=parent
+  wire @t34 @d-sessions -> @s-library "contains" kind=parent
+  wire @t35 @d-sessions -> @s-panel "contains" kind=parent
+  wire @t36 @d-ds -> @x-dialog-css "contains" kind=parent
+
+  section @repo "1 · Target repo tree — what React sees ([collection N] = specified there; paths under apps/web/ except the design-system row)" mode=tree direction=down gap=compact order=1 {
+    show @root @d-core @d-ws @d-view @d-rules @d-contract @d-compose @d-records @d-recwf @d-adapters @d-facade @d-react @d-sessions detail=label size=small
+    show @v-project @v-diagram @v-editing @v-journal @v-status @r-permissions @w-status @c-compose @c-reacttypes @c-libreact @c-defmodel @c-workspace @c-records @c-commands @c-view @c-perms detail=label size=small
+    show @f-navigation @f-journal @f-history @f-forms @f-connection @f-movement @f-source @f-sends @f-view detail=label size=small
+    show @x-shell @x-alerts @x-hooks @x-object @x-wire @x-library @x-definitions @x-export-css @s-retained @s-definition @s-library @s-panel detail=label size=small
+    connect @t1 @t1b @t2 @t3 @t4 @t5 @t6 @t7 @t8 @t8b @t9 @t10 @t11 @t12 @t13 @t14 @t15 @t16 @t17 @t18 @t18b @t18c @t18d @t19 @t20 @t20b @t21 @t21b @t22 @t22b @t22c @t22d @t22e @t22f @t22g @t23 @t23b @t24 @t25 @t26 @t27 @t28 @t29 @t30 @t31 @t32 @t33 @t34 @t35 source-side=bottom target-side=left
+    root @root
+  }
+
+  section @repo-ds "1.1 · The one design-system file P1 touches" mode=tree direction=down gap=compact order=2 {
+    show @d-ds @x-dialog-css detail=label size=small
+    connect @t36 source-side=bottom target-side=left
+    root @d-ds
+  }
+
+  node @e-view entity "ProjectedView" {
+    field @diagram "diagram" type="DiagramView: snapshot, generation, collections, connected, opening, collectionSwitch (idle | choosing | loading | failed), problem"
+    field @journal "journal" type="JournalView: pending (PendingView rows with check, retry, dismiss permissions), newestRefusal"
+    field @history "history" type="HistoryView: status known or null"
+    field @editing "editing" type="EditingView: creation (drafts, note, adding), movementReview, connection + requestState"
+    field @source "source" type="SourceView: phase, panel, text, readout"
+    field @status "status" type="string (display text, derived)"
+    field @may "may" type="Permissions"
+    text @i0 "invariant D6: no busy, history.busy or creation.busy; 'can I act now?' has one answer, may"
+    text @i1 "invariant: view = projectWorkspace(state); pure; cached per state reference, so an unchanged state gives the same object (R8)"
+    text @i2 "invariant: null and boolean appear only here, as 'nothing to draw' and derived flags; stored state has none"
+    text @i3 "invariant: status = the first matching row of the status table (7.1); stored status text does not exist"
+  }
+  node @e-permissions entity "Permissions" {
+    field @fields "undo · redo · applyEdits · applySource · library · createCollection · addForms · chooseMove · applyMove · cancelMove · editConnection · applyConnection" type="Permission"
+    text @i1 "invariant: each send permission = sendReadiness(target) + phase checks; gatedSend runs the same sendReadiness first, and the gesture machine reads the same may.applyMove"
+  }
+  node @e-permission entity "Permission" {
+    field @kind "kind" type="'allowed' | 'blocked'"
+    field @reason "reason" type="BlockReason = SendBlock | 'offline' | 'saving' | 'uncertain' | 'retryable' | 'checking' | 'no-diagram' | 'nothing-to-undo' | 'nothing-to-redo' | 'status-unknown' | 'move-in-progress' | 'form-locked' | 'connection-sent' | 'diagram-changed' | 'stored-draft-kept' | 'not-refused'"
+    text @i1 "invariant: kind = 'blocked' <=> reason present; React shows the reason instead of reporting an error (I10)"
+  }
+  node @e-wview entity "WorkspaceView (what React reads)" {
+    field @projected "projected" type="ProjectedView"
+    field @active "active" type="ActiveDiagram | null (live Canvas session and canvas, attached by the facade)"
+    text @i1 "invariant: memoised by the identities of the projection and the session handle; each React feature gets its own part and command set; React holds no second copy"
+  }
+  node @e-waiter entity "Waiter (editor store apply)" {
+    field @request "request" type="RequestId" key=primary
+    field @answer "answer" type="'waiting' | Result<Receipt>"
+    text @i1 "invariant: resolved exactly once, by the answer-caller effect, when the entry settles, turns uncertain or is blocked"
+  }
+
+  wire @er1 @e-view.@may -> @e-permissions "has" kind=association from=1 to=1
+  wire @er2 @e-permissions.@fields -> @e-permission "12 of" kind=association from=1 to=1..many
+  wire @er3 @e-wview.@projected -> @e-view "wraps" kind=association from=1 to=1
+
+  section @entities "2 · Entities and invariants — the view React reads" mode=er direction=right order=3 {
+    show @e-view @e-permissions @e-permission @e-wview @e-waiter
+    connect @er1 @er2 @er3
+  }
+
+  wire @m1 @v-project -> @v-diagram.@sig "diagramView(): DiagramView" kind=imports
+  wire @m2 @v-project -> @v-editing.@sig "editingView(): EditingView" kind=imports
+  wire @m3 @v-project -> @v-journal.@sig "journalView(): JournalView" kind=imports
+  wire @m4 @v-project -> @v-status.@sig "statusText(): string" kind=imports
+  wire @m5 @v-project -> @r-permissions.@sig "permissions(): Permissions" kind=imports
+  wire @m6 @c-workspace -> @f-navigation.@sig "navigationCommands()" kind=imports
+  wire @m6b @c-workspace -> @f-journal.@sig "journalCommands()" kind=imports
+  wire @m6c @c-workspace -> @f-history.@sig "historyCommands()" kind=imports
+  wire @m6d @c-workspace -> @f-forms.@sig "formCommands()" kind=imports
+  wire @m6e @c-workspace -> @f-connection.@sig "connectionCommands()" kind=imports
+  wire @m6f @c-workspace -> @f-movement.@sig "movementCommands()" kind=imports
+  wire @m6g @c-workspace -> @f-source.@sig "sourceCommands()" kind=imports
+  wire @m6h @c-workspace -> @f-view.@sig "workspaceView()" kind=imports
+  wire @m7 @c-workspace -> @f-sends.@sig "createEditorSends(): EditorSends" kind=imports
+  wire @m8 @c-compose -> @x-shell.@sig "createWorkspaceShell(): ComponentType<WorkspaceProps>" kind=imports
+  wire @m9 @c-compose -> @x-alerts.@sig "createShellAlerts(): ShellAlerts (injected slot)" kind=imports
+  wire @m10 @c-compose -> @x-hooks.@sig "useControllerLifetime(): void (injected slot)" kind=imports
+  wire @m11 @c-compose -> @s-retained.@sig "createRetainedEditor(): RetainedEditor" kind=imports
+  wire @m12 @c-compose -> @s-definition.@sig "createDefinitionSession(): DefinitionSession" kind=imports
+  wire @m13 @c-compose -> @s-library.@sig "createLibraryController(): LibraryController" kind=imports
+  wire @m14 @c-compose -> @s-panel.@sig "createPanelController(): PanelController" kind=imports
+
+  section @modules "3.1 · Module imports — the projection (pure)" mode=modules layout=layered direction=right order=4 {
+    group @g-ws "core/workspace/" {
+      group @g-view "view/" {
+        show @v-project @v-diagram @v-editing @v-journal @v-status
+      }
+      group @g-rules "rules/" {
+        show @r-permissions
+      }
+    }
+    connect @m1 @m2 @m3 @m4 @m5
+  }
+
+  section @modules-facade "3.2 · Module imports — compose builds the facade: one small file per workflow" mode=modules layout=layered direction=right order=5 {
+    group @g-contract "contract/" {
+      group @g-compose "compose/" {
+        show @c-workspace
+      }
+    }
+    group @g-adapters "adapters/" {
+      group @g-facade "facade/" layout=grid columns=1 {
+        show @f-navigation @f-journal @f-history @f-forms @f-connection @f-movement @f-source @f-sends @f-view
+      }
+    }
+    connect @m6 @m6b @m6c @m6d @m6e @m6f @m6g @m6h @m7
+  }
+
+  section @modules-adapters "3.3 · Module imports — compose wires the shell and the editor stores (adapters never import adapters)" mode=modules layout=layered direction=right order=6 {
+    group @g-contract2 "contract/" {
+      show @c-compose
+    }
+    group @g-adapters2 "adapters/" {
+      group @g-react "react/" layout=grid columns=1 {
+        show @x-shell @x-alerts @x-hooks
+      }
+      group @g-sessions "sessions/" layout=grid columns=1 {
+        show @s-retained @s-definition @s-library @s-panel
+      }
+    }
+    connect @m8 @m9 @m10 @m11 @m12 @m13 @m14
+  }
+
+
+  node @summary concept "4 · Modules summary — collection 9" size=large {
+    table @summary-t columns=["Module", "Current Line Count", "Lines Added", "Lines Removed", "Net", "Expected final line count (estimate)", "What the module does"] {
+      row @sm-1 cells=["core/workspace/view/project.ts", "0", "+60", "0", "+60", "60", "NEW (M2, empty; each wire PR adds its part) · projectWorkspace: the view split by feature."]
+      row @sm-2 cells=["core/workspace/view/diagram-view.ts", "0", "+130", "0", "+130", "130", "NEW (M12, M17, M18) · snapshot, generation, collections, connected, opening, collectionSwitch (incl. choosing), problem visibility."]
+      row @sm-3 cells=["core/workspace/view/editing-view.ts", "0", "+110", "0", "+110", "110", "NEW · creation, connection, movementReview, source fields."]
+      row @sm-4 cells=["core/workspace/view/journal-view.ts", "0", "+90", "0", "+90", "90", "NEW (M7, M8) · pending rows with their permissions, history status, newest refusal. No busy flags."]
+      row @sm-5 cells=["core/workspace/view/status.ts", "0", "+120", "0", "+120", "120", "NEW · Status text by fixed priority; same wording as today."]
+      row @sm-6 cells=["core/workspace/rules/permissions.ts", "0", "+140", "0", "+140", "140", "NEW (M2 skeleton; rows added by each wire PR) · may: sendReadiness plus phase checks, with the reason when blocked."]
+      row @sm-7 cells=["core/workspace/status.ts", "78", "0", "-78", "-78", "0", "DELETE · Stored status helpers; replaced by view/status.ts."]
+      row @sm-8 cells=["contract/records/workflow/view.ts", "0", "+150", "0", "+150", "150", "NEW (M1) · ProjectedView and its feature parts: DiagramView, JournalView, PendingView, HistoryView, EditingView, SourceView."]
+      row @sm-24 cells=["contract/records/workflow/permissions.ts", "0", "+50", "0", "+50", "50", "NEW (M1) · Permissions, Permission and BlockReason."]
+      row @sm-25 cells=["contract/records/commands.ts", "0", "+110", "0", "+110", "110", "NEW (grows with each facade PR) · The 8 command sets."]
+      row @sm-26 cells=["contract/react-types.ts", "102", "+30", "-30", "0", "102", "CHANGE (M33) · Feature props take their view part and command set, not Picks of one flat view."]
+      row @sm-27 cells=["contract/library-react.ts", "24", "+5", "-5", "0", "24", "CHANGE (M33) · LibraryWorkspaceView = connected + may.library (was Pick busy, connected)."]
+      row @sm-28 cells=["contract/definitions-model.ts", "24", "+3", "-3", "0", "24", "CHANGE (M33) · Reads may.applyEdits instead of busy."]
+      row @sm-29 cells=["capability/design-system/adapters/react/Dialog.module.css", "91", "+23", "-7", "+16", "107", "CHANGE (P1) · Centre dialog owns its height; the chooser list scrolls."]
+      row @sm-9 cells=["contract/records/workspace.ts", "107", "+40", "-57", "-17", "90", "CHANGE · WorkspaceController = the command sets + start, dispose, subscribe, getSnapshot, exportArtifact; WorkspaceView = projection plus live handles."]
+      row @sm-10 cells=["adapters/facade/navigation.ts", "0", "+80", "0", "+80", "80", "NEW (M17, M18) · open, create, chooser commands."]
+      row @sm-30 cells=["adapters/facade/journal.ts", "0", "+60", "0", "+60", "60", "NEW (M7, M8) · Check, Retry, Dismiss; dismiss problem; report, reportCanvas, reportPanel."]
+      row @sm-31 cells=["adapters/facade/history.ts", "0", "+40", "0", "+40", "40", "NEW (M20) · navigateHistory; mints the request."]
+      row @sm-32 cells=["adapters/facade/forms.ts", "0", "+80", "0", "+80", "80", "NEW (M23) · setDraft, add, cancelCreation, dropPalette; mints IDs."]
+      row @sm-33 cells=["adapters/facade/connection.ts", "0", "+50", "0", "+50", "50", "NEW (M25) · edit, apply (mints relationship and request), cancel."]
+      row @sm-34 cells=["adapters/facade/movement.ts", "0", "+50", "0", "+50", "50", "NEW (M28) · chooseMoveOption, applyMove (fresh request), cancelMove."]
+      row @sm-35 cells=["adapters/facade/source.ts", "0", "+50", "0", "+50", "50", "NEW (M32) · showSource, editSource, applySource, closeSource."]
+      row @sm-36 cells=["adapters/facade/view.ts", "0", "+40", "0", "+40", "40", "NEW (M17) · getSnapshot: projection plus live Canvas handles, memoised."]
+      row @sm-11 cells=["adapters/facade/editor-sends.ts", "0", "+90", "0", "+90", "90", "NEW (M30) · Inspector, wire, definition and library apply: bindRequest first for a definition, unlockWithoutRequest if the build fails; journal send plus waiter."]
+      row @sm-12 cells=["adapters/react/WorkspaceShell.tsx", "321", "+10", "-131", "-121", "200", "CHANGE · P5 split; palette drop becomes one dispatch."]
+      row @sm-13 cells=["adapters/react/ShellAlerts.tsx", "0", "+70", "0", "+70", "70", "NEW, moved · ProblemBar and StatusBar (P5)."]
+      row @sm-14 cells=["adapters/react/shell-hooks.ts", "0", "+70", "0", "+70", "70", "NEW, moved · Shell hooks (P5)."]
+      row @sm-15 cells=["adapters/react/ObjectEditor.tsx", "138", "+5", "-5", "0", "138", "CHANGE · Apply enabled by may.applyEdits."]
+      row @sm-16 cells=["adapters/react/WireEditor.tsx", "267", "+5", "-5", "0", "267", "CHANGE · Apply enabled by may.applyEdits. Watch: 267 lines."]
+      row @sm-17 cells=["adapters/react/LibraryBrowser.tsx", "63", "+5", "-5", "0", "63", "CHANGE · Actions enabled by may.library."]
+      row @sm-18 cells=["adapters/react/Definitions.tsx", "202", "+2", "-6", "-4", "198", "CHANGE · Stops minting definition IDs."]
+      row @sm-19 cells=["adapters/react/ExportPanel.module.css", "25", "+1", "-1", "0", "25", "CHANGE · P1 token fix."]
+      row @sm-20 cells=["adapters/sessions/retained-editor.ts", "138", "+15", "-23", "-8", "130", "CHANGE · Apply awaits the waiter; a workspace phase replaces ''."]
+      row @sm-21 cells=["adapters/sessions/definition-session.ts", "179", "+15", "-19", "-4", "175", "CHANGE · Settled by the settle-definition effect; keyed by RequestId."]
+      row @sm-22 cells=["adapters/sessions/library-session.ts", "219", "+10", "-14", "-4", "215", "CHANGE · Apply through editor-sends; refresh through the stores executor."]
+      row @sm-23 cells=["adapters/sessions/panel-session.ts", "181", "+8", "-9", "-1", "180", "CHANGE · Restore through the stores executor; PanelSectionId."]
+      row @sm-total cells=["TOTAL · 36 files", "2159", "+1817", "-398", "+1419", "3578", "Estimates, not gates. Paths are under apps/web/ unless they start with capability/, apps/service/ or name the repo root."]
+    }
+  }
+  section @s-summary "4 · Modules summary — what React sees" mode=grid columns=1 order=7 {
+    show @summary
+  }
+
+  node @crud note "5 · Capability ownership — the view" size=large {
+    table @crud-t columns=["Object", "Create", "Read", "Update", "Delete"] {
+      row @e-view-row cells=["ProjectedView", "core/workspace/view/project.ts — projectWorkspace()", "adapters/runner/runner.ts — getSnapshot() cache", "never; a new one per new state", "runner — replaced on the next state"]
+      row @e-permissions-row cells=["Permissions", "core/workspace/rules/permissions.ts — permissions()", "React components; diagram/children.ts (SceneContext.may)", "never", "with its view"]
+      row @e-permission-row cells=["Permission", "rules/permissions.ts", "React components (disabled + reason)", "never", "with its view"]
+      row @e-wview-row cells=["WorkspaceView", "adapters/facade/view.ts — getSnapshot()", "WorkspaceShell.tsx — useSyncExternalStore", "never", "facade — replaced when the projection or session handle changes"]
+      row @e-waiter-row cells=["Waiter", "adapters/facade/editor-sends.ts — on each editor apply", "adapters/runner/waiters.ts", "waiters.ts — answer-caller resolves it", "waiters.ts — after resolving; all dropped on dispose"]
+    }
+  }
+  section @ownership "5 · Capability ownership — the view" mode=grid columns=1 order=8 {
+    show @crud
+  }
+
+  node @z-start start "Build the status line" {}
+  node @z-1 decision "1 · Opening, switching or a chooser failure?" {}
+  node @z-2 decision "2 · A problem is shown?" {}
+  node @z-3 decision "3 · A request is recording or sending?" {}
+  node @z-4 decision "4 · Move choices shown?" {}
+  node @z-5 decision "5 · New connection being edited?" {}
+  node @z-6 decision "6 · A status note is set?" {}
+  node @z-t1 end "'Rendering diagram…' · 'Opening {title}…' · 'Could not open {title}'" {}
+  node @z-t2 end "open failure: its message; else 'Action failed. See the error above.'" {}
+  node @z-t3 end "'Saving…'" {}
+  node @z-t4 end "'Review movement options'" {}
+  node @z-t5 end "'Review new connection'" {}
+  node @z-t6 end "The note: 'Movement cancelled', 'No receipt found…', 'Collection is no longer available', 'Add to … was not applied'" {}
+  node @z-t7 end "7 · Resting: 'Connecting…' · 'Ready' · 'Draft not applied' · 'Edit awaiting confirmation' · 'Saved'" {}
+
+  wire @zw0 @z-start -> @z-1 "first match wins" kind=flow step=1
+  wire @zw1 @z-1 -> @z-t1 "yes" kind=flow
+  wire @zw2 @z-1 -> @z-2 "no" kind=flow
+  wire @zw3 @z-2 -> @z-t2 "yes" kind=flow
+  wire @zw4 @z-2 -> @z-3 "no" kind=flow
+  wire @zw5 @z-3 -> @z-t3 "yes" kind=flow
+  wire @zw6 @z-3 -> @z-4 "no" kind=flow
+  wire @zw7 @z-4 -> @z-t4 "yes" kind=flow
+  wire @zw8 @z-4 -> @z-5 "no" kind=flow
+  wire @zw9 @z-5 -> @z-t5 "yes" kind=flow
+  wire @zw10 @z-5 -> @z-6 "no" kind=flow
+  wire @zw11 @z-6 -> @z-t6 "yes" kind=flow
+  wire @zw12 @z-6 -> @z-t7 "no" kind=flow
+
+  section @flow-51 "7.1 · Status text is derived by fixed priority (same wording as today)" mode=flow layout=layered direction=down order=9 {
+    show @z-start @z-1 @z-2 @z-3 @z-4 @z-5 @z-6 @z-t1 @z-t2 @z-t3 @z-t4 @z-t5 @z-t6 @z-t7
+    connect @zw0 @zw1 @zw2 @zw3 @zw4 @zw5 @zw6 @zw7 @zw8 @zw9 @zw10 @zw11 @zw12
+  }
+}
