@@ -24,6 +24,7 @@ import { admissionFields } from '../../contract/records/presets/preparation.js';
 import { chromeName } from '../../contract/schemas.js';
 import { authoringFailure } from '../../contract/errors.js';
 import type { FontBinding, ThemeAdmissionOwners } from '../../contract/ports/headless.js';
+import { parseThemePin } from './theme-pin.js';
 
 /**
  * Prepares one admission. An admission that is not a source-syntax theme is returned unchanged.
@@ -67,13 +68,14 @@ function prepareSourceTheme(
 }
 
 /**
- * The Templates selection for a base: an exact `id@version#sha256:hex` pin (the syntax Language
- * prints), otherwise a bare ID Templates resolves to its latest version.
+ * The Templates selection for a base (grammar in theme-pin.ts): an exact pin selects that version
+ * and bare digest, any other text is an ID Templates resolves to its latest version. Templates
+ * parses the selection and refuses what it does not store.
  */
-function selection(source: string): unknown {
-  const exact = /^([^@]+)@([^#]+)#sha256:([a-f0-9]{64})$/.exec(source);
-  if (exact) return { kind: 'theme', id: exact[1], version: exact[2], digest: exact[3] };
-  return { kind: 'theme', id: source };
+function selection(base: string): unknown {
+  const pin = parseThemePin(base);
+  if (pin.kind === 'latest') return { kind: 'theme', id: pin.id };
+  return { kind: 'theme', id: pin.id, version: pin.version, digest: pin.digest };
 }
 
 /**

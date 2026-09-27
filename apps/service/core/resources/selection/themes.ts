@@ -14,6 +14,7 @@ import type {
 } from '../../../contract/records/capabilities.js';
 import { pinnedDigest } from '../../../contract/brands.js';
 import { themeBinding, type BindingModel, type ThemeBinding } from '../../presets/theme-binding.js';
+import { formatThemePin, type ThemePinText } from '../../presets/theme-pin.js';
 import type { Intent } from './intent.js';
 import { ResourceFault, accepted } from './refusal.js';
 
@@ -23,7 +24,7 @@ export interface ThemeOwners {
   readonly templates: Pick<Templates<LoweredIntent>, 'read'>;
 }
 
-/** Theme bindings keyed by alias or exact `id@version#sha256:hex` pin. */
+/** Theme bindings keyed by alias or exact pin text (grammar in theme-pin.ts). */
 export type Themes = ResolvedResources['themes'];
 
 /**
@@ -36,11 +37,7 @@ export function availableThemes(
 ): Themes {
   const records = themePresets(catalog);
   const exact = records.map(
-    (item) =>
-      [
-        `${item.id}@${item.version}#${pinnedDigest(item.digest)}`,
-        accepted(themeBinding(item, owners.model)),
-      ] as const,
+    (item) => [presetPin(item), accepted(themeBinding(item, owners.model))] as const,
   );
   const aliases = [...new Set(records.map((item) => item.id))].map(
     (id) => [id, latestBinding(catalog, id, owners)] as const,
@@ -66,6 +63,15 @@ export function pinnedThemes(
 /** The catalog's theme presets, in catalog order. */
 export function themePresets(catalog: Catalog): readonly ThemePreset[] {
   return catalog.filter((item) => item.kind === 'theme');
+}
+
+/** A stored theme version's exact pin text, its digest in Model's pinned form. Never fails. */
+function presetPin(preset: ThemePreset): ThemePinText {
+  return formatThemePin({
+    id: preset.id,
+    version: preset.version,
+    digest: pinnedDigest(preset.digest),
+  });
 }
 
 /**
