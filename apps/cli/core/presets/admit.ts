@@ -3,7 +3,7 @@ import type { CliDependencies } from '../../contract/ports/runtime.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
 import { resourceCall, stageResources } from '../resources/stage.js';
-import { submit } from '../authoring/author.js';
+import { submit } from '../authoring/submit.js';
 /** All bytes and exact preset content are retained before the sole canonical Authoring apply gate. */
 export async function admitPreset(
   command: Command,

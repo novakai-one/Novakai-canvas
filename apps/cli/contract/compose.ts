@@ -6,7 +6,7 @@ import { validate, plan, stage } from '@novakai/canvas-model';
 import { readArguments } from '../adapters/inputs/arguments.js';
 import { createPresetInputs } from '../adapters/inputs/preset-inputs.js';
 import { createResourceFiles } from '../adapters/files/resource-reader.js';
-import { createRequestFiles } from '../adapters/inputs/files.js';
+import { createRequestFiles } from '../adapters/files/request-journal.js';
 import { createTransport } from '../adapters/service-http/transport.js';
 import { createSemanticInputs } from '../adapters/inputs/semantic-inputs.js';
 import { executeCommand, executeProfile, isProfileCommand, readThemeConfig, usage } from './api.js';

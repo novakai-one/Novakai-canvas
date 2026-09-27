@@ -3,7 +3,7 @@ import type { Command, CommandName } from '../../contract/records/command.js';
 import type { CliDependencies } from '../../contract/ports/runtime.js';
 import type { Result } from '../../contract/errors.js';
 import { admitPreset, instantiateRecipe } from '../presets/admit.js';
-import { author, retry } from '../authoring/author.js';
+import { author, retry } from '../authoring/submit.js';
 import { executeProfile } from '../profiles/commands.js';
 /** Read failures preserve the service diagnostic; successful payloads still pass their owner-specific readout. */
 async function query(
