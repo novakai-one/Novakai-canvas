@@ -116,15 +116,17 @@ function initialized(
     worker.once('exit', exited);
   });
 }
-/** Keep one idle initialized worker, never derived geometry. Concurrent jobs retain separate cancellation realms. */
+/**
+ * Keep one idle initialized worker, never derived geometry. Concurrent jobs retain separate
+ * cancellation realms. `entry` is the worker realm's script; compose names it.
+ */
 export function createRenderTransport(
+  entry: URL,
   timeoutMs: number,
 ): RenderTransport & { readonly ready: Promise<void> } {
   let idle: WorkerSlot | null = null;
   function create(): WorkerSlot {
-    const worker = new NodeWorker(new URL('../../cli/render-worker.mjs', import.meta.url), {
-      execArgv: [],
-    });
+    const worker = new NodeWorker(entry, { execArgv: [] });
     const retired = (): void => {
       if (idle?.worker === worker) idle = null;
     };

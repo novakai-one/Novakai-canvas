@@ -10,6 +10,8 @@ export interface WorkspaceOptions {
   readonly tokenRoot: string;
   readonly createdAt: number;
 }
+/** Whether startup found a stored workspace (`existing`) or starts an empty one (`new`). */
+export type WorkspaceState = 'existing' | 'new';
 export interface NativeFactories {
   assets(root: string): AssetResult<Assets>;
   storage(
