@@ -1,4 +1,9 @@
-import type { KeyboardEvent } from 'react';
+/*
+ * Translates React Flow callbacks into public Canvas events: selection, hover, connections and the
+ * viewport, composed with the geometry gestures and keyboard commands it is given. Not pure: it
+ * dispatches to the session. The host drains effects, retains drafts and repairs reported callback
+ * failures; canceled pointer IDs never replay.
+ */
 import type { NodeChange, EdgeChange, Connection } from '@xyflow/react';
 import type {
   InteractionOwners,
@@ -7,15 +12,16 @@ import type {
   FlowEdge,
   ViewActions,
 } from '../../contract/react-types.js';
+import type { HoverPause, InteractionParts } from '../../contract/interaction-parts.js';
 import type { Target } from '../../contract/records/selection.js';
-import type { Box, Point } from '../../contract/records/camera.js';
 import type { CanvasEvent } from '../../contract/events.js';
-import type { PointerGesture } from '../../contract/ports/session.js';
 import type { SessionState } from '../../contract/records/state.js';
+/** The React Flow change records selection reads. */
+type FlowChange = NodeChange<FlowNode> | EdgeChange<FlowEdge>;
 /** Incoming selection change carries its scoped node/edge ID; no generated ID parsing is needed. */
 function selectedTargets(
   owners: InteractionOwners,
-  changes: readonly (NodeChange<FlowNode> | EdgeChange<FlowEdge>)[],
+  changes: readonly FlowChange[],
 ): readonly Target[] {
   const state = owners.session.getSnapshot();
   const selected = new Map(state.selection.map((target) => [targetAddress(target), target]));
@@ -25,8 +31,8 @@ function selectedTargets(
 /** Apply only selection deltas; geometry dimensions/positions never become canonical React Flow JSON. */
 function applySelectionChange(
   selected: Map<string, Target>,
-  targets: ReturnType<InteractionOwners['session']['getSnapshot']>['index']['targets'],
-  change: NodeChange<FlowNode> | EdgeChange<FlowEdge>,
+  targets: SessionState['index']['targets'],
+  change: FlowChange,
 ): void {
   if (change.type !== 'select') return;
   const target = targets[change.id]?.target;
@@ -45,48 +51,12 @@ function setSelected(
   }
   selected.delete(targetAddress(target));
 }
-/** Ignore delayed drag callbacks after Escape, a foreign update or gesture replacement. */
-function stillActive(
+/** Translate React Flow events to public Canvas commands; drag, resize and keys come from `parts`. */
+export function createInteractions(
+  parts: InteractionParts,
   owners: InteractionOwners,
-  active: PointerGesture | null,
-): active is PointerGesture {
-  if (active === null) return false;
-  return owners.session.getSnapshot().draft?.id === active.id;
-}
-/** Sequence and tree sections draw from node positions outside the node itself; they keep the full per-frame path. */
-function previewable(
-  state: SessionState,
-  targets: readonly Target[],
-): boolean {
-  return targets.every((target) => {
-    if (target.kind !== 'node') return false;
-    const section = state.scene.sections.find((item) => item.id === target.section);
-    return section?.tree === undefined && section?.sequence.lifelines.length === 0;
-  });
-}
-/** True when the key or any of its ancestors is dragged. */
-function under(
-  state: SessionState,
-  key: string | null,
-  dragged: ReadonlySet<string>,
-): boolean {
-  if (key === null) return false;
-  if (dragged.has(key)) return true;
-  return under(state, state.index.targets[key]?.parentKey ?? null, dragged);
-}
-/** Dragged targets plus every descendant; children are separate React Flow nodes and must move too. */
-function movedKeys(
-  state: SessionState,
-  dragged: readonly string[],
-): ReadonlySet<string> {
-  const roots = new Set(dragged);
-  return new Set(Object.keys(state.index.targets).filter((key) => under(state, key, roots)));
-}
-/** Translate React Flow events to public Canvas commands. Host drains effects, retains drafts and repairs reported callback failures; canceled pointer IDs never replay. */
-export function createInteractions(owners: InteractionOwners): Interactions {
-  const hoverSuppression = new Set<'drag' | 'pan' | 'connect'>();
-  /** Keys that move with the current drag; null means the full per-frame path. */
-  let moved: { readonly id: string; readonly keys: ReadonlySet<string> } | null = null;
+): Interactions {
+  const hoverSuppression = new Set<HoverPause>();
   /** Typed failures are reported to the host; they never trigger a fallback save or guessed state change. */
   function dispatch(event: CanvasEvent): void {
     const result = owners.session.dispatch(event);
@@ -96,129 +66,43 @@ export function createInteractions(owners: InteractionOwners): Interactions {
     }
     result.value.diagnostics.forEach((diagnostic) => owners.onError(diagnostic));
   }
-  /** Release applies the last live offset once, then the usual finish. */
-  function flushPreview(active: PointerGesture): void {
-    const preview = owners.session.readPreview();
-    if (preview?.id !== active.id) return;
-    dispatch({ kind: 'move', id: active.id, delta: preview.delta });
-  }
   /** Gesture suppression is adapter-local because React Flow owns pan/connect lifecycle boundaries. */
-  function suppressHover(reason: 'drag' | 'pan' | 'connect'): void {
+  function suppressHover(reason: HoverPause): void {
     hoverSuppression.add(reason);
     clearHover();
   }
-  function resumeHover(reason: 'drag' | 'pan' | 'connect'): void {
+  /** Lifts one pause; hover returns once no pause remains. */
+  function resumeHover(reason: HoverPause): void {
     hoverSuppression.delete(reason);
   }
+  /** Leaves the hovered target, if any. */
   function clearHover(): void {
     const hover = owners.session.getSnapshot().hover;
-    if (hover !== null) dispatch({ kind: 'target-leave', target: hover });
+    if (hover !== null) leaveHover(hover);
   }
+  /** Hovers the target unless a drag, pan or connection is running. */
   function enterHover(target: Target): void {
     if (hoverSuppression.size > 0) return;
     dispatch({ kind: 'target-enter', target });
   }
-  /** Initial geometry comes from the admitted view, not a possibly already-moved callback position. */
-  function startDrag(
-    event: MouseEvent | TouchEvent,
-    node: FlowNode,
-    nodes: FlowNode[],
-  ): void {
-    if (owners.input.ownsNativeInput(event.target)) return;
-    suppressHover('drag');
-    const id = owners.nextGestureId();
-    owners.session.writePointer({
-      id,
-      target: node.data.view.target,
-      start: node.data.view.position,
-    });
-    const targets = nodes.map((item) => item.data.view.target);
-    dispatch({ kind: 'begin', id, gesture: 'move', targets });
-    const state = owners.session.getSnapshot();
-    const live = previewable(state, targets);
-    moved = live
-      ? {
-          id,
-          keys: movedKeys(
-            state,
-            nodes.map((item) => item.id),
-          ),
-        }
-      : null;
+  /** Leaves the target; leaving is never paused. */
+  function leaveHover(target: Target): void {
+    dispatch({ kind: 'target-leave', target });
   }
-  /** Frame updates carry a total delta from drag start; reducers retain original geometry for recovery. */
-  function moveDrag(
-    _event: MouseEvent | TouchEvent,
-    node: FlowNode,
-  ): void {
-    const active = owners.session.readPointer();
-    if (!stillActive(owners, active)) return;
-    const delta = { x: node.position.x - active.start.x, y: node.position.y - active.start.y };
-    livePreview(active.id, delta);
+  /** Asks the host to inspect the target. */
+  function inspect(target: Target): void {
+    dispatch({ kind: 'inspect', target });
   }
-  /** Previewable drags publish only the offset; others take the full per-frame path. */
-  function livePreview(
-    id: string,
-    delta: Point,
-  ): void {
-    if (moved?.id === id) owners.session.writePreview({ id, delta, moved: moved.keys });
-    else dispatch({ kind: 'move', id, delta });
-  }
-  /** Release submits exactly one coalesced intent; late duplicate stops are harmless. */
-  function finishGeometry(): void {
-    const active = owners.session.readPointer();
-    if (!stillActive(owners, active)) {
-      owners.session.writePointer(null);
-      owners.session.writePreview(null);
-      resumeHover('drag');
-      return;
-    }
-    flushPreview(active);
-    dispatch({ kind: 'finish', id: active.id });
-    owners.session.writePointer(null);
-    resumeHover('drag');
-  }
-  /** Pointer cancellation never emits an edit intent; only the active gesture is cleared. */
-  function cancelGeometry(): void {
-    const active = owners.session.readPointer();
-    if (!stillActive(owners, active)) {
-      owners.session.writePointer(null);
-      owners.session.writePreview(null);
-      resumeHover('drag');
-      return;
-    }
-    dispatch({ kind: 'cancel', id: active.id });
-    owners.session.writePointer(null);
-    resumeHover('drag');
-  }
-  /** Resize controls operate on one target and retain the same gesture identity through their lifecycle. */
-  function beginResize(target: Target): void {
-    const id = owners.nextGestureId();
-    owners.session.writePointer({ id, target, start: { x: 0, y: 0 } });
-    dispatch({ kind: 'begin', id, gesture: 'resize', targets: [target] });
-  }
-  /** React Flow resize coordinates are parent-relative; add the displayed parent's world origin once. */
-  function resize(
-    target: Target,
-    box: Box,
-  ): void {
-    const active = owners.session.readPointer();
-    if (!stillActive(owners, active)) return;
-    const state = owners.session.getSnapshot();
-    const info = Object.values(state.index.targets).find(
-      (item) => targetAddress(item.target) === targetAddress(target),
-    );
-    if (!info) return;
-    const parent = state.index.targets[info.parentKey ?? ''];
-    const origin = parent?.box ?? { x: 0, y: 0 };
-    dispatch({
-      kind: 'resize',
-      id: active.id,
-      box: { x: box.x + origin.x, y: box.y + origin.y, width: box.width, height: box.height },
-    });
-  }
+  const geometry = parts.createGeometryGestures({
+    owners,
+    dispatch,
+    sameTarget,
+    suppressHover,
+    resumeHover,
+  });
+  const keyboard = parts.createKeyboardCommands({ owners, dispatch, sameTarget });
   /** Selection changes are the only React Flow change records consumed; dimensions/positions remain derived. */
-  function selection(changes: readonly (NodeChange<FlowNode> | EdgeChange<FlowEdge>)[]): void {
+  function selection(changes: readonly FlowChange[]): void {
     if (!changes.some((change) => change.type === 'select')) return;
     dispatch({ kind: 'select', targets: selectedTargets(owners, changes), mode: 'replace' });
   }
@@ -240,38 +124,12 @@ export function createInteractions(owners: InteractionOwners): Interactions {
       endpoint: { section: target.section, node: target.id, member: connection.targetHandle },
     });
   }
-  /** Canvas handles only its documented key vocabulary; global browser and text-editor shortcuts remain native. */
-  function keyboard(event: KeyboardEvent<HTMLDivElement>): void {
-    if (event.defaultPrevented || owners.input.ownsNativeInput(event.target)) return;
-    const handled = [
-      'ArrowLeft',
-      'ArrowRight',
-      'ArrowUp',
-      'ArrowDown',
-      'Enter',
-      'Delete',
-      'Backspace',
-      'Escape',
-    ].includes(event.key);
-    if (!handled) return;
-    event.preventDefault();
-    focusKeyboardTarget(owners, event.target, dispatch);
-    dispatch({
-      kind: 'keyboard',
-      id: owners.nextGestureId(),
-      key: event.key,
-      alt: event.altKey,
-      shift: event.shiftKey,
-      typing: false,
-      modal: false,
-    });
-  }
   const actions: ViewActions = {
     dispatch,
-    beginResize,
-    resize,
-    finishGeometry,
-    cancelGeometry,
+    beginResize: geometry.beginResize,
+    resize: geometry.resize,
+    finishGeometry: geometry.finishGeometry,
+    cancelGeometry: geometry.cancelGeometry,
     nextId: owners.nextGestureId,
     readPreview: owners.session.readPreview,
     subscribePreview: owners.session.subscribePreview,
@@ -280,36 +138,28 @@ export function createInteractions(owners: InteractionOwners): Interactions {
     actions,
     keyboard,
     flow: {
-      onNodeDragStart: startDrag,
-      onNodeDrag: moveDrag,
-      onNodeDragStop: finishGeometry,
+      onNodeDragStart: geometry.startDrag,
+      onNodeDrag: geometry.moveDrag,
+      onNodeDragStop: geometry.finishGeometry,
       onSelectionDragStart: (event, nodes) => {
         const first = nodes[0];
-        if (first) startDrag(event.nativeEvent, first, nodes);
+        if (first) geometry.startDrag(event.nativeEvent, first, nodes);
       },
       onSelectionDrag: (event, nodes) => {
         const first = nodes[0];
-        if (first) moveDrag(event.nativeEvent, first);
+        if (first) geometry.moveDrag(event.nativeEvent, first);
       },
-      onSelectionDragStop: finishGeometry,
+      onSelectionDragStop: geometry.finishGeometry,
       onNodeClick: () => undefined,
       onNodeDoubleClick: (event, node) => {
-        if (!owners.input.ownsNativeInput(event.target))
-          dispatch({ kind: 'inspect', target: node.data.view.target });
+        if (!owners.input.ownsNativeInput(event.target)) inspect(node.data.view.target);
       },
       onNodeMouseEnter: (_event, node) => enterHover(node.data.view.target),
-      onNodeMouseLeave: (_event, node) =>
-        dispatch({ kind: 'target-leave', target: node.data.view.target }),
+      onNodeMouseLeave: (_event, node) => leaveHover(node.data.view.target),
       onEdgeClick: () => undefined,
-      onEdgeDoubleClick: (_event, edge) => {
-        if (edge.data) dispatch({ kind: 'inspect', target: edge.data.view.target });
-      },
-      onEdgeMouseEnter: (_event, edge) => {
-        if (edge.data) enterHover(edge.data.view.target);
-      },
-      onEdgeMouseLeave: (_event, edge) => {
-        if (edge.data) dispatch({ kind: 'target-leave', target: edge.data.view.target });
-      },
+      onEdgeDoubleClick: onEdge(inspect),
+      onEdgeMouseEnter: onEdge(enterHover),
+      onEdgeMouseLeave: onEdge(leaveHover),
       onPaneClick: () => dispatch({ kind: 'select', targets: [], mode: 'replace' }),
       onPaneMouseLeave: clearHover,
       onNodesChange: selection,
@@ -329,29 +179,19 @@ export function createInteractions(owners: InteractionOwners): Interactions {
     },
   };
 }
-/** Keyboard commands follow the focused diagram item; an already-selected item preserves its multi-selection. */
-function focusKeyboardTarget(
-  owners: InteractionOwners,
-  element: EventTarget | null,
-  dispatch: (event: CanvasEvent) => void,
-): void {
-  const state = owners.session.getSnapshot();
-  const target = keyboardTarget(state, owners.input.focusedId(element));
-  if (!target) return;
-  const selected = state.selection.some((item) => targetAddress(item) === targetAddress(target));
-  if (selected) return;
-  dispatch({ kind: 'select', targets: [target], mode: 'replace' });
+/** Runs `act` on the diagram item an edge draws; an edge without data is ignored. */
+function onEdge(act: (target: Target) => void): (event: unknown, edge: FlowEdge) => void {
+  return (_event, edge) => {
+    if (edge.data) act(edge.data.view.target);
+  };
 }
-
-/** Resolve browser focus against the admitted index; controls outside graph items have no implicit target. */
-function keyboardTarget(
-  state: ReturnType<InteractionOwners['session']['getSnapshot']>,
-  id: string | null,
-): Target | undefined {
-  if (!id) return undefined;
-  return state.index.targets[id]?.target;
+/** True when both targets name the same diagram item; the geometry and keyboard parts compare with it. */
+function sameTarget(
+  left: Target,
+  right: Target,
+): boolean {
+  return targetAddress(left) === targetAddress(right);
 }
-
 /** Opaque structural target identity is shared by adapter comparisons; no generated ID encoding is parsed. */
 function targetAddress(target: Target): string {
   return JSON.stringify(target);

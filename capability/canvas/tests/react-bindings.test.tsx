@@ -5,6 +5,8 @@ import { createReactBindings, createSession } from '../contract/index.js';
 import type { ViewNode, ViewActions } from '../contract/index.js';
 import type { FlowNode } from '../contract/index.js';
 import { createInteractions } from '../adapters/react-flow/interaction-handlers.js';
+import { createGeometryGestures } from '../adapters/react-flow/geometry-gestures.js';
+import { createKeyboardCommands } from '../adapters/react-flow/keyboard-commands.js';
 import { harness, value, alpha } from './fixtures.js';
 import { slots, installDomGeometry, renderedScene, mouseGesture } from './react-fixtures.js';
 afterEach(() => {
@@ -74,7 +76,8 @@ it('16 real adapter callbacks coalesce drag, cancel safely, preserve viewport an
   const session = createSession(setup.canvas, setup.state);
   let id = 0;
   const errors = vi.fn();
-  const handlers = createInteractions({
+  const parts = { createGeometryGestures, createKeyboardCommands };
+  const handlers = createInteractions(parts, {
     session,
     input: {
       ownsNativeInput: (target) =>
