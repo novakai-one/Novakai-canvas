@@ -1,5 +1,4 @@
 import type { FailureSource } from '../../contract/records/transport/failure-source.js';
-import { validate } from '@novakai/canvas-model';
 import type { Catalog, Preset, RecipePayload } from '@novakai/canvas-templates';
 import type { ResolvedResources } from '@novakai/canvas-language';
 import type {
@@ -78,10 +77,13 @@ function addTheme(
   ).candidate;
 }
 /** Model mints the diagram theme binding from the checked preset; the host owns alias selection only. */
-function themeBinding(preset: Preset): ResolvedResources['themes'][string] {
+function themeBinding(
+  preset: Preset,
+  owners: BuiltinPresetOwners,
+): ResolvedResources['themes'][string] {
   if (preset.kind !== 'theme') throw new PresetFault('Recipe is not a theme');
   return accepted(
-    validate({
+    owners.model.validate({
       schemaVersion: 1,
       id: 'resource-binding',
       revision: 0,
@@ -104,7 +106,9 @@ function addRecipe(
 ): Catalog {
   const resources = {
     themes: Object.fromEntries(
-      catalog.filter((item) => item.kind === 'theme').map((item) => [item.id, themeBinding(item)]),
+      catalog
+        .filter((item) => item.kind === 'theme')
+        .map((item) => [item.id, themeBinding(item, owners)]),
     ),
     assets: {},
   };

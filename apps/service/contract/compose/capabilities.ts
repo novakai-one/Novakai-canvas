@@ -1,7 +1,9 @@
 /*
- * The one place the service binds concrete capabilities: Language, Design System, the Templates
- * factory and the Model, Library and Export rules. Wiring only; constructing them starts no I/O.
- * Each capability owns its own failures and recovery.
+ * The one construction site for Language, Design System, the Templates factory and the Model,
+ * Library and Export rule tables. installation.ts and wiring.ts each call it once; serve.ts builds
+ * only Language here. Some adapters still import Model, Library and Export rules directly until
+ * later PRs move those rules into core. Constructing starts no I/O; each capability owns its own
+ * failures and recovery.
  */
 import { composeDesignSystem } from '@novakai/canvas-design-system';
 import { composeExport, formatMarkdown } from '@novakai/canvas-export';
