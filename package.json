@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx apps/service/cli/serve.ts",
-    "canvas": "tsx apps/cli/cli/main.ts",
+    "canvas": "tsx apps/cli/cli/canvas.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "architecture": "depcruise capability apps --config .dependency-cruiser.cjs --output-type err",

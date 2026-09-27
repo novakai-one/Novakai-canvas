@@ -27,7 +27,7 @@ import type {
   Language,
   RenderDocument,
   ResolvedResources,
-} from './records/render.js';
+} from './records/foreign.js';
 
 /** The prepared capability environment of one render. */
 export interface Environment {

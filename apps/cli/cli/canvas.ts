@@ -1,6 +1,5 @@
-import { formatFailure } from '../contract/api.js';
 import { fileURLToPath } from 'node:url';
-import { runCli } from '../contract/index.js';
+import { formatFailure, runCli } from '../contract/index.js';
 /** The executable reports one readable outcome and exit status. No credentials or request envelopes are logged. */
 async function main(): Promise<void> {
   const workspace = fileURLToPath(new URL('../../../.local/workspace', import.meta.url));

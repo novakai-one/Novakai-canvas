@@ -36,7 +36,7 @@ AGENTS-SPEC-AUTHORING.md
 | Diagram records and validity / collection catalog and search | `capability/model/` / `capability/library/` |
 | Applying edits, revisions and recovery / physical storage | `capability/authoring/` / `capability/persistence/` |
 | Assets, reusable recipes and export | `capability/assets/`, `capability/templates/`, `capability/export/` |
-| Local server and CLI | `apps/service/cli/serve.ts`, `apps/cli/cli/main.ts` |
+| Local server and CLI | `apps/service/cli/serve.ts`, `apps/cli/cli/canvas.ts` |
 
 ## Author or edit a diagram
 

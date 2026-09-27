@@ -1,5 +1,5 @@
-import { buildSpecProfile, scaffoldBuildSpec } from '../profiles/build-spec.js';
-import { lintBuildSpec } from '../profiles/lint.js';
+import { buildSpecProfile, scaffoldBuildSpec } from './build-spec.js';
+import { lintBuildSpec } from './lint/lint.js';
 import type { Command } from '../../contract/records/command.js';
 import type { SemanticInputs } from '../../contract/ports/runtime.js';
 import type { RequestFiles } from '../../contract/ports/runtime.js';

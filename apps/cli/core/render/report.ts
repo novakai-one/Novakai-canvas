@@ -2,7 +2,7 @@
  * The headless render report: written files, the collection's theme, scene inspection counts
  * and the admitted theme digests. Pure assembly from the document the owners produced.
  */
-import type { Catalog, Collection, RenderDocument } from '../../contract/records/render.js';
+import type { Catalog, Collection, RenderDocument } from '../../contract/records/foreign.js';
 import type { HeadlessReport } from '../../contract/records/headless.js';
 
 /** The report of one completed render. */

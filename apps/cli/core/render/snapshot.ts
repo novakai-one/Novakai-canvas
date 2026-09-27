@@ -11,7 +11,7 @@ import type {
   RenderDocument,
   Resource,
   Resources,
-} from '../../contract/records/render.js';
+} from '../../contract/records/foreign.js';
 import { accepted } from './faults.js';
 
 /** Every byte the exact export snapshot needs: collection assets, document fonts, catalog presets. */

@@ -2,8 +2,8 @@ import type { Command } from '../../contract/records/command.js';
 import type { CliDependencies } from '../../contract/ports/runtime.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
-import { resourceCall, stageResources } from './resources.js';
-import { submit } from './author.js';
+import { resourceCall, stageResources } from '../resources/stage.js';
+import { submit } from '../authoring/author.js';
 /** All bytes and exact preset content are retained before the sole canonical Authoring apply gate. */
 export async function admitPreset(
   command: Command,
@@ -60,7 +60,7 @@ async function retainedSnapshot(
   prepared: unknown,
   assets: readonly { readonly alias: string; readonly digest: string }[],
   backups: readonly import('../../contract/records/resources.js').ByteBackup[],
-  current: import('../../contract/records/owners.js').TransportResponse,
+  current: import('../../contract/records/foreign.js').TransportResponse,
   dependencies: CliDependencies,
 ): Promise<Result<string>> {
   if (!current.outcome.ok) return current.outcome;
@@ -82,7 +82,7 @@ async function retainRequest(
   prepared: unknown,
   assets: readonly { readonly alias: string; readonly digest: string }[],
   backups: readonly import('../../contract/records/resources.js').ByteBackup[],
-  snapshot: import('../../contract/records/owners.js').Snapshot,
+  snapshot: import('../../contract/records/foreign.js').Snapshot,
   generation: string,
   dependencies: CliDependencies,
 ): Promise<Result<string>> {

@@ -1,4 +1,4 @@
-import { prepareResources, restoreResources } from './resources.js';
+import { prepareResources, restoreResources } from '../resources/stage.js';
 import type { Command } from '../../contract/records/command.js';
 import type { CliDependencies, RequestDraft } from '../../contract/ports/runtime.js';
 import type { Result } from '../../contract/errors.js';
@@ -18,7 +18,7 @@ async function prepare(
 async function prepareCaptured(
   command: Command,
   source: string,
-  current: import('../../contract/records/owners.js').TransportResponse,
+  current: import('../../contract/records/foreign.js').TransportResponse,
   dependencies: CliDependencies,
 ): Promise<Result<RequestDraft>> {
   const draft = captured(command, source, current, dependencies);
@@ -29,7 +29,7 @@ async function prepareCaptured(
 function captured(
   command: Command,
   source: string,
-  current: import('../../contract/records/owners.js').TransportResponse,
+  current: import('../../contract/records/foreign.js').TransportResponse,
   dependencies: CliDependencies,
 ): Result<RequestDraft> {
   if (!current.outcome.ok) return current.outcome;
@@ -41,7 +41,7 @@ function captured(
 function draft(
   command: Command,
   source: string,
-  snapshot: import('../../contract/records/owners.js').Snapshot,
+  snapshot: import('../../contract/records/foreign.js').Snapshot,
   generation: string,
   dependencies: CliDependencies,
 ): Result<RequestDraft> {
@@ -83,7 +83,7 @@ async function transmit(
 }
 /** Network uncertainty names the retained request instead of suggesting a new request ID. */
 function submitted(
-  result: Result<import('../../contract/records/owners.js').TransportResponse>,
+  result: Result<import('../../contract/records/foreign.js').TransportResponse>,
   id: string,
   preview: boolean,
   dependencies: CliDependencies,
@@ -138,7 +138,7 @@ export async function retry(
 /** Receipt absence permits explicit caller-requested replay; changed Authoring preconditions remain rejected by the owner. */
 async function reconciled(
   draft: RequestDraft,
-  response: import('../../contract/records/owners.js').TransportResponse,
+  response: import('../../contract/records/foreign.js').TransportResponse,
   dependencies: CliDependencies,
 ): Promise<Result<string>> {
   if (!response.outcome.ok) return response.outcome;

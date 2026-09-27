@@ -5,7 +5,7 @@ import type {
   PresetInputs,
 } from '../records/resources.js';
 import type { Result } from '../errors.js';
-import type { Snapshot, Request, TransportResponse } from '../records/owners.js';
+import type { Snapshot, Request, TransportResponse } from '../records/foreign.js';
 import type { Command } from '../records/command.js';
 import type { ParsedSource } from '@novakai/canvas-language';
 export interface Transport {

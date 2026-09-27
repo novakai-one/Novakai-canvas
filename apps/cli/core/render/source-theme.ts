@@ -4,7 +4,7 @@
  * Language parses it; nothing here trusts filenames or mutates sources. The source envelope
  * schema lives with the boundary vocabulary in contract/records.
  */
-import type { Collection, Language } from '../../contract/records/render.js';
+import type { Collection, Language } from '../../contract/records/foreign.js';
 import type { ResourceRequest } from '../../contract/records/resources.js';
 import type { HeadlessOptions } from '../../contract/records/headless.js';
 import { RenderFault, accepted } from './faults.js';

@@ -1,13 +1,17 @@
-export { execute as executeCommand } from '../core/commands/execute.js';
+export { execute as executeCommand } from '../core/commands/dispatch.js';
 
 export { usage } from '../core/commands/help.js';
 
-export { formatFailure } from '../core/output/diagnostics.js';
+export { executeProfile, isProfileCommand } from '../core/profiles/commands.js';
+
+export { readThemeConfig } from '../core/themes/grammar.js';
+
+export { formatFailure } from '../core/diagnostics/format.js';
 
 export { RenderFault, accepted, evidence } from '../core/render/faults.js';
 
-export { retainedResources, resourceInspector } from '../core/render/resources.js';
+export { retainedResources, resourceInspector } from '../core/render/snapshot.js';
 
-export { assetAttribution, sourceMatches, sourceWithTheme } from '../core/render/source.js';
+export { assetAttribution, sourceMatches, sourceWithTheme } from '../core/render/source-theme.js';
 
 export { renderReport } from '../core/render/report.js';

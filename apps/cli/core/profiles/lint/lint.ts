@@ -1,19 +1,19 @@
 /*
  * The build-spec structural lint entry point: index the source, run the five rule groups —
  * sections, repo tree, modules, entities/CRUD, appendix content — and summarise. The rules live
- * in lint/; each returns its findings and this file only orders and counts them.
+ * in this folder; each returns its findings and this file only orders and counts them.
  */
 import type {
   ProfileDeclarationIndex,
   ProfileLintResult,
   ProfileSource,
-} from '../../contract/records/profiles.js';
-import { buildSpecProfile } from './build-spec.js';
-import { lintSections } from './lint/sections.js';
-import { lintRepo } from './lint/repo.js';
-import { lintModules } from './lint/modules.js';
-import { lintEntitiesAndCrud } from './lint/crud.js';
-import { lintAppendices } from './lint/appendices.js';
+} from '../../../contract/records/profiles.js';
+import { buildSpecProfile } from '../build-spec.js';
+import { lintSections } from './sections.js';
+import { lintRepo } from './repo.js';
+import { lintModules } from './modules.js';
+import { lintEntitiesAndCrud } from './crud.js';
+import { lintAppendices } from './appendices.js';
 
 /**
  * Lint a parsed source against build-spec@1.
