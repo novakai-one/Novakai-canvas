@@ -38,7 +38,7 @@ export function lintBuildSpec(source: ParsedSource): ProfileLintResult {
 }
 
 /** Identity, presence, order and appendix-shape findings for the section list. */
-function lintSections(indexed: DeclarationIndex): ProfileFinding[] {
+function lintSections(indexed: DeclarationIndex): readonly ProfileFinding[] {
   return [
     ...lintSectionIdentity(indexed),
     ...lintRequiredSections(indexed),
@@ -48,7 +48,7 @@ function lintSections(indexed: DeclarationIndex): ProfileFinding[] {
 }
 
 /** Entity findings first, then the CRUD table findings of the ownership section. */
-function lintEntitiesAndCrud(indexed: DeclarationIndex): ProfileFinding[] {
+function lintEntitiesAndCrud(indexed: DeclarationIndex): readonly ProfileFinding[] {
   const entities = sectionById(indexed.sections, 'entities');
   const ownership = sectionById(indexed.sections, 'ownership');
   if (entities === undefined || ownership === undefined) return [];

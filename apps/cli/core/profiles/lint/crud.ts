@@ -21,7 +21,7 @@ export function crudFindings(
   indexed: DeclarationIndex,
   ownership: Declaration,
   entityIds: readonly string[],
-): ProfileFinding[] {
+): readonly ProfileFinding[] {
   const tables = crudTables(indexed, ownership);
   const [table] = tables;
   if (tables.length !== 1 || table === undefined)
@@ -56,7 +56,7 @@ function crudTables(
 }
 
 /** The CRUD table's columns must be exactly Object, Create, Read, Update, Delete. */
-function columnFinding(table: Declaration): ProfileFinding[] {
+function columnFinding(table: Declaration): readonly ProfileFinding[] {
   return validColumns(field(table, 'columns'))
     ? []
     : [
@@ -84,7 +84,7 @@ const crudColumns = Object.freeze(['Object', 'Create', 'Read', 'Update', 'Delete
 function crudRowFindings(
   row: Declaration,
   expectedRows: ReadonlySet<string>,
-): ProfileFinding[] {
+): readonly ProfileFinding[] {
   const rowId = id(row);
   return [...rowIdFinding(row, rowId, expectedRows), ...rowCellsFinding(row, rowId)];
 }
@@ -94,7 +94,7 @@ function rowIdFinding(
   row: Declaration,
   rowId: string | undefined,
   expectedRows: ReadonlySet<string>,
-): ProfileFinding[] {
+): readonly ProfileFinding[] {
   if (rowId !== undefined && expectedRows.has(rowId)) return [];
   return [
     findingAt(row, {
@@ -109,7 +109,7 @@ function rowIdFinding(
 function rowCellsFinding(
   row: Declaration,
   rowId: string | undefined,
-): ProfileFinding[] {
+): readonly ProfileFinding[] {
   const cells = field(row, 'cells');
   return Array.isArray(cells) && cells.length === crudColumns.length
     ? []
@@ -132,7 +132,7 @@ function missingRowFindings(
   table: Declaration,
   rows: readonly Declaration[],
   expectedRows: ReadonlySet<string>,
-): ProfileFinding[] {
+): readonly ProfileFinding[] {
   return [...expectedRows].flatMap((expectedRow) =>
     rows.some((row) => id(row) === expectedRow)
       ? []
@@ -147,7 +147,7 @@ function missingRowFindings(
 }
 
 /** A row id used more than once is reported once, at its first row. */
-function duplicateRowFindings(rows: readonly Declaration[]): ProfileFinding[] {
+function duplicateRowFindings(rows: readonly Declaration[]): readonly ProfileFinding[] {
   const rowIds = rows.map(id);
   return rows.flatMap((row, index) =>
     firstOfRepeated(rowIds, index)

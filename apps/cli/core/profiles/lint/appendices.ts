@@ -8,6 +8,7 @@ import { collectAppendices, type Appendix } from './appendix-ids.js';
 import {
   connected,
   id,
+  isConnectedWire,
   shown,
   text,
   type Declaration,
@@ -26,7 +27,7 @@ interface NativeContent {
 }
 
 /** The content findings of every appendix section, in document order. */
-export function lintAppendices(indexed: DeclarationIndex): ProfileFinding[] {
+export function lintAppendices(indexed: DeclarationIndex): readonly ProfileFinding[] {
   return collectAppendices(indexed.sections).flatMap((appendix) =>
     appendixContentFindings(appendix, indexed),
   );
@@ -36,7 +37,7 @@ export function lintAppendices(indexed: DeclarationIndex): ProfileFinding[] {
 function appendixContentFindings(
   appendix: Appendix,
   indexed: DeclarationIndex,
-): ProfileFinding[] {
+): readonly ProfileFinding[] {
   const mode = text(appendix.section, 'mode');
   return mode === 'sequence'
     ? sequenceAppendixFinding(appendix)
@@ -44,7 +45,7 @@ function appendixContentFindings(
 }
 
 /** A sequence appendix must contain native event or fragment declarations. */
-function sequenceAppendixFinding(appendix: Appendix): ProfileFinding[] {
+function sequenceAppendixFinding(appendix: Appendix): readonly ProfileFinding[] {
   return appendix.section.children.some(
     (child) => child.kind === 'event' || child.kind === 'fragment',
   )
@@ -85,7 +86,7 @@ function nodeAppendixFindings(
   appendix: Appendix,
   content: NativeContent,
   indexed: DeclarationIndex,
-): ProfileFinding[] {
+): readonly ProfileFinding[] {
   return [
     ...nativeNodesFinding(appendix, content, shownNodesOf(appendix.section, indexed.nodes)),
     ...nativeWireFinding(appendix, content, indexed.wires),
@@ -108,7 +109,7 @@ function nativeNodesFinding(
   appendix: Appendix,
   content: NativeContent,
   nodes: readonly Declaration[],
-): ProfileFinding[] {
+): readonly ProfileFinding[] {
   return nodes.some((node) => hasKindIn(node, content.nodeKinds))
     ? []
     : [
@@ -134,9 +135,11 @@ function nativeWireFinding(
   appendix: Appendix,
   content: NativeContent,
   wires: readonly Declaration[],
-): ProfileFinding[] {
+): readonly ProfileFinding[] {
   const connectedIds = new Set(connected(appendix.section));
-  return wires.some((wire) => nativeConnected(wire, connectedIds, content.wireKind))
+  return wires.some(
+    (wire) => isConnectedWire(wire, connectedIds) && text(wire, 'kind') === content.wireKind,
+  )
     ? []
     : [
         findingAt(appendix.section, {
@@ -145,14 +148,4 @@ function nativeWireFinding(
           message: `${content.mode} appendix must connect native ${content.mode} wires.`,
         }),
       ];
-}
-
-/** The wire has an id the section connects and is of the required kind. */
-function nativeConnected(
-  wire: Declaration,
-  connectedIds: ReadonlySet<string>,
-  kind: string | undefined,
-): boolean {
-  const wireId = id(wire);
-  return wireId !== undefined && connectedIds.has(wireId) && text(wire, 'kind') === kind;
 }

@@ -11,7 +11,7 @@ export function entityFindings(
   entityIds: readonly string[],
   nodes: readonly Declaration[],
   section: Declaration,
-): ProfileFinding[] {
+): readonly ProfileFinding[] {
   return entityIds.flatMap((entityId) =>
     entityFinding(
       nodes.find((node) => id(node) === entityId),
@@ -26,7 +26,7 @@ function entityFinding(
   entity: Declaration | undefined,
   entityId: string,
   section: Declaration,
-): ProfileFinding[] {
+): readonly ProfileFinding[] {
   if (!isEntityNode(entity))
     return [
       findingAt(section, {
@@ -47,7 +47,7 @@ function isEntityNode(entity: Declaration | undefined): entity is Declaration {
 function invariantFinding(
   entity: Declaration,
   entityId: string,
-): ProfileFinding[] {
+): readonly ProfileFinding[] {
   return entity.children.some((child) => child.kind === 'text')
     ? []
     : [

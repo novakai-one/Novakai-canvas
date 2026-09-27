@@ -6,11 +6,11 @@
 import { z } from 'zod';
 import type { Mode, Span } from './foreign.js';
 
-/** The one profile the CLI knows. */
-export type ProfileId = 'build-spec@1';
+/** Every profile the CLI knows. `profile describe|scaffold|lint` accept only these (`unknown-profile`). */
+export const profileId = z.enum(['build-spec@1']);
 
-/** Checks a profile operand or --profile; core/commands/values.ts reports a miss as `unknown-profile`. */
-export const profileId = z.enum(['build-spec@1']) satisfies z.ZodType<ProfileId>;
+/** A profile that passed {@link profileId}. */
+export type ProfileId = z.infer<typeof profileId>;
 
 /** Section modes a slot or appendix accepts; the first is the one a required slot must use. */
 export type ProfileModes = readonly [Mode, ...Mode[]];
@@ -62,8 +62,10 @@ export interface ProfileDescriptor {
  * interface in the repo tree), `entity-kind` (a shown entity is not an entity node),
  * `entity-invariant` (an entity has no invariant text).
  *
- * Ownership: `crud-table` (not exactly one CRUD table), `crud-columns`, `crud-row-id`,
- * `crud-cells`, `crud-missing-row`, `crud-duplicate-row`.
+ * Ownership: `crud-table` (not exactly one CRUD table), `crud-columns` (columns are not exactly
+ * Object, Create, Read, Update, Delete), `crud-row-id` (a row ID is not some entity's
+ * `<entity-id>-row`), `crud-cells` (a row does not have one cell per column), `crud-missing-row`
+ * (an entity has no row), `crud-duplicate-row` (a row ID is used more than once).
  *
  * Appendix content: `appendix-sequence-content` (no event or fragment), `appendix-native-nodes`
  * (no native node of its mode shown), `appendix-native-wires` (no native wire connected).

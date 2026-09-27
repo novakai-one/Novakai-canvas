@@ -21,7 +21,7 @@ type RequiredSection = {
 };
 
 /** Every required slot must be present and carry its first mode. */
-export function lintRequiredSections(indexed: DeclarationIndex): ProfileFinding[] {
+export function lintRequiredSections(indexed: DeclarationIndex): readonly ProfileFinding[] {
   return buildSpecProfile.slots.flatMap((slot) => requiredSectionFinding(slot, indexed));
 }
 
@@ -32,7 +32,7 @@ export function lintRequiredSections(indexed: DeclarationIndex): ProfileFinding[
 function requiredSectionFinding(
   slot: ProfileSlot,
   indexed: DeclarationIndex,
-): ProfileFinding[] {
+): readonly ProfileFinding[] {
   const section = sectionById(indexed.sections, slot.id.slice(1));
   if (section === undefined)
     return [
@@ -54,7 +54,7 @@ function requiredSectionFinding(
 }
 
 /** Consecutive required sections must carry increasing order fields. */
-export function lintRequiredOrder(indexed: DeclarationIndex): ProfileFinding[] {
+export function lintRequiredOrder(indexed: DeclarationIndex): readonly ProfileFinding[] {
   const required = presentRequired(indexed);
   return required
     .slice(1)
@@ -62,7 +62,7 @@ export function lintRequiredOrder(indexed: DeclarationIndex): ProfileFinding[] {
 }
 
 /** The required slots whose sections exist, in slot order. */
-function presentRequired(indexed: DeclarationIndex): RequiredSection[] {
+function presentRequired(indexed: DeclarationIndex): readonly RequiredSection[] {
   return buildSpecProfile.slots.flatMap((slot) => {
     const section = sectionById(indexed.sections, slot.id.slice(1));
     return section === undefined ? [] : [{ slot, section }];
@@ -73,7 +73,7 @@ function presentRequired(indexed: DeclarationIndex): RequiredSection[] {
 function requiredOrderFinding(
   previous: RequiredSection | undefined,
   current: RequiredSection,
-): ProfileFinding[] {
+): readonly ProfileFinding[] {
   if (previous === undefined) return [];
   return orderIncreases(previous.section, current.section)
     ? []

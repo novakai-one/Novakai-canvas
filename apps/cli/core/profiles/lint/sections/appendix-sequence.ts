@@ -14,16 +14,16 @@ import {
 } from '../declarations.js';
 import { fieldFinding, findingAt } from '../findings.js';
 
-/** The sequential appendix-check state: numbers seen and the running order anchor. */
-type AppendixSequence = {
-  readonly numbers: Set<number>;
-  previousNumber: number;
-  previousOrder: number | undefined;
-  readonly findings: ProfileFinding[];
-};
+/** The appendix fold state: numbers seen, the number and order anchors, and the findings so far. */
+interface AppendixSequence {
+  readonly numbers: ReadonlySet<number>;
+  readonly previousNumber: number;
+  readonly previousOrder: number | undefined;
+  readonly findings: readonly ProfileFinding[];
+}
 
 /** Appendix presence findings, then the sequential number, mode and order findings. */
-export function lintAppendixShape(indexed: DeclarationIndex): ProfileFinding[] {
+export function lintAppendixShape(indexed: DeclarationIndex): readonly ProfileFinding[] {
   const appendices = collectAppendices(indexed.sections);
   return [
     ...appendixPresenceFinding(appendices.length, indexed.declaration),
@@ -35,7 +35,7 @@ export function lintAppendixShape(indexed: DeclarationIndex): ProfileFinding[] {
 function appendixPresenceFinding(
   count: number,
   declaration: Declaration,
-): ProfileFinding[] {
+): readonly ProfileFinding[] {
   return count === 0
     ? [
         findingAt(declaration, {
@@ -51,17 +51,14 @@ function appendixPresenceFinding(
 function appendixSequenceFindings(
   appendices: readonly Appendix[],
   sections: readonly Declaration[],
-): ProfileFinding[] {
-  const sequence: AppendixSequence = {
+): readonly ProfileFinding[] {
+  const start: AppendixSequence = {
     numbers: new Set<number>(),
     previousNumber: 0,
     previousOrder: ownershipOrder(sections),
     findings: [],
   };
-  for (const appendix of appendices.toSorted((a, b) => a.number - b.number)) {
-    visitAppendix(appendix, sequence);
-  }
-  return sequence.findings;
+  return appendices.toSorted((a, b) => a.number - b.number).reduce(visitAppendix, start).findings;
 }
 
 /** The ownership section's order anchors the appendix sequence. */
@@ -70,20 +67,26 @@ function ownershipOrder(sections: readonly Declaration[]): number | undefined {
   return ownership === undefined ? undefined : order(ownership);
 }
 
-/** One appendix's findings, advancing the number and order anchors. */
+/**
+ * The next fold state: this appendix's number, mode and order findings added in that order, its
+ * number recorded, and the order anchor moved to its order when it has one.
+ */
 function visitAppendix(
-  appendix: Appendix,
   sequence: AppendixSequence,
-): void {
-  sequence.findings.push(
-    ...appendixNumberFindings(appendix, sequence.numbers, sequence.previousNumber),
-  );
-  sequence.numbers.add(appendix.number);
-  sequence.previousNumber = appendix.number;
-  sequence.findings.push(...appendixModeFinding(appendix));
+  appendix: Appendix,
+): AppendixSequence {
   const currentOrder = order(appendix.section);
-  sequence.findings.push(...appendixOrderFinding(appendix, currentOrder, sequence.previousOrder));
-  if (currentOrder !== undefined) sequence.previousOrder = currentOrder;
+  return {
+    numbers: new Set([...sequence.numbers, appendix.number]),
+    previousNumber: appendix.number,
+    previousOrder: currentOrder ?? sequence.previousOrder,
+    findings: [
+      ...sequence.findings,
+      ...appendixNumberFindings(appendix, sequence.numbers, sequence.previousNumber),
+      ...appendixModeFinding(appendix),
+      ...appendixOrderFinding(appendix, currentOrder, sequence.previousOrder),
+    ],
+  };
 }
 
 /** Duplicate number first, then out-of-sequence — the order a reader meets them. */
@@ -91,7 +94,7 @@ function appendixNumberFindings(
   appendix: Appendix,
   numbers: ReadonlySet<number>,
   previous: number,
-): ProfileFinding[] {
+): readonly ProfileFinding[] {
   return [
     ...duplicateNumberFinding(appendix, numbers),
     ...increasingNumberFinding(appendix, previous),
@@ -102,7 +105,7 @@ function appendixNumberFindings(
 function duplicateNumberFinding(
   appendix: Appendix,
   numbers: ReadonlySet<number>,
-): ProfileFinding[] {
+): readonly ProfileFinding[] {
   return numbers.has(appendix.number)
     ? [
         fieldFinding(appendix.section, 'id', {
@@ -121,7 +124,7 @@ function duplicateNumberFinding(
 function increasingNumberFinding(
   appendix: Appendix,
   previous: number,
-): ProfileFinding[] {
+): readonly ProfileFinding[] {
   return appendix.number <= previous
     ? [
         fieldFinding(appendix.section, 'id', {
@@ -134,7 +137,7 @@ function increasingNumberFinding(
 }
 
 /** An appendix id prefix fixes the section's mode. */
-function appendixModeFinding(appendix: Appendix): ProfileFinding[] {
+function appendixModeFinding(appendix: Appendix): readonly ProfileFinding[] {
   return text(appendix.section, 'mode') === appendix.mode
     ? []
     : [
@@ -151,7 +154,7 @@ function appendixOrderFinding(
   appendix: Appendix,
   current: number | undefined,
   previous: number | undefined,
-): ProfileFinding[] {
+): readonly ProfileFinding[] {
   return current !== undefined && previous !== undefined && current > previous
     ? []
     : [

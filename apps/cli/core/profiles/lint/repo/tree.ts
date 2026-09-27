@@ -7,6 +7,7 @@ import type { ProfileFinding } from '../../../../contract/records/profiles.js';
 import {
   connected,
   id,
+  isConnectedWire,
   sectionById,
   shown,
   text,
@@ -19,7 +20,7 @@ import { fieldFinding, findingAt } from '../findings.js';
 import { reachabilityFindings } from './reachability.js';
 
 /** Root, wire and reachability findings for the repo tree section. */
-export function lintRepo(indexed: DeclarationIndex): ProfileFinding[] {
+export function lintRepo(indexed: DeclarationIndex): readonly ProfileFinding[] {
   const section = sectionById(indexed.sections, 'repo');
   if (section === undefined) return [];
   const roots = section.children.filter((child) => child.kind === 'root');
@@ -48,7 +49,7 @@ function rootCountFinding(
   section: Declaration,
   roots: readonly Declaration[],
   rootIds: readonly string[],
-): ProfileFinding[] {
+): readonly ProfileFinding[] {
   return roots.length !== 1 || rootIds.length !== 1
     ? [
         fieldFinding(section, 'id', {
@@ -65,7 +66,7 @@ function rootShownFinding(
   section: Declaration,
   rootIds: readonly string[],
   shownIds: ReadonlySet<string>,
-): ProfileFinding[] {
+): readonly ProfileFinding[] {
   const rootId = rootIds[0];
   return rootId !== undefined && !shownIds.has(rootId)
     ? [
@@ -82,7 +83,7 @@ function rootShownFinding(
 function wirePresenceFinding(
   section: Declaration,
   count: number,
-): ProfileFinding[] {
+): readonly ProfileFinding[] {
   return count === 0
     ? [
         findingAt(section, {
@@ -101,24 +102,15 @@ function repoParentWires(
 ): readonly Declaration[] {
   const connectedIds = new Set(connected(section));
   return indexed.wires.filter(
-    (wire) => text(wire, 'kind') === 'parent' && isConnected(wire, connectedIds),
+    (wire) => text(wire, 'kind') === 'parent' && isConnectedWire(wire, connectedIds),
   );
-}
-
-/** The wire has an id and the section connects it. */
-function isConnected(
-  wire: Declaration,
-  connectedIds: ReadonlySet<string>,
-): boolean {
-  const wireId = id(wire);
-  return wireId !== undefined && connectedIds.has(wireId);
 }
 
 /** One wire's field and endpoint findings. */
 function repoWireFindings(
   wire: Declaration,
   shownIds: ReadonlySet<string>,
-): ProfileFinding[] {
+): readonly ProfileFinding[] {
   const ends = wireEnds(wire);
   return [...wireFieldsFinding(wire, ends), ...wireEndpointsFinding(wire, ends, shownIds)];
 }
@@ -127,8 +119,8 @@ function repoWireFindings(
 function wireFieldsFinding(
   wire: Declaration,
   ends: WireEnds,
-): ProfileFinding[] {
-  return ends.id !== undefined && ends.source !== undefined && ends.target !== undefined
+): readonly ProfileFinding[] {
+  return ends.kind === 'complete'
     ? []
     : [
         findingAt(wire, {
@@ -144,7 +136,7 @@ function wireEndpointsFinding(
   wire: Declaration,
   ends: WireEnds,
   shownIds: ReadonlySet<string>,
-): ProfileFinding[] {
+): readonly ProfileFinding[] {
   return endpointHidden(ends, shownIds)
     ? [
         findingAt(wire, {
@@ -161,12 +153,10 @@ function wireLabel(ends: WireEnds): string {
   return `wire @${ends.id ?? '?'}`;
 }
 
-/** Both endpoints exist and at least one is not shown. */
+/** The wire has an id, a source and a target, and at least one endpoint is not shown. */
 function endpointHidden(
-  { source, target }: WireEnds,
+  ends: WireEnds,
   shownIds: ReadonlySet<string>,
 ): boolean {
-  return (
-    source !== undefined && target !== undefined && (!shownIds.has(source) || !shownIds.has(target))
-  );
+  return ends.kind === 'complete' && (!shownIds.has(ends.source) || !shownIds.has(ends.target));
 }

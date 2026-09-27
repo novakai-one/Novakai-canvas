@@ -20,12 +20,18 @@ export type SyntaxValue = unknown;
 /** A reference field value: kind 'reference' with a string id. */
 export type Reference = { readonly kind: 'reference'; readonly id: string };
 
-/** What {@link wireEnds} reads off one wire. */
-export interface WireEnds {
-  readonly id: string | undefined;
-  readonly source: string | undefined;
-  readonly target: string | undefined;
-}
+/**
+ * What {@link wireEnds} reads off one wire. `complete`: the wire has an id, a source and a target.
+ * `incomplete`: one of them is missing; the id is kept when the wire has one.
+ */
+export type WireEnds =
+  | {
+      readonly kind: 'complete';
+      readonly id: string;
+      readonly source: string;
+      readonly target: string;
+    }
+  | { readonly kind: 'incomplete'; readonly id?: string };
 
 /** The index of a full canvas document; undefined for any other source (a patch). */
 export function indexSource(source: ParsedSource): DeclarationIndex | undefined {
@@ -112,19 +118,34 @@ export function connected(section: Declaration): readonly string[] {
     .flatMap((child) => ids(child, 'ids'));
 }
 
-/** A wire's own id and its source and target object ids, each undefined when missing. */
+/** A wire's own id and its source and target object ids; `incomplete` when any is missing. */
 export function wireEnds(wire: Declaration): WireEnds {
-  return {
-    id: id(wire),
-    source: reference(field(wire, 'source'))?.id,
-    target: reference(field(wire, 'target'))?.id,
-  };
+  const wireId = id(wire);
+  const source = reference(field(wire, 'source'))?.id;
+  const target = reference(field(wire, 'target'))?.id;
+  if (wireId === undefined || source === undefined || target === undefined)
+    return incompleteEnds(wireId);
+  return { kind: 'complete', id: wireId, source, target };
+}
+
+/** The wire has an id and `connectedIds` (a section's connect list) holds it. */
+export function isConnectedWire(
+  wire: Declaration,
+  connectedIds: ReadonlySet<string>,
+): boolean {
+  const wireId = id(wire);
+  return wireId !== undefined && connectedIds.has(wireId);
 }
 
 /** The numeric order field of a section, when it is a number. */
 export function order(section: Declaration): number | undefined {
   const value = field(section, 'order');
   return typeof value === 'number' ? value : undefined;
+}
+
+/** Incomplete ends, keeping the wire's id only when it has one. */
+function incompleteEnds(wireId: string | undefined): WireEnds {
+  return wireId === undefined ? { kind: 'incomplete' } : { kind: 'incomplete', id: wireId };
 }
 
 /** A field value that is an object with kind 'reference' and a string id. */

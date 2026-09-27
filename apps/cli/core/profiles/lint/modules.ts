@@ -14,7 +14,7 @@ import {
 import { findingAt } from './findings.js';
 
 /** Every shown modules entry must be a canonical module or interface shown by the repo tree. */
-export function lintModules(indexed: DeclarationIndex): ProfileFinding[] {
+export function lintModules(indexed: DeclarationIndex): readonly ProfileFinding[] {
   const repo = sectionById(indexed.sections, 'repo');
   const modules = sectionById(indexed.sections, 'modules');
   if (repo === undefined || modules === undefined) return [];
@@ -35,7 +35,7 @@ function moduleProjectionFinding(
   objectId: string,
   repoObjects: ReadonlySet<string>,
   modules: Declaration,
-): ProfileFinding[] {
+): readonly ProfileFinding[] {
   return isCanonicalModule(node, objectId, repoObjects)
     ? []
     : [

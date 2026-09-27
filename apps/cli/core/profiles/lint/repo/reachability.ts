@@ -18,7 +18,7 @@ export function reachabilityFindings(
   rootId: string | undefined,
   parentWires: readonly Declaration[],
   shownIds: ReadonlySet<string>,
-): ProfileFinding[] {
+): readonly ProfileFinding[] {
   if (rootId === undefined) return [];
   const reachable = reachableFrom([rootId], new Set([rootId]), childrenByParentOf(parentWires));
   return [...shownIds].flatMap((objectId) => unreachableFinding(section, objectId, reachable));
@@ -29,7 +29,7 @@ function unreachableFinding(
   section: Declaration,
   objectId: string,
   reachable: ReadonlySet<string>,
-): ProfileFinding[] {
+): readonly ProfileFinding[] {
   return reachable.has(objectId)
     ? []
     : [
@@ -49,11 +49,9 @@ function childrenByParentOf(wires: readonly Declaration[]): ReadonlyMap<string, 
 }
 
 /** The wire's edge as a one-item list; empty unless the wire has an id, a source and a target. */
-function parentEdge(wire: Declaration): ParentEdge[] {
-  const { id, source, target } = wireEnds(wire);
-  return id === undefined || source === undefined || target === undefined
-    ? []
-    : [{ source, target }];
+function parentEdge(wire: Declaration): readonly ParentEdge[] {
+  const ends = wireEnds(wire);
+  return ends.kind === 'complete' ? [{ source: ends.source, target: ends.target }] : [];
 }
 
 /** The targets of the edges leaving one parent. */

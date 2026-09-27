@@ -12,7 +12,7 @@ const reserved: ReadonlyMap<string, ProfileSlot> = new Map(
 );
 
 /** Duplicate-id and reserved-mode findings, section by section in document order. */
-export function lintSectionIdentity(indexed: DeclarationIndex): ProfileFinding[] {
+export function lintSectionIdentity(indexed: DeclarationIndex): readonly ProfileFinding[] {
   const sectionIds = indexed.sections.map(id);
   return indexed.sections.flatMap((section, index) =>
     identifySection(section, sectionIds.slice(0, index)),
@@ -23,7 +23,7 @@ export function lintSectionIdentity(indexed: DeclarationIndex): ProfileFinding[]
 function identifySection(
   section: Declaration,
   earlier: readonly (string | undefined)[],
-): ProfileFinding[] {
+): readonly ProfileFinding[] {
   const sectionId = id(section);
   if (sectionId === undefined) return [];
   return [
@@ -37,7 +37,7 @@ function duplicateFinding(
   section: Declaration,
   sectionId: string,
   earlier: readonly (string | undefined)[],
-): ProfileFinding[] {
+): readonly ProfileFinding[] {
   return earlier.includes(sectionId)
     ? [
         fieldFinding(section, 'id', {
@@ -56,7 +56,7 @@ function duplicateFinding(
 function reservedModeFinding(
   section: Declaration,
   sectionId: string,
-): ProfileFinding[] {
+): readonly ProfileFinding[] {
   const slot = reserved.get(sectionId);
   const mode = text(section, 'mode');
   return slot !== undefined && mode !== undefined && !slot.modes.some((allowed) => allowed === mode)
