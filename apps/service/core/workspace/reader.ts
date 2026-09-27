@@ -6,6 +6,7 @@
 import type {
   AuthoringResult,
   Collection,
+  LibrarySnapshot,
   LoweredIntent,
   Snapshot,
   StoredRecord,
@@ -35,7 +36,8 @@ export function createWorkspaceReader(owners: WorkspaceReaderOwners): WorkspaceR
 }
 
 /**
- * Checks every live record of one snapshot. Fails with `invariant-violation` at:
+ * Checks the live collection, catalog and preset records of one snapshot. Fails with
+ * `invariant-violation` at:
  * - the record ID, when Model rejects a collection (Model's failure kept as source);
  * - `catalog`, when there is not exactly one catalog, or Library rejects it (source kept);
  * - `presets`, when Templates rejects the stored presets (Templates' message and source kept).
@@ -56,8 +58,8 @@ function read(
 }
 
 /**
- * Adds one collection record once Model accepts it. An earlier failure passes through unchanged;
- * a rejected record is `invariant-violation` at its record ID, so no invalid member is dropped.
+ * One reduce step over the collection records. An earlier failure passes through unchanged;
+ * otherwise the record is checked and added (see `checkedCollection`).
  */
 function collection(
   records: AuthoringResult<readonly Collection[]>,
@@ -65,6 +67,18 @@ function collection(
   model: WorkspaceReaderOwners['model'],
 ): AuthoringResult<readonly Collection[]> {
   if (!records.ok) return records;
+  return checkedCollection(records.value, record, model);
+}
+
+/**
+ * Adds one collection record once Model accepts it. A rejected record is `invariant-violation`
+ * at its record ID with Model's failure as source, so no invalid member is dropped.
+ */
+function checkedCollection(
+  accepted: readonly Collection[],
+  record: StoredRecord,
+  model: WorkspaceReaderOwners['model'],
+): AuthoringResult<readonly Collection[]> {
   const checked = model.validate(record.value);
   if (!checked.ok)
     return authoringFailure(
@@ -74,11 +88,11 @@ function collection(
       [],
       checked.error,
     );
-  return success([...records.value, checked.value]);
+  return success([...accepted, checked.value]);
 }
 
 /**
- * Requires exactly one catalog record, then checks it (see `checkedCatalogs`). Zero or several
+ * Requires exactly one catalog record, then checks it (see `checkedLibrary`). Zero or several
  * catalogs is `invariant-violation` at `catalog`.
  */
 function complete(
@@ -93,15 +107,15 @@ function complete(
       'catalog',
       'Workspace requires exactly one catalog',
     );
-  return checkedCatalogs(catalogs[0]?.value, live, collections, owners);
+  return checkedLibrary(catalogs[0]?.value, live, collections, owners);
 }
 
 /**
- * Checks the catalog with Library and the stored presets with Templates. A Library rejection is
- * `invariant-violation` at `catalog`; a Templates rejection is `invariant-violation` at `presets`.
- * Both keep the owner's failure as source.
+ * Checks the catalog and the checked collections with Library, then the presets (see
+ * `checkedPresets`). A Library rejection is `invariant-violation` at `catalog`, Library's failure
+ * kept as source.
  */
-function checkedCatalogs(
+function checkedLibrary(
   catalog: unknown,
   live: readonly StoredRecord[],
   collections: readonly Collection[],
@@ -120,7 +134,20 @@ function checkedCatalogs(
       [],
       library.error,
     );
-  const presets = owners.templates.readCatalog(
+  return checkedPresets(live, collections, library.value, owners.templates);
+}
+
+/**
+ * Checks the live preset records with Templates and answers the complete contents. A Templates
+ * rejection is `invariant-violation` at `presets`, Templates' message and failure kept.
+ */
+function checkedPresets(
+  live: readonly StoredRecord[],
+  collections: readonly Collection[],
+  library: LibrarySnapshot,
+  templates: WorkspaceReaderOwners['templates'],
+): AuthoringResult<WorkspaceContents> {
+  const presets = templates.readCatalog(
     live.filter((record) => record.key.kind === 'preset').map((record) => record.value),
   );
   if (!presets.ok)
@@ -131,5 +158,5 @@ function checkedCatalogs(
       [],
       presets.error,
     );
-  return success({ collections, library: library.value, presets: presets.value });
+  return success({ collections, library, presets: presets.value });
 }
