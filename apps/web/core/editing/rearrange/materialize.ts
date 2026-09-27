@@ -1,8 +1,8 @@
 /*
  * Materializing an accepted rearrangement: placements are rewritten from the native preview's
- * geometry and the preview is run a second time. The option is offered only when both previews
- * agree on the final geometry. Geometry the preview omits is an `invalid-edit` failure, never
- * a throw.
+ * geometry, then `acceptance.ts` runs the preview a second time and offers the option only when
+ * both previews agree on the final geometry. Pure; geometry the preview omits is an
+ * `invalid-edit` failure, never a throw. Authoring owns commit and recovery.
  */
 import type { Section } from '../../../contract/records/owners.js';
 import type { Result } from '../../../contract/errors.js';
@@ -11,13 +11,11 @@ import { failure } from '../../../contract/errors.js';
 import { mapResults } from '../results.js';
 import { changes } from '../capture/settling/sections.js';
 import { sourcePlacement } from '../capture/pinning.js';
-import { exactBox, targetKey, type Box } from '../capture/boxes.js';
+import type { Box } from '../capture/boxes.js';
 import type { SceneNode } from '../capture/scene.js';
-import { completePreview } from '../preview/completeness.js';
-import { closureGeometryMatches, otherSectionMatches } from './matching.js';
+import { previewMaterializedRearrangement } from './acceptance.js';
 import type {
   MaterializedCandidate,
-  MaterializedPreview,
   RearrangementPreparation,
   SectionAppearance,
   SectionGroup,
@@ -219,93 +217,4 @@ function previewParentBox(
 ): Result<Box> {
   if (parentId === null) return { ok: true, value: sectionBox };
   return findNodePreviewBox(preview, sectionId, parentId);
-}
-
-/** Run the native preview over the materialized changes for verification. */
-function previewMaterializedRearrangement(input: MaterializedPreview): Result<MoveOption | null> {
-  const preview = input.context.preview;
-  return preview === undefined
-    ? failure('invalid-edit', 'Movement preview is not available')
-    : callMaterializedPreview(input, preview);
-}
-
-/** A failed second preview is a failure; a null one declines the option. */
-function callMaterializedPreview(
-  input: MaterializedPreview,
-  preview: NonNullable<MaterializedPreview['context']['preview']>,
-): Result<MoveOption | null> {
-  const second = preview(input.context.document, input.prepared.intent, input.finalChanges);
-  return second.ok ? inspectMaterializedPreview(input, second.value) : second;
-}
-
-/** Flatten the second preview before comparing it with the first. */
-function inspectMaterializedPreview(
-  input: MaterializedPreview,
-  secondPreview: MoveOption['preview'] | null,
-): Result<MoveOption | null> {
-  if (secondPreview === null) return { ok: true, value: null };
-  const secondMapResult = completePreview(input.context.document, secondPreview);
-  return secondMapResult.ok
-    ? acceptRearrangement(input, secondPreview, secondMapResult.value)
-    : secondMapResult;
-}
-
-/** Offer the option only when both previews agree and every target still matches. */
-function acceptRearrangement(
-  input: MaterializedPreview,
-  secondPreview: MoveOption['preview'],
-  secondMap: ReadonlyMap<string, Box>,
-): Result<MoveOption | null> {
-  if (!sameGeometryMap(input.firstMap, secondMap)) return { ok: true, value: null };
-  const accepted = inspectSecondTargets(input);
-  if (!accepted) return { ok: true, value: null };
-  return {
-    ok: true,
-    value: {
-      id: 'rearrange-section',
-      kind: 'rearrange',
-      label: 'Rearrange section',
-      section: input.prepared.sectionId,
-      changes: input.finalChanges,
-      geometryChanges: input.geometryChanges,
-      preview: secondPreview,
-    },
-  };
-}
-
-/** Every first-preview target must still satisfy the section and closure predicates. */
-function inspectSecondTargets(input: MaterializedPreview): boolean {
-  return [...input.firstMap].every(([key, firstBox]) => inspectSecondTarget(input, key, firstBox));
-}
-
-/** Two geometry maps agree when every shared key holds an exactly equal box. */
-function sameGeometryMap(
-  first: ReadonlyMap<string, Box>,
-  second: ReadonlyMap<string, Box>,
-): boolean {
-  return [...first].every(([key, box]) => {
-    const counterpart = second.get(key);
-    return counterpart !== undefined && exactBox(counterpart, box);
-  });
-}
-
-/** One second-preview target passes when its section and closure geometry still match. */
-function inspectSecondTarget(
-  input: MaterializedPreview,
-  key: string,
-  firstBox: Box,
-): boolean {
-  const target = input.firstPreview.boxes.find((item) => targetKey(item.target) === key)?.target;
-  return (
-    target !== undefined &&
-    otherSectionMatches(input.prepared, target, firstBox, input.context.document) &&
-    closureGeometryMatches(
-      input.prepared,
-      target,
-      firstBox,
-      input.expected,
-      input.closure,
-      input.wanted,
-    )
-  );
 }
