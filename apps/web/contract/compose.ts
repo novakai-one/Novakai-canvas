@@ -42,6 +42,8 @@ import { createRequestRecovery } from '../adapters/react/RequestRecovery.js';
 import { createMovementReview } from '../adapters/react/MovementReview.js';
 import { createSourceEditor } from '../adapters/react/SourceEditor.js';
 import { createWorkspaceShell } from '../adapters/react/WorkspaceShell.js';
+import { createProblemBar, StatusBar } from '../adapters/react/ShellAlerts.js';
+import { createShellHooks } from '../adapters/react/shell-hooks.js';
 import { mountWorkspace, observeWorkspaceWidth } from '../adapters/edge/browser-host.js';
 import type { Result } from './errors.js';
 import type { BrowserGlobals } from './ports/browser-globals.js';
@@ -159,7 +161,9 @@ async function mount(
     }),
     Source: createSourceEditor(design, element),
     Recovery: createRequestRecovery(design),
-    Button: design.Button,
+    ProblemBar: createProblemBar(design),
+    StatusBar,
+    hooks: createShellHooks(globals.window),
     MovementReview: createMovementReview(design),
     Reveal: RevealInterface,
     CreateDialog: createCollectionDialog(design),

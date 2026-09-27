@@ -8,20 +8,15 @@
  * their failures. For `start()` and `create()`, a failed read or a failed or refused request sets
  * `view.problem`, shown in the problem bar. A failed add sets `creation.problem`, shown in the Add
  * panel; a refused add also sets `view.problem`.
+ * The problem bar and status bar (`ShellAlerts.tsx`) and the shell's hooks (`shell-hooks.ts`) come
+ * in as slots.
  */
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import type { ComponentType, ReactElement, RefObject } from 'react';
-import {
-  failureSummary,
-  formatFailure,
-  palette,
-  planPaletteDrop,
-  shellLayout,
-} from '../../contract/api.js';
+import { useState, useSyncExternalStore } from 'react';
+import type { ComponentType, ReactElement } from 'react';
+import { palette, planPaletteDrop, shellLayout } from '../../contract/api.js';
 import type { PaletteDrop, ShellLayout } from '../../contract/api.js';
-import type { Diagnostic } from '../../contract/errors.js';
 import type { ChromeSlots, FeatureProps, WorkspaceProps } from '../../contract/react-types.js';
-import type { WorkspaceController, WorkspaceView } from '../../contract/records/workspace.js';
+import type { WorkspaceController } from '../../contract/records/workspace.js';
 import type { ActiveDiagram } from '../../contract/records/active-diagram.js';
 import styles from './WorkspaceShell.module.css';
 
@@ -32,7 +27,9 @@ export function createWorkspaceShell({
   Library,
   Panel,
   Recovery,
-  Button,
+  ProblemBar,
+  StatusBar,
+  hooks,
   MovementReview,
   Reveal,
   Source,
@@ -43,6 +40,8 @@ export function createWorkspaceShell({
   portal,
   nextGestureId,
 }: ChromeSlots): ComponentType<WorkspaceProps> {
+  const { useAlertClearance, useControllerLifetime, useRevealOnEscape } = hooks;
+
   /** Mount owns subscription lifetime. Selection and panning remain entirely inside the Canvas session. */
   function WorkspaceShell({ controller }: WorkspaceProps): ReactElement {
     const view = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
@@ -159,25 +158,6 @@ export function createWorkspaceShell({
     );
   }
 
-  /** The problem bar: the summary, the technical details and Dismiss; nothing when there is no problem. */
-  function ProblemBar({ problem, onDismiss }: ProblemBarProps): ReactElement | null {
-    if (problem === null) return null;
-    return (
-      <div className={styles.problem} role="alert">
-        <div className={styles.problemText}>
-          <strong>{failureSummary(problem)}</strong>
-          <details>
-            <summary>Technical details</summary>
-            {formatFailure(problem).map((line, index) => (
-              <p key={index}>{line}</p>
-            ))}
-          </details>
-        </div>
-        <Button label="Dismiss error" icon="×" iconOnly onClick={onDismiss} />
-      </div>
-    );
-  }
-
   return WorkspaceShell;
 }
 
@@ -194,27 +174,10 @@ interface DiagramCanvasProps {
   readonly layout: Pick<ShellLayout, 'chrome' | 'roads' | 'labels'>;
 }
 
-/** The problem to show (null for none) and the Dismiss intent. */
-interface ProblemBarProps {
-  readonly problem: Diagnostic | null;
-  readonly onDismiss: () => void;
-}
-
 /** Whether core shows the part, and the part. */
 interface ShowProps {
   readonly when: boolean;
   readonly children: ReactElement;
-}
-
-/** The status line and the connection state. */
-interface StatusBarProps {
-  readonly view: Pick<WorkspaceView, 'status' | 'connected'>;
-}
-
-/** The canvas host and its alerts box; the host carries the alerts' height. */
-interface AlertClearance {
-  readonly host: RefObject<HTMLElement | null>;
-  readonly alerts: RefObject<HTMLDivElement | null>;
 }
 
 /** Where a palette drop goes: an add to the controller, a refusal to its report. */
@@ -226,63 +189,6 @@ type DropReceiver = Pick<WorkspaceController, 'addObject' | 'report'>;
  */
 function Show({ when, children }: ShowProps): ReactElement | null {
   return when ? children : null;
-}
-
-/** The status bar: the controller's status line and whether the service is connected. */
-function StatusBar({ view }: StatusBarProps): ReactElement {
-  return (
-    <footer className={styles.status}>
-      <span role="status">{view.status}</span>
-      <span>{view.connected ? 'Connected to local workspace' : 'Service disconnected'}</span>
-    </footer>
-  );
-}
-
-/**
- * Starts the controller on mount and disposes it on unmount or when the controller changes.
- * A disposed controller's `start()` returns early, so a second run of this effect (as StrictMode
- * does) would leave the workspace stopped; apps/web does not use StrictMode.
- */
-function useControllerLifetime(controller: Pick<WorkspaceController, 'start' | 'dispose'>): void {
-  useEffect(() => {
-    void controller.start();
-    return controller.dispose;
-  }, [controller]);
-}
-
-/** While the interface is hidden, Escape reveals it; the key's default action is prevented. */
-function useRevealOnEscape(
-  hidden: boolean,
-  reveal: () => void,
-): void {
-  useEffect(() => {
-    if (!hidden) return undefined;
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') return;
-      event.preventDefault();
-      reveal();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [hidden, reveal]);
-}
-
-/** Publishes the alerts' height as --nv-alert-clearance so scrolling views (the Library) can pad
- * their end and never hide their last item under an alert. */
-function useAlertClearance(): AlertClearance {
-  const host = useRef<HTMLElement>(null);
-  const alerts = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const box = alerts.current;
-    const main = host.current;
-    if (box === null || main === null) return undefined;
-    const observer = new ResizeObserver(() => {
-      main.style.setProperty('--nv-alert-clearance', `${box.offsetHeight}px`);
-    });
-    observer.observe(box);
-    return () => observer.disconnect();
-  }, []);
-  return { host, alerts };
 }
 
 /** Alerts clear the zoom controls only when a canvas shows them; the Library has none. */
