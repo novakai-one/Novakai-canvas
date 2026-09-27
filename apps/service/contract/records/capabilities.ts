@@ -27,5 +27,6 @@ export type {
 } from '@novakai/canvas-authoring';
 export type { Collection, Change, ChangePlan } from '@novakai/canvas-model';
 export type { Persistence } from '@novakai/canvas-persistence';
-export type { Language, ResolvedResources } from '@novakai/canvas-language';
+export type { Language, LoweredIntent, ResolvedResources } from '@novakai/canvas-language';
+export type { Templates } from '@novakai/canvas-templates';
 export type { Organisation, LibrarySnapshot } from '@novakai/canvas-library';

@@ -1,8 +1,8 @@
 /*
  * The one non-compose file that may import service core. It re-exports only what files outside
- * core and compose still call: `projectCollection` for the public index and the workspace reader,
- * the export rules for the export adapter and export documents, and `historyVersionsOnly` for the
- * HTTP router. Compose imports core directly.
+ * core and compose still call: `projectCollection` for the public index, the export rules for the
+ * export adapter and export documents, and `historyVersionsOnly` for the HTTP router. Compose
+ * imports core directly.
  */
 export { readExportRequest } from '../core/export/request.js';
 export {

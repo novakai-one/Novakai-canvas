@@ -21,6 +21,7 @@ import type { Result } from '../errors.js';
 import { authoringFailure, failure, success } from '../errors.js';
 import { createWorkspaceSession } from '../../core/session/facade.js';
 import { createSessionLifetime } from '../../core/session/lifetime.js';
+import { createWorkspaceReader } from '../../core/workspace/reader.js';
 import { createWorkspaceExporter } from '../../adapters/workspace/export.js';
 import { createPngRuntime } from '../../adapters/raster/png-runtime.js';
 import { cacheRenders } from '../../adapters/rendering/render-cache.js';
@@ -46,7 +47,6 @@ export async function wireWorkspace(
   const [
     storeModule,
     codecModule,
-    viewModule,
     resourceModule,
     leaseModule,
     collectionModule,
@@ -64,7 +64,6 @@ export async function wireWorkspace(
   ] = await Promise.all([
     import('../../adapters/storage/authoring-store.js'),
     import('../../adapters/builtins/preset-codecs.js'),
-    import('../../core/workspace/reader.js'),
     import('../../adapters/resources/resource-selection.js'),
     import('../../adapters/resources/resource-leases.js'),
     import('../../adapters/planning/collection-plans.js'),
@@ -84,9 +83,9 @@ export async function wireWorkspace(
     installation.tokens,
     codecModule.createPresetCodecs,
   );
-  const { language, system } = capabilities;
+  const { language, system, model, library } = capabilities;
   const templates = capabilities.templates(EMPTY_RESOURCES);
-  const views = viewModule.createWorkspaceReader({ templates });
+  const views = createWorkspaceReader({ model, library, templates });
   const resources = resourceModule.createResourceSelector({
     assets: native.assets,
     templates,
