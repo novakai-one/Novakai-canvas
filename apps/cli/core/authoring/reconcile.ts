@@ -7,6 +7,7 @@ import { submit } from './submit.js';
 import type { Command } from '../../contract/records/command.js';
 import type { CliDependencies, RequestDraft } from '../../contract/ports/runtime.js';
 import type { Result } from '../../contract/errors.js';
+import { rejected } from '../../contract/errors.js';
 
 /** Replay checks for a completed receipt first. A restarted host receives the identical Authoring request under its new transport generation. */
 export async function retry(
@@ -27,7 +28,7 @@ async function reconciled(
   response: import('../../contract/records/foreign.js').TransportResponse,
   dependencies: CliDependencies,
 ): Promise<Result<string>> {
-  if (!response.outcome.ok) return response.outcome;
+  if (!response.outcome.ok) return rejected('service-rejected', response.outcome.error);
   if (response.outcome.value !== null)
     return dependencies.semantic.receipt(response.outcome.value, {
       kind: 'committed',

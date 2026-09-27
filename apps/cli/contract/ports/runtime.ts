@@ -4,16 +4,20 @@ import type {
   ResourceSyntax,
   PresetInputs,
 } from '../records/resources.js';
-import type { Result } from '../errors.js';
+import type { LocalFailure, Result } from '../errors.js';
 import type { Snapshot, Request, TransportResponse } from '../records/foreign.js';
 import type { Command } from '../records/command.js';
 import type { ParsedSource } from '@novakai/canvas-language';
+/**
+ * Sends one request to the local service. Fails only locally: `invalid-response` or
+ * `connection-uncertain`. A service rejection arrives inside the envelope's `outcome`.
+ */
 export interface Transport {
-  get(path: string): Promise<Result<TransportResponse>>;
+  get(path: string): Promise<Result<TransportResponse, LocalFailure>>;
   post(
     path: string,
     body: unknown,
-  ): Promise<Result<TransportResponse>>;
+  ): Promise<Result<TransportResponse, LocalFailure>>;
 }
 export interface RequestDraft {
   readonly generation: string;

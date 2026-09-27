@@ -4,7 +4,7 @@ import type { Snapshot, Request } from '@novakai/canvas-authoring';
 import type { PresetInputs, ResourceSyntax } from '../../contract/records/resources.js';
 import type { Command } from '../../contract/records/command.js';
 import type { Result } from '../../contract/errors.js';
-import { failure } from '../../contract/errors.js';
+import { failure, success } from '../../contract/errors.js';
 const flags = z.object({
   id: z.string().min(1),
   version: z.string().min(1),
@@ -23,16 +23,16 @@ function recipe(
 ): ReturnType<PresetInputs['source']> {
   const parsed = flags.safeParse(command.preset);
   if (!parsed.success)
-    return failure('invalid-arguments', 'recipe admit requires --id --version --family --title');
+    return failure({
+      code: 'invalid-arguments',
+      message: 'recipe admit requires --id --version --family --title',
+    });
   const resources = syntax.requests(source);
   if (!resources.ok) return resources;
-  return {
-    ok: true,
-    value: {
-      admission: { schemaVersion: 1, kind: 'recipe', ...parsed.data, description: '', source },
-      resources: resources.value,
-    },
-  };
+  return success({
+    admission: { schemaVersion: 1, kind: 'recipe', ...parsed.data, description: '', source },
+    resources: resources.value,
+  });
 }
 /** The metadata precondition serializes new admissions; exact preset absence/presence is explicitly scoped too. */
 function request(
@@ -43,11 +43,15 @@ function request(
 ): Result<Request> {
   const parsed = prepared.safeParse(input);
   if (!parsed.success)
-    return failure('invalid-response', 'Service returned invalid preset preparation');
+    return failure({
+      code: 'invalid-response',
+      message: 'Service returned invalid preset preparation',
+    });
   const metadata = snapshot.records.find(
     (item) => item.key.kind === 'workspace' && item.key.id === 'metadata',
   );
-  if (!metadata) return failure('invalid-response', 'Workspace metadata is missing');
+  if (!metadata)
+    return failure({ code: 'invalid-response', message: 'Workspace metadata is missing' });
   const existing = snapshot.records.find(
     (item) => item.key.kind === 'preset' && item.key.id === parsed.data.key.id,
   );
@@ -70,8 +74,11 @@ function request(
 /** Owner schema rejection remains a typed CLI failure. */
 function checkedResult(checked: ReturnType<typeof requestSchema.safeParse>): Result<Request> {
   if (!checked.success)
-    return failure('invalid-response', 'Prepared preset cannot form an Authoring request');
-  return { ok: true, value: checked.data };
+    return failure({
+      code: 'invalid-response',
+      message: 'Prepared preset cannot form an Authoring request',
+    });
+  return success(checked.data);
 }
 /** Expansion requires an exact recipe pin and explicit fresh namespace; Language remaps the resulting editable document. */
 function expansion(
@@ -80,17 +87,14 @@ function expansion(
 ): Result<unknown> {
   const exact = /^([^@]+)@([^#]+)#sha256:([a-f0-9]{64})$/.exec(pin);
   if (!exact || namespace.length === 0)
-    return failure(
-      'invalid-arguments',
-      'Use recipe instantiate ID@VERSION#sha256:DIGEST --namespace ID --out FILE',
-    );
-  return {
-    ok: true,
-    value: {
-      pin: { kind: 'recipe', id: exact[1], version: exact[2], digest: exact[3] },
-      namespace,
-    },
-  };
+    return failure({
+      code: 'invalid-arguments',
+      message: 'Use recipe instantiate ID@VERSION#sha256:DIGEST --namespace ID --out FILE',
+    });
+  return success({
+    pin: { kind: 'recipe', id: exact[1], version: exact[2], digest: exact[3] },
+    namespace,
+  });
 }
 /** Theme grammar is injected; this adapter owns only command-to-owner envelope construction. */
 export function createPresetInputs(

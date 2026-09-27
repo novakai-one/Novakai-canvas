@@ -9,7 +9,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import type { RequestFiles } from '../../contract/ports/runtime.js';
 import type { Result } from '../../contract/errors.js';
-import { failure } from '../../contract/errors.js';
+import { failure, success } from '../../contract/errors.js';
 
 /** Source reads and --out writes; neither needs the workspace directory. */
 export function createLocalFiles(): Pick<RequestFiles, 'source' | 'output'> {
@@ -20,10 +20,10 @@ async function source(path: string): Promise<Result<string>> {
   try {
     const bytes = await readFile(path);
     if (bytes.byteLength > 16 * 1024 * 1024)
-      return failure('source-too-large', 'DSL source exceeds 16 MiB');
-    return { ok: true, value: new TextDecoder('utf-8', { fatal: true }).decode(bytes) };
+      return failure({ code: 'source-too-large', message: 'DSL source exceeds 16 MiB' });
+    return success(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
   } catch {
-    return failure('source-unavailable', `Cannot read UTF-8 source: ${path}`);
+    return failure({ code: 'source-unavailable', message: `Cannot read UTF-8 source: ${path}` });
   }
 }
 /** --out is an explicit destination, written after the command ran. Never changes service data. */
@@ -33,8 +33,8 @@ async function output(
 ): Promise<Result<void>> {
   try {
     await writeFile(path, text, 'utf8');
-    return { ok: true, value: undefined };
+    return success(undefined);
   } catch {
-    return failure('output-unavailable', `Cannot write output: ${path}`);
+    return failure({ code: 'output-unavailable', message: `Cannot write output: ${path}` });
   }
 }

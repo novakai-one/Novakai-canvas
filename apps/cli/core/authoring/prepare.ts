@@ -8,6 +8,7 @@ import { prepareResources } from '../resources/stage.js';
 import type { Command } from '../../contract/records/command.js';
 import type { CliDependencies, RequestDraft } from '../../contract/ports/runtime.js';
 import type { Result } from '../../contract/errors.js';
+import { rejected, success } from '../../contract/errors.js';
 
 /** Capture source and observed versions once; neither preview nor apply refreshes the resulting Authoring envelope. */
 export async function prepare(
@@ -38,7 +39,7 @@ function captured(
   current: import('../../contract/records/foreign.js').TransportResponse,
   dependencies: CliDependencies,
 ): Result<RequestDraft> {
-  if (!current.outcome.ok) return current.outcome;
+  if (!current.outcome.ok) return rejected('service-rejected', current.outcome.error);
   const snapshot = dependencies.semantic.snapshot(current.outcome.value);
   if (!snapshot.ok) return snapshot;
   return draft(command, source, snapshot.value, current.generation, dependencies);
@@ -58,5 +59,5 @@ function draft(
     command.request ?? dependencies.nextRequestId(),
   );
   if (!request.ok) return request;
-  return { ok: true, value: { generation, request: request.value } };
+  return success({ generation, request: request.value });
 }

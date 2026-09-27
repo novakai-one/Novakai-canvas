@@ -5,8 +5,8 @@
  */
 import { z } from 'zod';
 import type { Catalog } from '@novakai/canvas-templates';
-import type { Diagnostic } from '../errors.js';
-import type { FailureSource } from './failure-source.js';
+import type { CliFailure } from '../errors.js';
+import type { FailureSource } from './foreign.js';
 /** Filesystem path at the native CLI edge; Node resolves it and resource owners enforce confinement. */
 export const filePath = z.string().min(1).brand<'HeadlessFilePath'>();
 /** Checked filesystem text, distinct from a semantic collection or theme selector. */
@@ -81,14 +81,14 @@ export const headlessFault = z.discriminatedUnion('code', [
   providerFault,
 ]);
 /** Consumer-owned source union retains owner paths, diagnostic tuples and recursive source/cleanup chains. */
-export type HeadlessSource = FailureSource | Diagnostic | z.infer<typeof headlessFault>;
+export type HeadlessSource = FailureSource | CliFailure | z.infer<typeof headlessFault>;
 /** Every adapter rejection carries structured evidence in the existing CLI error channel. */
-export type HeadlessFailure = Readonly<
-  Omit<Diagnostic, 'code' | 'source'> & {
-    readonly code: 'render-failed';
-    readonly source: HeadlessSource;
-  }
->;
+export interface HeadlessFailure {
+  readonly code: 'render-failed';
+  readonly message: string;
+  readonly recovery: string;
+  readonly source: HeadlessSource;
+}
 /** Machine-readable export evidence; Layout validates scenes before they reach this report. */
 export interface HeadlessReport {
   readonly files: readonly FilePath[];

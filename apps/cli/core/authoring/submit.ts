@@ -8,7 +8,8 @@ import { restoreResources } from '../resources/restore.js';
 import { prepare } from './prepare.js';
 import type { Command } from '../../contract/records/command.js';
 import type { CliDependencies, RequestDraft } from '../../contract/ports/runtime.js';
-import type { Result } from '../../contract/errors.js';
+import type { LocalFailure, Result } from '../../contract/errors.js';
+import { rejected, success } from '../../contract/errors.js';
 
 /** Retention failure prevents a write because an uncertain result could not be reconciled safely without the request. */
 export async function submit(
@@ -39,7 +40,7 @@ async function transmit(
 }
 /** Network uncertainty names the retained request instead of suggesting a new request ID. */
 function submitted(
-  result: Result<import('../../contract/records/foreign.js').TransportResponse>,
+  result: Result<import('../../contract/records/foreign.js').TransportResponse, LocalFailure>,
   id: string,
   preview: boolean,
   dependencies: CliDependencies,
@@ -52,7 +53,7 @@ function submitted(
         recovery: `Run canvas receipt ${id}, then canvas retry ${id} only if no receipt exists.`,
       },
     };
-  if (!result.value.outcome.ok) return result.value.outcome;
+  if (!result.value.outcome.ok) return rejected('service-rejected', result.value.outcome.error);
   return confirmed(result.value.outcome.value, id, preview, dependencies);
 }
 /** Preview prints reviewable owner output and a stable apply command; successful writes use the apply-answer reader. */
@@ -63,10 +64,9 @@ function confirmed(
   dependencies: CliDependencies,
 ): Result<string> {
   if (preview)
-    return {
-      ok: true,
-      value: `Preview request ${id}\n${JSON.stringify(value, null, 2)}\nApply with: canvas apply ${id}`,
-    };
+    return success(
+      `Preview request ${id}\n${JSON.stringify(value, null, 2)}\nApply with: canvas apply ${id}`,
+    );
   return dependencies.semantic.applied(value, id);
 }
 /** Agent authoring consumes readable source only. JSON envelopes and coordinates are never required user input. */

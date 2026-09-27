@@ -6,6 +6,7 @@
 import type { Command } from '../../contract/records/command.js';
 import type { CliDependencies } from '../../contract/ports/runtime.js';
 import type { Result } from '../../contract/errors.js';
+import { rejected } from '../../contract/errors.js';
 import { resourceCall, stageResources } from '../resources/stage.js';
 import { submit } from '../authoring/submit.js';
 
@@ -56,7 +57,7 @@ async function retain(
 ): Promise<Result<string>> {
   const current = await dependencies.transport.get('/api/v1/workspace');
   if (!current.ok) return current;
-  if (!current.value.outcome.ok) return current.value.outcome;
+  if (!current.value.outcome.ok) return rejected('service-rejected', current.value.outcome.error);
   return retainedSnapshot(command, prepared, assets, backups, current.value, dependencies);
 }
 /** Checked snapshot versions and local backups form one retained request. */
@@ -68,7 +69,7 @@ async function retainedSnapshot(
   current: import('../../contract/records/foreign.js').TransportResponse,
   dependencies: CliDependencies,
 ): Promise<Result<string>> {
-  if (!current.outcome.ok) return current.outcome;
+  if (!current.outcome.ok) return rejected('service-rejected', current.outcome.error);
   const snapshot = dependencies.semantic.snapshot(current.outcome.value);
   if (!snapshot.ok) return snapshot;
   return retainRequest(

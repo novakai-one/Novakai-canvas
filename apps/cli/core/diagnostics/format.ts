@@ -1,21 +1,44 @@
-import type { Diagnostic } from '../../contract/errors.js';
-import type {
-  FailureSource,
-  OperationSource,
-  ValidationSource,
-  RecordSource,
-} from '../../contract/records/failure-source.js';
-/** Display-only formatting. The original Result remains structured for recovery and machine consumers. */
-export function formatFailure(error: Diagnostic): readonly string[] {
+/*
+ * A CLI failure as terminal lines. Pure and display-only: the Result stays structured for
+ * machine consumers, and nothing parses these lines back.
+ */
+import type { CliFailure, LocalFailure } from '../../contract/errors.js';
+import type { FailureSource, OperationSource } from '../../contract/records/foreign.js';
+
+/** A validation batch: the evidence that is not an operation failure. */
+type ValidationSource = Exclude<FailureSource, OperationSource>;
+/** One validation diagnostic: a record issue (code, path) or a Language issue (code, span). */
+type ValidationIssue = ValidationSource['diagnostics'][number];
+/** A Model record issue addressed by its path. */
+type RecordIssue = Extract<ValidationIssue, { readonly path: string }>;
+
+/**
+ * `code: message`, the evidence lines, then the recovery line. A foreign failure prints the
+ * owner's own code, message, evidence and recovery, exactly as the owner wrote them.
+ */
+export function formatFailure(error: CliFailure): readonly string[] {
+  switch (error.code) {
+    case 'service-rejected':
+    case 'credential-unavailable':
+      return failureLines(error.foreign);
+    default:
+      return failureLines(error);
+  }
+}
+
+/** One failure's lines; the evidence sits between the message and the recovery line. */
+function failureLines(error: LocalFailure | OperationSource): readonly string[] {
   return [`${error.code}: ${error.message}`, ...sourceLines(error.source), error.recovery];
 }
-/** Absence means a local failure; validation and operational sources remain distinct. */
+
+/** No evidence prints nothing; validation and operation evidence print differently. */
 function sourceLines(source: FailureSource | undefined): readonly string[] {
   if (source === undefined) return [];
   if ('diagnostics' in source) return source.diagnostics.flatMap(diagnosticLines);
   return operationLines(source);
 }
-/** Nested owner failures preserve order and cleanup guidance in the final display. */
+
+/** A nested owner failure keeps its order and its cleanup failure. */
 function operationLines(source: OperationSource): readonly string[] {
   return [
     `${source.code} ${source.path}: ${source.message}`,
@@ -24,8 +47,9 @@ function operationLines(source: OperationSource): readonly string[] {
     ...sourceLines(source.cleanup),
   ];
 }
-/** Source spans and record paths are explicit addresses; no parser reads the resulting text. */
-function diagnosticLines(issue: ValidationSource['diagnostics'][number]): readonly string[] {
+
+/** A record issue prints its path; a Language issue prints its span, expectation and recovery. */
+function diagnosticLines(issue: ValidationIssue): readonly string[] {
   if ('path' in issue) return [`${issue.code} ${issue.path}: ${issue.message}`];
   const location = `${issue.span.start.line}:${issue.span.start.column}`;
   return [
@@ -35,8 +59,9 @@ function diagnosticLines(issue: ValidationSource['diagnostics'][number]): readon
     ...ownerLines(issue.source),
   ];
 }
-/** Language enrichment can point back to a precise Model code/path without sacrificing the source span. */
-function ownerLines(issue: RecordSource | undefined): readonly string[] {
+
+/** The Model issue behind a Language issue, when Language kept one. */
+function ownerLines(issue: RecordIssue | undefined): readonly string[] {
   if (issue === undefined) return [];
   return [`${issue.code} ${issue.path}: ${issue.message}`];
 }

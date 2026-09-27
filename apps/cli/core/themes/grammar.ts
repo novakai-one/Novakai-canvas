@@ -1,8 +1,13 @@
+/*
+ * The `.theme` text grammar: header, three fonts and token overrides → a theme admission and its
+ * font requests. Pure. Grammar faults are thrown privately and returned as `invalid-theme` or
+ * `duplicate-token`; the caller fixes the theme file and runs the command again.
+ */
 import type { ResourceRequest } from '../../contract/records/resources.js';
 import type { PortableToken } from '../../contract/records/foreign.js';
 import { chromeName, type ChromeName } from '../../contract/brands.js';
-import type { Result } from '../../contract/errors.js';
-import { failure } from '../../contract/errors.js';
+import type { LocalCode, LocalFailure, Result } from '../../contract/errors.js';
+import { failure, success } from '../../contract/errors.js';
 interface Override {
   readonly token: string;
   // Existing raw color/scalar syntax stays at the grammar edge; dimensions reuse the owner vocabulary.
@@ -14,10 +19,12 @@ interface Override {
       });
   readonly line: number;
 }
+/** The codes a theme file can fail with. */
+type ThemeCode = Extract<LocalCode, 'invalid-theme' | 'duplicate-token'>;
 /** Theme grammar faults retain a stable reason and exact corrective instruction. */
 class ThemeFault extends Error {
   constructor(
-    readonly code: string,
+    readonly code: ThemeCode,
     message: string,
     readonly recovery: string,
   ) {
@@ -29,18 +36,20 @@ export function readThemeConfig(
   source: string,
 ): Result<{ readonly admission: unknown; readonly resources: readonly ResourceRequest[] }> {
   try {
-    return { ok: true, value: parse(source) };
+    return success(parse(source));
   } catch (error) {
     return themeFailure(error);
   }
 }
-/** Unexpected grammar faults remain a stable generic syntax outcome. */
-function themeFailure<T>(error: unknown): Result<T> {
-  if (error instanceof ThemeFault) return failure(error.code, error.message, error.recovery);
-  return failure(
-    'invalid-theme',
-    'Expected theme 1 @id "Title" version=X base=ALIAS, font body/mono/strong source="PATH", set color TOKEN="HEX", or set number TOKEN=VALUE',
-  );
+/** A ThemeFault keeps its code and recovery; any other grammar throw is `invalid-theme`. */
+function themeFailure(error: unknown): Result<never, LocalFailure> {
+  if (error instanceof ThemeFault)
+    return failure({ code: error.code, message: error.message, recovery: error.recovery });
+  return failure({
+    code: 'invalid-theme',
+    message:
+      'Expected theme 1 @id "Title" version=X base=ALIAS, font body/mono/strong source="PATH", set color TOKEN="HEX", or set number TOKEN=VALUE',
+  });
 }
 /** Header vocabulary is intentionally closed and coordinate-free; no diagram or typography metric model is introduced. */
 function parse(source: string): {

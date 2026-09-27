@@ -8,6 +8,7 @@ import type { CliDependencies, RequestDraft } from '../../contract/ports/runtime
 import type { ByteBackup, LocalInput } from '../../contract/records/resources.js';
 import type { Command } from '../../contract/records/command.js';
 import type { Result } from '../../contract/errors.js';
+import { rejected, success } from '../../contract/errors.js';
 import { combined } from '../shared/results.js';
 
 /** This resource flow consumes only byte I/O plus the four semantic decoders it invokes. */
@@ -27,7 +28,9 @@ export async function resourceCall(
 ): Promise<Result<unknown>> {
   const response = await dependencies.transport.post(`/api/v1/resources/${path}`, input);
   if (!response.ok) return response;
-  return response.value.outcome;
+  const outcome = response.value.outcome;
+  if (!outcome.ok) return rejected('service-rejected', outcome.error);
+  return success(outcome.value);
 }
 /** One upload is followed by an exact normalized byte read for durable local replay protection. */
 async function stage(
@@ -59,7 +62,7 @@ async function backup(
   if (!blob.ok) return blob;
   const bytes = dependencies.semantic.backup(blob.value);
   if (!bytes.ok) return bytes;
-  return { ok: true, value: { alias, backup: bytes.value } };
+  return success({ alias, backup: bytes.value });
 }
 /** Stage each declaration before freezing aliases; failure leaves only collectable Assets orphans. */
 export async function prepareResources(
@@ -88,10 +91,7 @@ async function freezeDraft(
   if (!frozen.ok) return frozen;
   const checked = dependencies.semantic.checkedRequest(frozen.value);
   if (!checked.ok) return checked;
-  return {
-    ok: true,
-    value: { ...draft, request: checked.value, backups: values.map((item) => item.backup) },
-  };
+  return success({ ...draft, request: checked.value, backups: values.map((item) => item.backup) });
 }
 /** Stage a semantic declaration list; a failed member prevents any canonical request submission. */
 export async function stageResources(

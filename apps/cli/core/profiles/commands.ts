@@ -10,7 +10,7 @@ import type { Command } from '../../contract/records/command.js';
 import type { SemanticInputs } from '../../contract/ports/runtime.js';
 import type { RequestFiles } from '../../contract/ports/runtime.js';
 import type { Result } from '../../contract/errors.js';
-import { failure } from '../../contract/errors.js';
+import { failure, success } from '../../contract/errors.js';
 
 export interface ProfileDependencies {
   readonly files: Pick<RequestFiles, 'source' | 'output'>;
@@ -18,7 +18,11 @@ export interface ProfileDependencies {
 }
 
 function profileError(target: string): Result<string> {
-  return failure('unknown-profile', `Unknown profile: ${target}`, 'Use build-spec@1.');
+  return failure({
+    code: 'unknown-profile',
+    message: `Unknown profile: ${target}`,
+    recovery: 'Use build-spec@1.',
+  });
 }
 
 function validText(
@@ -26,8 +30,8 @@ function validText(
   label: string,
 ): Result<string> {
   if (value === undefined || value.trim() === '')
-    return failure('invalid-arguments', `Scaffold requires --${label}.`);
-  return { ok: true, value };
+    return failure({ code: 'invalid-arguments', message: `Scaffold requires --${label}.` });
+  return success(value);
 }
 
 export async function executeProfile(
@@ -36,7 +40,7 @@ export async function executeProfile(
 ): Promise<Result<string>> {
   const handler = profileHandlers[command.name];
   return handler === undefined
-    ? failure('invalid-command', `Unsupported profile command: ${command.name}`)
+    ? failure({ code: 'invalid-command', message: `Unsupported profile command: ${command.name}` })
     : handler(command, dependencies);
 }
 
@@ -58,7 +62,7 @@ function describeProfile(
   void dependencies;
   const result: Result<string> =
     command.target === buildSpecProfile.id
-      ? { ok: true, value: displayDescriptor() }
+      ? success(displayDescriptor())
       : profileError(command.target);
   return Promise.resolve(result);
 }
@@ -97,11 +101,14 @@ async function writeScaffold(
   const validId = /^[-a-zA-Z0-9_]+$/.test(id);
   if (!validId)
     return Promise.resolve(
-      failure('invalid-arguments', 'Scaffold --id must be a simple collection ID.'),
+      failure({
+        code: 'invalid-arguments',
+        message: 'Scaffold --id must be a simple collection ID.',
+      }),
     );
   const source = scaffoldBuildSpec(id, title);
   return command.output === null
-    ? Promise.resolve({ ok: true, value: source })
+    ? Promise.resolve(success(source))
     : writeScaffoldFile(command.output, source, dependencies);
 }
 
@@ -111,7 +118,7 @@ async function writeScaffoldFile(
   dependencies: ProfileDependencies,
 ): Promise<Result<string>> {
   const saved = await dependencies.files.output(output, source);
-  return saved.ok ? { ok: true, value: `Written: ${output}` } : saved;
+  return saved.ok ? success(`Written: ${output}`) : saved;
 }
 
 async function lintProfile(
@@ -144,18 +151,22 @@ type ParsedProfile =
 function lintParsedProfile(source: ParsedProfile): Result<string> {
   const result = lintBuildSpec(source);
   return result.valid
-    ? { ok: true, value: result.summary }
-    : failure(
-        'profile-structure',
-        `${result.summary}\n${result.findings.map(findingLine).join('\n')}`,
-        'Fix the reported structural findings and rerun profile lint.',
-      );
+    ? success(result.summary)
+    : failure({
+        code: 'profile-structure',
+        message: `${result.summary}\n${result.findings.map(findingLine).join('\n')}`,
+        recovery: 'Fix the reported structural findings and rerun profile lint.',
+      });
 }
 
 function requireProfile(value: string): Result<true> {
   return value === buildSpecProfile.id
-    ? { ok: true, value: true }
-    : failure('unknown-profile', `Unknown profile: ${value}`, 'Use build-spec@1.');
+    ? success(true)
+    : failure({
+        code: 'unknown-profile',
+        message: `Unknown profile: ${value}`,
+        recovery: 'Use build-spec@1.',
+      });
 }
 
 export function isProfileCommand(command: Command): boolean {

@@ -17,9 +17,9 @@ import { createRequestJournal } from '../adapters/files/request-journal.js';
 import { createTransport } from '../adapters/service-http/transport.js';
 import { createSemanticInputs } from '../adapters/inputs/semantic-inputs.js';
 import { executeCommand, executeProfile, isProfileCommand, readThemeConfig, usage } from './api.js';
-import type { Diagnostic, Result } from './errors.js';
+import type { LocalFailure, Result } from './errors.js';
 import type { HeadlessFailure, HeadlessOptions, HeadlessReport } from './records/headless.js';
-import { failure } from './errors.js';
+import { failure, rejected, success } from './errors.js';
 /** Bind the actual CLI to protected credentials and real HTTP; failed setup cannot submit a diagram mutation. */
 export async function runCli(
   args: readonly string[],
@@ -30,11 +30,11 @@ export async function runCli(
     if (!parsed.ok) return parsed;
     return dispatch(parsed.value);
   } catch {
-    return failure(
-      'cli-unavailable',
-      'CLI could not complete',
-      'Retain the request ID and inspect its receipt before retrying.',
-    );
+    return failure({
+      code: 'cli-unavailable',
+      message: 'CLI could not complete',
+      recovery: 'Retain the request ID and inspect its receipt before retrying.',
+    });
   }
 }
 /** One owner-composed Language parser drives scope discovery; there is no second DSL implementation in the CLI. */
@@ -42,7 +42,7 @@ async function run(options: import('./records/command.js').CliOptions): Promise<
   const credential = await readAgentCredential(
     resolve(options.workspaceDirectory, 'agent-credential.json'),
   );
-  if (!credential.ok) return credential;
+  if (!credential.ok) return rejected('credential-unavailable', credential.error);
   const transport = createTransport(options.server, credential.value);
   if (!transport.ok) return transport;
   const language = createLanguage({ reader: { validate }, planner: { plan }, stage: { stage } });
@@ -62,7 +62,7 @@ async function run(options: import('./records/command.js').CliOptions): Promise<
 
 /** Local help needs no infrastructure; authoring commands bind their real runtime before executing. */
 function dispatch(options: import('./records/command.js').CliOptions): Promise<Result<string>> {
-  if (options.command.name === 'help') return Promise.resolve({ ok: true, value: usage });
+  if (options.command.name === 'help') return Promise.resolve(success(usage));
   if (isProfileCommand(options.command)) return runProfile(options);
   return run(options);
 }
@@ -83,7 +83,7 @@ async function runProfile(
  */
 export async function runHeadless(
   options: HeadlessOptions,
-): Promise<Result<HeadlessReport, HeadlessFailure | Diagnostic>> {
+): Promise<Result<HeadlessReport, HeadlessFailure | LocalFailure>> {
   try {
     const [adapter, service, temp, files, raster] = await Promise.all([
       import('../adapters/edge/headless.js'),
@@ -100,10 +100,10 @@ export async function runHeadless(
       files: { ...files.createRenderFiles(options), ...raster.createRaster(options.root) },
     });
   } catch {
-    return failure(
-      'render-unavailable',
-      'Headless rendering could not initialize',
-      'Restore local resources and retry.',
-    );
+    return failure({
+      code: 'render-unavailable',
+      message: 'Headless rendering could not initialize',
+      recovery: 'Restore local resources and retry.',
+    });
   }
 }
