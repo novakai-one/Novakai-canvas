@@ -38,7 +38,7 @@ async function prepareInstallationInputs(
   const files = await createTokenFileBindings(tokenRoot);
   if (!files.ok) return failure('unavailable', 'tokens', files.error.message, files.error);
   const [loader, codecs, builtins] = await Promise.all([
-    import('../../adapters/builtins/builtin-files.js'),
+    import('../../adapters/files/shipped-resources.js'),
     import('../../adapters/builtins/preset-codecs.js'),
     import('../../adapters/builtins/builtin-presets.js'),
   ]);

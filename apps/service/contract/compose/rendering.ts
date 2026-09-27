@@ -14,9 +14,9 @@ import { produce } from '../../core/rendering/produce.js';
 export async function runRenderWorker(): Promise<Result<void>> {
   try {
     const [entry, input, rendering] = await Promise.all([
-      import('../../adapters/rendering/worker-entry.js'),
-      import('../../adapters/rendering/rendering-input.js'),
-      import('../../adapters/rendering/rendering.js'),
+      import('../../adapters/render-worker/entry.js'),
+      import('../../adapters/render-worker/job-reader.js'),
+      import('../../adapters/render-worker/derive.js'),
     ]);
     const prepared = await prepareNativeRuntimes();
     if (!prepared.ok) return prepared;
@@ -43,8 +43,8 @@ async function prepareNativeRuntimes(): Promise<Result<void>> {
 export async function createDiagramProducer(timeoutMs: number): Promise<Result<DiagramProducer>> {
   try {
     const [worker, output] = await Promise.all([
-      import('../../adapters/rendering/render-worker.js'),
-      import('../../adapters/rendering/rendering-output.js'),
+      import('../../adapters/render-worker/pool.js'),
+      import('../../adapters/render-worker/reply-reader.js'),
     ]);
     const transport = worker.createRenderTransport(timeoutMs);
     await transport.ready;

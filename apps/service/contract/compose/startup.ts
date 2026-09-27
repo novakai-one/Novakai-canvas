@@ -22,7 +22,7 @@ import type { WiredWorkspace } from './wiring.js';
 /** Open a real persistent workspace explicitly. Every canonical initial/edit write passes through Authoring; caller owns startup recovery. */
 export async function openWorkspace(options: WorkspaceOptions): Promise<Result<WorkspaceSession>> {
   try {
-    const files = await import('../../adapters/workspace/workspace-files.js');
+    const files = await import('../../adapters/files/workspace-files.js');
     const native = await files.openWorkspaceFiles(options, {
       assets: openAssets,
       storage: openSqlite,

@@ -24,7 +24,7 @@ import type { Result } from '../errors.js';
 import { failure } from '../errors.js';
 import { createWorkspaceSession } from '../api.js';
 import { createWorkspaceExporter } from '../../adapters/workspace/export.js';
-import { createPngRuntime } from '../../adapters/rendering/png-runtime.js';
+import { createPngRuntime } from '../../adapters/raster/png-runtime.js';
 import { cacheRenders } from '../../adapters/rendering/render-cache.js';
 import type { createFeasibility } from '../../adapters/planning/feasibility.js';
 
@@ -64,7 +64,7 @@ export async function wireWorkspace(
     presetPlannerModule,
     themePreparationModule,
   ] = await Promise.all([
-    import('../../adapters/workspace/authoring-store.js'),
+    import('../../adapters/storage/authoring-store.js'),
     import('../../adapters/builtins/preset-codecs.js'),
     import('../../adapters/workspace/workspace-reader.js'),
     import('../../adapters/resources/resource-selection.js'),
@@ -77,7 +77,7 @@ export async function wireWorkspace(
     import('../../adapters/planning/feasibility.js'),
     import('../../adapters/rendering/collection-renderer.js'),
     import('../../adapters/planning/installation-planner.js'),
-    import('../../adapters/runtime/change-channel.js'),
+    import('../../adapters/notifications/change-channel.js'),
     import('../../adapters/runtime/session-lifetime.js'),
     import('../../adapters/resources/resource-commands.js'),
     import('../../adapters/planning/preset-planner.js'),

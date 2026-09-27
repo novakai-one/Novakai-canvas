@@ -19,13 +19,13 @@ export async function serveWorkspace(
 ): Promise<Result<LocalServer>> {
   try {
     const [credentials, requests, router, source, io, files, server] = await Promise.all([
-      import('../../adapters/runtime/local-credentials.js'),
+      import('../../adapters/credentials/local-credentials.js'),
       import('../../adapters/http/request-reader.js'),
       import('../../adapters/http/http-router.js'),
       import('../../adapters/rendering/language-readout.js'),
-      import('../../adapters/http/http-io.js'),
+      import('../../adapters/http/socket-io.js'),
       import('../../adapters/http/static-files.js'),
-      import('../../adapters/http/http-server.js'),
+      import('../../adapters/http/server.js'),
     ]);
     const security = await credentials.createLocalSecurity(options.port, options.credentialFile);
     if (!security.ok) return security;
@@ -57,7 +57,7 @@ export async function serveWorkspace(
 
 /** Local agent bootstrap reads an existing protected credential; browser consumers must use their HttpOnly session instead. */
 export async function readAgentCredential(path: string): Promise<Result<string>> {
-  const credentials = await import('../../adapters/runtime/local-credentials.js');
+  const credentials = await import('../../adapters/credentials/local-credentials.js');
   return credentials.readAgentCredential(path);
 }
 
@@ -67,7 +67,7 @@ export async function createHeadlessBindings() {
     import('../../adapters/builtins/preset-codecs.js'),
     import('../../adapters/rendering/theme-preparation.js'),
     import('../../adapters/rendering/render-jobs.js'),
-    import('../../adapters/rendering/rendering.js'),
+    import('../../adapters/render-worker/derive.js'),
   ]);
   return {
     createPresetCodecs: codecs.createPresetCodecs,
