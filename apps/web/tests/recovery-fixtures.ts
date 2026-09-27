@@ -59,6 +59,18 @@ export function snapshot(revision: number) {
     ],
   });
 }
+/** A reloaded editor keeps only its one collection record as its base, pinned to the snapshot's workspace and sequence. */
+export function capturedCollection(base: ReturnType<typeof snapshot>) {
+  const [record] = base.records;
+  assert(record);
+  return {
+    kind: 'captured-collection',
+    schemaVersion: 1,
+    workspace: base.workspace,
+    sequence: base.sequence,
+    record,
+  };
+}
 /** Receipt fixtures express the actual committed version separately from the submitted precondition. */
 export function receipt(
   request: Request,

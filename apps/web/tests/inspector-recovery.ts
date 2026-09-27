@@ -4,7 +4,7 @@ import { snapshotSchema, receiptSchema } from '@novakai/canvas-authoring';
 import { createInspectorSession } from '../contract/index.js';
 import { readInspectorDrafts } from '../adapters/readers/inspector-reader.js';
 import { editedObject, objectDraftKey, failure } from '../contract/index.js';
-import { snapshot, memoryRetention, deferred } from './recovery-fixtures.js';
+import { snapshot, memoryRetention, deferred, capturedCollection } from './recovery-fixtures.js';
 import type { InspectorBindings, ObjectSelection } from '../contract/index.js';
 /** Retained command replay proves that unfinished labels and engineering content remain editable after reload. Extends host case7. */
 export async function verifyInspectorRecovery(): Promise<void> {
@@ -93,7 +93,7 @@ export async function verifyInspectorRecovery(): Promise<void> {
     label: 'Account with newer typing',
     content: [{ id: 'primary', kind: 'field', key: 'primary' }],
   });
-  expect(remaining.base).toEqual(base);
+  expect(remaining.base).toEqual(capturedCollection(base));
   expect(object.label).toBe('Customer');
   restarted.discard(key);
   expect(restarted.getSnapshot().drafts).toEqual([]);

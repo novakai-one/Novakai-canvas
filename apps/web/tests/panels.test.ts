@@ -37,15 +37,23 @@ it('host 6 preserves panel order, collapsed sections and separate drafts across 
   };
   const panels = createPanelController(bindings);
   panels.restore('demo');
+  expect(panelVisible(panels.getSnapshot(), 'left')).toBe(false); // panels start closed
+  expect(panelVisible(panels.getSnapshot(), 'right')).toBe(false);
+  panels.open('left', true);
   panels.open('right', true);
   expect(panelVisible(panels.getSnapshot(), 'left')).toBe(true);
   expect(panelVisible(panels.getSnapshot(), 'right')).toBe(true);
   panels.expand('content', false);
-  panels.move('content', 'left', 0);
-  panels.move('content', 'left', 0); // repeated placement is idempotent
+  panels.move('content', 'left', 0); // a section never leaves its role's side
   expect(panels.getSnapshot().preferences.sections).toEqual({
-    left: ['content', 'collections', 'sections'],
-    right: [],
+    left: ['collections', 'sections'],
+    right: ['content'],
+  });
+  panels.move('sections', 'left', 0);
+  panels.move('sections', 'left', 0); // repeated placement is idempotent
+  expect(panels.getSnapshot().preferences.sections).toEqual({
+    left: ['sections', 'collections'],
+    right: ['content'],
   });
   expect(panels.getSnapshot().preferences.collapsed).toContain('content');
   panels.viewport(1000);
@@ -80,9 +88,10 @@ it('host 6 preserves panel order, collapsed sections and separate drafts across 
     nextDefinitions,
     sizing,
   );
+  // Saved sections return to their role's side; duplicates and unknown IDs drop; new ones join their default side.
   expect(reconciled.sections).toEqual({
-    left: ['content', 'sections'],
-    right: ['collections', 'history'],
+    left: ['collections', 'sections'],
+    right: ['content', 'history'],
   });
   expect(reconciled.collapsed).toContain('history');
   reopened.reset();

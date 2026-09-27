@@ -6,7 +6,7 @@ import { editedWire, wireDraftKey, wireChanges } from '../contract/index.js';
 import { readWireDrafts } from '../adapters/readers/wire-reader.js';
 import { failure } from '../contract/index.js';
 import type { WireSelection, WireEditorBindings } from '../contract/records/wire-editor.js';
-import { snapshot, memoryRetention, deferred } from './recovery-fixtures.js';
+import { snapshot, memoryRetention, deferred, capturedCollection } from './recovery-fixtures.js';
 
 /** Extends host case7: shared label changes, section-local resets and retained wire drafts cross the actual Model boundary. */
 export async function verifyWireRecovery(): Promise<void> {
@@ -88,7 +88,7 @@ export async function verifyWireRecovery(): Promise<void> {
   const draft = resumed.getSnapshot().drafts[0];
   assert(draft);
   expect(editedWire(draft).relationship.label).toBe('');
-  expect(draft.base).toEqual(base);
+  expect(draft.base).toEqual(capturedCollection(base));
   expect(calls).toBe(0);
   await resumed.apply(key);
   expect(resumed.getSnapshot().problem?.code).toBe('invalid-wire');
@@ -134,7 +134,7 @@ export async function verifyWireRecovery(): Promise<void> {
   const remaining = resumed.getSnapshot().drafts[0];
   assert(remaining);
   expect(editedWire(remaining).relationship.label).toBe('newer unsaved label');
-  expect(remaining.base).toEqual(base);
+  expect(remaining.base).toEqual(capturedCollection(base));
   const tampered = readWireDrafts([{ ...remaining, section: { id: 'missing' } }]);
   expect(tampered.ok).toBe(false);
   resumed.discard(key);
