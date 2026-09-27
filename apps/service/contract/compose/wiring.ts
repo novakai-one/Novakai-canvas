@@ -65,11 +65,11 @@ export async function wireWorkspace(
     themePreparationModule,
   ] = await Promise.all([
     import('../../adapters/storage/authoring-store.js'),
-    import('../../adapters/builtins/preset-codecs.js'),
+    import('../../core/presets/codecs.js'),
     import('../../adapters/rendering/render-jobs.js'),
     import('../../adapters/rendering/collection-renderer.js'),
     import('../../adapters/notifications/change-channel.js'),
-    import('../../adapters/rendering/theme-preparation.js'),
+    import('../../core/presets/theme-admission.js'),
   ]);
   const capabilities = createServiceCapabilities(
     installation.tokens,

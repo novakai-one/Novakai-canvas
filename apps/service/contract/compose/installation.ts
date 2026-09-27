@@ -37,8 +37,8 @@ async function prepareInstallationInputs(
   if (!files.ok) return failure('unavailable', 'tokens', files.error.message, files.error);
   const [loader, codecs, builtins] = await Promise.all([
     import('../../adapters/files/shipped-resources.js'),
-    import('../../adapters/builtins/preset-codecs.js'),
-    import('../../adapters/builtins/builtin-presets.js'),
+    import('../../core/presets/codecs.js'),
+    import('../../core/presets/builtin.js'),
   ]);
   const sources = await loader.loadBuiltinSources(resourceRoot, assets, files.value);
   if (!sources.ok) return sources;
