@@ -32,7 +32,7 @@ export interface CollectionDependencies extends SourceDependencies, AssetDepende
  * choosing the source, overriding its theme, admitting its images, Language's lowering or Model's
  * check does, or with `missing-theme` when the choice has no admitted pin.
  */
-export async function renderCollection(
+export async function chosenCollection(
   selector: CollectionSelector,
   themes: AdmittedThemes,
   dependencies: CollectionDependencies,

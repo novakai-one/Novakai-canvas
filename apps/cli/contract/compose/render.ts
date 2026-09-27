@@ -1,47 +1,86 @@
 /*
- * `pnpm render:png` wiring: the service's headless render bindings, the resource reader, the
- * render's temporary asset store and its file I/O, bound for one read-only render. Not pure:
- * imports the render adapters lazily and reads and writes files. Failures are returned as values;
- * a render changes nothing, so the caller fixes the input and runs it again.
+ * `pnpm render:png` wiring: the ports of one read-only render. The service's headless bindings,
+ * the resource reader and the render's file and raster adapters are bound once; `open` makes the
+ * render's temporary asset store, prepares the installation in it and composes Language, the
+ * Design System and Templates over it. Not pure: the adapters touch the filesystem. Failures are
+ * values; a render changes nothing stored, so the caller fixes the input and runs it again.
  */
+import { join } from 'node:path';
+import {
+  createHeadlessBindings,
+  prepareInstallation,
+  type BuiltinResources,
+} from '@novakai/canvas-service';
+import { composeDesignSystem } from '@novakai/canvas-design-system';
+import { composeTemplates } from '@novakai/canvas-templates';
 import { createResourceReader } from '../../adapters/files/resource-reader.js';
-import type { LocalFailure, Result } from '../errors.js';
-import { failure } from '../errors.js';
-import type { RenderChoice, RenderReport } from '../records/render.js';
-import type { RenderFailure } from '../records/render-failure.js';
-import { filePath } from '../brands.js';
+import { createRaster } from '../../adapters/render/raster.js';
+import { createRenderFiles } from '../../adapters/render/render-files.js';
+import { openTempAssets } from '../../adapters/render/temp-assets.js';
+import type { RenderEnvironment, RenderPorts, TempAssetStore } from '../ports/render.js';
+import type { RenderRequest } from '../records/render.js';
+import type { RenderEvidence } from '../records/render-failure.js';
+import type { HeadlessBindings } from '../records/foreign.js';
+import { success, type Result } from '../errors.js';
+import { composeLanguage } from './language.js';
+import { renderEnvironment, type Environment } from './render-environment.js';
 
 /**
- * Headless export binds the same service owners without starting an HTTP server, plus the
- * render's temporary asset store and file I/O. The render adapters are imported lazily, like the
- * headless adapter. Fails with `render-failed`, or `render-unavailable` when set-up throws; that
- * includes an empty `root`, which a directory URL never gives. A temporary-directory failure is
- * not caught: it rejects with the OS error, which `cli/render.ts` prints.
+ * The ports of one render. Rejects when the service's render adapters cannot be imported; the
+ * composition root reports that as `render-unavailable`.
  */
-export async function runHeadless(
-  choice: RenderChoice,
-  root: string,
-): Promise<Result<RenderReport, RenderFailure | LocalFailure>> {
-  try {
-    const request = { ...choice, root: filePath.parse(root) };
-    const [adapter, service, temp, files, raster] = await Promise.all([
-      import('../../adapters/edge/headless.js'),
-      import('@novakai/canvas-service'),
-      import('../../adapters/render/temp-assets.js'),
-      import('../../adapters/render/render-files.js'),
-      import('../../adapters/render/raster.js'),
-    ]);
-    return adapter.renderHeadless(request, {
-      service: await service.createHeadlessBindings(),
-      resources: createResourceReader(),
-      temp: temp.createTempAssets(),
-      files: { ...files.createRenderFiles(request), ...raster.createRaster(request.root) },
-    });
-  } catch {
-    return failure({
-      code: 'render-unavailable',
-      message: 'Headless rendering could not initialize',
-      recovery: 'Restore local resources and retry.',
-    });
-  }
+export async function renderPorts(request: RenderRequest): Promise<RenderPorts> {
+  const service = await createHeadlessBindings();
+  return {
+    open: () => openEnvironment(request, service),
+    files: { ...createRenderFiles(request), ...createRaster(request.root) },
+    resources: createResourceReader(),
+  };
+}
+
+/**
+ * The render's temporary asset store, the installation prepared in it and the capability values
+ * over both. Fails with `provider-failed` or Assets' failure when the store cannot be made, or
+ * the service's installation failure; the store is then closed and the first failure wins.
+ */
+async function openEnvironment(
+  request: RenderRequest,
+  service: HeadlessBindings,
+): Promise<Result<RenderEnvironment, RenderEvidence>> {
+  const store = await openTempAssets();
+  if (!store.ok) return store;
+  const installation = await prepareInstallation(
+    join(request.root, 'resources'),
+    join(request.root, 'capability/design-system'),
+    store.value.assets,
+  );
+  if (!installation.ok) return closedAfter(store.value, installation.error);
+  const env = capabilities(service, store.value.assets, installation.value);
+  return success(renderEnvironment(env, { service, request, store: store.value }));
+}
+
+/** `error` as the outcome once `store` is closed; a failed close is not reported over it. */
+async function closedAfter(
+  store: TempAssetStore,
+  error: RenderEvidence,
+): Promise<Result<never, RenderEvidence>> {
+  await store.close();
+  return { ok: false, error };
+}
+
+/** Language, the Design System and Templates over the installation's tokens. Cannot fail. */
+function capabilities(
+  service: HeadlessBindings,
+  assets: TempAssetStore['assets'],
+  installation: BuiltinResources,
+): Environment {
+  const system = composeDesignSystem();
+  const language = composeLanguage();
+  const codecs = service.createPresetCodecs({
+    system,
+    language,
+    sources: installation.tokens,
+    resources: { themes: {}, assets: {} },
+  });
+  return { assets, installation, system, language, templates: composeTemplates(codecs) };
 }

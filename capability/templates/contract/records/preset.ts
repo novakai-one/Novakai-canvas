@@ -189,7 +189,8 @@ export type Query = z.infer<typeof query>;
 
 /**
  * A loose check of a theme admission's `kind` and `id` only; other fields are allowed and dropped.
- * The CLI uses it to pick out theme admissions (apps/cli/adapters/headless.ts).
+ * No app imports it today: the CLI's `.theme` grammar builds a typed admission itself
+ * (apps/cli/core/themes/grammar.ts).
  */
 export const themeInput = z.object({ kind: z.literal('theme'), id: presetId }).readonly();
 

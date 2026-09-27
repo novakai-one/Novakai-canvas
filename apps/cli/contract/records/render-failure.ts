@@ -2,8 +2,9 @@
  * render:png's failure contract: the faults the render finds itself, the evidence a failure can
  * carry, the `render-failed` record printed as JSON, faulted, which returns a fault as a failed
  * Result, and nativeFault, which turns a thrown native error into `provider-failed` evidence. Pure.
- * The render adapters catch their own native throws and call nativeFault; the caller corrects the
- * named input or resource and runs render:png again.
+ * The render adapters catch their own native throws and call nativeFault, and the render workflow
+ * does the same for an owner that throws; the caller corrects the named input or resource and runs
+ * render:png again.
  */
 import type { CliFailure, Result } from '../errors.js';
 import type { Collection, FailureSource } from './foreign.js';
@@ -26,7 +27,8 @@ export interface NativeDetail {
  * - `collection-title-required`: a theme override was asked for a collection without a title.
  * - `invalid-asset-pin`: a collection asset's digest is not Model's `sha256:` pin. Model
  *   validation refuses such a collection first, so no unchecked digest reaches Assets.
- * - `provider-failed`: a filesystem, temp-directory or wasm step threw; the native evidence is kept.
+ * - `provider-failed`: a filesystem, temp-directory or wasm step threw, or an owner threw
+ *   unexpectedly; the native evidence is kept.
  */
 export type RenderFault =
   | {
@@ -70,8 +72,8 @@ export interface RenderFailure {
   readonly source: RenderEvidence;
 }
 
-/** `fault` as a failed Result; nothing else is returned with it. */
-export function faulted(fault: RenderFault): Result<never, RenderFault> {
+/** `fault` as a failed Result, typed as its own fault; nothing else is returned with it. */
+export function faulted<F extends RenderFault>(fault: F): Result<never, F> {
   return { ok: false, error: fault };
 }
 

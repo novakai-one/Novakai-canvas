@@ -26,7 +26,7 @@ function print(result: Result<RenderReport, RenderFailure | CliFailure>): void {
   process.stdout.write(`${JSON.stringify(result)}\n`);
 }
 
-/** A temporary-directory failure rejects with its OS error: print it and exit 1. */
+/** runRender returns every failure as a value; a rejection is a bug: print it and exit 1. */
 await main().catch((error: unknown) => {
   process.stderr.write(`${String(error)}\n`);
   process.exitCode = 1;

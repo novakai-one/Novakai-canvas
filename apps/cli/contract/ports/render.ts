@@ -1,11 +1,11 @@
 /*
- * What one headless render gets injected: the service bindings, confined resource reads, a
- * temporary asset store, the render's file I/O, and the capability rules the render calls once its
- * environment is open. Declarations only. The adapters in adapters/render/ implement TempAssets and
- * RenderFiles; compose binds them. Every method returns its failure as a value; the headless render
- * decides what each one means.
+ * What one headless render gets injected: an opener for the render's environment, the render's file
+ * I/O and confined resource reads. Also the temporary asset store the environment is opened over.
+ * Declarations only. Adapters in adapters/render/ implement TempAssetStore and RenderFiles; compose
+ * binds them and the capability values. Every method returns its failure as a value;
+ * core/render/render.ts decides what each one means.
  */
-import type { AssetError, Assets } from '@novakai/canvas-assets';
+import type { Assets } from '@novakai/canvas-assets';
 import type { Diagnostic as ExportDiagnostic } from '@novakai/canvas-export';
 import type { ResourceReader } from './resource-reader.js';
 import type { FontRole, ThemeAdmission } from '../records/theme-source.js';
@@ -14,10 +14,12 @@ import type { SourceFile } from '../records/source-file.js';
 import type {
   Catalog,
   Collection,
-  HeadlessBindings,
+  ExportSnapshot,
   ParsedSource,
   RecipeFamily,
+  RenderDocument,
   ResolvedResources,
+  Resources,
   StageInput,
   StoredBlob,
 } from '../records/foreign.js';
@@ -25,12 +27,14 @@ import type { AssetDigest, FilePath, SectionId } from '../brands.js';
 import type { Result } from '../errors.js';
 
 /** Everything compose injects into one headless render. */
-export interface HeadlessOwners {
-  readonly resources: ResourceReader;
-  /** Theme preparation, preset codecs, render jobs and the diagram producer. */
-  readonly service: HeadlessBindings;
-  readonly temp: TempAssets;
+export interface RenderPorts {
+  /**
+   * Make the render's temporary asset store and its capability environment. Fails with
+   * `provider-failed`, Assets' failure or the service's installation failure; nothing is left open.
+   */
+  open(): Promise<Result<RenderEnvironment, RenderEvidence>>;
   readonly files: RenderFiles;
+  readonly resources: ResourceReader;
 }
 
 /** A theme font as the theme admission binds it: its role and the Assets digest of its bytes. */
@@ -39,9 +43,25 @@ export interface FontBinding {
   readonly digest: AssetDigest;
 }
 
+/** What Export draws one render's sections from. */
+export interface ExportInput {
+  readonly document: RenderDocument;
+  readonly snapshot: ExportSnapshot;
+  /** The pins Export's documents port lowers DSL against. */
+  readonly pins: ResolvedResources;
+  /** The inspector that admits only resources the snapshot retained. */
+  readonly resources: Resources;
+}
+
+/** Export bound to one snapshot, format and label mode. */
+export interface SectionExporter {
+  /** One section's file bytes. Fails with Export's or Presentation's diagnostic. */
+  export(section: SectionId): Promise<Result<Uint8Array, RenderEvidence>>;
+}
+
 /**
- * The capability rules of one render, bound over its temporary asset store. Each failure is the
- * owner's own evidence, returned whole: Language, Model, Assets, Templates or the service.
+ * The capability rules of one render, over its temporary asset store. Each failure is the owner's
+ * own evidence, returned whole: Language, Model, Assets, Templates, the service or Export.
  */
 export interface RenderEnvironment {
   /** The installation's shipped presets, before any `.theme` file is admitted. */
@@ -68,25 +88,30 @@ export interface RenderEnvironment {
     theme: ThemeAdmission,
     fonts: readonly FontBinding[],
   ): Result<Catalog, RenderEvidence>;
+  /**
+   * The service's rendered document of `collection` over `catalog`. Fails with Library's, the
+   * render job's or the producer's failure.
+   */
+  produce(
+    collection: Collection,
+    catalog: Catalog,
+  ): Promise<Result<RenderDocument, RenderEvidence>>;
+  /** Export over one snapshot. Fails with Presentation's font failure. */
+  exporter(input: ExportInput): Promise<Result<SectionExporter, RenderEvidence>>;
   /** The bytes a base64 text holds. Assets and the service verified the text; cannot fail. */
   decodeBase64(text: string): Uint8Array;
+  /** Close the asset store and remove its directory. Call once, last. */
+  close(): Promise<Result<void, RenderEvidence>>;
 }
 
-/** Creates the private temporary directory one render stages its assets in. */
-export interface TempAssets {
-  /** Create a fresh directory under the OS temp root. Fails with `provider-failed`. */
-  create(): Promise<Result<TempDirectory, ProviderFault>>;
-}
-
-/** One created temporary directory. The render opens its asset store, then removes it once. */
-export interface TempDirectory {
-  /** Open the Assets store inside this directory. Assets' own failure is returned whole. */
-  openAssets(): Result<Assets, AssetError>;
+/** One render's Assets store, opened in a fresh private temporary directory. */
+export interface TempAssetStore {
+  readonly assets: Pick<Assets, 'stage' | 'resolve'>;
   /**
-   * Remove this directory and all it holds; a missing one is not a failure.
-   * Fails with `provider-failed`.
+   * Close the store, then remove the directory; both are always attempted. Fails with Assets'
+   * close failure first, else `provider-failed` from the removal.
    */
-  remove(): Promise<Result<void, ProviderFault>>;
+  close(): Promise<Result<void, RenderEvidence>>;
 }
 
 /**

@@ -1,6 +1,6 @@
 /*
- * Core entry points for the composition root and the render wiring: the only contract file that
- * reaches core behaviour. Re-exports only; pure. Each entry point names its own failures.
+ * Core entry points for the composition root: the only contract file that reaches core behaviour.
+ * Re-exports only; pure. Each entry point names its own failures.
  */
 export { executeProfile, executeService } from '../core/commands/dispatch.js';
 
@@ -14,14 +14,4 @@ export { formatFailure } from '../core/diagnostics/format.js';
 
 export { parseRenderChoice } from '../core/render/request.js';
 
-export { accepted, evidence } from '../core/render/faults.js';
-
-export { admitThemes } from '../core/render/themes.js';
-
-export { renderCollection } from '../core/render/collection.js';
-
-export { pinResources } from '../core/render/pins.js';
-
-export { renderSnapshot, resourceInspector } from '../core/render/snapshot.js';
-
-export { renderReport } from '../core/render/report.js';
+export { renderCollection } from '../core/render/render.js';
