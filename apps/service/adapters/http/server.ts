@@ -10,7 +10,8 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { ServerBindings } from '../../contract/ports/transport.js';
 import type { Caller, HttpMetadata } from '../../contract/records/transport/http.js';
 import { loopbackIp } from '../../contract/records/transport/http.js';
-import type { RouteOutcome, WireOutcome } from '../../contract/records/transport/protocol.js';
+import type { RouteOutcome } from '../../contract/records/transport/protocol.js';
+import type { WireOutcome } from '../../contract/records/transport/wire-codes.js';
 import type {
   LocalServer,
   RequestKind,

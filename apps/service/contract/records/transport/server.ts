@@ -1,9 +1,9 @@
 /*
  * The HTTP server's startup options, its running handle, the file it sends as bytes, the answers
- * the transport policy gives the socket edge (which part answers a request, the HTTP status, the
- * browser grant) and the fixed response headers. Declarations and fixed header constants. A
- * failed start leaves the workspace with the caller, which closes it; clients reconcile a retained
- * request's receipt.
+ * the transport policy gives the socket edge (which part answers a request, the browser grant)
+ * and the fixed response headers; the HTTP status is in wire-codes.ts. Declarations and fixed
+ * header constants. A failed start leaves the workspace with the caller, which closes it; clients
+ * reconcile a retained request's receipt.
  */
 import type { Result } from '../../errors.js';
 import type { Generation, HostPath, LoopbackPort } from '../../brands.js';
@@ -35,9 +35,6 @@ export interface StaticFile {
  * authenticated API router, `browser` the built web app.
  */
 export type RequestKind = 'events' | 'api' | 'browser';
-
-/** Every HTTP status the service answers with. */
-export type HttpStatus = 200 | 401 | 403 | 404 | 409 | 422 | 503;
 
 /**
  * What browser access allows: the request already holds the session, or it is a navigation that

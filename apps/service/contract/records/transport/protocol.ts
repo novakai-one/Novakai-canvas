@@ -1,17 +1,16 @@
 /*
  * The wire protocol: the mutation and response envelopes, an admitted mutation, the route outcome
- * and one authenticated API call. Declarations and the two envelope schemas; the router and
- * command decoder ports are in ports/transport.ts. A refused request is the caller's to correct
- * and resend; Authoring owns commit and receipt recovery.
+ * and one authenticated API call. Declarations and the two envelope schemas; the wire codes and
+ * JSON outcome are in wire-codes.ts, the router and command decoder ports in ports/transport.ts.
+ * A refused request is the caller's to correct and resend; Authoring owns commit and receipt
+ * recovery.
  */
-import type { OperationSource } from './failure-source.js';
-import { operationSource } from './failure-source.js';
 import { z } from 'zod';
 import { generation } from '../../brands.js';
-import type { Result } from '../../errors.js';
 import type { Caller, HttpMetadata } from './http.js';
 import type { Request } from '../capabilities.js';
 import type { StaticFile } from './server.js';
+import { wireFailure, type WireOutcome } from './wire-codes.js';
 /** A transport generation prevents a retained request from silently targeting a restarted/restored owner set. */
 export const mutationEnvelope = z.strictObject({
   version: z.literal(1),
@@ -25,8 +24,7 @@ export interface AdmittedMutation {
   readonly preview: boolean;
   readonly options: unknown;
 }
-/** Owner error codes remain stable in transport; consumers can retain richer owner-specific diagnostics. */
-export type WireOutcome = Result<unknown, OperationSource>;
+/** A route's answer: a JSON outcome, or a file sent as bytes. */
 export type RouteOutcome = WireOutcome | { readonly kind: 'bytes'; readonly file: StaticFile };
 
 export interface ApiCall {
@@ -37,7 +35,10 @@ export interface ApiCall {
   readonly metadata: HttpMetadata;
   readonly body: string;
 }
-/** HTTP consumers decode this envelope before handing success values to their respective capability readers. */
+/**
+ * HTTP consumers decode this envelope before handing success values to their respective capability
+ * readers. A failure's top-level code is a closed wire code; its nested evidence keeps owner codes.
+ */
 export const responseEnvelope = z.strictObject({
   version: z.literal(1),
   generation,
@@ -45,7 +46,7 @@ export const responseEnvelope = z.strictObject({
     z.strictObject({ ok: z.literal(true), value: z.unknown() }),
     z.strictObject({
       ok: z.literal(false),
-      error: operationSource,
+      error: wireFailure,
     }),
   ]),
 });

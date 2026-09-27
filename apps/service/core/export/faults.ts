@@ -4,7 +4,7 @@
  * never hides the primary outcome; and the route turns the final diagnostic into the service
  * outcome, keeping the diagnostic as structured source evidence.
  */
-import { failure } from '../../contract/errors.js';
+import { failure, type ErrorCode } from '../../contract/errors.js';
 import type { RouteOutcome } from '../../contract/records/transport/protocol.js';
 import type { OperationSource } from '../../contract/records/transport/failure-source.js';
 import type {
@@ -66,11 +66,31 @@ export function settledFailure<T>(
   return { ok: false, error: { ...primary.error, cleanup: cleanup.error } };
 }
 
-/** The service failure of an export: cancellation stays cancellation, the rest is invalid input. */
+/**
+ * The service failure of an export: its code mapped by `ROUTE_CODE` (`cancelled` or
+ * `invalid-input`), with Export's diagnostic kept as source.
+ */
 export function exportRouteFailure(result: ExportFailure): RouteOutcome {
-  const code = result.error.code === 'cancelled' ? 'cancelled' : 'invalid-input';
-  return failure(code, result.error.path, result.error.message, exportSource(result.error));
+  const { code, path, message } = result.error;
+  return failure(ROUTE_CODE[code], path, message, exportSource(result.error));
 }
+
+/** The service codes an Export refusal becomes. */
+type RouteCode = Extract<ErrorCode, 'invalid-input' | 'cancelled'>;
+
+/** The service code of each Export code: `cancelled` stays; every other is `invalid-input`. */
+const ROUTE_CODE: Readonly<Record<ExportErrorCode, RouteCode>> = Object.freeze({
+  'invalid-input': 'invalid-input',
+  'snapshot-mismatch': 'invalid-input',
+  'missing-section': 'invalid-input',
+  'limit-exceeded': 'invalid-input',
+  'invalid-bundle': 'invalid-input',
+  'invalid-import': 'invalid-input',
+  cancelled: 'cancelled',
+  'encoding-failed': 'invalid-input',
+  'cleanup-failed': 'invalid-input',
+  'resource-rejected': 'invalid-input',
+});
 
 /** The diagnostic as source evidence; an absent cleanup stays an explicit undefined key. */
 function exportSource(error: ExportDiagnostic): OperationSource {

@@ -6,7 +6,7 @@
  * authenticates before `invoke`; a handler throw reaches its `receive`, which answers
  * `unavailable` at `request`.
  */
-import type { WireOutcome } from '../../contract/records/transport/protocol.js';
+import type { WireOutcome } from '../../contract/records/transport/wire-codes.js';
 import type { ApiRouter } from '../../contract/ports/transport.js';
 import { failure } from '../../contract/errors.js';
 import {

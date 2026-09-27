@@ -5,11 +5,8 @@
  * owns commit and receipt recovery; a refused export body is the caller's to correct. A throw
  * reaches the HTTP server's `receive` (routes.ts).
  */
-import type {
-  ApiCall,
-  RouteOutcome,
-  WireOutcome,
-} from '../../contract/records/transport/protocol.js';
+import type { ApiCall, RouteOutcome } from '../../contract/records/transport/protocol.js';
+import type { WireOutcome } from '../../contract/records/transport/wire-codes.js';
 import type { ApiRouter } from '../../contract/ports/transport.js';
 import type { WorkspaceSession } from '../../contract/types.js';
 import { success } from '../../contract/errors.js';

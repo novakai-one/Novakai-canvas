@@ -4,11 +4,8 @@
  * writes storage. A stale generation is the caller's to reconcile; Authoring owns commit and
  * receipt recovery. A throw reaches the HTTP server's `receive` (routes.ts).
  */
-import type {
-  AdmittedMutation,
-  ApiCall,
-  WireOutcome,
-} from '../../contract/records/transport/protocol.js';
+import type { AdmittedMutation, ApiCall } from '../../contract/records/transport/protocol.js';
+import type { WireOutcome } from '../../contract/records/transport/wire-codes.js';
 import type { ApiRouter, CommandDecoder, HttpAdmission } from '../../contract/ports/transport.js';
 import type { WorkspaceSession } from '../../contract/types.js';
 import type { Generation } from '../../contract/brands.js';

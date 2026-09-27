@@ -9,6 +9,7 @@ import type { Result } from '../../errors.js';
 import { z } from 'zod';
 import type { ReadVersion, RecordKey } from '@novakai/canvas-authoring';
 import type { Pin } from '@novakai/canvas-templates';
+import type { AuthoringErrorCode, TemplatesErrorCode } from '../capabilities.js';
 /** A preset preparation request: the admission and the uploaded assets it may bind (none by default). */
 export const preparationInput = z.strictObject({
   admission: z.json(),
@@ -53,9 +54,14 @@ export interface PresetPreparation {
   readonly resources: readonly string[];
   readonly reads: readonly ReadVersion[];
 }
+/**
+ * The codes a resource preparation refuses with: Authoring's (selection, theme admission and the
+ * service's own input refusals) and Templates' (catalog, admission and recipe reads).
+ */
+export type ResourceErrorCode = AuthoringErrorCode | TemplatesErrorCode;
 /** Resource preparation preserves the originating owner's stable diagnostic and recovery advice. */
 export interface ResourceDiagnostic {
-  readonly code: string;
+  readonly code: ResourceErrorCode;
   readonly path: string;
   readonly message: string;
   readonly recovery: string;

@@ -22,14 +22,9 @@ import type {
   ApiCall,
   RouteOutcome,
   TransportResponse,
-  WireOutcome,
 } from '../records/transport/protocol.js';
-import type {
-  BrowserGrant,
-  HttpStatus,
-  RequestKind,
-  StaticFile,
-} from '../records/transport/server.js';
+import type { HttpStatus, WireOutcome } from '../records/transport/wire-codes.js';
+import type { BrowserGrant, RequestKind, StaticFile } from '../records/transport/server.js';
 
 /**
  * One server's loopback address and secrets, minted by adapters/credentials. The host keeps the

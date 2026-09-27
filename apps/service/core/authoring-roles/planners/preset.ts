@@ -15,6 +15,7 @@ import { presetCommand } from '../../../contract/records/presets/preparation.js'
 import type {
   PresetPreparation,
   ResourceDiagnostic,
+  ResourceErrorCode,
 } from '../../../contract/records/presets/preparation.js';
 import type { ResourceCommands } from '../../../contract/ports/workspace.js';
 import { workspaceMetadata } from '../../../contract/records/workspace/metadata.js';
@@ -28,7 +29,7 @@ import { changePayload, checkedProposal } from './change-payload.js';
  * not an exact prepared preset) or `preset.proposal` (over Authoring's limits),
  * `revision-conflict` at `preset` when the prepared content changed, `corrupt-record` at
  * `metadata` when workspace metadata is missing or invalid, and with the preparation's own
- * diagnostic when preparation fails (its code mapped to Authoring's, `invalid-input` otherwise).
+ * diagnostic when preparation fails (its code mapped by `AUTHORING_CODE`).
  */
 export function createPresetPlanner(owner: Pick<ResourceCommands, 'preparePreset'>): IntentPlanner {
   return {
@@ -75,18 +76,20 @@ function reprepare(
 
 /**
  * The preparation's diagnostic as an Authoring failure. Path, message, recovery and source are
- * kept. The code is kept when Authoring has it too, otherwise it becomes `invalid-input`.
+ * kept; the code is mapped by `AUTHORING_CODE`.
  */
 function preparationRejected<T>(owner: ResourceDiagnostic): AuthoringResult<T> {
-  const code = authoringCodes[owner.code] ?? 'invalid-input';
   return {
     ok: false,
-    error: { ...owner, code, targets: [], traceId: null },
+    error: { ...owner, code: AUTHORING_CODE[owner.code], targets: [], traceId: null },
   };
 }
 
-/** The preparation codes Authoring has too, each mapped to itself. */
-const authoringCodes: Readonly<Record<string, AuthoringErrorCode>> = Object.freeze({
+/**
+ * The Authoring code of each preparation code: Authoring's own codes map to themselves; the codes
+ * only Templates has become `invalid-input` (the caller corrects the preset and prepares again).
+ */
+const AUTHORING_CODE: Readonly<Record<ResourceErrorCode, AuthoringErrorCode>> = Object.freeze({
   'invalid-input': 'invalid-input',
   'unsupported-version': 'unsupported-version',
   'unknown-reference': 'unknown-reference',
@@ -99,6 +102,12 @@ const authoringCodes: Readonly<Record<string, AuthoringErrorCode>> = Object.free
   'storage-unavailable': 'storage-unavailable',
   'corrupt-record': 'corrupt-record',
   cancelled: 'cancelled',
+  'missing-preset': 'invalid-input',
+  'digest-mismatch': 'invalid-input',
+  'version-exists': 'invalid-input',
+  'duplicate-preset': 'invalid-input',
+  'dependency-cycle': 'invalid-input',
+  'provider-failed': 'invalid-input',
 });
 
 /**

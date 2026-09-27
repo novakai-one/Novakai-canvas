@@ -47,6 +47,7 @@ export type {
   ThemePayload,
   Pin as PresetPin,
   Result as TemplatesResult,
+  ErrorCode as TemplatesErrorCode,
 } from '@novakai/canvas-templates';
 export type {
   DesignSystem,
@@ -60,6 +61,7 @@ export type {
   WriteLease,
   ReadLease,
   Result as AssetResult,
+  ErrorCode as AssetErrorCode,
   StoredBlob,
 } from '@novakai/canvas-assets';
 export type {
