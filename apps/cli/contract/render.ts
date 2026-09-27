@@ -13,20 +13,10 @@ import {
   type BuiltinResources,
   type RenderingJob,
 } from '@novakai/canvas-service';
-import {
-  composeDesignSystem,
-  type DesignSystem,
-} from '../../../capability/design-system/contract/index.js';
-import {
-  composeTemplates,
-  themeInput,
-  type Templates,
-} from '../../../capability/templates/contract/index.js';
-import {
-  validateLibrarySnapshot,
-  type LibrarySnapshot,
-} from '../../../capability/library/contract/index.js';
-import type { Snapshot } from '../../../capability/export/contract/index.js';
+import { composeDesignSystem, type DesignSystem } from '@novakai/canvas-design-system';
+import { composeTemplates, themeInput, type Templates } from '@novakai/canvas-templates';
+import { validateLibrarySnapshot, type LibrarySnapshot } from '@novakai/canvas-library';
+import type { Snapshot } from '@novakai/canvas-export';
 import { RenderFault, accepted, retainedResources } from './api.js';
 import type { HeadlessOptions, HeadlessOwners } from './records/headless.js';
 import type {

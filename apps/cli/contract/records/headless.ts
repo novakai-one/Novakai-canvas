@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Catalog } from '../../../../capability/templates/contract/index.js';
+import type { Catalog } from '@novakai/canvas-templates';
 import type { readThemeConfig } from '../theme-reader.js';
 import type { createHeadlessBindings } from '@novakai/canvas-service';
 import type { Diagnostic } from '../errors.js';

@@ -5,10 +5,6 @@
 export type { Collection } from '@novakai/canvas-model';
 export type { Language, ResolvedResources } from '@novakai/canvas-language';
 export type { RenderDocument } from '@novakai/canvas-service';
-export type { Assets } from '../../../../capability/assets/contract/index.js';
-export type { Catalog, ThemePreset } from '../../../../capability/templates/contract/index.js';
-export type {
-  Documents,
-  Resource,
-  Resources,
-} from '../../../../capability/export/contract/index.js';
+export type { Assets } from '@novakai/canvas-assets';
+export type { Catalog, ThemePreset } from '@novakai/canvas-templates';
+export type { Documents, Resource, Resources } from '@novakai/canvas-export';

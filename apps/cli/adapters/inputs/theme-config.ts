@@ -1,9 +1,5 @@
 import type { ResourceRequest } from '@novakai/canvas-language';
-import {
-  chromeName,
-  type ChromeName,
-  type PortableToken,
-} from '../../../../capability/design-system/contract/index.js';
+import { chromeName, type ChromeName, type PortableToken } from '@novakai/canvas-design-system';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
 interface Override {

@@ -11,16 +11,12 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { z } from 'zod';
-import { openAssets, type Assets } from '../../../../capability/assets/contract/index.js';
+import { openAssets, type Assets } from '@novakai/canvas-assets';
 import type { RenderDocument } from '@novakai/canvas-service';
-import type { Catalog } from '../../../../capability/templates/contract/index.js';
+import type { Catalog } from '@novakai/canvas-templates';
 import { validate, type Collection } from '@novakai/canvas-model';
-import { createReactBindings } from '../../../../capability/presentation/contract/index.js';
-import {
-  composeExport,
-  initializeRaster,
-  type Snapshot,
-} from '../../../../capability/export/contract/index.js';
+import { createReactBindings } from '@novakai/canvas-presentation';
+import { composeExport, initializeRaster, type Snapshot } from '@novakai/canvas-export';
 import {
   filePath,
   headlessFault,

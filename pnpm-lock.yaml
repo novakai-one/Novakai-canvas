@@ -48,18 +48,36 @@ importers:
 
   apps/cli:
     dependencies:
+      '@novakai/canvas-assets':
+        specifier: workspace:*
+        version: link:../../capability/assets
       '@novakai/canvas-authoring':
         specifier: workspace:*
         version: link:../../capability/authoring
+      '@novakai/canvas-design-system':
+        specifier: workspace:*
+        version: link:../../capability/design-system
+      '@novakai/canvas-export':
+        specifier: workspace:*
+        version: link:../../capability/export
       '@novakai/canvas-language':
         specifier: workspace:*
         version: link:../../capability/language
+      '@novakai/canvas-library':
+        specifier: workspace:*
+        version: link:../../capability/library
       '@novakai/canvas-model':
         specifier: workspace:*
         version: link:../../capability/model
+      '@novakai/canvas-presentation':
+        specifier: workspace:*
+        version: link:../../capability/presentation
       '@novakai/canvas-service':
         specifier: workspace:*
         version: link:../service
+      '@novakai/canvas-templates':
+        specifier: workspace:*
+        version: link:../../capability/templates
       zod:
         specifier: 4.6.2
         version: 4.6.2
