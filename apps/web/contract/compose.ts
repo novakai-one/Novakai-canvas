@@ -111,10 +111,17 @@ async function mount(
   ]);
   const ThemeSelector = createThemeSelector(design, preferences, themes);
   // `panels` and `runtime` are declared below; these closures read them only after mount returns.
-  const sections = featureSections(design, preferences, ThemeSelector, Browser, {
-    subscribe: (listener) => panels.subscribe(listener),
-    getSnapshot: () => panels.getSnapshot(),
-    setInterfaceVisibility: (control, visible) => panels.setInterfaceVisibility(control, visible),
+  const sections = featureSections({
+    design,
+    preferences,
+    ThemeSelector,
+    Browser,
+    roadVisibility: {
+      subscribe: (listener) => panels.subscribe(listener),
+      getSnapshot: () => panels.getSnapshot(),
+      setInterfaceVisibility: (control, visible) => panels.setInterfaceVisibility(control, visible),
+    },
+    random: globals.random,
   });
   const sizing = panelSizing(element);
   const panels: PanelController = createPanelController({

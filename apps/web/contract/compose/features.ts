@@ -1,7 +1,8 @@
 /*
  * Declarative feature registration: the side-panel sections each tab offers, and the panel
  * definitions that give each section its default placement. Feature components do not import
- * each other; adding a feature registers its renderer and default ID placement here.
+ * each other; adding a feature registers its renderer and default ID placement here. Pure
+ * assembly: no I/O and no page globals; composition hands in the random text for new content IDs.
  */
 import { createElement, type ComponentType, type ReactElement } from 'react';
 import type { FeatureProps, ThemeSelectorProps } from '../react-types.js';
@@ -30,14 +31,33 @@ import { createObjectEditor } from '../../adapters/react/ObjectEditor.js';
 import { createContentEditor } from '../../adapters/react/ContentEditor.js';
 import { createEngineeringFields } from '../../adapters/react/EngineeringFields.js';
 
-/** Concrete side-panel registration is declarative; individual feature components do not import each other. */
-export function featureSections(
-  design: DesignBindings,
-  preferences: PreferenceController,
-  ThemeSelector: ComponentType<ThemeSelectorProps>,
-  Browser: ComponentType<LibraryBrowserProps>,
-  roadVisibility: Pick<PanelController, 'subscribe' | 'getSnapshot' | 'setInterfaceVisibility'>,
-): readonly RegisteredSection[] {
+/** What the side-panel features are built from. */
+export interface FeatureParts {
+  readonly design: DesignBindings;
+  readonly preferences: PreferenceController;
+  readonly ThemeSelector: ComponentType<ThemeSelectorProps>;
+  readonly Browser: ComponentType<LibraryBrowserProps>;
+  readonly roadVisibility: Pick<
+    PanelController,
+    'subscribe' | 'getSnapshot' | 'setInterfaceVisibility'
+  >;
+  /** Fresh random text (a UUID) for new content IDs. Plan B3b replaces it with `IdSource`. */
+  readonly random: () => string;
+}
+
+/**
+ * Concrete side-panel registration is declarative; individual feature components do not import
+ * each other. A new content ID is parsed from `random`; the parse throws only if that text is not
+ * a valid ID, which a UUID always is.
+ */
+export function featureSections({
+  design,
+  preferences,
+  ThemeSelector,
+  Browser,
+  roadVisibility,
+  random,
+}: FeatureParts): readonly RegisteredSection[] {
   function LibrarySection(props: FeatureProps): ReactElement {
     return createElement(Browser, { controller: props.controller, view: props.view });
   }
@@ -84,7 +104,7 @@ export function featureSections(
       Content: createObjectEditor({
         ...design,
         Content: createContentEditor({ ...design, Engineering: createEngineeringFields(design) }),
-        nextContentId: () => descendantId.parse(`content-${crypto.randomUUID()}`),
+        nextContentId: () => descendantId.parse(`content-${random()}`),
       }),
     },
   ];

@@ -61,12 +61,15 @@ export interface AddFieldComponents {
   readonly FormActions: ComponentType<FormActionsProps>;
 }
 
+/** The diagram an Object or Group add targets, typed as the form views type it. */
+type TargetSection = ObjectFormView['section'] | GroupFormView['section'];
+
 /** The diagrams that take adds, the chosen one, the shared lock and the change callback. */
 export interface DiagramFieldProps {
   readonly sections: readonly Section[];
-  readonly section: string;
+  readonly section: TargetSection;
   readonly busy: boolean;
-  readonly onSection: (section: string) => void;
+  readonly onSection: (section: TargetSection) => void;
 }
 
 /** The Object form's view and its draft callback. */
