@@ -1,17 +1,25 @@
 /*
  * HTTP serving: expose one already-open workspace through authenticated loopback transport. The
- * socket, static-file and credential adapters load lazily; admission and the router bind to the
- * server's security. Every failure is a value; the caller keeps the workspace, closes transport
- * before draining it, and retries startup.
+ * socket, static-file and credential adapters load lazily; admission, the router and the transport
+ * policy bind to the server's security. Every failure is a value; the caller keeps the workspace,
+ * closes transport before draining it, and retries startup.
  */
 import type { WorkspaceSession } from '../types.js';
 import type { LocalServer, ServerOptions } from '../records/transport/server.js';
+import type { HttpAdmission, HttpSecurity } from '../records/transport/http.js';
+import type { TransportPolicy } from '../ports/transport.js';
 import type { Result } from '../errors.js';
 import { failure } from '../errors.js';
 import { createAdmission } from '../../core/transport/admission.js';
+import { createBrowserAccess } from '../../core/transport/browser-access.js';
 import { readCommand } from '../../core/transport/command.js';
+import { eventFrames } from '../../core/transport/events.js';
+import { requestBody } from '../../core/transport/request-body.js';
+import { requestHead } from '../../core/transport/request-head.js';
+import { apiQuery, requestKind } from '../../core/transport/request-kind.js';
 import { createHttpRouter } from '../../core/transport/routes.js';
 import { createSourceReadout } from '../../core/transport/source-readout.js';
+import { httpStatus, transportResponse } from '../../core/transport/status.js';
 import { createServiceLanguage } from './capabilities.js';
 
 /**
@@ -44,9 +52,8 @@ async function startServer(
   session: WorkspaceSession,
   options: ServerOptions,
 ): Promise<Result<LocalServer>> {
-  const [credentials, io, files, server] = await Promise.all([
+  const [credentials, files, server] = await Promise.all([
     import('../../adapters/credentials/local-credentials.js'),
-    import('../../adapters/http/http-io.js'),
     import('../../adapters/http/static-files.js'),
     import('../../adapters/http/server.js'),
   ]);
@@ -57,7 +64,7 @@ async function startServer(
     security: security.value,
     admission,
     changes: session,
-    io: io.createHttpIo(),
+    policy: transportPolicy(admission, security.value),
     files: files.createStaticFiles(options.webRoot),
     router: createHttpRouter({
       session,
@@ -68,4 +75,21 @@ async function startServer(
       source: createSourceReadout(createServiceLanguage()),
     }),
   });
+}
+
+/** The core transport policy, with browser access bound to this server's admission and secret. */
+function transportPolicy(
+  admission: HttpAdmission,
+  security: HttpSecurity,
+): TransportPolicy {
+  return {
+    head: requestHead,
+    body: requestBody,
+    kind: requestKind,
+    query: apiQuery,
+    status: httpStatus,
+    envelope: transportResponse,
+    browserAccess: createBrowserAccess({ admission, security }),
+    frames: eventFrames,
+  };
 }

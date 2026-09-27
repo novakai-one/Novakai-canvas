@@ -1,5 +1,5 @@
 /*
- * The HTTP ingress vocabulary: the authenticated caller, the untrusted request headers, the
+ * The HTTP ingress vocabulary: the authenticated caller, the raw and read request headers, the
  * server's security secrets, the ingress admission port, the body limit and the browser cookie
  * name. Declarations only. A refused request is the caller's to correct and resend; Authoring owns
  * commit and receipt recovery.
@@ -11,6 +11,8 @@ export interface Caller {
   readonly id: string;
   readonly kind: 'human' | 'agent';
 }
+/** A request's headers as the socket reads them: lowercase names, each with every value sent. */
+export type HeaderLists = Readonly<Record<string, readonly string[] | undefined>>;
 /** Header values remain untrusted until the ingress policy admits the exact configured origin. */
 export interface HttpMetadata {
   readonly method: string;

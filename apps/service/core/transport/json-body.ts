@@ -1,8 +1,8 @@
 /*
  * The JSON body policy of the mutation, resource and export routes: `application/json` only, then
- * a JSON parse. Pure. The socket reader (adapters/http/http-io.ts) already caps a body at 24 MiB
- * and rejects invalid UTF-8, so no route counts bytes again. A refused body is the caller's to
- * correct and resend.
+ * a JSON parse. Pure. The body reader (request-body.ts) already caps a body at 24 MiB and rejects
+ * invalid UTF-8, so no route counts bytes again. A refused body is the caller's to correct and
+ * resend.
  */
 import { failure, success, type Result } from '../../contract/errors.js';
 

@@ -1,57 +1,64 @@
 /*
- * The HTTP server's startup options, its running handle and the bindings it is started with (the
- * native socket IO and static files ports). Declarations only. A failed start leaves the workspace
- * with the caller, which closes it; clients reconcile a retained request's receipt.
+ * The HTTP server's startup options, its running handle, the file it sends as bytes, the answers
+ * the transport policy gives the socket edge (which part answers a request, the HTTP status, the
+ * browser grant) and the fixed response headers. Declarations only. A failed start leaves the
+ * workspace with the caller, which closes it; clients reconcile a retained request's receipt.
  */
-import type { WorkspaceSession } from '../../types.js';
-import type { HttpAdmission, HttpMetadata, HttpSecurity } from './http.js';
-import type { ApiRouter } from './protocol.js';
 import type { Result } from '../../errors.js';
-import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { WireOutcome } from './protocol.js';
-/** Body readers expose only the iterator control needed to preserve a rejected native socket. */
-export interface BodyStream {
-  iterator(options: { readonly destroyOnReturn: false }): AsyncIterableIterator<unknown>;
-}
+
 /** Server-owned paths and port are explicit startup inputs, never request parameters. */
 export interface ServerOptions {
   readonly port: number;
   readonly webRoot: string;
   readonly credentialFile: string;
 }
+
+/** A listening server: its loopback URL, its transport generation and its shutdown. */
 export interface LocalServer {
   readonly url: string;
   readonly generation: string;
   close(): Promise<Result<void>>;
 }
-export interface ServerBindings {
-  readonly admission: HttpAdmission;
-  readonly security: HttpSecurity;
-  readonly router: ApiRouter;
-  readonly changes: Pick<WorkspaceSession, 'subscribe'>;
-  readonly io: HttpIo;
-  readonly files: StaticFiles;
-}
-/** Native socket adaptation is injected at composition; policy does not inspect Node request objects. */
-export interface HttpIo {
-  metadata(request: IncomingMessage): HttpMetadata;
-  body(request: BodyStream): Promise<Result<string>>;
-  json(
-    response: ServerResponse,
-    outcome: WireOutcome,
-    generation: string,
-  ): void;
-  bytes(
-    response: ServerResponse,
-    file: StaticFile,
-  ): void;
-}
+
+/** Bytes sent as they are: a built web app file or an export artifact. */
 export interface StaticFile {
   readonly bytes: Uint8Array;
   readonly mediaType: string;
   readonly filename?: string;
   readonly headers?: Readonly<Record<string, string>>;
 }
-export interface StaticFiles {
-  read(path: string): Promise<Result<StaticFile>>;
-}
+
+/**
+ * Which part of the server answers a request: `events` is the change stream, `api` the
+ * authenticated API router, `browser` the built web app.
+ */
+export type RequestKind = 'events' | 'api' | 'browser';
+
+/** Every HTTP status the service answers with. */
+export type HttpStatus = 200 | 401 | 403 | 404 | 409 | 422 | 503;
+
+/**
+ * What browser access allows: the request already holds the session, or it is a navigation that
+ * receives it through `setCookie` (a `Set-Cookie` header value).
+ */
+export type BrowserGrant =
+  | { readonly kind: 'session-exists' }
+  | { readonly kind: 'session-issued'; readonly setCookie: string };
+
+/** Browser isolation headers on every JSON and bytes answer; exports never run as documents. */
+export const isolationHeaders: Readonly<Record<string, string>> = Object.freeze({
+  'Cache-Control': 'no-store',
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'no-referrer',
+  'Cross-Origin-Resource-Policy': 'same-origin',
+  'Content-Security-Policy':
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+});
+
+/** The headers of the change stream (`GET /api/v1/events`). */
+export const eventStreamHeaders: Readonly<Record<string, string>> = Object.freeze({
+  'Content-Type': 'text/event-stream',
+  'Cache-Control': 'no-store',
+  'X-Content-Type-Options': 'nosniff',
+});

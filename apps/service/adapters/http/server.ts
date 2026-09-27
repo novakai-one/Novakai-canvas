@@ -1,188 +1,104 @@
-import { createServer } from 'node:http';
-import type { IncomingMessage, ServerResponse, Server } from 'node:http';
-import type { HttpMetadata } from '../../contract/records/transport/http.js';
-import type { Caller } from '../../contract/records/transport/http.js';
+/*
+ * The node:http edge of the service: listen and close on IPv4 loopback, read request heads and
+ * bodies, write JSON, bytes and server-sent events. Impure (sockets, timers). Every decision comes
+ * from the injected `TransportPolicy`. A failed start leaves the workspace with the caller; a
+ * request that throws answers `unavailable`, and its client reconciles the request's receipt.
+ */
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import type { ServerBindings } from '../../contract/ports/transport.js';
+import type { Caller, HttpMetadata } from '../../contract/records/transport/http.js';
+import type { RouteOutcome, WireOutcome } from '../../contract/records/transport/protocol.js';
 import type {
   LocalServer,
-  ServerBindings,
+  RequestKind,
   ServerOptions,
+  StaticFile,
 } from '../../contract/records/transport/server.js';
-import type { RouteOutcome } from '../../contract/records/transport/protocol.js';
-import type { Result } from '../../contract/errors.js';
-import { failure } from '../../contract/errors.js';
+import { eventStreamHeaders, isolationHeaders } from '../../contract/records/transport/server.js';
+import { failure, success, type Result } from '../../contract/errors.js';
 
+/** The only address the server binds. */
+const LOOPBACK_HOST = '127.0.0.1';
+/** Socket limits: the largest request head (bytes); how long a request and its head may take (ms). */
+const SOCKET_LIMITS = Object.freeze({
+  maxHeaderSize: 16384,
+  requestTimeout: 35000,
+  headersTimeout: 10000,
+});
+/** How often an idle change stream sends a keepalive frame (ms). */
+const HEARTBEAT_MS = 15000;
+/** The answer when the server does not close cleanly. */
+const CLOSE_FAILED = failure<never>('unavailable', 'server', 'HTTP server could not close cleanly');
+/** The answer when a request throws before it is answered. */
+const INCOMPLETE = failure<never>(
+  'unavailable',
+  'request',
+  'Request did not complete; reconcile its receipt before retrying',
+);
+
+/** One request in flight: the native objects, its cancellation, head and URL, and the bindings. */
 interface Exchange {
   readonly request: IncomingMessage;
   readonly response: ServerResponse;
   readonly signal: AbortSignal;
   readonly metadata: HttpMetadata;
   readonly url: URL;
+  readonly bindings: ServerBindings;
 }
-/** Committed messages are hints. Every connection first receives the host generation and rereads authoritative state. */
-function events(
-  exchange: Exchange,
+/** Answers one request of a kind. */
+type Handler = (exchange: Exchange) => Promise<void>;
+/** Answers one authenticated request. */
+type CallerHandler = (exchange: Exchange, caller: Caller) => Promise<void> | void;
+
+/** The handler of each request kind; the change stream and the API authenticate first. */
+const HANDLERS: Readonly<Record<RequestKind, Handler>> = Object.freeze({
+  events: (exchange) => authenticated(exchange, streamEvents),
+  api: (exchange) => authenticated(exchange, invokeApi),
+  browser: serveBrowser,
+});
+
+/**
+ * Listens on IPv4 loopback at `options.port`. Fails with `unavailable` at `server` when the port
+ * cannot be opened. The workspace stays with the caller, which closes it.
+ */
+export function startHttpServer(
+  options: ServerOptions,
   bindings: ServerBindings,
-): void {
-  const response = exchange.response;
-  response.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-store',
-    'X-Content-Type-Options': 'nosniff',
-  });
-  response.write(
-    `event: connected\ndata: ${JSON.stringify({ version: 1, generation: bindings.security.generation })}\n\n`,
-  );
-  const unsubscribe = bindings.changes.subscribe((change) => {
-    response.write(
-      `event: committed\ndata: ${JSON.stringify({ version: 1, generation: bindings.security.generation, change })}\n\n`,
+): Promise<Result<LocalServer>> {
+  return new Promise((resolve) => {
+    const server = createServer(SOCKET_LIMITS, (request, response) =>
+      receive(request, response, bindings),
+    );
+    server.once('error', () =>
+      resolve(failure('unavailable', 'server', 'Configured loopback port could not be opened')),
+    );
+    server.listen(options.port, LOOPBACK_HOST, () =>
+      resolve(
+        success({
+          url: bindings.security.origin,
+          generation: bindings.security.generation,
+          close: () => close(server),
+        }),
+      ),
     );
   });
-  const heartbeat = setInterval(() => response.write(': keepalive\n\n'), 15000);
-  response.once('close', () => {
-    clearInterval(heartbeat);
-    unsubscribe();
+}
+
+/**
+ * Stops listening and drops open sockets, which cancels their requests. Fails with `unavailable`
+ * at `server` when the server does not close cleanly; the caller then closes the workspace.
+ */
+function close(server: Server): Promise<Result<void>> {
+  return new Promise((resolve) => {
+    server.close((error) => resolve(error ? CLOSE_FAILED : success(undefined)));
+    server.closeAllConnections();
   });
 }
-/** Authentication precedes streaming reads and route lookup. Unsupported API methods cannot bootstrap a browser session. */
-async function api(
-  exchange: Exchange,
-  bindings: ServerBindings,
-): Promise<void> {
-  const caller = bindings.admission.authenticate(exchange.metadata);
-  if (!caller.ok) {
-    bindings.io.json(exchange.response, caller, bindings.security.generation);
-    return;
-  }
-  return authenticatedApi(exchange, caller.value, bindings);
-}
-/** Streaming and ordinary API requests share the same authentication boundary. */
-async function authenticatedApi(
-  exchange: Exchange,
-  caller: Caller,
-  bindings: ServerBindings,
-): Promise<void> {
-  if (`${exchange.metadata.method} ${exchange.url.pathname}` === 'GET /api/v1/events') {
-    events(exchange, bindings);
-    return;
-  }
-  return invokeApi(exchange, caller, bindings);
-}
-/** Body decoding occurs only for an admitted caller; route failures retain the generation in their response. */
-async function invokeApi(
-  exchange: Exchange,
-  caller: Caller,
-  bindings: ServerBindings,
-): Promise<void> {
-  const body = await bindings.io.body(exchange.request);
-  if (!body.ok) {
-    bindings.io.json(exchange.response, body, bindings.security.generation);
-    return;
-  }
-  const outcome = await bindings.router.invoke({
-    path: exchange.url.pathname,
-    query: queryValues(exchange.url.searchParams, exchange.url.pathname === '/api/v1/source'),
-    caller,
-    signal: exchange.signal,
-    metadata: exchange.metadata,
-    body: body.value,
-  });
-  if (isBytes(outcome)) {
-    bindings.io.bytes(exchange.response, outcome.file);
-    return;
-  }
-  bindings.io.json(exchange.response, outcome, bindings.security.generation);
-}
 
-function isBytes(outcome: RouteOutcome): outcome is Extract<RouteOutcome, { kind: 'bytes' }> {
-  return 'kind' in outcome && outcome.kind === 'bytes';
-}
-
-function queryValues(
-  params: URLSearchParams,
-  preserveScopeDuplicates: boolean,
-): Readonly<Record<string, string>> {
-  if (!preserveScopeDuplicates) return Object.fromEntries(params);
-  const values = new Map<string, string>();
-  for (const [key, value] of params) appendQueryValue(values, key, value);
-  return Object.fromEntries(values);
-}
-
-function appendQueryValue(
-  values: Map<string, string>,
-  key: string,
-  value: string,
-): void {
-  if (key !== 'section' && key !== 'object') {
-    values.set(key, value);
-    return;
-  }
-  values.set(key, joinedScopeValue(values.get(key), value));
-}
-
-function joinedScopeValue(
-  previous: string | undefined,
-  value: string,
-): string {
-  return previous === undefined ? value : `${previous}\u0000${value}`;
-}
-/** A navigation grants only an HttpOnly browser session. Subsequent resource reads still pass exact host/origin admission. */
-function browserAccess(
-  exchange: Exchange,
-  bindings: ServerBindings,
-): Result<void> {
-  if (exchange.metadata.mode !== 'navigate') {
-    return existingBrowserAccess(exchange, bindings);
-  }
-  return establishBrowserAccess(exchange, bindings);
-}
-/** Resource fetches can only reuse an already established session. */
-function existingBrowserAccess(
-  exchange: Exchange,
-  bindings: ServerBindings,
-): Result<void> {
-  const caller = bindings.admission.authenticate(exchange.metadata);
-  if (!caller.ok) return caller;
-  return { ok: true, value: undefined };
-}
-/** Only the navigation branch can issue the session cookie. */
-function establishBrowserAccess(
-  exchange: Exchange,
-  bindings: ServerBindings,
-): Result<void> {
-  const navigation = bindings.admission.bootstrap(exchange.metadata);
-  if (!navigation.ok) return navigation;
-  exchange.response.setHeader(
-    'Set-Cookie',
-    `${bindings.admission.cookieName}=${bindings.security.browserSession}; HttpOnly; SameSite=Strict; Path=/`,
-  );
-  return { ok: true, value: undefined };
-}
-/** Built application requests cannot invoke handlers and never read outside the configured static root. */
-async function browser(
-  exchange: Exchange,
-  bindings: ServerBindings,
-): Promise<void> {
-  const access = browserAccess(exchange, bindings);
-  if (!access.ok) {
-    bindings.io.json(exchange.response, access, bindings.security.generation);
-    return;
-  }
-  const file = await bindings.files.read(exchange.url.pathname);
-  if (!file.ok) {
-    bindings.io.json(exchange.response, file, bindings.security.generation);
-    return;
-  }
-  bindings.io.bytes(exchange.response, file.value);
-}
-/** URL construction failures and provider throws stop at the HTTP boundary; clients retain requests for receipt recovery. */
-async function route(
-  exchange: Exchange,
-  bindings: ServerBindings,
-): Promise<void> {
-  if (exchange.url.pathname.startsWith('/api/')) return api(exchange, bindings);
-  return browser(exchange, bindings);
-}
-/** Each request owns cancellation; a disconnected render terminates its worker, while committed receipts remain queryable. */
+/**
+ * Answers one request. A closed socket aborts its work (a render stops its worker). Any throw,
+ * a malformed URL included, answers `INCOMPLETE` (`unavailable` at `request`).
+ */
 function receive(
   request: IncomingMessage,
   response: ServerResponse,
@@ -190,69 +106,123 @@ function receive(
 ): void {
   const controller = new AbortController();
   response.once('close', () => controller.abort());
-  void receiveRoute(request, response, controller.signal, bindings).catch(() =>
-    bindings.io.json(
-      response,
-      failure(
-        'unavailable',
-        'request',
-        'Request did not complete; reconcile its receipt before retrying',
-      ),
-      bindings.security.generation,
-    ),
+  void route(request, response, controller.signal, bindings).catch(() =>
+    writeJson(response, INCOMPLETE, bindings),
   );
 }
-/** URL parsing also runs inside the asynchronous failure boundary; malformed input cannot escape the native callback. */
-async function receiveRoute(
+
+/** Reads the head and URL, then runs the handler of the request's kind. */
+async function route(
   request: IncomingMessage,
   response: ServerResponse,
   signal: AbortSignal,
   bindings: ServerBindings,
 ): Promise<void> {
-  const exchange = {
-    request,
-    response,
-    signal,
-    metadata: bindings.io.metadata(request),
-    url: new URL(request.url ?? '/', bindings.security.origin),
-  };
-  await route(exchange, bindings);
+  const metadata = bindings.policy.head(request.method, request.headersDistinct);
+  const url = new URL(request.url ?? '/', bindings.security.origin);
+  const exchange: Exchange = { request, response, signal, metadata, url, bindings };
+  await HANDLERS[bindings.policy.kind(metadata.method, url.pathname)](exchange);
 }
-/** Closing aborts active sockets, which cancels request workers; the composition caller then drains and closes the workspace. */
-function close(server: Server): Promise<Result<void>> {
-  return new Promise((resolve) => {
-    server.close((error) => {
-      if (error) {
-        resolve(failure('unavailable', 'server', 'HTTP server could not close cleanly'));
-        return;
-      }
-      resolve({ ok: true, value: undefined });
-    });
-    server.closeAllConnections();
+
+/** Runs `handler` for an authenticated caller; a refused caller gets admission's failure. */
+async function authenticated(
+  exchange: Exchange,
+  handler: CallerHandler,
+): Promise<void> {
+  const caller = exchange.bindings.admission.authenticate(exchange.metadata);
+  if (!caller.ok) return writeJson(exchange.response, caller, exchange.bindings);
+  await handler(exchange, caller.value);
+}
+
+/** Streams the policy's event frames until the client disconnects. */
+function streamEvents({ response, bindings }: Exchange): void {
+  const { frames } = bindings.policy;
+  const { generation } = bindings.security;
+  response.writeHead(200, eventStreamHeaders);
+  response.write(frames.connected(generation));
+  const unsubscribe = bindings.changes.subscribe((change) =>
+    response.write(frames.committed(generation, change)),
+  );
+  const heartbeat = setInterval(() => response.write(frames.keepalive), HEARTBEAT_MS);
+  response.once('close', () => {
+    clearInterval(heartbeat);
+    unsubscribe();
   });
 }
-/** Bind only IPv4 loopback. Startup failure leaves workspace ownership with the caller for explicit cleanup. */
-export function startHttpServer(
-  options: ServerOptions,
+
+/** Reads the body only after authentication, then writes the router's outcome. */
+async function invokeApi(
+  exchange: Exchange,
+  caller: Caller,
+): Promise<void> {
+  const { request, response, url, bindings } = exchange;
+  const body = await bindings.policy.body(request.iterator({ destroyOnReturn: false }));
+  if (!body.ok) return writeJson(response, body, bindings);
+  const outcome = await bindings.router.invoke({
+    path: url.pathname,
+    query: bindings.policy.query(url.searchParams),
+    caller,
+    signal: exchange.signal,
+    metadata: exchange.metadata,
+    body: body.value,
+  });
+  if (isFile(outcome)) return writeBytes(response, outcome.file);
+  writeJson(response, outcome, bindings);
+}
+
+/** Whether the route answered with a file to send as bytes. */
+function isFile(outcome: RouteOutcome): outcome is Extract<RouteOutcome, { kind: 'bytes' }> {
+  return 'kind' in outcome && outcome.kind === 'bytes';
+}
+
+/** Serves the web app once the policy grants browser access; sets the cookie a navigation gets. */
+async function serveBrowser(exchange: Exchange): Promise<void> {
+  const { response, metadata, bindings } = exchange;
+  const access = bindings.policy.browserAccess(metadata);
+  if (!access.ok) return writeJson(response, access, bindings);
+  if (access.value.kind === 'session-issued')
+    response.setHeader('Set-Cookie', access.value.setCookie);
+  return serveFile(exchange);
+}
+
+/** Writes the built file at the URL path, or the static files' failure. */
+async function serveFile({ response, url, bindings }: Exchange): Promise<void> {
+  const file = await bindings.files.read(url.pathname);
+  if (!file.ok) return writeJson(response, file, bindings);
+  writeBytes(response, file.value);
+}
+
+/** Writes the policy's status and envelope; nothing when the socket is already gone. */
+function writeJson(
+  response: ServerResponse,
+  outcome: WireOutcome,
   bindings: ServerBindings,
-): Promise<Result<LocalServer>> {
-  return new Promise((resolve) => {
-    const server = createServer(
-      { maxHeaderSize: 16384, requestTimeout: 35000, headersTimeout: 10000 },
-      (request, response) => receive(request, response, bindings),
-    );
-    server.once('error', () =>
-      resolve(failure('unavailable', 'server', 'Configured loopback port could not be opened')),
-    );
-    server.listen(options.port, '127.0.0.1', () =>
-      resolve({
-        ok: true,
-        value: {
-          url: bindings.security.origin,
-          generation: bindings.security.generation,
-          close: () => close(server),
-        },
-      }),
-    );
-  });
+): void {
+  if (response.destroyed) return;
+  setHeaders(response, isolationHeaders);
+  response.statusCode = bindings.policy.status(outcome);
+  response.setHeader('Content-Type', 'application/json; charset=utf-8');
+  response.end(JSON.stringify(bindings.policy.envelope(outcome, bindings.security.generation)));
+}
+
+/** Writes a file's bytes with its media type, download name and extra headers. */
+function writeBytes(
+  response: ServerResponse,
+  file: StaticFile,
+): void {
+  setHeaders(response, isolationHeaders);
+  response.statusCode = 200;
+  response.setHeader('Content-Type', file.mediaType);
+  if (file.filename !== undefined)
+    response.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
+  setHeaders(response, file.headers ?? {});
+  response.end(file.bytes);
+}
+
+/** Sets each header, in order. */
+function setHeaders(
+  response: ServerResponse,
+  headers: Readonly<Record<string, string>>,
+): void {
+  for (const [name, value] of Object.entries(headers)) response.setHeader(name, value);
 }
