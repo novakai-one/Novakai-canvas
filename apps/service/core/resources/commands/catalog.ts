@@ -1,8 +1,8 @@
 /*
  * What a resource command reads first: the stored preset catalog, decoded by Templates against one
  * exact snapshot, and the semantic selection envelope the selector reads. Pure over Templates; an
- * owner refusal throws PreparationFault and a malformed admission throws zod's error (commands.ts
- * turns both into a ResourceResult). Authoring owns commit and recovery.
+ * owner refusal throws PreparationFault and a malformed admission throws zod's error (`guarded` in
+ * refusal.ts turns both into a ResourceResult). Authoring owns commit and recovery.
  */
 import type {
   Catalog,
@@ -21,7 +21,7 @@ import { accepted } from './refusal.js';
 /** The owner catalog reads go through. */
 export interface CatalogOwners {
   /** Templates bound to one call's resolved resources; catalog reads bind none. */
-  templates(resources: ResolvedResources): Pick<Templates<LoweredIntent>, 'readCatalog' | 'read'>;
+  templates(resources: ResolvedResources): Pick<Templates<LoweredIntent>, 'readCatalog'>;
 }
 
 /**
@@ -64,7 +64,12 @@ export function selectionRequest(
   });
 }
 
-/** Catalog reads need no selected resources; each caller receives its explicit direct Templates collaborator. */
-export function unboundTemplates(owners: CatalogOwners): ReturnType<CatalogOwners['templates']> {
+/**
+ * Catalog reads need no selected resources. Returns Templates bound to none, typed as the caller's
+ * own owner bag declares them. Never refuses.
+ */
+export function unboundTemplates<Bound>(owners: {
+  templates(resources: ResolvedResources): Bound;
+}): Bound {
   return owners.templates(EMPTY_RESOURCES);
 }

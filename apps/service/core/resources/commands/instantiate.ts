@@ -1,8 +1,8 @@
 /*
  * Recipe instantiation: one stored recipe expanded with its selected resources and printed as DSL
  * source. Pure over the injected owners; Language owns all identity remapping. A refusal throws
- * PreparationFault or zod's error (commands.ts turns both into a ResourceResult), and Authoring
- * owns the canonical write and receipt.
+ * PreparationFault or zod's error (`guarded` in refusal.ts turns both into a ResourceResult), and
+ * Authoring owns the canonical write and receipt.
  */
 import type {
   Language,

@@ -1,7 +1,8 @@
 /*
  * How a resource command refuses: a private typed throw inside the operations, turned into a
- * ResourceResult at the command boundary (commands.ts). Pure; a refusal happens before any write,
- * the owner's diagnostic is kept, and the caller corrects the input and prepares again.
+ * ResourceResult by `guarded`, which commands.ts wraps around freeze, preparePreset and instantiate.
+ * Pure; a refusal happens before any write, the owner's diagnostic is kept, and the caller corrects
+ * the input and prepares again.
  * Planned: the service Result PR replaces PreparationFault and the throw with returned Results.
  */
 import type {

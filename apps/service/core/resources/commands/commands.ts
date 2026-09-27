@@ -1,8 +1,8 @@
 /*
  * Resource commands: byte staging, lookup and restore through Assets, and the snapshot-bound preset
- * preparation, theme-pin freezing and recipe instantiation the session exposes. This file composes
- * the operations (restore, freeze, preparation, instantiate) and is the only one that turns a
- * refusal into a typed outcome. Pure over the injected owners; Assets owns byte recovery,
+ * preparation, theme-pin freezing and recipe instantiation the session exposes. Composes the
+ * operations: freeze, preparePreset and instantiate are wrapped in `guarded` (refusal.ts); restore
+ * returns its own typed outcome. Pure over the injected owners; Assets owns byte recovery,
  * Authoring owns the canonical write and receipt.
  */
 import type {

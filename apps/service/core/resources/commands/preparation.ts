@@ -1,8 +1,8 @@
 /*
  * Preset preparation: a theme or recipe admission normalised, bound to its selected resources and
  * planned by Templates against one snapshot, without a canonical write. Pure over the injected
- * owners; a refusal throws PreparationFault or zod's error (commands.ts turns both into a
- * ResourceResult), and Authoring owns the canonical write and receipt.
+ * owners; a refusal throws PreparationFault or zod's error (`guarded` in refusal.ts turns both
+ * into a ResourceResult), and Authoring owns the canonical write and receipt.
  */
 import type {
   Catalog,

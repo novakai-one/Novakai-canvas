@@ -1,8 +1,8 @@
 /*
  * Theme-pin freezing: a retained DSL request gets each theme alias replaced by the exact pin the
  * selector chose, so a later apply uses the same theme version. Pure over the selector; a refusal
- * throws PreparationFault or zod's error (commands.ts turns both into a ResourceResult), and
- * Authoring owns the canonical write and receipt.
+ * throws PreparationFault or zod's error (`guarded` in refusal.ts turns both into a
+ * ResourceResult), and Authoring owns the canonical write and receipt.
  */
 import type { Request, Snapshot } from '../../../contract/records/capabilities.js';
 import type { ResourceSelector } from '../../../contract/records/planning/planning.js';
