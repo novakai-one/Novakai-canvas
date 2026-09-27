@@ -35,6 +35,9 @@ import type { CommandDefaults, CommandFlags } from './flags.js';
 /** The service origin when --server is absent: the local service's default port. */
 const defaultServer = 'http://127.0.0.1:5174';
 
+/** The workspace when --workspace is empty: Node resolves `''` and `.` to the same directory. */
+const currentDirectory = '.';
+
 /** The change mode when --mode is absent. */
 const defaultMode: ChangeMode = 'create';
 
@@ -136,8 +139,8 @@ export function profile(text: string): Result<ProfileId> {
 
 /**
  * --server (the local service's default port when absent), then --workspace (the executable's
- * default when absent). Fails with `invalid-server` or `invalid-arguments` (an empty --workspace).
- * Both fail before the credential is read.
+ * default when absent; an empty one is the current directory). Fails with `invalid-server`, before
+ * the credential is read.
  */
 export function serviceOptions(
   flags: Pick<CommandFlags, 'server' | 'workspace'>,
@@ -163,12 +166,21 @@ function origin(text: string): Result<LoopbackOrigin> {
   });
 }
 
-/** The directory holding the agent credential and the request journal. Fails with `invalid-arguments`. */
+/**
+ * The directory holding the agent credential and the request journal. Every text is accepted: an
+ * empty one is the current directory. Fails with `invalid-arguments` only if that were empty.
+ */
 function workspacePath(text: string): Result<FilePath> {
-  return checked(filePath, text, {
+  return checked(filePath, directoryText(text), {
     code: 'invalid-arguments',
-    message: 'Workspace must be a non-empty directory path.',
+    message: 'Workspace must be a directory path.',
   });
+}
+
+/** --workspace as Node resolves it: `''` names the current directory, so it becomes `.`. */
+function directoryText(text: string): string {
+  if (text === '') return currentDirectory;
+  return text;
 }
 
 /** --mode as given, or the default mode. */

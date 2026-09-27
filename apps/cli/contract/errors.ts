@@ -12,8 +12,7 @@ import type { FailureSource, OperationSource } from './records/foreign.js';
  * read or write would give):
  * - `invalid-command`: no such command.
  * - `invalid-arguments`: an unknown flag, a wrong operand count, a flag the command does not
- *   take, or a missing or malformed operand or flag value (collection ID, recipe header, pin, an
- *   empty --workspace).
+ *   take, or a missing or malformed operand or flag value (collection ID, recipe header, pin).
  * - `invalid-mode`: `--mode` is not create, replace or patch.
  * - `invalid-revision`: `--revision` is not a non-negative safe integer.
  * - `invalid-server`: `--server` is not an `http://127.0.0.1` origin.

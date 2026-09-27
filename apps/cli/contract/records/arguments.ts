@@ -31,23 +31,26 @@ export interface FlagShape {
 /** One executable's flags: a missing or extra flag is a type error. */
 export type FlagSpec<F extends string> = Readonly<Record<F, FlagShape>>;
 
+/** A flag that takes text. Frozen, like every shape in `canvasFlags`. */
+const textFlag: FlagShape = Object.freeze({ type: 'string' });
+
 /** `pnpm canvas` flags. Only `--help` (`-h`) is a switch. No flag has a default here; core fills them. */
 export const canvasFlags: FlagSpec<CanvasFlag> = Object.freeze({
-  help: { type: 'boolean', short: 'h' },
-  server: { type: 'string' },
-  workspace: { type: 'string' },
-  revision: { type: 'string' },
-  mode: { type: 'string' },
-  request: { type: 'string' },
-  out: { type: 'string' },
-  id: { type: 'string' },
-  version: { type: 'string' },
-  family: { type: 'string' },
-  title: { type: 'string' },
-  namespace: { type: 'string' },
-  profile: { type: 'string' },
-  section: { type: 'string' },
-  object: { type: 'string' },
+  help: Object.freeze({ type: 'boolean', short: 'h' }),
+  server: textFlag,
+  workspace: textFlag,
+  revision: textFlag,
+  mode: textFlag,
+  request: textFlag,
+  out: textFlag,
+  id: textFlag,
+  version: textFlag,
+  family: textFlag,
+  title: textFlag,
+  namespace: textFlag,
+  profile: textFlag,
+  section: textFlag,
+  object: textFlag,
 } satisfies FlagSpec<CanvasFlag>);
 
 /** The words and flags Node accepted. */
