@@ -1,6 +1,7 @@
 /**
- * The package entry point of `@novakai/canvas-service` (see package.json `exports`): only the names
- * apps/web and apps/cli import, listed explicitly.
+ * The package entry point of `@novakai/canvas-service` (see package.json `exports`). It lists the
+ * 11 names apps/web and apps/cli import, plus `Result` and `Diagnostic`: the return types of
+ * `prepareInstallation` and `readAgentCredential`.
  *
  * `projectCollection` comes from `api.ts`, the only non-compose file allowed to import core.
  * `prepareInstallation`, `readAgentCredential` and `createHeadlessBindings` come from the
@@ -15,5 +16,4 @@ export { renderEnvelope } from './records/rendering/worker.js';
 export type { RenderingJob, RenderDocument } from './records/rendering/job.js';
 export type { InspectionReport } from './records/rendering/inspection.js';
 export type { BuiltinResources } from './records/presets/builtins.js';
-export type { AppliedCommit } from './records/workspace/session.js';
 export type { Result, Diagnostic } from './errors.js';
