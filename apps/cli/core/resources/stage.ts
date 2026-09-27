@@ -4,7 +4,7 @@
  * into the Authoring request. Uses injected ports only. A failure stops before any Authoring
  * request is sent; staged bytes left behind are collectable Assets orphans.
  */
-import type { SemanticInputs } from '../../contract/ports/runtime.js';
+import type { ResourceSyntax } from '../../contract/ports/runtime.js';
 import type { ResourceReader } from '../../contract/ports/resource-reader.js';
 import type { ServiceResources } from '../../contract/ports/service-resources.js';
 import type { RetainedRequest } from '../../contract/records/retained-request.js';
@@ -29,7 +29,7 @@ export interface StagingDependencies {
 /** What DSL preparation adds: the source's resource declarations and the service's freeze. */
 export interface ResourceDependencies extends StagingDependencies {
   readonly resources: Pick<ServiceResources, 'stage' | 'blob' | 'freeze'>;
-  readonly semantic: Pick<SemanticInputs, 'requests'>;
+  readonly semantic: ResourceSyntax;
 }
 
 /**

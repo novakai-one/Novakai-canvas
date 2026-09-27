@@ -1,9 +1,10 @@
 /*
  * Composition root: reads the arguments, then binds the parsed command's family to real
  * infrastructure (agent credential, HTTP transport and the service calls over it, Language, Model,
- * local files, request journal, headless render bindings, render file I/O). Not pure: reads files, calls HTTP, mints request
- * IDs. Failures are returned as values; `cli/canvas.ts` and `cli/render.ts` print them and set the
- * exit code. Recovery after a sent request is `receipt` then `retry`; a render changes nothing.
+ * local files, request journal, headless render bindings, render file I/O). Not pure: reads files,
+ * calls HTTP, mints request IDs. Failures are returned as values; `cli/canvas.ts` and
+ * `cli/render.ts` print them and set the exit code. Recovery after a sent request is `receipt`
+ * then `retry`; a render changes nothing.
  */
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
@@ -29,6 +30,7 @@ import {
   usage,
 } from './api.js';
 import type { CliFailure, LocalFailure, Result } from './errors.js';
+import type { SemanticInputs } from './ports/runtime.js';
 import { canvasFlags, renderFlags } from './records/arguments.js';
 import type {
   ParsedCommand,
@@ -48,7 +50,11 @@ import {
   type RequestId,
 } from './brands.js';
 
-/** Bind the actual CLI to protected credentials and real HTTP; failed setup cannot submit a diagram mutation. */
+/**
+ * `pnpm canvas`: reads and parses the argv, then runs the command on real infrastructure. Fails as
+ * the command does, or with `cli-unavailable` when reading or parsing the argv throws. A throw
+ * while the command runs rejects; `cli/canvas.ts` catches it and prints its own notice.
+ */
 export async function runCli(
   args: readonly string[],
   defaultWorkspace: string,
@@ -88,15 +94,18 @@ function parsedRun(
   return dispatch(parsed.value);
 }
 
-/** One owner-composed Language parser drives scope discovery; there is no second DSL implementation in the CLI. */
+/**
+ * Binds a service command to the workspace credential, the service calls over one transport,
+ * local files, the request journal, Language and Model, then runs it. Fails as {@link readToken}
+ * or the command does.
+ */
 async function run(
   command: ServiceCommand,
   options: ServiceOptions,
 ): Promise<Result<string>> {
   const token = await readToken(options.workspace);
   if (!token.ok) return token;
-  const language = createLanguage({ reader: { validate }, planner: { plan }, stage: { stage } });
-  const semantic = createSemanticInputs(language);
+  const semantic = semanticInputs();
   const transport = createTransport(options.server, token.value);
   return executeCommand(command, {
     reads: createServiceReads(transport),
@@ -127,13 +136,16 @@ async function readToken(workspace: FilePath): Promise<Result<AgentToken>> {
 
 /**
  * A fresh request ID. A UUID always matches Authoring's request ID grammar, so the parse cannot
- * fail; runCli's catch would report `cli-unavailable` before anything was sent.
+ * fail; if it did, the throw would reach `cli/canvas.ts` before the Authoring request was sent.
  */
 function nextRequestId(): RequestId {
   return requestId.parse(randomUUID());
 }
 
-/** Local help needs no infrastructure; profile commands bind local ports; service commands bind their real runtime. */
+/**
+ * Help needs no infrastructure; profile commands bind local ports; service commands bind their
+ * real runtime. Fails as the family's run does.
+ */
 function dispatch(parsed: ParsedCommand): Promise<Result<string>> {
   switch (parsed.kind) {
     case 'help':
@@ -147,9 +159,14 @@ function dispatch(parsed: ParsedCommand): Promise<Result<string>> {
 
 /** Profile discovery/scaffold/lint bind only the Language parser and local files. */
 async function runProfile(command: ProfileCommand): Promise<Result<string>> {
-  const language = createLanguage({ reader: { validate }, planner: { plan }, stage: { stage } });
-  const semantic = createSemanticInputs(language);
-  return executeProfile(command, { files: createLocalFiles(), semantic });
+  return executeProfile(command, { files: createLocalFiles(), semantic: semanticInputs() });
+}
+
+/** The semantic adapter over one Language built on Model's reader, planner and stage. */
+function semanticInputs(): SemanticInputs {
+  return createSemanticInputs(
+    createLanguage({ reader: { validate }, planner: { plan }, stage: { stage } }),
+  );
 }
 
 /** Whether the argv word is anything but pnpm's `--` separator. */

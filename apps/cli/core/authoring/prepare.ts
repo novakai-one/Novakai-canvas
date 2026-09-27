@@ -7,7 +7,7 @@
 import { prepareResources } from '../resources/stage.js';
 import type { ResourceDependencies } from '../resources/stage.js';
 import type { ChangeCommand, ChangeIntent, ChangeMode } from '../../contract/records/command.js';
-import type { SemanticInputs } from '../../contract/ports/runtime.js';
+import type { ChangeInputs } from '../../contract/ports/runtime.js';
 import type { ServiceReads } from '../../contract/ports/service-reads.js';
 import type { LocalFiles } from '../../contract/ports/local-files.js';
 import type { Snapshot } from '../../contract/records/foreign.js';
@@ -24,7 +24,7 @@ import type { Result } from '../../contract/errors.js';
 export interface PrepareDependencies extends ResourceDependencies {
   readonly files: Pick<LocalFiles, 'readSource'>;
   readonly reads: Pick<ServiceReads, 'workspace'>;
-  readonly semantic: Pick<SemanticInputs, 'request' | 'requests'>;
+  readonly semantic: ChangeInputs;
   nextRequestId(): RequestId;
 }
 

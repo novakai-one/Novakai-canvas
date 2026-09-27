@@ -28,10 +28,8 @@ export interface ResourceSyntax {
   requests(source: string): Result<readonly ResourceRequest[]>;
 }
 
-/** Language's reading of a DSL source, and the Authoring request a DSL change sends. */
-export interface SemanticInputs extends ResourceSyntax {
-  /** The parsed source. Fails with `invalid-source`. */
-  profileParse(source: string): Result<ParsedSource>;
+/** What a DSL change needs from Language: the source's resource declarations and its request. */
+export interface ChangeInputs extends ResourceSyntax {
   /**
    * The Authoring request for `source` under `intent`'s preconditions against `snapshot`. Fails
    * with `invalid-source`, `invalid-input`, `invalid-response`, `not-found`, `already-exists`,
@@ -45,15 +43,24 @@ export interface SemanticInputs extends ResourceSyntax {
   ): Result<Request>;
 }
 
+/** All the semantic adapter reads from a DSL source: a change's inputs and a profile parse. */
+export interface SemanticInputs extends ChangeInputs {
+  /** The parsed source, for `profile lint`. Fails with `invalid-source`. */
+  profileParse(source: string): Result<ParsedSource>;
+}
+
 /** A preset file's Templates admission and the font or image declarations to stage first. */
 export interface PresetSource {
   readonly admission: Admission;
   readonly resources: readonly ResourceRequest[];
 }
 
-/** Preset inputs use semantic sources and exact owner-prepared identities, never JSON coordinates. */
+/** A preset file's admission, and the Authoring request its Templates preparation sends. */
 export interface PresetInputs {
-  /** The admission of `theme admit` or `recipe admit`. Fails with `invalid-theme`, `duplicate-token` or `invalid-source`. */
+  /**
+   * The admission of `theme admit` or `recipe admit`. Fails with `invalid-theme`,
+   * `duplicate-token` or `invalid-source`.
+   */
   source(
     command: AdmitCommand,
     source: string,
@@ -70,7 +77,10 @@ export interface PresetInputs {
   ): Result<Request>;
 }
 
-/** Narrow effects are bound once at CLI composition. */
+/**
+ * Everything a service command may use; compose binds each member once. Each flow declares the
+ * narrow part it reads (for example `AdmitDependencies`).
+ */
 export interface CliDependencies {
   readonly reads: ServiceReads;
   readonly authoring: ServiceAuthoring;
@@ -80,6 +90,6 @@ export interface CliDependencies {
   readonly reader: ResourceReader;
   readonly collections: CollectionReader;
   readonly presets: PresetInputs;
-  readonly semantic: SemanticInputs;
+  readonly semantic: ChangeInputs;
   nextRequestId(): RequestId;
 }

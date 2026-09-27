@@ -57,7 +57,10 @@ function sourceQuery(
   return { id: collection, [scope.kind]: scope.id };
 }
 
-/** The answer's value without its generation, which the caller does not need. */
+/**
+ * The answer's value without its generation, which the caller does not need. Fails as the
+ * transport does.
+ */
 async function value<T>(pending: Promise<Result<Observed<T>>>): Promise<Result<T>> {
   const answer = await pending;
   if (!answer.ok) return answer;

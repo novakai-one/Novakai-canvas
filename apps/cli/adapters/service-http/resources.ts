@@ -20,7 +20,7 @@ import type { AssetDigest } from '../../contract/brands.js';
 import type { LocalFailure, Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 
-/** The transport's POST; this adapter never reads a route. */
+/** The transport's POST; this adapter never sends a GET. */
 type TransportPost = Pick<HttpTransport, 'post'>;
 
 /** Checks one answer's value. */
@@ -41,7 +41,10 @@ export function createServiceResources(transport: TransportPost): ServiceResourc
   };
 }
 
-/** Posts `body` to one resource route and checks the answer's value. */
+/**
+ * Posts `body` to one resource route and checks the answer's value. Fails as the transport or
+ * `check` does.
+ */
 async function call<T>(
   transport: TransportPost,
   action: ResourceAction,
@@ -53,14 +56,17 @@ async function call<T>(
   return check(answer.value.value);
 }
 
-/** The digest of the bytes Assets admitted. */
+/** The digest of the bytes Assets admitted. Fails with `invalid-response`. */
 function stagedDigest(value: unknown): Result<AssetDigest> {
   const parsed = stagedAnswer.safeParse(value);
   if (!parsed.success) return invalidResponse('Invalid Assets admission');
   return success(parsed.data.descriptor.digest);
 }
 
-/** The normalised bytes and their digest, as the journal keeps them. */
+/**
+ * The normalised bytes and their digest, as the journal keeps them. Fails with `invalid-response`
+ * (bad answer, or bad digest).
+ */
 function blobBackup(value: unknown): Result<ByteBackup> {
   const parsed = blobAnswer.safeParse(value);
   if (!parsed.success) return invalidResponse('Invalid normalized Assets bytes');
@@ -72,7 +78,7 @@ function blobBackup(value: unknown): Result<ByteBackup> {
   return success(checked.data);
 }
 
-/** The frozen request, checked by Authoring's request schema. */
+/** The frozen request, checked by Authoring's request schema. Fails with `invalid-input`. */
 function frozenRequest(value: unknown): Result<Request> {
   const checked = requestSchema.safeParse(value);
   if (!checked.success)
@@ -83,26 +89,32 @@ function frozenRequest(value: unknown): Result<Request> {
   return success(checked.data);
 }
 
-/** A restore answers nothing the CLI reads. */
+/** A restore answers nothing the CLI reads. Never fails. */
 function restored(): Result<void> {
   return success(undefined);
 }
 
-/** The preset key; the whole answer is kept unchanged as the change payload. */
+/**
+ * The preset key; the whole answer is kept unchanged as the change payload. Fails with
+ * `invalid-response`.
+ */
 function preparation(value: unknown): Result<PresetPreparation> {
   const parsed = preparedAnswer.safeParse(value);
   if (!parsed.success) return invalidResponse('Service returned invalid preset preparation');
   return success({ key: parsed.data.key, document: value });
 }
 
-/** Recipe expansion is editable DSL text, never structured authoring input. */
+/**
+ * Recipe expansion is editable DSL text, never structured authoring input. Fails with
+ * `invalid-response`.
+ */
 function expandedSource(value: unknown): Result<string> {
   if (typeof value !== 'string')
     return invalidResponse('Recipe expansion did not return editable DSL');
   return success(value);
 }
 
-/** An answer that does not match its schema. */
+/** An answer that does not match its schema: always `invalid-response`. */
 function invalidResponse(message: string): Result<never, LocalFailure> {
   return failure({ code: 'invalid-response', message });
 }

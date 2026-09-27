@@ -15,7 +15,7 @@ import type { RequestId } from '../../contract/brands.js';
 import type { CliFailure, Result } from '../../contract/errors.js';
 import { failure, success, unconfirmedApply } from '../../contract/errors.js';
 
-/** The transport's POST; this adapter never reads a route. */
+/** The transport's POST; this adapter never sends a GET. */
 type TransportPost = Pick<HttpTransport, 'post'>;
 
 /** The Authoring route of each mode. */
@@ -35,7 +35,7 @@ export function createServiceAuthoring(transport: TransportPost): ServiceAuthori
   };
 }
 
-/** Authoring's preview answer, unchecked: printed as JSON. */
+/** Authoring's preview answer, unchecked: printed as JSON. Fails as {@link send} does. */
 async function preview(
   transport: TransportPost,
   retained: RetainedRequest,
@@ -45,7 +45,10 @@ async function preview(
   return success(answer.value.value);
 }
 
-/** The receipt the apply answer carries, or `null` when it carries none. */
+/**
+ * The receipt the apply answer carries, or `null` when it carries none. Fails as {@link send} or
+ * {@link appliedReceipt} does.
+ */
 async function apply(
   transport: TransportPost,
   retained: RetainedRequest,
@@ -55,7 +58,10 @@ async function apply(
   return appliedReceipt(answer.value.value, retained.request.request);
 }
 
-/** Sends the retained request in Authoring's mutation envelope; never its byte backups. */
+/**
+ * Sends the retained request in Authoring's mutation envelope; never its byte backups. Fails as the
+ * transport does, with the recovery {@link unconfirmed} sets.
+ */
 async function send(
   transport: TransportPost,
   retained: RetainedRequest,
