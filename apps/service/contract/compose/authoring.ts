@@ -65,16 +65,6 @@ export interface WiredAuthoring {
   readonly adopt: () => Promise<AuthoringResult<HistoryStatus>>;
 }
 
-/** The Authoring roles bound once per workspace; each request composes Authoring over them. */
-interface AdmissionRuntime {
-  readonly store: AuthoringStore;
-  readonly planners: readonly IntentPlanner[];
-  readonly validation: CandidateValidator;
-  readonly resources: ResourceAdmission;
-  readonly changes: Notifications;
-  readonly feasibility: FeasibilityOwners;
-}
-
 /**
  * Loads the store adapter and binds the workspace's Authoring roles. Rejects when the adapter
  * cannot load, or when the trusted installation breaks Authoring's proposal limits (see
@@ -103,6 +93,16 @@ function installationRecords(inputs: AuthoringInputs): Installation {
     createdAt: inputs.options.createdAt,
     presets: inputs.installation.presets,
   };
+}
+
+/** The Authoring roles bound once per workspace; each request composes Authoring over them. */
+interface AdmissionRuntime {
+  readonly store: AuthoringStore;
+  readonly planners: readonly IntentPlanner[];
+  readonly validation: CandidateValidator;
+  readonly resources: ResourceAdmission;
+  readonly changes: Notifications;
+  readonly feasibility: FeasibilityOwners;
 }
 
 /** Binds the store, planners, validator, leases, notifications and feasibility. Never fails. */
@@ -140,7 +140,10 @@ function planners(
   ];
 }
 
-/** Composes Authoring for one request; its feasibility renders run under that request's signal. */
+/**
+ * Composes Authoring for one request; its feasibility renders run under that request's signal.
+ * Throws only when a planner's `id` getter throws (see `composeAuthoring`).
+ */
 function requestAuthoring(
   runtime: AdmissionRuntime,
   signal: AbortSignal,
