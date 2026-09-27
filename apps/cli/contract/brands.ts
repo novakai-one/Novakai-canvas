@@ -24,7 +24,8 @@ export type { ChromeName } from '@novakai/canvas-design-system';
  * A local file path: any non-empty text. Node resolves it against the working directory; the
  * resource reader enforces confinement. Minted from a FILE operand (`source-unavailable`), --out
  * (`output-unavailable`) and --workspace (an empty one becomes `.`) by core's argument checks, by
- * the render's file adapter, and by render:png's argument check (`invalid-arguments`).
+ * the render's file adapter, by render:png's argument check (`invalid-arguments`), and from
+ * render:png's repo root by compose (`render-unavailable`).
  */
 export const filePath = z.string().min(1).brand<'CliFilePath'>();
 

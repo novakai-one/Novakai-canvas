@@ -1,7 +1,8 @@
 /*
  * render:png's request and report: which collection to render, with which theme, into which
  * files, and the JSON a finished render prints. Pure declarations. `core/render/request.ts` mints
- * the request from argv; the caller corrects the named flag and runs render:png again.
+ * the choice from argv and compose adds the repo root; the caller corrects the named flag and runs
+ * render:png again.
  */
 import type { CollectionName, FilePath, PresetDigest, PresetId, ThemeName } from '../brands.js';
 import type { Collection, InspectionReport } from './foreign.js';
@@ -20,8 +21,8 @@ export type CollectionSelector =
   | { readonly kind: 'file'; readonly path: FilePath }
   | { readonly kind: 'named'; readonly name: CollectionName };
 
-/** One read-only render. No stored collection is changed. */
-export interface RenderRequest {
+/** What render:png's flags ask for. */
+export interface RenderChoice {
   readonly collection: CollectionSelector;
   /** --theme: wins over the --theme-file's `@id`. */
   readonly theme?: ThemeName;
@@ -31,7 +32,11 @@ export interface RenderRequest {
   readonly out: FilePath;
   readonly format: RenderFormat;
   readonly labels: LabelMode;
-  /** The repo root. Every shipped file the render reads is found below it. */
+}
+
+/** One read-only render: the flags' choice, below the repo root. No stored collection is changed. */
+export interface RenderRequest extends RenderChoice {
+  /** The repo root the executable found. Every shipped file the render reads is found below it. */
   readonly root: FilePath;
 }
 

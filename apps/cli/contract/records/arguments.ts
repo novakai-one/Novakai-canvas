@@ -78,8 +78,10 @@ export interface RawArguments<F extends string> {
 }
 
 /**
- * What the argv adapter read. `malformed`: Node refused the argv (an unknown flag, a text flag with
- * no value, a value on a switch); core reports it as `invalid-arguments`.
+ * What the argv adapter read. `malformed`: a flag Node's strict mode refuses (an unknown flag, a
+ * text flag with no value, a value on a switch), named in `flag` as typed, such as `--nope` or
+ * `-c`; core reports it as `invalid-arguments`.
  */
 export type ArgvReading<F extends string> =
-  { readonly kind: 'read'; readonly arguments: RawArguments<F> } | { readonly kind: 'malformed' };
+  | { readonly kind: 'read'; readonly arguments: RawArguments<F> }
+  | { readonly kind: 'malformed'; readonly flag: string };

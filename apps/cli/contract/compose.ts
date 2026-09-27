@@ -21,7 +21,7 @@ import {
   executeCommand,
   executeProfile,
   parseCommand,
-  parseRenderRequest,
+  parseRenderChoice,
   readThemeSource,
   usage,
 } from './api.js';
@@ -33,10 +33,17 @@ import type {
   ServiceCommand,
   ServiceOptions,
 } from './records/command.js';
-import type { RenderReport, RenderRequest } from './records/render.js';
+import type { RenderChoice, RenderReport } from './records/render.js';
 import type { RenderFailure } from './records/render-failure.js';
 import { failure, rejected, success } from './errors.js';
-import { agentToken, requestId, type AgentToken, type FilePath, type RequestId } from './brands.js';
+import {
+  agentToken,
+  filePath,
+  requestId,
+  type AgentToken,
+  type FilePath,
+  type RequestId,
+} from './brands.js';
 
 /** Bind the actual CLI to protected credentials and real HTTP; failed setup cannot submit a diagram mutation. */
 export async function runCli(
@@ -56,16 +63,16 @@ export async function runCli(
 
 /**
  * `pnpm render:png`: Node reads the argv with every `--` dropped (pnpm forwards it), core's render
- * grammar checks it, then one read-only render runs below `root`. Fails with `invalid-arguments`
- * before anything is read or made; otherwise as {@link runHeadless}.
+ * grammar checks it, then one read-only render runs below the repo `root`. Fails with
+ * `invalid-arguments` before anything is read or made; otherwise as {@link runHeadless}.
  */
 export async function runRender(
   args: readonly string[],
   root: string,
 ): Promise<Result<RenderReport, RenderFailure | CliFailure>> {
-  const request = parseRenderRequest(readArguments(args.filter(isNotSeparator), renderFlags), root);
-  if (!request.ok) return request;
-  return runHeadless(request.value);
+  const choice = parseRenderChoice(readArguments(args.filter(isNotSeparator), renderFlags));
+  if (!choice.ok) return choice;
+  return runHeadless(choice.value, root);
 }
 
 /** Node reads the argv; core's grammar checks every word and value; then the command runs. */
@@ -147,13 +154,16 @@ function isNotSeparator(arg: string): boolean {
  * Headless export binds the same theme grammar and service owners without starting an HTTP
  * server, plus the render's temporary asset store and file I/O. The render adapters are imported
  * lazily, like the headless adapter. Fails with `render-failed`, or `render-unavailable` when
- * set-up throws. A temporary-directory failure is not caught: it rejects with the OS error, which
- * `cli/render.ts` prints.
+ * set-up throws; that includes an empty `root`, which a directory URL never gives. A
+ * temporary-directory failure is not caught: it rejects with the OS error, which `cli/render.ts`
+ * prints.
  */
 async function runHeadless(
-  request: RenderRequest,
+  choice: RenderChoice,
+  root: string,
 ): Promise<Result<RenderReport, RenderFailure | LocalFailure>> {
   try {
+    const request = { ...choice, root: filePath.parse(root) };
     const [adapter, service, temp, files, raster] = await Promise.all([
       import('../adapters/edge/headless.js'),
       import('@novakai/canvas-service'),
