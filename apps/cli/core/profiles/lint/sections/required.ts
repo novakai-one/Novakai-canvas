@@ -26,14 +26,15 @@ export function lintRequiredSections(indexed: DeclarationIndex): readonly Profil
 }
 
 /**
- * The missing or wrong-mode finding for one required slot. Known overlap: a wrong (not absent)
- * mode is also reported by `reservedModeFinding` (identity.ts) at the same span.
+ * The missing or wrong-mode finding for one required slot: `missing-section` when no section has
+ * the slot's ID, `section-mode` when the first such section's mode is absent or not the slot's
+ * first mode. The only mode rule for required slots.
  */
 function requiredSectionFinding(
   slot: ProfileSlot,
   indexed: DeclarationIndex,
 ): readonly ProfileFinding[] {
-  const section = sectionById(indexed.sections, slot.id.slice(1));
+  const section = slotSection(slot, indexed.sections);
   if (section === undefined)
     return [
       findingAt(indexed.declaration, {
@@ -53,6 +54,14 @@ function requiredSectionFinding(
       ];
 }
 
+/** The first section whose ID is the slot's ID without its `@`. */
+function slotSection(
+  slot: ProfileSlot,
+  sections: readonly Declaration[],
+): Declaration | undefined {
+  return sectionById(sections, slot.id.slice(1));
+}
+
 /** Consecutive required sections must carry increasing order fields. */
 export function lintRequiredOrder(indexed: DeclarationIndex): readonly ProfileFinding[] {
   const required = presentRequired(indexed);
@@ -64,7 +73,7 @@ export function lintRequiredOrder(indexed: DeclarationIndex): readonly ProfileFi
 /** The required slots whose sections exist, in slot order. */
 function presentRequired(indexed: DeclarationIndex): readonly RequiredSection[] {
   return buildSpecProfile.slots.flatMap((slot) => {
-    const section = sectionById(indexed.sections, slot.id.slice(1));
+    const section = slotSection(slot, indexed.sections);
     return section === undefined ? [] : [{ slot, section }];
   });
 }

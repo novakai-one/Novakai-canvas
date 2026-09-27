@@ -44,7 +44,6 @@ export interface ProfileDescriptor {
  *
  * Sections:
  * - `duplicate-section`: a section ID is used twice.
- * - `reserved-slot-mode`: a section with a required slot's ID uses a mode that slot does not allow.
  * - `missing-section`: a required slot has no section.
  * - `section-mode`: a required section does not use its slot's first mode.
  * - `section-order`: a required section's order does not increase after the previous one.
@@ -73,7 +72,6 @@ export interface ProfileDescriptor {
  */
 export type ProfileRuleCode =
   | 'duplicate-section'
-  | 'reserved-slot-mode'
   | 'missing-section'
   | 'section-mode'
   | 'section-order'

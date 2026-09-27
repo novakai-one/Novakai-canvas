@@ -17,8 +17,8 @@ import { fieldFinding, findingAt } from '../findings.js';
 
 /** The fold state: the anchors the next appendix is checked against, and the findings so far. */
 interface AppendixSequence {
-  /** The number of the appendix just visited; `undefined` before the first. */
-  readonly previousNumber: number | undefined;
+  /** The number of the appendix just visited; absent before the first. */
+  readonly previousNumber?: number;
   /** The order the next appendix must exceed: the last order seen, starting at ownership's. */
   readonly previousOrder: number | undefined;
   readonly findings: readonly ProfileFinding[];
@@ -58,7 +58,6 @@ function appendixSequenceFindings(
   sections: readonly Declaration[],
 ): readonly ProfileFinding[] {
   const start: AppendixSequence = {
-    previousNumber: undefined,
     previousOrder: ownershipOrder(sections),
     findings: [],
   };
