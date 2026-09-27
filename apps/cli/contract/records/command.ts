@@ -73,16 +73,20 @@ export type ServiceCommand =
       Writes)
   | ({ readonly name: 'recipe-instantiate'; readonly expansion: ExpansionRequest } & Writes);
 
-/** A local build-spec profile command. Only `profile scaffold` writes `--out`. */
+/** A local build-spec profile command. Each writes its text answer to `--out` when given. */
 export type ProfileCommand =
-  | { readonly name: 'profile-describe'; readonly profile: ProfileId }
+  | ({ readonly name: 'profile-describe'; readonly profile: ProfileId } & Writes)
   | ({
       readonly name: 'profile-scaffold';
       readonly profile: ProfileId;
       readonly collection: CollectionId;
       readonly title: string;
     } & Writes)
-  | { readonly name: 'profile-lint'; readonly profile: ProfileId; readonly file: FilePath };
+  | ({
+      readonly name: 'profile-lint';
+      readonly profile: ProfileId;
+      readonly file: FilePath;
+    } & Writes);
 
 /** Any `pnpm canvas` command. */
 export type Command = { readonly name: 'help' } | ServiceCommand | ProfileCommand;

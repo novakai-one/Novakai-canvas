@@ -1,7 +1,7 @@
 /*
  * `pnpm canvas` argv → ParsedCommand, checked in the base CLI's order: Node accepted the flags; no
  * read scope flag is repeated; `--help` or a known command word (a family word joins the next
- * word); the command's operand count; placed flags only where the command table takes them. Then
+ * word); the command's operand count; only flags the command table says the command reads. Then
  * `operands.ts` checks each value. Pure. Every failure comes before anything is read or sent: the
  * caller corrects the named argument and runs the command again.
  */
@@ -10,11 +10,10 @@ import type { CommandName, ParsedCommand } from '../../contract/records/command.
 import type { LocalFailure, Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 import { flagText } from './flags.js';
-import type { CommandDefaults, CommandFlags, CommandWords } from './flags.js';
+import type { CommandDefaults, CommandFlags, CommandWords, TextFlag } from './flags.js';
 import { assembleCommand } from './operands.js';
 import { lintProfileRequired } from './profile-operands.js';
-import { commandRow, isCommandName, isFamilyWord } from './table.js';
-import type { PlacedFlag } from './table.js';
+import { commandRow, isAccepted, isCommandName, isFamilyWord, spokenName } from './table.js';
 
 /** A placement rule: the message when the command may not take a flag it was given. */
 type PlacementRule = (name: CommandName, flags: CommandFlags) => string | undefined;
@@ -23,7 +22,10 @@ type PlacementRule = (name: CommandName, flags: CommandFlags) => string | undefi
 const commonUsage =
   'Use canvas describe | list | read ID | create FILE | patch FILE --revision N | preview FILE.';
 
-/** The placement rules in the base CLI's order; the first broken rule is reported. */
+/**
+ * The placement rules; the first broken rule is reported. Five flags keep the base CLI's order and
+ * wording; any other flag a command does not read is checked last.
+ */
 const placementRules: readonly PlacementRule[] = Object.freeze([
   onlyWhereTaken(['profile'], '--profile is only valid with profile lint.'),
   lintNeedsProfile,
@@ -33,6 +35,7 @@ const placementRules: readonly PlacementRule[] = Object.freeze([
   ),
   scopeFlagsExclusive,
   onlyWhereTaken(['section', 'object'], '--section and --object are only valid with read.'),
+  unreadFlag,
 ]);
 
 /**
@@ -75,8 +78,8 @@ function spokenWords(raw: RawArguments<CanvasFlag>): readonly string[] {
 }
 
 /**
- * Exactly the table's operand count, then every placement rule. Operands cannot be silently
- * ignored. Fails with `invalid-arguments`.
+ * Exactly the table's operand count, then every placement rule. Neither an operand nor a flag is
+ * silently ignored. Fails with `invalid-arguments`.
  */
 function placed(
   name: CommandName,
@@ -95,22 +98,35 @@ function firstOperand(operands: readonly string[]): string {
   return operands[0] ?? '';
 }
 
-/** A rule: any flag of `group` given to a command whose row does not take it fails with `message`. */
+/** A rule: any flag of `group` given to a command whose row does not read it fails with `message`. */
 function onlyWhereTaken(
-  group: readonly PlacedFlag[],
+  group: readonly TextFlag[],
   message: string,
 ): PlacementRule {
   return (name, flags) =>
     group.some((flag) => isMisplaced(name, flag, flags)) ? message : undefined;
 }
 
-/** Whether `flag` is given to a command that does not take it. */
+/** Whether `flag` is given to a command that does not read it. */
 function isMisplaced(
   name: CommandName,
-  flag: PlacedFlag,
+  flag: TextFlag,
   flags: CommandFlags,
 ): boolean {
-  return flags[flag] !== undefined && !commandRow(name).placed.includes(flag);
+  return flags[flag] !== undefined && !isAccepted(name, flag);
+}
+
+/**
+ * The last rule: the first flag, in the order given, that the command does not read, as
+ * `--X is not valid with <command>`.
+ */
+function unreadFlag(
+  name: CommandName,
+  flags: CommandFlags,
+): string | undefined {
+  const unread = Object.keys(flags).find((flag) => !isAccepted(name, flag));
+  if (unread === undefined) return undefined;
+  return `--${unread} is not valid with ${spokenName(name)}`;
 }
 
 /** `profile lint` needs --profile. Checked before the read scope flags, as the base CLI does. */

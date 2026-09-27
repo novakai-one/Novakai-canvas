@@ -1,17 +1,17 @@
 /*
  * Profile command assembly: `profile describe|scaffold|lint` with a checked profile, scaffold's
- * collection ID and title, and lint's file. Pure. Fails with `unknown-profile`,
+ * collection ID and title, lint's file, then --out. Pure. Fails with `unknown-profile`,
  * `invalid-arguments`, `source-unavailable` (an empty FILE) or `output-unavailable` (an empty
  * --out); nothing was read or written, so the caller corrects the named argument.
  */
 import { collectionId } from '../../contract/brands.js';
-import type { CollectionId } from '../../contract/brands.js';
+import type { CollectionId, FilePath } from '../../contract/brands.js';
 import type { ProfileCommand, Writes } from '../../contract/records/command.js';
 import type { ProfileId } from '../../contract/records/profiles.js';
 import type { Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 import { checked } from '../shared/checks.js';
-import { joined, mapped, unsupported } from '../shared/results.js';
+import { joined, unsupported } from '../shared/results.js';
 import type { CommandFlags } from './flags.js';
 import { profile, sourceFile, writes } from './values.js';
 
@@ -23,7 +23,7 @@ type Scaffold = { readonly collection: CollectionId; readonly title: string } & 
 
 /**
  * One profile command. describe and scaffold take the profile as their operand, lint takes a FILE
- * and --profile.
+ * and --profile; each command's --out is checked last.
  */
 export function profileCommand(
   name: ProfileCommand['name'],
@@ -32,7 +32,11 @@ export function profileCommand(
 ): Result<ProfileCommand> {
   switch (name) {
     case 'profile-describe':
-      return mapped(profile(operand), (id) => ({ name, profile: id }));
+      return joined(profile(operand), writes(flags), (id, written) => ({
+        name,
+        profile: id,
+        ...written,
+      }));
     case 'profile-scaffold':
       return joined(profile(operand), scaffold(flags), (id, fields) => ({
         name,
@@ -40,14 +44,22 @@ export function profileCommand(
         ...fields,
       }));
     case 'profile-lint':
-      return joined(lintProfile(flags.profile), sourceFile(operand), (id, file) => ({
+      return joined(lintFile(operand, flags.profile), writes(flags), (fields, written) => ({
         name,
-        profile: id,
-        file,
+        ...fields,
+        ...written,
       }));
     default:
       return unsupported(name);
   }
+}
+
+/** lint's --profile, then its FILE. */
+function lintFile(
+  operand: string,
+  text: string | undefined,
+): Result<{ readonly profile: ProfileId; readonly file: FilePath }> {
+  return joined(lintProfile(text), sourceFile(operand), (id, file) => ({ profile: id, file }));
 }
 
 /**

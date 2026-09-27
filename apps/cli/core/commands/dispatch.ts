@@ -1,9 +1,9 @@
 /*
- * Service command routing: run the one flow each command names, then return its text or write the
- * text to the --out file. Uses injected ports only. Failures are returned as values;
- * `cli/canvas.ts` prints them and sets the exit code.
+ * Command routing: run the one flow each service or profile command names, then return its text or
+ * write the text to the --out file. The one --out writer. Uses injected ports only. Failures are
+ * returned as values; `cli/canvas.ts` prints them and sets the exit code.
  */
-import type { ServiceCommand } from '../../contract/records/command.js';
+import type { ProfileCommand, ServiceCommand } from '../../contract/records/command.js';
 import type { LocalFiles } from '../../contract/ports/local-files.js';
 import type { ServiceResources } from '../../contract/ports/service-resources.js';
 import type { FilePath } from '../../contract/brands.js';
@@ -17,12 +17,18 @@ import { retry } from '../authoring/reconcile.js';
 import type { RetryDependencies } from '../authoring/reconcile.js';
 import { describe, inspect, list, read, receipt } from '../reads/queries.js';
 import type { ReadDependencies } from '../reads/queries.js';
+import { answerProfile } from '../profiles/commands.js';
+import type { ProfileDependencies } from '../profiles/commands.js';
 import { unsupported } from '../shared/results.js';
 
-/** What routing itself uses: recipe expansion and the --out write. */
-interface RouteDependencies {
-  readonly resources: Pick<ServiceResources, 'instantiate'>;
+/** What the --out write uses. */
+interface OutputDependencies {
   readonly files: Pick<LocalFiles, 'writeOutput'>;
+}
+
+/** What service routing itself uses: recipe expansion and the --out write. */
+interface RouteDependencies extends OutputDependencies {
+  readonly resources: Pick<ServiceResources, 'instantiate'>;
 }
 
 /**
@@ -35,6 +41,9 @@ export type ServicePorts = ReadDependencies &
   AdmitDependencies &
   RouteDependencies;
 
+/** Every port a profile command may use: the lint file, Language and the --out write. */
+export type ProfilePorts = ProfileDependencies & OutputDependencies;
+
 /**
  * Runs one service command and returns its text, or `Written: FILE` after writing --out. Fails as
  * the command's flow does, or with `output-unavailable` after the command ran.
@@ -44,6 +53,19 @@ export async function executeService(
   dependencies: ServicePorts,
 ): Promise<Result<string>> {
   const outcome = await run(command, dependencies);
+  if (!outcome.ok) return outcome;
+  return output(command.out, outcome.value, dependencies);
+}
+
+/**
+ * Runs one profile command and returns its text, or `Written: FILE` after writing --out. Fails as
+ * the command does, or with `output-unavailable` after the command ran.
+ */
+export async function executeProfile(
+  command: ProfileCommand,
+  dependencies: ProfilePorts,
+): Promise<Result<string>> {
+  const outcome = await answerProfile(command, dependencies);
   if (!outcome.ok) return outcome;
   return output(command.out, outcome.value, dependencies);
 }
@@ -82,11 +104,11 @@ function run(
   }
 }
 
-/** Source files are only written at the explicit --out path; stdout remains the default. */
+/** Text is only written at the explicit --out path; stdout remains the default. */
 async function output(
   path: FilePath | undefined,
   text: string,
-  dependencies: RouteDependencies,
+  dependencies: OutputDependencies,
 ): Promise<Result<string>> {
   if (path === undefined) return success(text);
   const saved = await dependencies.files.writeOutput(path, text);

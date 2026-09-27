@@ -1,10 +1,10 @@
 /*
  * `pnpm canvas` command assembly: the grammar's words and flag text become one `ParsedCommand`,
- * each command carrying only the checked fields it reads. Pure. Runs after `parse.ts`'s placement
- * rules. Order: the read scope, --mode and --revision for every command, then the command's
- * operand, its own flags, --request and --out, then a service command's --server and --workspace.
- * A rejected value is a failure naming the argument; nothing was read or sent, so the caller
- * corrects it and runs the command again.
+ * each command carrying only the checked fields it reads. Pure. Runs after `parse.ts` refused
+ * every flag the command does not read. Order: the read scope, --mode and --revision, then the
+ * command's operand, its own flags, --request and --out, then a service command's --server and
+ * --workspace. A rejected value is a failure naming the argument; nothing was read or sent, so the
+ * caller corrects it and runs the command again.
  */
 import type {
   ChangeMode,
@@ -36,7 +36,11 @@ import {
   writes,
 } from './values.js';
 
-/** What every command checks, as the base CLI does; only the commands that use a value keep it. */
+/**
+ * The read scope, change mode and revision, checked first as the base CLI does. `parse.ts` refused
+ * these flags on a command that does not read them, so that command sees only defaults and drops
+ * them.
+ */
 interface SharedFlags {
   readonly scope: ReadScope;
   readonly mode: ChangeMode;

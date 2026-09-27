@@ -1,7 +1,8 @@
 /*
- * The build-spec@1 profile commands: describe, scaffold and lint. Local only; they never reach the
- * service or a workspace. The profile and every argument are already checked. Failures are
- * returned as values; the caller prints them.
+ * The build-spec@1 profile commands: describe, scaffold and lint, each answering with its text.
+ * Local only; they never reach the service or a workspace. The profile and every argument are
+ * already checked; `core/commands/dispatch.ts` writes the text to --out. Failures are returned as
+ * values; the caller prints them.
  */
 import { scaffoldBuildSpec } from './build-spec/starter.js';
 import { displayDescriptor, lintReport, lintSummary } from './format.js';
@@ -16,43 +17,32 @@ import { failure, success } from '../../contract/errors.js';
 import { parseSource } from '../shared/parse-source.js';
 import { unsupported } from '../shared/results.js';
 
-/** What the profile commands read and write: local files and the Language parser. */
+/** What the profile commands read: the lint file and the Language parser. */
 export interface ProfileDependencies {
-  readonly files: LocalFiles;
+  readonly files: Pick<LocalFiles, 'readSource'>;
   readonly language: SourceLanguage;
 }
 
 /**
- * Runs one profile command and returns its text. Fails with `output-unavailable` (scaffold's
- * --out), `source-unavailable` or `source-too-large` (lint's file), `invalid-source` (Language
- * rejected it) or `profile-structure` (lint findings).
+ * Runs one profile command and returns its text: the descriptor, the starter named with the
+ * checked collection ID and title, or the lint summary. Fails with `source-unavailable` or
+ * `source-too-large` (lint's file), `invalid-source` (Language rejected it) or `profile-structure`
+ * (lint findings).
  */
-export async function executeProfile(
+export function answerProfile(
   command: ProfileCommand,
   dependencies: ProfileDependencies,
 ): Promise<Result<string>> {
   switch (command.name) {
     case 'profile-describe':
-      return success(displayDescriptor());
+      return Promise.resolve(success(displayDescriptor()));
     case 'profile-scaffold':
-      return scaffold(command, dependencies);
+      return Promise.resolve(success(scaffoldBuildSpec(command.collection, command.title)));
     case 'profile-lint':
       return lintFile(command.file, dependencies);
     default:
-      return unsupported(command);
+      return Promise.resolve(unsupported(command));
   }
-}
-
-/** The starter named with the checked collection ID and title; written to --out when given. */
-async function scaffold(
-  command: Extract<ProfileCommand, { readonly name: 'profile-scaffold' }>,
-  dependencies: ProfileDependencies,
-): Promise<Result<string>> {
-  const source = scaffoldBuildSpec(command.collection, command.title);
-  if (command.out === undefined) return success(source);
-  const saved = await dependencies.files.writeOutput(command.out, source);
-  if (!saved.ok) return saved;
-  return success(`Written: ${command.out}`);
 }
 
 /** Read, parse and lint one file. */
