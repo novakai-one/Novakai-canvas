@@ -2039,7 +2039,7 @@ capability/design-system/cli/audit-styles.ts N (U22) · package.json C (`styles:
 | 14 | `confirmedGestures` leaks connection IDs | FIX (I24) |
 | 15 | Work continues after dispose | FIX (I20) |
 | 16 | AddTools keeps a second copy of form state | FIX (M23 deletes `useLocalCreation`) |
-| 17 | An Add draft keeps the collection from its first edit, so a diagram added later cannot be picked in it (#143; same on base) | FIX (I33): capture at each edit. The draft holds only names and choices, so a newer base loses nothing; Authoring still refuses a foreign conflict |
+| 17 | An Add draft keeps the collection from its first edit, so a diagram added later cannot be picked in it (#143; same on base) | FIX (I33, confirmed by lead): capture at each edit. The draft holds only names and choices, so a newer base loses nothing; Authoring still refuses a foreign conflict |
 
 ---
 
@@ -2165,7 +2165,7 @@ capability/design-system/cli/audit-styles.ts N (U22) · package.json C (`styles:
 
 **M28 note (decision 1, server half).** A second browser committing first cannot force `constraint-conflict`: Authoring checks read versions before layout feasibility, so it gives `revision-conflict`, which snaps back (§3). `constraint-conflict` needs a move the local preview accepts and the service's layout refuses. M28 looks for a repeatable one in a scratch workspace; if none is found, the PR lists "choices after a server refusal" under **Not verified**, and M28b is decided on the local-refusal drive only. The Canvas side is expected to work: `preview-routes` needs the entry still `submitted` at the same stamp (`draft-events.ts:31-35`), D4 keeps it `submitted`, and a refusal with no foreign commit rereads without a reopen, so the stamp is unchanged.
 
-- **Not scheduled (needs Chris's decision, §16 Q4):** `layout-owns-settling` (drop settling and expand geometry → capability/layout) and `layout-owns-preview-rules` (Layout's preview returns the grew / pushed / stopped verdict). Until then `core/canvas-edits/settle/` and `core/movement/preview/*-rules.ts` stay in web with that written reason.
+- **L1 `layout-owns-settling`** (drop settling and expand geometry → capability/layout) and **L2 `layout-owns-preview-rules`** (Layout's preview returns the grew / pushed / stopped verdict; web stops re-deriving it) run after U42 and before OB1 (§16 Q4 decided yes). Each ≤ ~600 lines; `pnpm exec vitest run capability/layout` adds no new failures; headless: drag a module past its edge → same choices as before.
 - **Totals.** 97 PRs (plus M28b if needed): 8 built (P1–P8, real +2,390 / −1,622), 47 more plan PRs (+12,490 / −6,834 by estimate) and 42 U PRs (+9,105 / −6,590; renames sized by `git diff -M`). Sum +23,985 / −15,046 = 39,031 changed lines. Over 600: P3, P6, P7 (built; overages accepted). P1–P8 ran 0.6–2.7× their estimates (house-style headers and JSDoc, score-gate fixes); expect the same spread later.
 
 ### 13.3 Order
@@ -2246,14 +2246,14 @@ Each was checked in the code at `5571c7e`.
 
 ---
 
-## 16. Decisions (decided by the lead, 27–28 Sep; Q4 open)
+## 16. Decisions (decided by the lead, 27–28 Sep)
 
 | # | Question | Decision |
 |---|---|---|
 | Q1 | Owner brands for values that are named aliases today (workspace sequence, collection revision, Canvas target ID and scene key, Library cursor and visit time) | **Yes — brand them in their owning capabilities.** Chris's rule: no bare string/number for identities or domain values. Scheduled last as OB1–OB3, after ER3 and the U-series, so they do not collide with the service/cli stacks. |
 | Q2 | Score gate for `workspace-session.ts` and the temporary bridge while they are being removed | **Exempt both until M34.** Instead `wc -l workspace-session.ts` must drop in every wire PR, and the bridge stays within its §8.5 budget. |
 | Q3 | Choices after a server refusal: which refusal codes | **`constraint-conflict` only.** The other 7 codes snap back. |
-| Q4 | Should capability/layout own drop settling, expand geometry and the preview rules that web re-derives today (`core/canvas-edits/settle/`, `core/movement/expand/geometry.ts`, `core/movement/preview/*-rules.ts`)? | **Open (Chris).** Default: not scheduled; web keeps them with that written reason (§13.2 "Not scheduled"). |
+| Q4 | Should capability/layout own drop settling, expand geometry and the preview rules that web re-derives today (`core/canvas-edits/settle/`, `core/movement/expand/geometry.ts`, `core/movement/preview/*-rules.ts`)? | **Yes (lead, 28 Sep).** Geometry and placement belong to Layout (repo map: "Node placement, module roads/lanes and wire routing → capability/layout"); web keeps only the interaction. Scheduled as L1, L2 after U42. |
 
 Decided by default, no question needed:
 - Run M28b (Canvas change) only if the M28 drive shows the Canvas drops the preview.
