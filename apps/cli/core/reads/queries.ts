@@ -1,48 +1,67 @@
 /*
- * Read-only service queries: send one read route and turn the answer into text, plus the route and
- * query of each read that names a collection or request. Uses injected ports only; nothing is
- * written to the workspace. Service failures are returned whole; the caller fixes the named input
- * and runs the command again.
+ * Read-only service commands: `describe`, `list`, `read`, `inspect` and `receipt`. Each asks the
+ * service once through the injected reads port and turns the checked answer into text. Nothing is
+ * written to the workspace; service failures are returned whole, and the caller fixes the named
+ * input and runs the command again.
  */
+import type { CollectionReader } from '../../contract/ports/collection-reader.js';
+import type { ServiceReads } from '../../contract/ports/service-reads.js';
 import type { ReadScope } from '../../contract/records/command.js';
-import type { HttpTransport, ReadRoute, RouteQuery } from '../../contract/ports/http-transport.js';
 import type { CollectionId, RequestId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
-import { success } from '../../contract/errors.js';
+import { mapped } from '../shared/results.js';
+import { collectionLines } from './collections.js';
+import { lookedUpReceipt } from './receipt.js';
+import { sourceText } from './source.js';
 
-/** One read: its route and, when it names a collection or request, its query. */
-export interface ReadTarget {
-  readonly route: ReadRoute;
-  readonly query?: RouteQuery;
+/** What the read commands use: the service's read calls and Model's collection check. */
+export interface ReadDependencies {
+  readonly reads: ServiceReads;
+  readonly collections: CollectionReader;
 }
 
-/** Read failures preserve the service diagnostic; successful payloads still pass their owner-specific readout. */
-export async function query(
-  target: ReadTarget,
-  format: (input: unknown) => Result<string>,
-  dependencies: { readonly transport: Pick<HttpTransport, 'get'> },
-): Promise<Result<string>> {
-  const answer = await dependencies.transport.get(target.route, target.query);
-  if (!answer.ok) return answer;
-  return format(answer.value.value);
+/** `describe`: the DSL vocabulary as JSON. Fails as the read does. */
+export async function describe(dependencies: ReadDependencies): Promise<Result<string>> {
+  return mapped(await dependencies.reads.language(), json);
 }
-/** Read-only grammar inspection is JSON output, never a requirement to author diagram JSON. */
-export function describe(value: unknown): Result<string> {
-  return success(JSON.stringify(value, null, 2));
+
+/** `list`: one line per live collection. Fails as the workspace read does. */
+export async function list(dependencies: ReadDependencies): Promise<Result<string>> {
+  const current = await dependencies.reads.workspace();
+  return mapped(current, (observed) => collectionLines(observed.value, dependencies.collections));
 }
-/** The `/api/v1/source` read of one collection, narrowed to a section or object when the scope names one. */
-export function sourceRead(
+
+/** `read`: the collection's source under its revision comment. Fails as the source read does. */
+export async function read(
   collection: CollectionId,
   scope: ReadScope,
-): ReadTarget {
-  if (scope.kind === 'all') return { route: '/api/v1/source', query: { id: collection } };
-  return { route: '/api/v1/source', query: { id: collection, [scope.kind]: scope.id } };
+  dependencies: ReadDependencies,
+): Promise<Result<string>> {
+  return mapped(await dependencies.reads.source(collection, scope), sourceText);
 }
-/** The `/api/v1/inspect` read of one collection. */
-export function inspectRead(collection: CollectionId): ReadTarget {
-  return { route: '/api/v1/inspect', query: { id: collection } };
+
+/** `inspect`: the service's inspection report as JSON. Fails as the inspect read does. */
+export async function inspect(
+  collection: CollectionId,
+  dependencies: ReadDependencies,
+): Promise<Result<string>> {
+  return mapped(await dependencies.reads.inspect(collection), json);
 }
-/** The `/api/v1/receipt` read of one request. */
-export function receiptRead(request: RequestId): ReadTarget {
-  return { route: '/api/v1/receipt', query: { id: request } };
+
+/**
+ * `receipt`: the request's receipt, or that none exists. Fails as the receipt read does, or with
+ * `invalid-response` when the receipt names another request.
+ */
+export async function receipt(
+  request: RequestId,
+  dependencies: ReadDependencies,
+): Promise<Result<string>> {
+  const found = await dependencies.reads.receipt(request);
+  if (!found.ok) return found;
+  return lookedUpReceipt(found.value.value, request);
+}
+
+/** Read-only grammar and inspection output is JSON, never a requirement to author diagram JSON. */
+function json(value: unknown): string {
+  return JSON.stringify(value, null, 2);
 }

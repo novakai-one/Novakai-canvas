@@ -4,24 +4,28 @@
  * only. A failure stops before the Authoring request is sent; the backups stay in the retained
  * request for the next `retry`.
  */
+import type { ServiceResources } from '../../contract/ports/service-resources.js';
 import type { ByteBackup } from '../../contract/records/retained-request.js';
 import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
 import { combined } from '../shared/results.js';
-import { resourceCall } from './stage.js';
-import type { ResourcePoster } from './stage.js';
+
+/** What the restore uses: the service's byte restore. */
+export interface RestoreDependencies {
+  readonly resources: Pick<ServiceResources, 'restore'>;
+}
 
 /**
  * Restage exact normalized bytes before admission; receipt reconciliation has already established
  * no commit exists. Restore failures stop before canonical admission, while successful backups
- * remain safe to replay. Fails as the first failed `/resources/restore` call does.
+ * remain safe to replay. Fails as the first failed restore does.
  */
 export async function restoreResources(
   backups: readonly ByteBackup[],
-  dependencies: ResourcePoster,
+  dependencies: RestoreDependencies,
 ): Promise<Result<void>> {
   const result = combined(
-    await Promise.all(backups.map((backup) => resourceCall('restore', backup, dependencies))),
+    await Promise.all(backups.map((backup) => dependencies.resources.restore(backup))),
   );
   if (!result.ok) return result;
   return success(undefined);

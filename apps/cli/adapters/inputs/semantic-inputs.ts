@@ -1,51 +1,41 @@
 /*
- * Checks service answers and builds the text and requests the service commands need: snapshots,
- * Authoring requests from DSL, Assets byte backups, receipts, source read-outs and `list` lines.
- * Pure apart from the injected Language parser. Fails with `invalid-source` (fix the DSL),
- * `invalid-input` (the built request fails Authoring's schema), `invalid-response` (the service's
- * answer did not match), or a precondition code: `not-found`, `already-exists`,
- * `revision-required`, `revision-conflict`. The caller fixes the named input and runs again.
+ * Language's reading of a DSL source and the Authoring request a DSL change sends: the source's
+ * collection, resource declarations and the change's storage preconditions against the observed
+ * snapshot. Pure apart from the injected Language parser. Fails with `invalid-source` (fix the
+ * DSL), `invalid-input` (the built request fails Authoring's schema), `invalid-response` (the
+ * snapshot lacks a record the change needs), or a precondition code: `not-found`,
+ * `already-exists`, `revision-required`, `revision-conflict`. The caller fixes the named input and
+ * runs again.
  */
-import { snapshotSchema, receiptSchema } from '@novakai/canvas-authoring';
 import type { Request, Snapshot, StoredRecord } from '@novakai/canvas-authoring';
 import { requestSchema } from '../../contract/schemas.js';
-import { assetDigest, type CollectionRevision, type RequestId } from '../../contract/brands.js';
+import type { CollectionRevision, RequestId } from '../../contract/brands.js';
 import { validate } from '@novakai/canvas-model';
 import type { Language } from '@novakai/canvas-language';
-import { byteBackup } from '../../contract/records/retained-request.js';
-import { z } from 'zod';
-import type { SemanticInputs, ReceiptExpectation } from '../../contract/ports/runtime.js';
+import type { SemanticInputs } from '../../contract/ports/runtime.js';
 import type { ChangeIntent } from '../../contract/records/command.js';
 import type { LocalFailure, Result } from '../../contract/errors.js';
 import type { FailureSource } from '../../contract/records/foreign.js';
 import { failure, success } from '../../contract/errors.js';
-const manualTarget = z
-  .strictObject({
-    target: z.string(),
-    kind: z.enum(['placement', 'route']),
-    locked: z.boolean(),
-  })
-  .readonly();
-/** The snapshot half is the browser's; the CLI checks only that a receipt is present. */
-const appliedCommit = z.looseObject({ receipt: z.unknown() });
-const readout = z.looseObject({
-  source: z.string(),
-  collection: z.string(),
-  revision: z.number().int().nonnegative(),
-  scope: z
-    .union([
-      z.object({ kind: z.literal('all') }),
-      z.object({ kind: z.enum(['section', 'object']), id: z.string() }),
-    ])
-    .default({ kind: 'all' }),
-  manual: z.array(manualTarget).readonly().optional(),
-});
-/** Parse the server snapshot through Authoring, rather than asserting the JSON response type. */
-function snapshot(input: unknown): Result<Snapshot> {
-  const parsed = snapshotSchema.safeParse(input);
-  if (!parsed.success) return invalidResponse('Service returned an invalid workspace snapshot');
-  return success(parsed.data);
+
+/** All CLI semantic interpretation uses owning capability contracts; host output remains a small readable vocabulary. */
+export function createSemanticInputs(language: Pick<Language, 'parse'>): SemanticInputs {
+  return {
+    profileParse: (source) => {
+      const result = language.parse(source);
+      if (!result.ok)
+        return invalidSource({ code: 'validation-failed', diagnostics: result.error.diagnostics });
+      return success(result.value);
+    },
+    requests: (source) => {
+      const result = language.parse(source);
+      if (!result.ok) return invalidSource(result.error);
+      return success(result.value.resources);
+    },
+    request: (intent, source, state, id) => request(intent, source, state, id, language),
+  };
 }
+
 /** Existing edits require the revision the agent actually read; storage preconditions remain tied to the same snapshot. */
 function existingVersion(
   record: StoredRecord | undefined,
@@ -161,128 +151,6 @@ function request(
   if (!parsed.ok) return invalidSource(parsed.error);
   return build(intent, source, state, id, parsed.value.collection);
 }
-/** List uses Model's checked labels and IDs; invalid canonical data cannot masquerade as an empty library. */
-function collectionLine(record: StoredRecord): string {
-  const collection = validate(record.value);
-  if (!collection.ok) return `${record.key.id}\tInvalid collection — inspect service diagnostics`;
-  return `${collection.value.id}\tr${collection.value.revision}\t${collection.value.title}\t${collection.value.sections.length} sections`;
-}
-/** Human geometry survives matching replacements; agents reset it explicitly when reflow is wanted. */
-function manualNote(manual: ReadonlyArray<{ readonly target: string }> | undefined): string {
-  if (manual === undefined || manual.length === 0) return '';
-  return `\n# manual geometry: ${manual.length} target(s) — replace preserves these; reset layout @section / reset route @section/@wire to reflow`;
-}
-/** Read output declares the exact revision as a DSL comment, preserving fully authorable source. */
-function sourceReadout(input: unknown): Result<string> {
-  const parsed = readout.safeParse(input);
-  if (!parsed.success) return invalidResponse('Service returned an invalid source readout');
-  return success(
-    `${scopeNotice(parsed.data.scope)}# ${parsed.data.collection} revision=${parsed.data.revision}${manualNote(parsed.data.manual)}\n${parsed.data.source}`,
-  );
-}
-
-function scopeNotice(scope: { readonly kind: string }): string {
-  return scope.kind === 'all'
-    ? ''
-    : '# Read-only partial context; referenced objects/views and manual geometry may be omitted. Read those IDs separately or use the full collection.\n';
-}
-/** Receipt output reports confirmed identity and sequence, not an optimistic saved status. */
-function receipt(
-  input: unknown,
-  expected: ReceiptExpectation,
-): Result<string> {
-  if (input === null) return absentReceipt(expected);
-  return receiptReadout(input, expected.request);
-}
-/** An absent lookup is useful information; an absent apply confirmation remains an error requiring reconciliation. */
-function absentReceipt(expected: ReceiptExpectation): Result<string> {
-  if (expected.kind === 'lookup') return success('No committed receipt found.');
-  return failure({
-    code: 'invalid-response',
-    message: 'Apply returned no committed receipt',
-    recovery: `Check canvas receipt ${expected.request} before retrying.`,
-  });
-}
-/** An apply answer without its receipt half is as unconfirmed as a missing receipt. */
-function appliedReceipt(
-  input: unknown,
-  request: RequestId,
-): Result<string> {
-  const parsed = appliedCommit.safeParse(input);
-  if (!parsed.success)
-    return failure({
-      code: 'invalid-response',
-      message: 'Service returned an invalid apply confirmation',
-      recovery: `Check canvas receipt ${request} before retrying.`,
-    });
-  return receipt(parsed.data.receipt, { kind: 'committed', request });
-}
-/** Malformed receipts cannot release a pending request or be reported as a successful write. */
-function receiptReadout(
-  input: unknown,
-  request: RequestId,
-): Result<string> {
-  const parsed = receiptSchema.safeParse(input);
-  if (!parsed.success) return invalidResponse('Service returned an invalid receipt');
-  if (parsed.data.request !== request)
-    return invalidResponse('Service returned a receipt for another request');
-  return success(
-    `${parsed.data.outcome.status}: ${parsed.data.request}\nWorkspace sequence: ${parsed.data.sequence}`,
-  );
-}
-/** All CLI semantic interpretation uses owning capability contracts; host output remains a small readable vocabulary. */
-export function createSemanticInputs(language: Pick<Language, 'parse'>): SemanticInputs {
-  return {
-    profileParse: (source) => {
-      const result = language.parse(source);
-      if (!result.ok)
-        return invalidSource({ code: 'validation-failed', diagnostics: result.error.diagnostics });
-      return success(result.value);
-    },
-    snapshot,
-    checkedRequest,
-    requests: (source) => {
-      const result = language.parse(source);
-      if (!result.ok) return invalidSource(result.error);
-      return success(result.value.resources);
-    },
-    admissionDigest: (input) => {
-      const result = z
-        .looseObject({ descriptor: z.looseObject({ digest: assetDigest }) })
-        .safeParse(input);
-      if (!result.success) return invalidResponse('Invalid Assets admission');
-      return success(result.data.descriptor.digest);
-    },
-    backup: (input) => {
-      const result = z
-        .looseObject({ descriptor: z.looseObject({ digest: z.string() }), base64: z.string() })
-        .safeParse(input);
-      if (!result.success) return invalidResponse('Invalid normalized Assets bytes');
-      const checked = byteBackup.safeParse({
-        digest: result.data.descriptor.digest,
-        base64: result.data.base64,
-      });
-      if (!checked.success) return invalidResponse('Invalid normalized Assets digest');
-      return success(checked.data);
-    },
-    receipt,
-    applied: appliedReceipt,
-    readout: sourceReadout,
-    request: (intent, source, state, id) => request(intent, source, state, id, language),
-    collections: (input) => {
-      const current = snapshot(input);
-      if (!current.ok) return current;
-      const records = current.value.records.filter(
-        (item) => item.key.kind === 'collection' && !item.deleted,
-      );
-      return success(
-        records.map(collectionLine).join('\n') ||
-          'No collections yet. Use canvas create diagram.canvas.',
-      );
-    },
-  };
-}
-
 /** Language's diagnostics under `invalid-source`. */
 function invalidSource(source: FailureSource): Result<never, LocalFailure> {
   return failure({

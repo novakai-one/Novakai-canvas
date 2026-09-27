@@ -1,9 +1,9 @@
 /*
  * HTTP transport to the local service: one checked loopback origin, a bearer token, and the
- * service's response envelope; a rejection in it becomes `service-rejected`. Network I/O; each
- * failure is returned as a value. A lost answer is `connection-uncertain`; for a write,
- * `core/authoring/submit.ts` names the retained request so `receipt` then `retry` recover it.
- * This file never retries.
+ * service's response envelope; a rejection in it becomes `service-rejected`, the service's record
+ * kept whole. Network I/O; each failure is returned as a value. A lost answer is
+ * `connection-uncertain`; for a write, `adapters/service-http/authoring.ts` names the retained
+ * request so `receipt` then `retry` recover it. This file never retries.
  */
 import { responseEnvelope } from '@novakai/canvas-service';
 import type { HttpTransport, RouteQuery } from '../../contract/ports/http-transport.js';

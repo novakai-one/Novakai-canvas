@@ -4,72 +4,99 @@
  * Authoring owns the commit; the retained request file is the recovery record for `retry`.
  */
 import type { AdmitCommand } from '../../contract/records/command.js';
-import type { CliDependencies, PresetSource } from '../../contract/ports/runtime.js';
+import type { PresetInputs, PresetSource } from '../../contract/ports/runtime.js';
+import type { LocalFiles } from '../../contract/ports/local-files.js';
+import type { ServiceReads } from '../../contract/ports/service-reads.js';
+import type { ServiceResources } from '../../contract/ports/service-resources.js';
 import type { StagedBackup } from '../../contract/records/staged-resource.js';
-import type { Request } from '../../contract/records/foreign.js';
+import type { PresetPreparation } from '../../contract/records/service-answers.js';
+import type { RequestId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
-import { assetBindings, resourceCall, stageResources } from '../resources/stage.js';
+import { success } from '../../contract/errors.js';
+import { assetBindings, stageResources } from '../resources/stage.js';
+import type { StagingDependencies } from '../resources/stage.js';
 import { submit } from '../authoring/submit.js';
+import type { SubmitDependencies } from '../authoring/submit.js';
 
-/** All bytes and exact preset content are retained before the sole canonical Authoring apply gate. */
+/**
+ * What admission uses: the preset file read and grammar, staging, Templates preparation, the
+ * workspace read, request IDs, and what `submit` uses.
+ */
+export interface AdmitDependencies extends StagingDependencies, SubmitDependencies {
+  readonly files: Pick<LocalFiles, 'readSource'>;
+  readonly presets: PresetInputs;
+  readonly reads: Pick<ServiceReads, 'workspace'>;
+  readonly resources: Pick<ServiceResources, 'stage' | 'blob' | 'prepare' | 'restore'>;
+  nextRequestId(): RequestId;
+}
+
+/** A preset whose bytes are staged and whose content Templates prepared. */
+interface PreparedPreset {
+  readonly staged: readonly StagedBackup[];
+  readonly preparation: PresetPreparation;
+}
+
+/**
+ * All bytes and exact preset content are retained before the sole canonical Authoring apply gate.
+ * Fails as the source read, the preset grammar, staging, preparation, the workspace read, the
+ * request builder or `submit` does.
+ */
 export async function admitPreset(
   command: AdmitCommand,
-  dependencies: CliDependencies,
+  dependencies: AdmitDependencies,
 ): Promise<Result<string>> {
+  const parsed = await readPreset(command, dependencies);
+  if (!parsed.ok) return parsed;
+  const prepared = await preparePreset(command, parsed.value, dependencies);
+  if (!prepared.ok) return prepared;
+  return retain(command, prepared.value, dependencies);
+}
+
+/** The preset file's admission and declarations. Fails as the source read or the grammar does. */
+async function readPreset(
+  command: AdmitCommand,
+  dependencies: AdmitDependencies,
+): Promise<Result<PresetSource>> {
   const source = await dependencies.files.readSource(command.file);
   if (!source.ok) return source;
-  const parsed = dependencies.presets.source(command, source.value);
-  if (!parsed.ok) return parsed;
-  return stagePreset(command, parsed.value, dependencies);
+  return dependencies.presets.source(command, source.value);
 }
+
 /** Byte admission, relative to the preset file, settles before immutable Templates preparation. */
-async function stagePreset(
+async function preparePreset(
   command: AdmitCommand,
   parsed: PresetSource,
-  dependencies: CliDependencies,
-): Promise<Result<string>> {
+  dependencies: AdmitDependencies,
+): Promise<Result<PreparedPreset>> {
   const staged = await stageResources(command.file, parsed.resources, dependencies);
   if (!staged.ok) return staged;
-  const prepared = await resourceCall(
-    'prepare',
-    { admission: parsed.admission, assets: assetBindings(staged.value) },
-    dependencies,
+  const preparation = await dependencies.resources.prepare(
+    parsed.admission,
+    assetBindings(staged.value),
   );
-  if (!prepared.ok) return prepared;
-  return retain(command, prepared.value, staged.value, dependencies);
+  if (!preparation.ok) return preparation;
+  return success({ staged: staged.value, preparation: preparation.value });
 }
+
 /** Observe write preconditions after staging; the service still recomputes content and compares all reads during admission. */
 async function retain(
   command: AdmitCommand,
-  prepared: unknown,
-  staged: readonly StagedBackup[],
-  dependencies: CliDependencies,
+  prepared: PreparedPreset,
+  dependencies: AdmitDependencies,
 ): Promise<Result<string>> {
-  const current = await dependencies.transport.get('/api/v1/workspace');
+  const current = await dependencies.reads.workspace();
   if (!current.ok) return current;
-  const request = presetRequest(command, prepared, staged, current.value.value, dependencies);
+  const request = dependencies.presets.request(
+    prepared.preparation,
+    current.value.value,
+    command.request ?? dependencies.nextRequestId(),
+    assetBindings(prepared.staged),
+  );
   if (!request.ok) return request;
-  const backups = staged.map((item) => item.backup);
+  const backups = prepared.staged.map((item) => item.backup);
   return submit(
     { generation: current.value.generation, request: request.value, backups },
-    false,
+    'apply',
     dependencies,
-  );
-}
-/** Request identity and preconditions are validated before durable local retention. */
-function presetRequest(
-  command: AdmitCommand,
-  prepared: unknown,
-  staged: readonly StagedBackup[],
-  workspace: unknown,
-  dependencies: CliDependencies,
-): Result<Request> {
-  const snapshot = dependencies.semantic.snapshot(workspace);
-  if (!snapshot.ok) return snapshot;
-  return dependencies.presets.request(
-    prepared,
-    snapshot.value,
-    command.request ?? dependencies.nextRequestId(),
-    assetBindings(staged),
   );
 }

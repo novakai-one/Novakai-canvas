@@ -4,7 +4,6 @@
  * resource syntax are injected. Fails with `invalid-source` (the recipe's DSL; the caller fixes
  * the file) or `invalid-response` (the service's preparation did not form a request).
  */
-import { z } from 'zod';
 import type { Snapshot, Request } from '@novakai/canvas-authoring';
 import { requestSchema } from '../../contract/schemas.js';
 import type { RequestId } from '../../contract/brands.js';
@@ -12,12 +11,9 @@ import type { AssetBinding } from '../../contract/records/staged-resource.js';
 import type { PresetInputs, PresetSource, ResourceSyntax } from '../../contract/ports/runtime.js';
 import type { ThemeSource } from '../../contract/records/theme-source.js';
 import type { RecipeHeader } from '../../contract/records/command.js';
+import type { PresetPreparation } from '../../contract/records/service-answers.js';
 import type { Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
-const prepared = z.looseObject({
-  key: z.strictObject({ kind: z.literal('preset'), id: z.string() }),
-  reads: z.array(z.unknown()),
-});
 /** Recipe admission keeps editable DSL as its source; Templates owns canonicalization and immutable identity. */
 function recipe(
   header: RecipeHeader,
@@ -33,28 +29,22 @@ function recipe(
 }
 /** The metadata precondition serializes new admissions; exact preset absence/presence is explicitly scoped too. */
 function request(
-  input: unknown,
+  preparation: PresetPreparation,
   snapshot: Snapshot,
   id: RequestId,
   assets: readonly AssetBinding[],
 ): Result<Request> {
-  const parsed = prepared.safeParse(input);
-  if (!parsed.success)
-    return failure({
-      code: 'invalid-response',
-      message: 'Service returned invalid preset preparation',
-    });
   const metadata = snapshot.records.find(
     (item) => item.key.kind === 'workspace' && item.key.id === 'metadata',
   );
   if (!metadata)
     return failure({ code: 'invalid-response', message: 'Workspace metadata is missing' });
   const existing = snapshot.records.find(
-    (item) => item.key.kind === 'preset' && item.key.id === parsed.data.key.id,
+    (item) => item.key.kind === 'preset' && item.key.id === preparation.key.id,
   );
   const expected = [
     { key: metadata.key, version: metadata.version },
-    { key: parsed.data.key, version: existing?.version ?? 'absent' },
+    { key: preparation.key, version: existing?.version ?? 'absent' },
   ];
   const checked = requestSchema.safeParse({
     workspace: snapshot.workspace,
@@ -64,7 +54,7 @@ function request(
     expected,
     scope: expected.map((item) => item.key),
     assets,
-    intent: { kind: 'change', planner: 'preset', payload: input },
+    intent: { kind: 'change', planner: 'preset', payload: preparation.document },
   });
   return checkedResult(checked);
 }

@@ -3,6 +3,7 @@
  * layer returns. Pure. Nothing throws across a boundary; `cli/canvas.ts` prints the failure and
  * sets the exit code. Consumers branch on the code, never on the message.
  */
+import type { RequestId } from './brands.js';
 import type { FailureSource, OperationSource } from './records/foreign.js';
 
 /**
@@ -159,6 +160,21 @@ export function unreadableSource(path: string): FailureInput {
  */
 export function unwritableOutput(path: string): FailureInput {
   return { code: 'output-unavailable', message: `Cannot write output: ${path}` };
+}
+
+/**
+ * `invalid-response` for an apply answer that does not confirm a commit. The write may have
+ * happened, so the recovery checks `request`'s receipt before any retry.
+ */
+export function unconfirmedApply(
+  request: RequestId,
+  message: string,
+): FailureInput {
+  return {
+    code: 'invalid-response',
+    message,
+    recovery: `Check canvas receipt ${request} before retrying.`,
+  };
 }
 
 /** Wraps another owner's failure record without changing it. */

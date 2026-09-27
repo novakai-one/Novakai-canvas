@@ -6,7 +6,7 @@
  */
 import type { SemanticInputs } from '../../contract/ports/runtime.js';
 import type { ResourceReader } from '../../contract/ports/resource-reader.js';
-import type { HttpTransport, ResourceAction } from '../../contract/ports/http-transport.js';
+import type { ServiceResources } from '../../contract/ports/service-resources.js';
 import type { RetainedRequest } from '../../contract/records/retained-request.js';
 import type {
   AssetBinding,
@@ -20,34 +20,22 @@ import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
 import { combined } from '../shared/results.js';
 
-/** What a single `/api/v1/resources/` call needs: the transport's POST. */
-export interface ResourcePoster {
-  readonly transport: Pick<HttpTransport, 'post'>;
+/** What staging uses: the confined resource reader and the service's stage and blob calls. */
+export interface StagingDependencies {
+  readonly reader: ResourceReader;
+  readonly resources: Pick<ServiceResources, 'stage' | 'blob'>;
 }
-/** This resource flow consumes only byte I/O plus the four semantic decoders it invokes. */
-export interface ResourceDependencies extends ResourcePoster {
-  readonly resources: ResourceReader;
-  readonly semantic: Pick<
-    SemanticInputs,
-    'admissionDigest' | 'backup' | 'requests' | 'checkedRequest'
-  >;
+
+/** What DSL preparation adds: the source's resource declarations and the service's freeze. */
+export interface ResourceDependencies extends StagingDependencies {
+  readonly resources: Pick<ServiceResources, 'stage' | 'blob' | 'freeze'>;
+  readonly semantic: Pick<SemanticInputs, 'requests'>;
 }
+
 /**
- * One `/api/v1/resources/ACTION` call and its answer's value. Service envelope failures retain
- * their owner diagnostic; preparation never reports an optimistic commit.
- */
-export async function resourceCall(
-  action: ResourceAction,
-  input: unknown,
-  dependencies: ResourcePoster,
-): Promise<Result<unknown>> {
-  const answer = await dependencies.transport.post(`/api/v1/resources/${action}`, input);
-  if (!answer.ok) return answer;
-  return success(answer.value.value);
-}
-/**
- * Stage each declaration of `source`, read relative to its file, before freezing aliases; failure
- * leaves only collectable Assets orphans.
+ * Stage each declaration of `source`, read relative to its file, before freezing aliases. Fails
+ * with `invalid-source`, as the resource read or a service call does, or with `invalid-input`
+ * when the frozen request fails Authoring's schema.
  */
 export async function prepareResources(
   source: SourceFile,
@@ -60,79 +48,73 @@ export async function prepareResources(
   if (!staged.ok) return staged;
   return freeze(retained, staged.value, dependencies);
 }
-/** Stage a semantic declaration list; a failed member prevents any canonical request submission. */
+
+/**
+ * Stage a declaration list; a failed member prevents any canonical request submission. Fails as
+ * the first failed resource read, then the first failed stage or blob call, does.
+ */
 export async function stageResources(
   file: FilePath,
   requests: readonly ResourceRequest[],
-  dependencies: ResourceDependencies,
+  dependencies: StagingDependencies,
 ): Promise<Result<readonly StagedBackup[]>> {
   const read = await Promise.all(
     requests
       .filter((item) => item.kind !== 'theme')
-      .map((item) => dependencies.resources.read(file, item)),
+      .map((item) => dependencies.reader.read(file, item)),
   );
   const checked = combined(read);
   if (!checked.ok) return checked;
   return combined(await Promise.all(checked.value.map((item) => stage(item, dependencies))));
 }
+
 /** Each staged alias and the digest of its bytes, in declaration order. */
 export function assetBindings(staged: readonly StagedBackup[]): readonly AssetBinding[] {
   return staged.map((item) => ({ alias: item.alias, digest: item.backup.digest }));
 }
+
 /** Exact aliases are retained after all declared bytes have been admitted. */
 async function freeze(
   retained: RetainedRequest,
   values: readonly StagedBackup[],
   dependencies: ResourceDependencies,
 ): Promise<Result<RetainedRequest>> {
-  const request = { ...retained.request, assets: assetBindings(values) };
-  const frozen = await resourceCall('freeze', request, dependencies);
+  const frozen = await dependencies.resources.freeze(retained.request, assetBindings(values));
   if (!frozen.ok) return frozen;
-  const checked = dependencies.semantic.checkedRequest(frozen.value);
-  if (!checked.ok) return checked;
   return success({
     ...retained,
-    request: checked.value,
+    request: frozen.value,
     backups: values.map((item) => item.backup),
   });
 }
+
 /** A pinned digest is backed up as it is; local bytes are staged first. */
 function stage(
   resource: StagedResource,
-  dependencies: ResourceDependencies,
+  dependencies: StagingDependencies,
 ): Promise<Result<StagedBackup>> {
   if (resource.kind === 'pinned') return backup(resource.alias, resource.digest, dependencies);
   return stageLocal(resource.alias, resource.input, dependencies);
 }
+
 /** One upload is followed by an exact normalized byte read for durable local replay protection. */
 async function stageLocal(
   alias: string,
   input: StageInput,
-  dependencies: ResourceDependencies,
+  dependencies: StagingDependencies,
 ): Promise<Result<StagedBackup>> {
-  const staged = await resourceCall('stage', input, dependencies);
-  if (!staged.ok) return staged;
-  return stagedBackup(alias, staged.value, dependencies);
-}
-/** Assets admission identity is checked before resolving its normalized copy. */
-function stagedBackup(
-  alias: string,
-  input: unknown,
-  dependencies: ResourceDependencies,
-): Promise<Result<StagedBackup>> {
-  const digest = dependencies.semantic.admissionDigest(input);
-  if (!digest.ok) return Promise.resolve(digest);
+  const digest = await dependencies.resources.stage(input);
+  if (!digest.ok) return digest;
   return backup(alias, digest.value, dependencies);
 }
+
 /** Every referenced byte, including already-pinned resources, is retained before the Authoring request can be sent. */
 async function backup(
   alias: string,
   digest: AssetDigest,
-  dependencies: ResourceDependencies,
+  dependencies: StagingDependencies,
 ): Promise<Result<StagedBackup>> {
-  const blob = await resourceCall('blob', digest, dependencies);
-  if (!blob.ok) return blob;
-  const bytes = dependencies.semantic.backup(blob.value);
+  const bytes = await dependencies.resources.blob(digest);
   if (!bytes.ok) return bytes;
   return success({ alias, backup: bytes.value });
 }

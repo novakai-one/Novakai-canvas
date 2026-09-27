@@ -1,7 +1,7 @@
 /*
  * Composition root: reads the arguments, then binds the parsed command's family to real
- * infrastructure (agent credential, HTTP transport, Language, local files, request journal,
- * headless render bindings, render file I/O). Not pure: reads files, calls HTTP, mints request
+ * infrastructure (agent credential, HTTP transport and the service calls over it, Language, Model,
+ * local files, request journal, headless render bindings, render file I/O). Not pure: reads files, calls HTTP, mints request
  * IDs. Failures are returned as values; `cli/canvas.ts` and `cli/render.ts` print them and set the
  * exit code. Recovery after a sent request is `receipt` then `retry`; a render changes nothing.
  */
@@ -16,6 +16,9 @@ import { createResourceReader } from '../adapters/files/resource-reader.js';
 import { createLocalFiles } from '../adapters/files/local-files.js';
 import { createRequestJournal } from '../adapters/files/request-journal.js';
 import { createTransport } from '../adapters/service-http/transport.js';
+import { createServiceReads } from '../adapters/service-http/reads.js';
+import { createServiceAuthoring } from '../adapters/service-http/authoring.js';
+import { createServiceResources } from '../adapters/service-http/resources.js';
 import { createSemanticInputs } from '../adapters/inputs/semantic-inputs.js';
 import {
   executeCommand,
@@ -94,11 +97,15 @@ async function run(
   if (!token.ok) return token;
   const language = createLanguage({ reader: { validate }, planner: { plan }, stage: { stage } });
   const semantic = createSemanticInputs(language);
+  const transport = createTransport(options.server, token.value);
   return executeCommand(command, {
-    transport: createTransport(options.server, token.value),
+    reads: createServiceReads(transport),
+    authoring: createServiceAuthoring(transport),
+    resources: createServiceResources(transport),
     files: createLocalFiles(),
     journal: createRequestJournal(resolve(options.workspace, 'requests')),
-    resources: createResourceReader(),
+    reader: createResourceReader(),
+    collections: { validate },
     semantic,
     presets: createPresetInputs(semantic, readThemeSource),
     nextRequestId,

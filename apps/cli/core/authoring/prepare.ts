@@ -8,8 +8,9 @@ import { prepareResources } from '../resources/stage.js';
 import type { ResourceDependencies } from '../resources/stage.js';
 import type { ChangeCommand, ChangeIntent, ChangeMode } from '../../contract/records/command.js';
 import type { SemanticInputs } from '../../contract/ports/runtime.js';
-import type { HttpTransport } from '../../contract/ports/http-transport.js';
+import type { ServiceReads } from '../../contract/ports/service-reads.js';
 import type { LocalFiles } from '../../contract/ports/local-files.js';
+import type { Snapshot } from '../../contract/records/foreign.js';
 import type { Observed } from '../../contract/records/service-answers.js';
 import type { RetainedRequest } from '../../contract/records/retained-request.js';
 import type { SourceFile } from '../../contract/records/source-file.js';
@@ -17,16 +18,13 @@ import type { CollectionRevision, RequestId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 
 /**
- * What `prepare` uses: the source read, the workspace read, request IDs, and the request and
- * resource staging readers.
+ * What `prepare` uses: the source read, the workspace read, request IDs, the request builder and
+ * resource staging.
  */
 export interface PrepareDependencies extends ResourceDependencies {
   readonly files: Pick<LocalFiles, 'readSource'>;
-  readonly transport: HttpTransport;
-  readonly semantic: Pick<
-    SemanticInputs,
-    'snapshot' | 'request' | 'requests' | 'admissionDigest' | 'backup' | 'checkedRequest'
-  >;
+  readonly reads: Pick<ServiceReads, 'workspace'>;
+  readonly semantic: Pick<SemanticInputs, 'request' | 'requests'>;
   nextRequestId(): RequestId;
 }
 
@@ -41,7 +39,7 @@ export async function prepare(
 ): Promise<Result<RetainedRequest>> {
   const source = await dependencies.files.readSource(command.file);
   if (!source.ok) return source;
-  const current = await dependencies.transport.get('/api/v1/workspace');
+  const current = await dependencies.reads.workspace();
   if (!current.ok) return current;
   return prepareCaptured(
     command,
@@ -51,22 +49,19 @@ export async function prepare(
   );
 }
 /**
- * Owner readers give the transported snapshot its type; an explicit ID supports scripted receipt
- * lookup, a generated one is retained before any submission. Resource preparation finishes before
- * retention or canonical submission.
+ * An explicit ID supports scripted receipt lookup, a generated one is retained before any
+ * submission. Resource preparation finishes before retention or canonical submission.
  */
 async function prepareCaptured(
   command: ChangeCommand,
   source: SourceFile,
-  current: Observed<unknown>,
+  current: Observed<Snapshot>,
   dependencies: PrepareDependencies,
 ): Promise<Result<RetainedRequest>> {
-  const snapshot = dependencies.semantic.snapshot(current.value);
-  if (!snapshot.ok) return snapshot;
   const request = dependencies.semantic.request(
     intentOf(command),
     source.source,
-    snapshot.value,
+    current.value,
     command.request ?? dependencies.nextRequestId(),
   );
   if (!request.ok) return request;

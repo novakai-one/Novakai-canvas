@@ -7,8 +7,8 @@
 import { z } from 'zod';
 import type { collectionId } from '@novakai/canvas-model';
 
-export { requestId, workspaceId } from '@novakai/canvas-authoring';
-export type { RequestId, WorkspaceId } from '@novakai/canvas-authoring';
+export { recordId, requestId, workspaceId } from '@novakai/canvas-authoring';
+export type { RecordId, RequestId, WorkspaceId } from '@novakai/canvas-authoring';
 export { collectionId, sectionId, objectId } from '@novakai/canvas-model';
 export type { SectionId, ObjectId } from '@novakai/canvas-model';
 /** Model's pinned content identity, `sha256:` then 64 lowercase hex digits (syntax only, unbranded). */

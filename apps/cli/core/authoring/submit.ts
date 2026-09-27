@@ -1,25 +1,41 @@
 /*
  * DSL authoring submission: retain the request, restore its resource bytes, then send it to
  * Authoring preview or apply and turn the answer into text. Uses injected ports only. Authoring
- * owns the commit; an uncertain answer names the retained request so `receipt` then `retry`
+ * owns the commit; an unconfirmed answer names the retained request so `receipt` then `retry`
  * recover it.
  */
 import { restoreResources } from '../resources/restore.js';
-import type { ResourcePoster } from '../resources/stage.js';
+import type { RestoreDependencies } from '../resources/restore.js';
+import { appliedReceipt } from '../reads/receipt.js';
 import { prepare } from './prepare.js';
 import type { PrepareDependencies } from './prepare.js';
 import type { ChangeCommand } from '../../contract/records/command.js';
-import type { SemanticInputs } from '../../contract/ports/runtime.js';
+import type { ServiceAuthoring } from '../../contract/ports/service-authoring.js';
 import type { RequestJournal } from '../../contract/ports/request-journal.js';
 import type { RetainedRequest } from '../../contract/records/retained-request.js';
-import type { RequestId } from '../../contract/brands.js';
-import type { CliFailure, Result } from '../../contract/errors.js';
+import type { SubmitMode } from '../../contract/records/service-answers.js';
+import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
+import { unsupported } from '../shared/results.js';
 
-/** What `submit` uses: the journal's save, the transport's POST and the apply-answer reader. */
-export interface SubmitDependencies extends ResourcePoster {
+/** What `submit` uses: the journal's save, the byte restore and Authoring's preview and apply. */
+export interface SubmitDependencies extends RestoreDependencies {
   readonly journal: Pick<RequestJournal, 'save'>;
-  readonly semantic: Pick<SemanticInputs, 'applied'>;
+  readonly authoring: ServiceAuthoring;
+}
+
+/**
+ * Agent authoring consumes readable source only; JSON envelopes and coordinates are never user
+ * input. `preview` sends to preview, the other change commands apply. Fails as `prepare` or
+ * `submit` does.
+ */
+export async function author(
+  command: ChangeCommand,
+  dependencies: PrepareDependencies & SubmitDependencies,
+): Promise<Result<string>> {
+  const prepared = await prepare(command, dependencies);
+  if (!prepared.ok) return prepared;
+  return submit(prepared.value, modeOf(command), dependencies);
 }
 
 /**
@@ -29,68 +45,60 @@ export interface SubmitDependencies extends ResourcePoster {
  */
 export async function submit(
   retained: RetainedRequest,
-  preview: boolean,
+  mode: SubmitMode,
   dependencies: SubmitDependencies,
 ): Promise<Result<string>> {
   const saved = await dependencies.journal.save(retained);
   if (!saved.ok) return saved;
   const restored = await restoreResources(retained.backups, dependencies);
   if (!restored.ok) return restored;
-  return transmit(retained, preview, dependencies);
+  return send(retained, mode, dependencies.authoring);
 }
-/** Transport receives only the canonical envelope, never local byte backups. */
-async function transmit(
+
+/** `preview` previews; `create`, `replace` and `patch` apply. */
+function modeOf(command: ChangeCommand): SubmitMode {
+  if (command.name === 'preview') return 'preview';
+  return 'apply';
+}
+
+/** The retained request to the mode's Authoring call; only the canonical envelope is sent. */
+function send(
   retained: RetainedRequest,
-  preview: boolean,
-  dependencies: SubmitDependencies,
+  mode: SubmitMode,
+  authoring: ServiceAuthoring,
 ): Promise<Result<string>> {
-  const route = preview ? '/api/v1/authoring/preview' : '/api/v1/authoring/apply';
-  const answer = await dependencies.transport.post(route, {
-    version: 1,
-    generation: retained.generation,
-    request: retained.request,
-    preview,
-  });
-  if (!answer.ok) return unconfirmed(answer.error, retained.request.request);
-  return confirmed(answer.value.value, retained.request.request, preview, dependencies);
+  switch (mode) {
+    case 'preview':
+      return previewed(retained, authoring);
+    case 'apply':
+      return applied(retained, authoring);
+    default:
+      return Promise.resolve(unsupported(mode));
+  }
 }
+
+/** Reviewable owner output and the stable command that applies it. Fails as the preview does. */
+async function previewed(
+  retained: RetainedRequest,
+  authoring: ServiceAuthoring,
+): Promise<Result<string>> {
+  const id = retained.request.request;
+  const answer = await authoring.preview(retained);
+  if (!answer.ok) return answer;
+  return success(
+    `Preview request ${id}\n${JSON.stringify(answer.value, null, 2)}\nApply with: canvas apply ${id}`,
+  );
+}
+
 /**
- * A lost or unreadable answer (`connection-uncertain`, `invalid-response`) names the retained
- * request instead of suggesting a new request ID. A service rejection is returned whole.
+ * The committed receipt of this request. Fails as the apply does, or with `invalid-response`
+ * when the answer carries no receipt or one for another request.
  */
-function unconfirmed(
-  error: CliFailure,
-  id: RequestId,
-): Result<never> {
-  if (error.code === 'connection-uncertain' || error.code === 'invalid-response')
-    return {
-      ok: false,
-      error: {
-        ...error,
-        recovery: `Run canvas receipt ${id}, then canvas retry ${id} only if no receipt exists.`,
-      },
-    };
-  return { ok: false, error };
-}
-/** Preview prints reviewable owner output and a stable apply command; successful writes use the apply-answer reader. */
-function confirmed(
-  value: unknown,
-  id: RequestId,
-  preview: boolean,
-  dependencies: Pick<SubmitDependencies, 'semantic'>,
-): Result<string> {
-  if (preview)
-    return success(
-      `Preview request ${id}\n${JSON.stringify(value, null, 2)}\nApply with: canvas apply ${id}`,
-    );
-  return dependencies.semantic.applied(value, id);
-}
-/** Agent authoring consumes readable source only. JSON envelopes and coordinates are never required user input. */
-export async function author(
-  command: ChangeCommand,
-  dependencies: PrepareDependencies & SubmitDependencies,
+async function applied(
+  retained: RetainedRequest,
+  authoring: ServiceAuthoring,
 ): Promise<Result<string>> {
-  const prepared = await prepare(command, dependencies);
-  if (!prepared.ok) return prepared;
-  return submit(prepared.value, command.name === 'preview', dependencies);
+  const receipt = await authoring.apply(retained);
+  if (!receipt.ok) return receipt;
+  return appliedReceipt(receipt.value, retained.request.request);
 }

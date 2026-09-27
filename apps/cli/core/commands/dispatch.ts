@@ -5,14 +5,13 @@
  */
 import type { ServiceCommand } from '../../contract/records/command.js';
 import type { CliDependencies } from '../../contract/ports/runtime.js';
-import type { FilePath, RequestId } from '../../contract/brands.js';
+import type { FilePath } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
 import { admitPreset } from '../presets/admit.js';
-import { instantiateRecipe } from '../presets/instantiate.js';
 import { author } from '../authoring/submit.js';
 import { retry } from '../authoring/reconcile.js';
-import { describe, inspectRead, query, receiptRead, sourceRead } from '../reads/queries.js';
+import { describe, inspect, list, read, receipt } from '../reads/queries.js';
 import { unsupported } from '../shared/results.js';
 
 /**
@@ -35,19 +34,15 @@ function run(
 ): Promise<Result<string>> {
   switch (command.name) {
     case 'describe':
-      return query({ route: '/api/v1/language' }, describe, dependencies);
+      return describe(dependencies);
     case 'list':
-      return query({ route: '/api/v1/workspace' }, dependencies.semantic.collections, dependencies);
+      return list(dependencies);
     case 'read':
-      return query(
-        sourceRead(command.collection, command.scope),
-        dependencies.semantic.readout,
-        dependencies,
-      );
+      return read(command.collection, command.scope, dependencies);
     case 'inspect':
-      return query(inspectRead(command.collection), describe, dependencies);
+      return inspect(command.collection, dependencies);
     case 'receipt':
-      return lookup(command.request, dependencies);
+      return receipt(command.request, dependencies);
     case 'create':
     case 'replace':
     case 'patch':
@@ -60,22 +55,10 @@ function run(
     case 'recipe-admit':
       return admitPreset(command, dependencies);
     case 'recipe-instantiate':
-      return instantiateRecipe(command.expansion, dependencies);
+      return dependencies.resources.instantiate(command.expansion);
     default:
       return Promise.resolve(unsupported(command));
   }
-}
-
-/** `receipt`: a missing receipt is information, not a failure. */
-function lookup(
-  request: RequestId,
-  dependencies: CliDependencies,
-): Promise<Result<string>> {
-  return query(
-    receiptRead(request),
-    (input) => dependencies.semantic.receipt(input, { kind: 'lookup', request }),
-    dependencies,
-  );
 }
 
 /** Source files are only written at the explicit --out path; stdout remains the default. */

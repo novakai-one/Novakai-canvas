@@ -1,12 +1,15 @@
 /*
- * What the service commands get injected: the HTTP transport, local files, the request journal,
- * the resource reader, the semantic and preset readers, and request IDs. Declarations only;
- * compose binds the adapters. Every method returns its failure as a value.
+ * What the service commands get injected: the service calls, local files, the request journal,
+ * the resource reader, Model's collection check, the semantic and preset readers, and request IDs.
+ * Declarations only; compose binds the adapters. Every method returns its failure as a value.
  */
+import type { CollectionReader } from './collection-reader.js';
 import type { LocalFiles } from './local-files.js';
-import type { HttpTransport } from './http-transport.js';
 import type { RequestJournal } from './request-journal.js';
 import type { ResourceReader } from './resource-reader.js';
+import type { ServiceAuthoring } from './service-authoring.js';
+import type { ServiceReads } from './service-reads.js';
+import type { ServiceResources } from './service-resources.js';
 import type { Result } from '../errors.js';
 import type {
   Admission,
@@ -15,39 +18,31 @@ import type {
   ResourceRequest,
   Snapshot,
 } from '../records/foreign.js';
-import type { ByteBackup } from '../records/retained-request.js';
+import type { PresetPreparation } from '../records/service-answers.js';
 import type { AssetBinding } from '../records/staged-resource.js';
 import type { AdmitCommand, ChangeIntent } from '../records/command.js';
-import type { AssetDigest, RequestId } from '../brands.js';
+import type { RequestId } from '../brands.js';
 
 /** The resource declarations of a DSL source, read by Language. Fails with `invalid-source`. */
 export interface ResourceSyntax {
   requests(source: string): Result<readonly ResourceRequest[]>;
 }
 
+/** Language's reading of a DSL source, and the Authoring request a DSL change sends. */
 export interface SemanticInputs extends ResourceSyntax {
+  /** The parsed source. Fails with `invalid-source`. */
   profileParse(source: string): Result<ParsedSource>;
-  checkedRequest(input: unknown): Result<Request>;
-  admissionDigest(input: unknown): Result<AssetDigest>;
-  backup(input: unknown): Result<ByteBackup>;
-  snapshot(input: unknown): Result<Snapshot>;
+  /**
+   * The Authoring request for `source` under `intent`'s preconditions against `snapshot`. Fails
+   * with `invalid-source`, `invalid-input`, `invalid-response`, `not-found`, `already-exists`,
+   * `revision-required` or `revision-conflict`.
+   */
   request(
     intent: ChangeIntent,
     source: string,
     snapshot: Snapshot,
     id: RequestId,
   ): Result<Request>;
-  readout(input: unknown): Result<string>;
-  collections(input: unknown): Result<string>;
-  receipt(
-    input: unknown,
-    expected: ReceiptExpectation,
-  ): Result<string>;
-  /** An apply answer carries the receipt beside the committed snapshot; the CLI reports only the receipt. */
-  applied(
-    input: unknown,
-    request: RequestId,
-  ): Result<string>;
 }
 
 /** A preset file's Templates admission and the font or image declarations to stage first. */
@@ -63,9 +58,12 @@ export interface PresetInputs {
     command: AdmitCommand,
     source: string,
   ): Result<PresetSource>;
-  /** The Authoring request for a prepared preset. Fails with `invalid-response`. */
+  /**
+   * The Authoring request for a prepared preset. Fails with `invalid-response` (no workspace
+   * metadata record, or the preparation cannot form a request).
+   */
   request(
-    input: unknown,
+    preparation: PresetPreparation,
     snapshot: Snapshot,
     id: RequestId,
     assets: readonly AssetBinding[],
@@ -74,17 +72,14 @@ export interface PresetInputs {
 
 /** Narrow effects are bound once at CLI composition. */
 export interface CliDependencies {
-  readonly transport: HttpTransport;
+  readonly reads: ServiceReads;
+  readonly authoring: ServiceAuthoring;
+  readonly resources: ServiceResources;
   readonly files: LocalFiles;
   readonly journal: RequestJournal;
-  readonly resources: ResourceReader;
+  readonly reader: ResourceReader;
+  readonly collections: CollectionReader;
   readonly presets: PresetInputs;
   readonly semantic: SemanticInputs;
   nextRequestId(): RequestId;
-}
-
-/** Receipt lookup may be absent; claimed apply success requires this exact request's committed receipt. */
-export interface ReceiptExpectation {
-  readonly kind: 'lookup' | 'committed';
-  readonly request: RequestId;
 }

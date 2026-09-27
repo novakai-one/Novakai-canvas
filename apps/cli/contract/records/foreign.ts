@@ -4,7 +4,7 @@
  */
 import type { TransportResponse, createHeadlessBindings } from '@novakai/canvas-service';
 import type { Admission } from '@novakai/canvas-templates';
-export type { Collection, Mode } from '@novakai/canvas-model';
+export type { Collection, Mode, Result as ModelResult } from '@novakai/canvas-model';
 export type {
   Declaration,
   Language,
