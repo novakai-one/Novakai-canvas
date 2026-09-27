@@ -1,8 +1,10 @@
 import { parseArgs } from 'node:util';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { openWorkspace, serveWorkspace } from '../contract/index.js';
-import type { Result, LocalServer, WorkspaceSession } from '../contract/index.js';
+import { openWorkspace, serveWorkspace } from '../contract/compose.js';
+import type { Result } from '../contract/errors.js';
+import type { LocalServer } from '../contract/records/transport/server.js';
+import type { WorkspaceSession } from '../contract/types.js';
 /** Print stable diagnostic fields only. Credential values and raw request bodies are never logged. */
 function report(result: Result<unknown>): void {
   if (result.ok) return;

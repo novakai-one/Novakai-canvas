@@ -1,9 +1,4 @@
-import type {
-  Authoring,
-  CandidateValidator,
-  ResourceAdmission,
-  IntentPlanner,
-} from '../capabilities.js';
+import type { CandidateValidator, ResourceAdmission, IntentPlanner } from '../capabilities.js';
 import type { AuthoringStore } from '../../ports/storage.js';
 import type { FeasibilityOwners } from '../../ports/render-jobs.js';
 import type { ChangeChannel } from '../../ports/notifications.js';
@@ -15,7 +10,4 @@ export interface AdmissionRuntime {
   readonly resources: ResourceAdmission;
   readonly changes: ChangeChannel;
   readonly feasibility: FeasibilityOwners;
-}
-export interface AdmissionFactory {
-  create(signal: AbortSignal): Authoring;
 }
