@@ -1,6 +1,9 @@
 /*
- * The CLI's public surface: the entry points of `pnpm canvas` and `pnpm render:png`, the failure
- * formatter and the records they print. Every mutation crosses the service's Authoring gate.
+ * The CLI's public surface: only what the two executables in cli/ use. `runCli` answers
+ * `pnpm canvas`, `runRender` answers `pnpm render:png`, `formatFailure` turns a failure into
+ * terminal lines. Both entry points return every failure as a value and never reject. Every
+ * mutation crosses the service's Authoring gate; recovery after a sent request is `canvas receipt`
+ * then `canvas retry`.
  */
 export { runCli, runRender } from './compose.js';
 export { formatFailure } from './api.js';

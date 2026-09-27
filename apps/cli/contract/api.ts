@@ -1,17 +1,18 @@
 /*
  * Core entry points for the composition root: the only contract file that reaches core behaviour.
- * Re-exports only; pure. Each entry point names its own failures.
+ * Only compose.ts, compose/ and the public index import it; no adapter or host executable does.
+ * Re-exports only; pure. Each entry point's own doc names its failures.
  */
-export { executeProfile, executeService } from '../core/commands/dispatch.js';
 
+/** `pnpm canvas`: compose.ts parses and answers --help; compose/ runs every other command. */
+export { parseCommand } from '../core/commands/parse.js';
+export { usage } from '../core/commands/help.js';
+export { executeProfile, executeService } from '../core/commands/dispatch.js';
 export type { ServicePorts } from '../core/commands/dispatch.js';
 
-export { usage } from '../core/commands/help.js';
-
-export { parseCommand } from '../core/commands/parse.js';
-
-export { formatFailure } from '../core/diagnostics/format.js';
-
+/** `pnpm render:png`: compose.ts checks the argv, then runs the render over compose/render.ts. */
 export { parseRenderChoice } from '../core/render/request.js';
-
 export { renderCollection } from '../core/render/render.js';
+
+/** Both executables print a failure through the public index. */
+export { formatFailure } from '../core/diagnostics/format.js';
