@@ -1,4 +1,4 @@
-import type { Language } from '@novakai/canvas-language';
+import type { Language } from '../../contract/records/capabilities.js';
 import type { RouterBindings } from '../../contract/records/transport/server.js';
 import { failure } from '../../contract/errors.js';
 /** Readout translation keeps language diagnostics readable without teaching HTTP the diagram syntax. */

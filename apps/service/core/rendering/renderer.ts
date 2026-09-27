@@ -1,5 +1,4 @@
-import type { Assets } from '@novakai/canvas-assets';
-import type { Collection } from '@novakai/canvas-model';
+import type { Assets, Collection } from '../../contract/records/capabilities.js';
 import type { CollectionRenderer } from '../../contract/ports/collection-renderer.js';
 import type { RenderJobs } from '../../contract/ports/render-jobs.js';
 import type { DiagramProducer } from '../../contract/ports/rendering.js';

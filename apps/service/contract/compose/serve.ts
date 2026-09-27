@@ -12,6 +12,8 @@ import { createAdmission as createHttpAdmission } from '../../core/transport/adm
 import { readCommand } from '../../core/transport/command.js';
 import { createPresetCodecs } from '../../core/presets/codecs.js';
 import { prepareTheme } from '../../core/presets/theme-admission.js';
+import { createRenderJobs } from '../../core/rendering/jobs.js';
+import { createSourceReadout } from '../../core/transport/source-readout.js';
 import { createServiceLanguage } from './capabilities.js';
 
 /** Expose one already-open workspace through authenticated loopback transport. Caller closes transport before draining its workspace. */
@@ -20,11 +22,10 @@ export async function serveWorkspace(
   options: ServerOptions,
 ): Promise<Result<LocalServer>> {
   try {
-    const [credentials, requests, router, source, io, files, server] = await Promise.all([
+    const [credentials, requests, router, io, files, server] = await Promise.all([
       import('../../adapters/credentials/local-credentials.js'),
       import('../../adapters/http/request-reader.js'),
       import('../../adapters/http/http-router.js'),
-      import('../../core/transport/source-readout.js'),
       import('../../adapters/http/http-io.js'),
       import('../../adapters/http/static-files.js'),
       import('../../adapters/http/server.js'),
@@ -43,7 +44,7 @@ export async function serveWorkspace(
         generation: security.value.generation,
         admission,
         decoder: { read: readCommand },
-        source: source.createSourceReadout(createServiceLanguage()),
+        source: createSourceReadout(createServiceLanguage()),
         exporter: session.exportArtifact,
       }),
     });
@@ -64,14 +65,11 @@ export async function readAgentCredential(path: string): Promise<Result<string>>
 
 /** Read-only headless composition shares the preset codecs, theme admission, render jobs and producer. CLI runHeadless catches import failures, reports render-unavailable and owns retry after dependencies are restored. */
 export async function createHeadlessBindings() {
-  const [jobs, rendering] = await Promise.all([
-    import('../../core/rendering/jobs.js'),
-    import('../../adapters/render-worker/derive.js'),
-  ]);
+  const rendering = await import('../../adapters/render-worker/derive.js');
   return {
     createPresetCodecs,
     prepareTheme,
-    createRenderJobs: jobs.createRenderJobs,
+    createRenderJobs,
     produceDiagram: rendering.produceDiagram,
   };
 }

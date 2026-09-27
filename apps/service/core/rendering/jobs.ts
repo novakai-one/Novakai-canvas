@@ -1,11 +1,19 @@
 import type { FailureSource } from '../../contract/records/transport/failure-source.js';
-import { fontSource, fontSet, visualAsset, resolvedStyle } from '@novakai/canvas-presentation';
-import type { FontSource, VisualAsset } from '@novakai/canvas-presentation';
-import { options } from '@novakai/canvas-layout';
-import type { Scene } from '@novakai/canvas-layout';
-import { failure } from '@novakai/canvas-authoring';
-import type { Result } from '@novakai/canvas-authoring';
-import type { Collection } from '@novakai/canvas-model';
+import type {
+  AuthoringResult,
+  Collection,
+  FontSource,
+  Scene,
+  VisualAsset,
+} from '../../contract/records/capabilities.js';
+import {
+  fontSource,
+  fontSet,
+  visualAsset,
+  resolvedStyle,
+  layoutOptions,
+} from '../../contract/schemas.js';
+import { authoringFailure } from '../../contract/errors.js';
 import type { RenderResourceOwners } from '../../contract/records/rendering/resources.js';
 import type { WorkspaceContents } from '../../contract/records/workspace/contents.js';
 import type { RenderingJob } from '../../contract/records/rendering/job.js';
@@ -21,7 +29,7 @@ class RenderResourceFault extends Error {
   }
 }
 /** Render resources are mandatory owner results, never machine-local fallback fonts or blank images. */
-function accepted<T>(result: Result<T, FailureSource>): T {
+function accepted<T>(result: AuthoringResult<T, FailureSource>): T {
   if (!result.ok)
     throw new RenderResourceFault('A render resource owner rejected input', result.error);
   return result.value;
@@ -96,7 +104,7 @@ function create(
     assets: collection.assets
       .filter((item) => item.mediaType.startsWith('image/'))
       .map((item) => asset(item.digest.slice(7), owners)),
-    options: options.parse({
+    options: layoutOptions.parse({
       gap: { compact: style.gap * 3, normal: style.gap * 8, roomy: style.gap * 12 },
       padding: style.padding * 2,
       routeClearance: style.padding,
@@ -109,15 +117,19 @@ function create(
   };
 }
 /** Owner rejection is a correction path; malformed resource output does not escape as a native exception. */
-function rejected(error: unknown): Result<never> {
+function rejected(error: unknown): AuthoringResult<never> {
   if (error instanceof RenderResourceFault)
-    return failure('missing-asset', 'render-resources', error.message, [], error.source);
-  return failure('invalid-input', 'render-resources', 'Render resources could not be decoded');
+    return authoringFailure('missing-asset', 'render-resources', error.message, [], error.source);
+  return authoringFailure(
+    'invalid-input',
+    'render-resources',
+    'Render resources could not be decoded',
+  );
 }
 /** Every job is built from one consistent workspace view; Authoring owns admission and keeps the prior scene on failure. */
 export function createRenderJobs(owners: RenderResourceOwners): RenderJobs {
   return {
-    create(collection, view, previous, id): Result<RenderingJob> {
+    create(collection, view, previous, id): AuthoringResult<RenderingJob> {
       try {
         return { ok: true, value: create(collection, view, previous, id, owners) };
       } catch (error) {

@@ -58,4 +58,6 @@ export type {
   ChromeName,
 } from '@novakai/canvas-design-system';
 export type { Assets, WriteLease } from '@novakai/canvas-assets';
+export type { FontSource, VisualAsset } from '@novakai/canvas-presentation';
+export type { Scene } from '@novakai/canvas-layout';
 export type { Organisation, LibrarySnapshot } from '@novakai/canvas-library';
