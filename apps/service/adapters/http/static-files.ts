@@ -27,9 +27,8 @@ export function createStaticFiles(root: string): StaticFiles {
 
 /**
  * The file at the URL path (`/` is `/index.html`). Fails with `not-found` at `file` when the path
- * is not a valid escape, leaves the root or does not exist ("build the web application first"),
- * or has an unsupported extension. A read that fails after those checks rejects; the HTTP server
- * then answers `unavailable` at `request`.
+ * is not a valid escape, leaves the root, does not exist or cannot be read ("build the web
+ * application first"), or has an unsupported extension. Never rejects.
  */
 async function read(
   root: string,
@@ -38,7 +37,7 @@ async function read(
   try {
     const location = await locate(root, resourcePath(pathname));
     if (!location.ok) return location;
-    return load(location.value);
+    return await load(location.value);
   } catch {
     return failure(
       'not-found',
@@ -69,7 +68,10 @@ async function locate(
   return success(file);
 }
 
-/** The file's bytes and media type. Fails with `not-found` at `file` for an unsupported extension. */
+/**
+ * The file's bytes and media type. Fails with `not-found` at `file` for an unsupported extension;
+ * throws when the file cannot be read.
+ */
 async function load(path: string): Promise<Result<StaticFile>> {
   const mediaType = MEDIA_TYPES[extname(path)];
   if (!mediaType) return failure('not-found', 'file', 'Unsupported application resource');
