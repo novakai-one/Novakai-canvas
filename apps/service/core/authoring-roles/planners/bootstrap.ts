@@ -1,9 +1,14 @@
-import { z } from 'zod';
-import { plannerId, proposalSchema, requestSchema, failure } from '@novakai/canvas-authoring';
-import type { IntentPlanner, Proposal, Result, Request } from '@novakai/canvas-authoring';
-import type { Preset } from '@novakai/canvas-templates';
+import type {
+  AuthoringResult,
+  IntentPlanner,
+  Preset,
+  Proposal,
+  Request,
+} from '../../../contract/records/capabilities.js';
 import type { Installation } from '../../../contract/records/workspace/installation.js';
-const initialize = z.strictObject({ action: z.literal('initialize') });
+import { initializeCommand } from '../../../contract/records/planning/commands.js';
+import { plannerId, proposalSchema, requestSchema } from '../../../contract/schemas.js';
+import { authoringFailure } from '../../../contract/errors.js';
 /** Templates already admitted this exact immutable preset; Authoring still validates the complete candidate and byte coverage. */
 function presetWrite(preset: Preset): unknown {
   return {
@@ -45,11 +50,15 @@ function proposal(installation: Installation): Proposal {
 function plan(
   request: Request,
   installation: Installation,
-): Result<Proposal> {
+): AuthoringResult<Proposal> {
   if (request.intent.kind !== 'change')
-    return failure('invalid-input', 'bootstrap', 'Initialization requires a change request');
-  if (!initialize.safeParse(request.intent.payload).success)
-    return failure('invalid-input', 'bootstrap', 'Invalid initialization command');
+    return authoringFailure(
+      'invalid-input',
+      'bootstrap',
+      'Initialization requires a change request',
+    );
+  if (!initializeCommand.safeParse(request.intent.payload).success)
+    return authoringFailure('invalid-input', 'bootstrap', 'Invalid initialization command');
   return { ok: true, value: proposal(installation) };
 }
 /** Bind trusted installation data once; callers invoke the ordinary Authoring API and own retry via its persisted receipt. */
@@ -57,7 +66,7 @@ export function createInstallationPlanner(installation: Installation): IntentPla
   return { id: plannerId.parse('bootstrap'), plan: async (request) => plan(request, installation) };
 }
 /** Deterministic installation request needs complete absence, never an implicit replace or upsert of an existing workspace. */
-export function installationRequest(installation: Installation): Result<Request> {
+export function installationRequest(installation: Installation): AuthoringResult<Request> {
   const writes = proposal(installation).writes;
   const result = requestSchema.safeParse({
     workspace: installation.workspace,
@@ -70,6 +79,10 @@ export function installationRequest(installation: Installation): Result<Request>
     intent: { kind: 'change', planner: 'bootstrap', payload: { action: 'initialize' } },
   });
   if (!result.success)
-    return failure('invalid-input', 'bootstrap', 'Installation request could not be constructed');
+    return authoringFailure(
+      'invalid-input',
+      'bootstrap',
+      'Installation request could not be constructed',
+    );
   return { ok: true, value: result.data };
 }

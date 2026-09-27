@@ -1,12 +1,11 @@
-import { plannerId, proposalSchema, failure } from '@novakai/canvas-authoring';
 import type {
+  AuthoringErrorCode,
+  AuthoringResult,
   IntentPlanner,
+  Proposal,
   Request,
   Snapshot,
-  Proposal,
-  Result,
-  ErrorCode,
-} from '@novakai/canvas-authoring';
+} from '../../../contract/records/capabilities.js';
 import { presetCommand } from '../../../contract/records/presets/preparation.js';
 import type {
   ResourceCommands,
@@ -14,7 +13,9 @@ import type {
   ResourceDiagnostic,
 } from '../../../contract/records/presets/preparation.js';
 import { workspaceMetadata } from '../../../contract/records/workspace/metadata.js';
-const authoringCodes: Readonly<Record<string, ErrorCode>> = {
+import { plannerId, proposalSchema } from '../../../contract/schemas.js';
+import { authoringFailure } from '../../../contract/errors.js';
+const authoringCodes: Readonly<Record<string, AuthoringErrorCode>> = {
   'invalid-input': 'invalid-input',
   'unsupported-version': 'unsupported-version',
   'unknown-reference': 'unknown-reference',
@@ -33,12 +34,12 @@ function plan(
   request: Request,
   snapshot: Snapshot,
   owner: Pick<ResourceCommands, 'preparePreset'>,
-): Result<Proposal> {
+): AuthoringResult<Proposal> {
   if (request.intent.kind !== 'change')
-    return failure('invalid-input', 'preset', 'Expected a preset change');
+    return authoringFailure('invalid-input', 'preset', 'Expected a preset change');
   const command = presetCommand.safeParse(request.intent.payload);
   if (!command.success)
-    return failure('invalid-input', 'preset', 'Expected an exact prepared preset');
+    return authoringFailure('invalid-input', 'preset', 'Expected an exact prepared preset');
   return reprepare(request, snapshot, owner, command.data);
 }
 /** Recompute only after decoding the exact prepared command. */
@@ -47,12 +48,12 @@ function reprepare(
   snapshot: Snapshot,
   owner: Pick<ResourceCommands, 'preparePreset'>,
   command: ReturnType<typeof presetCommand.parse>,
-): Result<Proposal> {
+): AuthoringResult<Proposal> {
   const prepared = owner.preparePreset(
     { admission: command.admission, assets: request.assets },
     snapshot,
   );
-  if (!prepared.ok) return authoringFailure(prepared.error);
+  if (!prepared.ok) return ownerRejected(prepared.error);
   return compared(command, prepared.value, snapshot);
 }
 /** Pin and manifest comparison prevents caller substitution; read versions stay client-observed CAS preconditions. */
@@ -60,11 +61,12 @@ function compared(
   command: ReturnType<typeof presetCommand.parse>,
   prepared: PresetPreparation,
   snapshot: Snapshot,
-): Result<Proposal> {
+): AuthoringResult<Proposal> {
   const same =
     JSON.stringify([command.pin, command.key, command.resources]) ===
     JSON.stringify([prepared.pin, prepared.key, prepared.resources]);
-  if (!same) return failure('revision-conflict', 'preset', 'Prepared preset content changed');
+  if (!same)
+    return authoringFailure('revision-conflict', 'preset', 'Prepared preset content changed');
   const existing = snapshot.records.find(
     (item) => item.key.kind === 'preset' && item.key.id === prepared.key.id && !item.deleted,
   );
@@ -81,14 +83,15 @@ function compared(
 function insertion(
   prepared: PresetPreparation,
   snapshot: Snapshot,
-): Result<Proposal> {
+): AuthoringResult<Proposal> {
   const metadata = snapshot.records.find(
     (item) => item.key.kind === 'workspace' && item.key.id === 'metadata' && !item.deleted,
   );
-  if (!metadata) return failure('corrupt-record', 'metadata', 'Workspace metadata is missing');
+  if (!metadata)
+    return authoringFailure('corrupt-record', 'metadata', 'Workspace metadata is missing');
   const parsed = workspaceMetadata.safeParse(metadata.value);
   if (!parsed.success)
-    return failure('corrupt-record', 'metadata', 'Workspace metadata is invalid');
+    return authoringFailure('corrupt-record', 'metadata', 'Workspace metadata is invalid');
   return proposal({
     reads: prepared.reads,
     writes: [
@@ -105,7 +108,7 @@ function insertion(
   });
 }
 /** Owner failures retain their path/message/recovery while Authoring admits only its bounded code vocabulary. */
-function authoringFailure<T>(owner: ResourceDiagnostic): Result<T> {
+function ownerRejected<T>(owner: ResourceDiagnostic): AuthoringResult<T> {
   const code = authoringCodes[owner.code] ?? 'invalid-input';
   return {
     ok: false,
@@ -114,10 +117,14 @@ function authoringFailure<T>(owner: ResourceDiagnostic): Result<T> {
 }
 
 /** Schema limits reject as a typed planner outcome; no Zod exception crosses Authoring. */
-function proposal(input: unknown): Result<Proposal> {
+function proposal(input: unknown): AuthoringResult<Proposal> {
   const parsed = proposalSchema.safeParse(input);
   if (!parsed.success)
-    return failure('invalid-input', 'preset.proposal', 'Prepared preset exceeds proposal limits');
+    return authoringFailure(
+      'invalid-input',
+      'preset.proposal',
+      'Prepared preset exceeds proposal limits',
+    );
   return { ok: true, value: parsed.data };
 }
 /** Only the named semantic planner is registered; Authoring supplies snapshot, scope and atomic write authority. */

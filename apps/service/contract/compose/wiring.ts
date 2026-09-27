@@ -25,10 +25,19 @@ import { createWorkspaceReader } from '../../core/workspace/reader.js';
 import { createResourceSelector } from '../../core/resources/selection/select.js';
 import { createResourceCommands } from '../../core/resources/commands/commands.js';
 import { createResourceAdmission } from '../../core/authoring-roles/resource-leases.js';
+import { createFeasibility } from '../../core/authoring-roles/feasibility.js';
+import { createCandidateValidator } from '../../core/authoring-roles/validation/candidate.js';
+import {
+  createInstallationPlanner,
+  installationRequest,
+} from '../../core/authoring-roles/planners/bootstrap.js';
+import { createCollectionPlanner } from '../../core/authoring-roles/planners/collection-proposal.js';
+import { createDiagramPlanners } from '../../core/authoring-roles/planners/diagram.js';
+import { createLibraryPlanner } from '../../core/authoring-roles/planners/library.js';
+import { createPresetPlanner } from '../../core/authoring-roles/planners/preset.js';
 import { createWorkspaceExporter } from '../../adapters/workspace/export.js';
 import { createPngRuntime } from '../../adapters/raster/png-runtime.js';
 import { cacheRenders } from '../../adapters/rendering/render-cache.js';
-import type { createFeasibility } from '../../core/authoring-roles/feasibility.js';
 import { createServiceCapabilities } from './capabilities.js';
 
 /** The workspace after wiring: the session facade, its validator, and the startup requests. */
@@ -50,30 +59,16 @@ export async function wireWorkspace(
   const [
     storeModule,
     codecModule,
-    collectionModule,
-    libraryModule,
-    plannerModule,
-    validationModule,
     jobModule,
-    feasibilityModule,
     rendererModule,
-    installationModule,
     channelModule,
-    presetPlannerModule,
     themePreparationModule,
   ] = await Promise.all([
     import('../../adapters/storage/authoring-store.js'),
     import('../../adapters/builtins/preset-codecs.js'),
-    import('../../core/authoring-roles/planners/collection-proposal.js'),
-    import('../../core/authoring-roles/planners/library.js'),
-    import('../../core/authoring-roles/planners/diagram.js'),
-    import('../../core/authoring-roles/validation/candidate.js'),
     import('../../adapters/rendering/render-jobs.js'),
-    import('../../core/authoring-roles/feasibility.js'),
     import('../../adapters/rendering/collection-renderer.js'),
-    import('../../core/authoring-roles/planners/bootstrap.js'),
     import('../../adapters/notifications/change-channel.js'),
-    import('../../core/authoring-roles/planners/preset.js'),
     import('../../adapters/rendering/theme-preparation.js'),
   ]);
   const capabilities = createServiceCapabilities(
@@ -101,7 +96,7 @@ export async function wireWorkspace(
       }),
     templates: capabilities.templates,
   });
-  const collections = collectionModule.createCollectionPlanner(views, resources);
+  const collections = createCollectionPlanner({ library, workspace: views, resources });
   const initial = {
     workspace: options.workspace,
     title: options.title,
@@ -109,12 +104,12 @@ export async function wireWorkspace(
     presets: installation.presets,
   };
   const planners = [
-    installationModule.createInstallationPlanner(initial),
-    presetPlannerModule.createPresetPlanner(resourceCommands),
-    libraryModule.createLibraryPlanner(views),
-    ...plannerModule.createDiagramPlanners({ language, workspace: views, resources, collections }),
+    createInstallationPlanner(initial),
+    createPresetPlanner(resourceCommands),
+    createLibraryPlanner({ library, workspace: views }),
+    ...createDiagramPlanners({ model, language, workspace: views, resources, collections }),
   ];
-  const validation = validationModule.createCandidateValidator({
+  const validation = createCandidateValidator({
     workspace: views,
     resources,
     assets: native.assets,
@@ -154,7 +149,7 @@ export async function wireWorkspace(
     resources,
     renderer,
     png: createPngRuntime(),
-    authoring: (signal) => requestAuthoring(runtime, signal, feasibilityModule.createFeasibility),
+    authoring: (signal) => requestAuthoring(runtime, signal),
   });
   if (!exporter.ok) {
     return failure('unavailable', 'startup', 'Workspace composition failed');
@@ -169,21 +164,17 @@ export async function wireWorkspace(
     readSignal: new AbortController().signal,
     unavailable: () =>
       authoringFailure('storage-unavailable', 'session', 'Workspace is closing or closed'),
-    authoring: (signal) => requestAuthoring(runtime, signal, feasibilityModule.createFeasibility),
+    authoring: (signal) => requestAuthoring(runtime, signal),
     renderer,
     exporter: exporter.value.invoke,
   });
   const adopt = () =>
-    requestAuthoring(
-      runtime,
-      new AbortController().signal,
-      feasibilityModule.createFeasibility,
-    ).initializeHistory(options.workspace);
+    requestAuthoring(runtime, new AbortController().signal).initializeHistory(options.workspace);
   return success({
     session,
     validation,
     adopt,
-    initialize: installationModule.installationRequest(initial),
+    initialize: installationRequest(initial),
   });
 }
 
@@ -191,7 +182,6 @@ export async function wireWorkspace(
 function requestAuthoring(
   runtime: AdmissionRuntime,
   signal: AbortSignal,
-  makeFeasibility: typeof createFeasibility,
 ): Authoring {
   return composeAuthoring({
     ...runtime.store,
@@ -200,7 +190,7 @@ function requestAuthoring(
     resources: runtime.resources,
     notifications: runtime.changes,
     cancellation: { cancelled: () => signal.aborted },
-    feasibility: makeFeasibility({
+    feasibility: createFeasibility({
       ...runtime.feasibility,
       producer: {
         produce: (job) => runtime.feasibility.producer.produce(job, signal),

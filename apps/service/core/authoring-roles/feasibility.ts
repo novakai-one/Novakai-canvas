@@ -1,23 +1,23 @@
-import { z } from 'zod';
-import { failure } from '@novakai/canvas-authoring';
 import type {
+  AuthoringDiagnostic,
+  AuthoringResult,
+  Collection,
   Feasibility,
   FeasibilityReport,
-  Snapshot,
   RecordKey,
-  Result,
-  Diagnostic,
-} from '@novakai/canvas-authoring';
-import type { Collection } from '@novakai/canvas-model';
+  Snapshot,
+} from '../../contract/records/capabilities.js';
 import type { WorkspaceContents } from '../../contract/records/workspace/contents.js';
 import type { FeasibilityOwners } from '../../contract/ports/render-jobs.js';
 import type { RenderDocument } from '../../contract/records/rendering/job.js';
+import { json } from '../../contract/schemas.js';
+import { authoringFailure } from '../../contract/errors.js';
 /** Geometry failure is mandatory even when callers did not request a visual preview. */
 async function render(
   collection: Collection,
   view: WorkspaceContents,
   owners: FeasibilityOwners,
-): Promise<Result<RenderDocument>> {
+): Promise<AuthoringResult<RenderDocument>> {
   const job = owners.jobs.create(
     collection,
     view,
@@ -27,7 +27,7 @@ async function render(
   if (!job.ok) return job;
   const result = await owners.producer.produce(job.value, new AbortController().signal);
   if (!result.ok)
-    return failure(
+    return authoringFailure(
       'constraint-conflict',
       result.error.path,
       result.error.message,
@@ -38,11 +38,11 @@ async function render(
 }
 /** Preserve failure while accumulating complete changed diagrams; no partial preview is admitted. */
 async function append(
-  previous: Promise<Result<readonly RenderDocument[]>>,
+  previous: Promise<AuthoringResult<readonly RenderDocument[]>>,
   collection: Collection,
   view: WorkspaceContents,
   owners: FeasibilityOwners,
-): Promise<Result<readonly RenderDocument[]>> {
+): Promise<AuthoringResult<readonly RenderDocument[]>> {
   const result = await previous;
   if (!result.ok) return result;
   const next = await render(collection, view, owners);
@@ -50,7 +50,7 @@ async function append(
   return { ok: true, value: [...result.value, next.value] };
 }
 /** Crossing warnings remain warnings in the result envelope, with labelled correction targets and no permission to violate constraints. */
-function warnings(documents: readonly RenderDocument[]): readonly Diagnostic[] {
+function warnings(documents: readonly RenderDocument[]): readonly AuthoringDiagnostic[] {
   return documents.flatMap((document) =>
     document.scene.warnings.map((item) => ({
       code: 'constraint-conflict' as const,
@@ -68,7 +68,7 @@ async function check(
   changed: readonly RecordKey[],
   preview: boolean,
   owners: FeasibilityOwners,
-): Promise<Result<FeasibilityReport>> {
+): Promise<AuthoringResult<FeasibilityReport>> {
   const view = owners.workspace.read(candidate);
   if (!view.ok) return view;
   const ids = new Set(
@@ -77,7 +77,7 @@ async function check(
   const collections = view.value.collections.filter((collection) => ids.has(collection.id));
   const documents = await collections.reduce(
     (previous, collection) => append(previous, collection, view.value, owners),
-    Promise.resolve<Result<readonly RenderDocument[]>>({ ok: true, value: [] }),
+    Promise.resolve<AuthoringResult<readonly RenderDocument[]>>({ ok: true, value: [] }),
   );
   if (!documents.ok) return documents;
   return { ok: true, value: report(documents.value, preview) };
@@ -89,13 +89,13 @@ function report(
 ): FeasibilityReport {
   return {
     warnings: warnings(documents),
-    diff: z.json().parse(
+    diff: json.parse(
       documents.map((item) => ({
         collection: item.collection.id,
         adjustments: item.scene.adjustments,
       })),
     ),
-    preview: preview ? z.json().parse(JSON.parse(JSON.stringify(documents))) : null,
+    preview: preview ? json.parse(JSON.parse(JSON.stringify(documents))) : null,
   };
 }
 

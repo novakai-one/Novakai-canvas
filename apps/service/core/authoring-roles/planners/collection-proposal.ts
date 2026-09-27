@@ -1,7 +1,11 @@
-import { planMembership } from '@novakai/canvas-library';
-import { proposalSchema, failure } from '@novakai/canvas-authoring';
-import type { Snapshot, Proposal, Result, Digest } from '@novakai/canvas-authoring';
-import type { Collection } from '@novakai/canvas-model';
+import type {
+  AuthoringResult,
+  Collection,
+  Digest,
+  Proposal,
+  Snapshot,
+} from '../../../contract/records/capabilities.js';
+import type { LibraryRules } from '../../../contract/ports/capabilities.js';
 import type {
   WorkspaceReader,
   WorkspaceContents,
@@ -10,26 +14,34 @@ import type {
   ResourceSelector,
   CollectionPlanner,
 } from '../../../contract/records/planning/planning.js';
+import { proposalSchema } from '../../../contract/schemas.js';
+import { authoringFailure } from '../../../contract/errors.js';
+
+/** What the collection planner uses; compose passes Library from ServiceCapabilities. */
+export interface CollectionProposalOwners {
+  readonly library: Pick<LibraryRules, 'planMembership'>;
+  readonly workspace: WorkspaceReader;
+  readonly resources: ResourceSelector;
+}
 /** A create includes catalog membership in the same proposed Authoring transaction as its canonical collection. */
 function propose(
   snapshot: Snapshot,
   collection: Collection,
-  workspace: WorkspaceReader,
-  resources: ResourceSelector,
-): Result<Proposal> {
-  const view = workspace.read(snapshot);
+  owners: CollectionProposalOwners,
+): AuthoringResult<Proposal> {
+  const view = owners.workspace.read(snapshot);
   if (!view.ok) return view;
-  const blobs = resources.forCollection(collection, view.value);
+  const blobs = owners.resources.forCollection(collection, view.value);
   if (!blobs.ok) return blobs;
-  return proposal(collection, view.value, blobs.value, workspace);
+  return proposal(collection, view.value, blobs.value, owners);
 }
 /** Updating existing semantics never rewrites catalog organisation or other collections. */
 function proposal(
   collection: Collection,
   view: WorkspaceContents,
   resources: readonly Digest[],
-  workspace: WorkspaceReader,
-): Result<Proposal> {
+  owners: CollectionProposalOwners,
+): AuthoringResult<Proposal> {
   const write = {
     kind: 'put',
     key: { kind: 'collection', id: collection.id },
@@ -38,8 +50,8 @@ function proposal(
   };
   if (view.collections.some((item) => item.id === collection.id))
     return checked([write], collection.id);
-  const inventory = [...view.library.collections, workspace.project(collection)];
-  const organisation = planMembership({
+  const inventory = [...view.library.collections, owners.workspace.project(collection)];
+  const organisation = owners.library.planMembership({
     snapshot: view.library,
     changes: [
       {
@@ -50,7 +62,7 @@ function proposal(
     inventory,
   });
   if (!organisation.ok)
-    return failure(
+    return authoringFailure(
       'invariant-violation',
       'catalog',
       'The owning capability rejected this input',
@@ -74,7 +86,7 @@ function proposal(
 function checked(
   writes: readonly unknown[],
   collection: string,
-): Result<Proposal> {
+): AuthoringResult<Proposal> {
   const result = proposalSchema.safeParse({
     writes,
     reads: [],
@@ -82,7 +94,7 @@ function checked(
     warnings: [],
   });
   if (!result.success)
-    return failure(
+    return authoringFailure(
       'invalid-input',
       'proposal',
       'Collection proposal exceeds the authoring contract',
@@ -90,9 +102,6 @@ function checked(
   return { ok: true, value: result.data };
 }
 /** Bind canonical Model proposals to Library membership; Authoring alone checks scope, preconditions and commits. */
-export function createCollectionPlanner(
-  workspace: WorkspaceReader,
-  resources: ResourceSelector,
-): CollectionPlanner {
-  return { propose: (snapshot, collection) => propose(snapshot, collection, workspace, resources) };
+export function createCollectionPlanner(owners: CollectionProposalOwners): CollectionPlanner {
+  return { propose: (snapshot, collection) => propose(snapshot, collection, owners) };
 }

@@ -1,32 +1,49 @@
-import { planOrganisation } from '@novakai/canvas-library';
-import { failure, plannerId, proposalSchema } from '@novakai/canvas-authoring';
-import type { IntentPlanner, Request, Snapshot, Proposal, Result } from '@novakai/canvas-authoring';
-import { libraryCommand } from '../../../contract/records/planning/commands.js';
+import type {
+  AuthoringResult,
+  IntentPlanner,
+  Proposal,
+  Request,
+  Snapshot,
+} from '../../../contract/records/capabilities.js';
+import type { LibraryRules } from '../../../contract/ports/capabilities.js';
 import type { WorkspaceReader } from '../../../contract/records/workspace/contents.js';
+import { libraryCommand } from '../../../contract/records/planning/commands.js';
+import { plannerId, proposalSchema } from '../../../contract/schemas.js';
+import { authoringFailure } from '../../../contract/errors.js';
+
+/** What the library planner uses; compose passes Library from ServiceCapabilities. */
+export interface LibraryPlannerOwners {
+  readonly library: Pick<LibraryRules, 'planOrganisation'>;
+  readonly workspace: WorkspaceReader;
+}
 /** Organisation commands are interpreted only by Library; the host cannot write an arbitrary organisation record. */
 function propose(
   request: Request,
   snapshot: Snapshot,
-  workspace: WorkspaceReader,
-): Result<Proposal> {
+  owners: LibraryPlannerOwners,
+): AuthoringResult<Proposal> {
   if (request.intent.kind !== 'change')
-    return failure('invalid-input', 'intent', 'Expected a library change');
+    return authoringFailure('invalid-input', 'intent', 'Expected a library change');
   const command = libraryCommand.safeParse(request.intent.payload);
   if (!command.success)
-    return failure('invalid-input', 'library', 'Library changes require a bounded change batch');
-  return planOrganisationChange(command.data.changes, snapshot, workspace);
+    return authoringFailure(
+      'invalid-input',
+      'library',
+      'Library changes require a bounded change batch',
+    );
+  return planOrganisationChange(command.data.changes, snapshot, owners);
 }
 /** The complete inventory checks membership and folder invariants before any write is proposed. */
 function planOrganisationChange(
   changes: readonly unknown[],
   snapshot: Snapshot,
-  workspace: WorkspaceReader,
-): Result<Proposal> {
-  const current = workspace.read(snapshot);
+  owners: LibraryPlannerOwners,
+): AuthoringResult<Proposal> {
+  const current = owners.workspace.read(snapshot);
   if (!current.ok) return current;
-  const planned = planOrganisation({ snapshot: current.value.library, changes });
+  const planned = owners.library.planOrganisation({ snapshot: current.value.library, changes });
   if (!planned.ok)
-    return failure(
+    return authoringFailure(
       'invariant-violation',
       'catalog',
       'The owning capability rejected this input',
@@ -39,13 +56,13 @@ function planOrganisationChange(
 function checkedProposal(
   organisation: unknown,
   snapshot: Snapshot,
-): Result<Proposal> {
+): AuthoringResult<Proposal> {
   const catalogs = snapshot.records.filter(
     (record) => record.key.kind === 'catalog' && !record.deleted,
   );
   const current = catalogs[0];
   if (current === undefined)
-    return failure('invariant-violation', 'catalog', 'A library catalog is required');
+    return authoringFailure('invariant-violation', 'catalog', 'A library catalog is required');
   const parsed = proposalSchema.safeParse({
     writes: [{ kind: 'put', key: current.key, value: organisation, resources: [] }],
     reads: snapshot.records
@@ -55,13 +72,13 @@ function checkedProposal(
     warnings: [],
   });
   if (!parsed.success)
-    return failure('invalid-input', 'catalog', 'Library proposal could not be admitted');
+    return authoringFailure('invalid-input', 'catalog', 'Library proposal could not be admitted');
   return { ok: true, value: parsed.data };
 }
 /** Authoring alone admits and commits the Library-owned candidate through the usual receipt/history transaction. */
-export function createLibraryPlanner(workspace: WorkspaceReader): IntentPlanner {
+export function createLibraryPlanner(owners: LibraryPlannerOwners): IntentPlanner {
   return {
     id: plannerId.parse('library'),
-    plan: async (request, snapshot) => propose(request, snapshot, workspace),
+    plan: async (request, snapshot) => propose(request, snapshot, owners),
   };
 }

@@ -1,3 +1,8 @@
+/*
+ * Planning seams shared by the planners, candidate validation and leases: the resource selector
+ * and the collection planner. Declarations only; core/resources/selection and
+ * core/authoring-roles/planners implement them, and Authoring owns commit and retry.
+ */
 import type {
   Collection,
   Snapshot,
@@ -7,9 +12,9 @@ import type {
   ReadVersion,
   AuthoringResult,
   Proposal,
+  ResolvedResources,
 } from '../capabilities.js';
-import type { ResolvedResources, Language } from '@novakai/canvas-language';
-import type { WorkspaceContents, WorkspaceReader } from '../workspace/contents.js';
+import type { WorkspaceContents } from '../workspace/contents.js';
 /** Immutable alias resolution is repeated against the same snapshot, then compared with Authoring's admitted pins. */
 export interface ResourceSelection {
   readonly resources: ResolvedResources;
@@ -32,10 +37,4 @@ export interface CollectionPlanner {
     snapshot: Snapshot,
     collection: Collection,
   ): AuthoringResult<Proposal>;
-}
-export interface DiagramPlannerOwners {
-  readonly language: Language;
-  readonly workspace: WorkspaceReader;
-  readonly resources: ResourceSelector;
-  readonly collections: CollectionPlanner;
 }

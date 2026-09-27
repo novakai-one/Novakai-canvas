@@ -1,5 +1,6 @@
 /*
- * Planner payload schemas: the envelopes the service's planners and resource selection decode.
+ * Planner payload schemas: the envelopes the service's planners and resource selection decode,
+ * including the private bootstrap command.
  * Declarations only; Model, Language, Library and Templates own the contents and their failures.
  */
 import { z } from 'zod';
@@ -23,6 +24,8 @@ export const presetAdmission = z.looseObject({
 export type PresetAdmission = z.infer<typeof presetAdmission>;
 /** A preset change names its admission; resource selection reads only the admission header. */
 export const presetChange = z.looseObject({ admission: presetAdmission });
+/** The private bootstrap planner's only command; HTTP never reaches that planner. */
+export const initializeCommand = z.strictObject({ action: z.literal('initialize') });
 /** Library owns the inner catalog operation schema and validates the complete batch. */
 export const libraryCommand = z
   .strictObject({ changes: z.array(z.unknown()).max(1000) })

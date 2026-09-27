@@ -1,16 +1,27 @@
-import type { FailureSource } from '../../../contract/records/transport/failure-source.js';
-import { failure } from '@novakai/canvas-authoring';
 import type {
+  Assets,
+  AuthoringResult,
   CandidateValidator,
-  Result,
+  Preset,
+  ReadVersion,
   Snapshot,
   StoredRecord,
-  ReadVersion,
-} from '@novakai/canvas-authoring';
-import type { Preset } from '@novakai/canvas-templates';
-import type { AdmissionOwners } from '../../../contract/ports/admission.js';
-import type { WorkspaceContents } from '../../../contract/records/workspace/contents.js';
+} from '../../../contract/records/capabilities.js';
+import type { FailureSource } from '../../../contract/records/transport/failure-source.js';
+import type { ResourceSelector } from '../../../contract/records/planning/planning.js';
+import type {
+  WorkspaceContents,
+  WorkspaceReader,
+} from '../../../contract/records/workspace/contents.js';
 import { workspaceMetadata, assetMetadata } from '../../../contract/records/workspace/metadata.js';
+import { authoringFailure } from '../../../contract/errors.js';
+
+/** What candidate validation reads; no validator can commit or alter the candidate it inspects. */
+export interface CandidateValidatorOwners {
+  readonly workspace: WorkspaceReader;
+  readonly resources: ResourceSelector;
+  readonly assets: Pick<Assets, 'resolve'>;
+}
 /** Cross-owner references are validated as a whole; a missing participant never becomes a skipped check. */
 class AdmissionFault extends Error {
   /** Expected owner failures keep their evidence through private short-circuiting. */
@@ -55,7 +66,7 @@ function resources(
 function collections(
   snapshot: Snapshot,
   view: WorkspaceContents,
-  owners: AdmissionOwners,
+  owners: CandidateValidatorOwners,
 ): void {
   view.collections.forEach((collection) => {
     const slot = record(snapshot, 'collection', collection.id);
@@ -77,7 +88,7 @@ function presetResources(preset: Preset): readonly string[] {
 function presets(
   snapshot: Snapshot,
   view: WorkspaceContents,
-  owners: AdmissionOwners,
+  owners: CandidateValidatorOwners,
 ): void {
   view.presets.forEach((preset) => {
     const slot = record(snapshot, 'preset', `preset:${preset.digest}`);
@@ -91,7 +102,7 @@ function presets(
 /** Discovery metadata does not mint a blob; a corresponding mechanically admitted resource must already exist. */
 function asset(
   record: StoredRecord,
-  owners: AdmissionOwners,
+  owners: CandidateValidatorOwners,
 ): void {
   const parsed = assetMetadata.safeParse(record.value);
   if (!parsed.success) throw new AdmissionFault('Invalid asset discovery metadata');
@@ -109,7 +120,7 @@ function asset(
 function metadata(
   snapshot: Snapshot,
   view: WorkspaceContents,
-  owners: AdmissionOwners,
+  owners: CandidateValidatorOwners,
 ): void {
   const slot = record(snapshot, 'workspace', 'metadata');
   const parsed = workspaceMetadata.safeParse(slot.value);
@@ -127,8 +138,8 @@ function metadata(
 function checked(
   before: Snapshot,
   after: Snapshot,
-  owners: AdmissionOwners,
-): Result<readonly ReadVersion[]> {
+  owners: CandidateValidatorOwners,
+): AuthoringResult<readonly ReadVersion[]> {
   const view = owners.workspace.read(after);
   if (!view.ok) return view;
   collections(after, view.value, owners);
@@ -142,19 +153,19 @@ function checked(
   };
 }
 /** Structured consistency faults are actionable; unexpected provider errors never authorize partial admission. */
-function rejected(error: unknown): Result<never> {
+function rejected(error: unknown): AuthoringResult<never> {
   if (error instanceof AdmissionFault)
-    return failure('invariant-violation', 'candidate', error.message, [], error.source);
-  return failure(
+    return authoringFailure('invariant-violation', 'candidate', error.message, [], error.source);
+  return authoringFailure(
     'corrupt-record',
     'candidate',
     'Candidate ownership validation could not complete',
   );
 }
 /** Mandatory final gate has no write bypass; Authoring owns scope, conditional commit and all recovery decisions. */
-export function createCandidateValidator(owners: AdmissionOwners): CandidateValidator {
+export function createCandidateValidator(owners: CandidateValidatorOwners): CandidateValidator {
   return {
-    async validate(before, after): Promise<Result<readonly ReadVersion[]>> {
+    async validate(before, after): Promise<AuthoringResult<readonly ReadVersion[]>> {
       try {
         return checked(before, after, owners);
       } catch (error) {
