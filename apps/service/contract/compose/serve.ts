@@ -41,6 +41,7 @@ export async function serveWorkspace(
       files: files.createStaticFiles(options.webRoot),
       router: createHttpRouter({
         session,
+        resources: session.resources,
         generation: security.value.generation,
         admission,
         decoder: { read: readCommand },

@@ -15,7 +15,7 @@ export function sourceScope(query: Readonly<Record<string, string>>): Result<Sco
   const object = query.object;
   if (bothScopes(section, object))
     return failure('invalid-input', 'scope', 'Use either section or object, not both');
-  const selected = section === undefined ? object : section;
+  const selected = section ?? object;
   return validSourceScope(section, selected);
 }
 
@@ -27,24 +27,17 @@ function bothScopes(
   return section !== undefined && object !== undefined;
 }
 
-/** Refuses a repeated scope key, then builds the scope as `sourceScopeValue`. */
+/**
+ * Fails with `invalid-input` at `scope` when a scope key was repeated; otherwise as
+ * `sourceScopeValue`.
+ */
 function validSourceScope(
   section: string | undefined,
   selected: string | undefined,
 ): Result<Scope> {
-  const duplicate = duplicateScopeError(section, selected);
-  if (duplicate !== undefined) return duplicate;
+  if (hasDuplicateScopeValue(section) || hasDuplicateScopeValue(selected))
+    return failure('invalid-input', 'scope', 'Each read scope query may be provided only once');
   return sourceScopeValue(section, selected);
-}
-
-/** `invalid-input` at `scope` when a scope key was repeated; otherwise nothing. */
-function duplicateScopeError(
-  section: string | undefined,
-  selected: string | undefined,
-): Result<Scope> | undefined {
-  return hasDuplicateScopeValue(section) || hasDuplicateScopeValue(selected)
-    ? failure('invalid-input', 'scope', 'Each read scope query may be provided only once')
-    : undefined;
 }
 
 /** The HTTP server joins repeated `section`/`object` values with U+0000. */

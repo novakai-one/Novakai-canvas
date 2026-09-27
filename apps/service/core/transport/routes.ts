@@ -43,9 +43,9 @@ export interface RouteOwners {
     | 'receipt'
     | 'render'
     | 'inspect'
-    | 'resources'
     | 'exportArtifact'
   >;
+  readonly resources: ResourceCommands;
   readonly generation: string;
   readonly admission: Pick<HttpAdmission, 'mutation'>;
   readonly decoder: CommandDecoder;
@@ -85,11 +85,11 @@ function routeTable(owners: RouteOwners): Readonly<Record<string, RouteHandler>>
   );
   return Object.freeze({
     'POST /api/v1/resources/stage': (call) =>
-      resource(call, (input) => owners.session.resources.stage(input)),
+      resource(call, (input) => owners.resources.stage(input)),
     'POST /api/v1/resources/restore': (call) =>
-      resource(call, (input) => owners.session.resources.restore(input)),
+      resource(call, (input) => owners.resources.restore(input)),
     'POST /api/v1/resources/blob': (call) =>
-      resource(call, async (input) => owners.session.resources.blob(input)),
+      resource(call, async (input) => owners.resources.blob(input)),
     'POST /api/v1/resources/freeze': (call) => resource(call, freeze),
     'POST /api/v1/resources/prepare': (call) => resource(call, prepare),
     'POST /api/v1/resources/instantiate': (call) => resource(call, instantiate),
@@ -255,7 +255,7 @@ function semanticResource(
   return async (input) => {
     const snapshot = await owners.session.read();
     if (!snapshot.ok) return snapshot;
-    return operation(owners.session.resources, input, snapshot.value);
+    return operation(owners.resources, input, snapshot.value);
   };
 }
 
