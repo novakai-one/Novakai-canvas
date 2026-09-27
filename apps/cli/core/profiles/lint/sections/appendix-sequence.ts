@@ -1,7 +1,8 @@
 /*
  * Appendix sequence rules of the build-spec profile: at least one appendix exists, and in numeric
- * order the appendices number, mode and order correctly after the ownership section. Pure; the
- * findings are returned.
+ * order each appendix has a number no earlier appendix used, the mode its ID prefix names, and an
+ * order above ownership and the appendix before it. Pure: one immutable fold; the findings are
+ * returned.
  */
 import type { ProfileFinding } from '../../../../contract/records/profiles.js';
 import { collectAppendices, type Appendix } from '../appendix-ids.js';
@@ -14,10 +15,11 @@ import {
 } from '../declarations.js';
 import { fieldFinding, findingAt } from '../findings.js';
 
-/** The appendix fold state: numbers seen, the number and order anchors, and the findings so far. */
+/** The fold state: the anchors the next appendix is checked against, and the findings so far. */
 interface AppendixSequence {
-  readonly numbers: ReadonlySet<number>;
-  readonly previousNumber: number;
+  /** The number of the appendix just visited; `undefined` before the first. */
+  readonly previousNumber: number | undefined;
+  /** The order the next appendix must exceed: the last order seen, starting at ownership's. */
   readonly previousOrder: number | undefined;
   readonly findings: readonly ProfileFinding[];
 }
@@ -47,14 +49,16 @@ function appendixPresenceFinding(
     : [];
 }
 
-/** Number, mode and order findings over the appendices in numeric order. */
+/**
+ * Number, mode and order findings over the appendices in numeric order. The sort is stable, so
+ * appendices that share a number keep their document order.
+ */
 function appendixSequenceFindings(
   appendices: readonly Appendix[],
   sections: readonly Declaration[],
 ): readonly ProfileFinding[] {
   const start: AppendixSequence = {
-    numbers: new Set<number>(),
-    previousNumber: 0,
+    previousNumber: undefined,
     previousOrder: ownershipOrder(sections),
     findings: [],
   };
@@ -69,7 +73,7 @@ function ownershipOrder(sections: readonly Declaration[]): number | undefined {
 
 /**
  * The next fold state: this appendix's number, mode and order findings added in that order, its
- * number recorded, and the order anchor moved to its order when it has one.
+ * number becomes the number anchor, and its order becomes the order anchor when it has one.
  */
 function visitAppendix(
   sequence: AppendixSequence,
@@ -77,36 +81,26 @@ function visitAppendix(
 ): AppendixSequence {
   const currentOrder = order(appendix.section);
   return {
-    numbers: new Set([...sequence.numbers, appendix.number]),
     previousNumber: appendix.number,
     previousOrder: currentOrder ?? sequence.previousOrder,
     findings: [
       ...sequence.findings,
-      ...appendixNumberFindings(appendix, sequence.numbers, sequence.previousNumber),
+      ...duplicateNumberFinding(appendix, sequence.previousNumber),
       ...appendixModeFinding(appendix),
       ...appendixOrderFinding(appendix, currentOrder, sequence.previousOrder),
     ],
   };
 }
 
-/** Duplicate number first, then out-of-sequence — the order a reader meets them. */
-function appendixNumberFindings(
-  appendix: Appendix,
-  numbers: ReadonlySet<number>,
-  previous: number,
-): readonly ProfileFinding[] {
-  return [
-    ...duplicateNumberFinding(appendix, numbers),
-    ...increasingNumberFinding(appendix, previous),
-  ];
-}
-
-/** An appendix number already used is a duplicate. */
+/**
+ * A number an earlier appendix already used is a duplicate. The appendices arrive sorted by
+ * number, so an earlier use is always the appendix just before. Reported once per repeat.
+ */
 function duplicateNumberFinding(
   appendix: Appendix,
-  numbers: ReadonlySet<number>,
+  previousNumber: number | undefined,
 ): readonly ProfileFinding[] {
-  return numbers.has(appendix.number)
+  return appendix.number === previousNumber
     ? [
         fieldFinding(appendix.section, 'id', {
           code: 'duplicate-appendix-number',
@@ -117,26 +111,7 @@ function duplicateNumberFinding(
     : [];
 }
 
-/**
- * Appendix numbers must strictly increase in id order. The appendices arrive sorted by number, so
- * this fires only on a repeated number and carries `duplicate-appendix-number`.
- */
-function increasingNumberFinding(
-  appendix: Appendix,
-  previous: number,
-): readonly ProfileFinding[] {
-  return appendix.number <= previous
-    ? [
-        fieldFinding(appendix.section, 'id', {
-          code: 'duplicate-appendix-number',
-          path: `section @${appendix.id}`,
-          message: 'Appendix numbers must increase.',
-        }),
-      ]
-    : [];
-}
-
-/** An appendix id prefix fixes the section's mode. */
+/** An appendix ID prefix fixes the section's mode. */
 function appendixModeFinding(appendix: Appendix): readonly ProfileFinding[] {
   return text(appendix.section, 'mode') === appendix.mode
     ? []
@@ -149,7 +124,7 @@ function appendixModeFinding(appendix: Appendix): readonly ProfileFinding[] {
       ];
 }
 
-/** Appendices order after ownership and strictly increase. */
+/** An appendix's order must exceed the order anchor; a missing order on either side fails. */
 function appendixOrderFinding(
   appendix: Appendix,
   current: number | undefined,

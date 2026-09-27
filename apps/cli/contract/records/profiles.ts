@@ -49,7 +49,8 @@ export interface ProfileDescriptor {
  * - `section-mode`: a required section does not use its slot's first mode.
  * - `section-order`: a required section's order does not increase after the previous one.
  * - `missing-appendix`: no `@flow-5N`, `@sequence-5N` or `@state-5N` appendix.
- * - `duplicate-appendix-number`: two appendices share a number.
+ * - `duplicate-appendix-number`: an appendix reuses an earlier appendix's number; reported once on
+ *   each repeat.
  * - `appendix-mode`: an appendix's mode differs from its ID prefix.
  * - `appendix-order`: an appendix's order is not above ownership and the previous appendix.
  *
