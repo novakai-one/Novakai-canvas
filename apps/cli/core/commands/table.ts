@@ -13,7 +13,7 @@ export type FamilyWord = 'theme' | 'recipe' | 'profile';
 export interface CommandRow {
   /** Operands after the command words. */
   readonly operands: 0 | 1;
-  /** Every flag this command reads; giving it any other flag is `invalid-arguments`. */
+  /** Every flag this command takes; giving it any other flag is `invalid-arguments`. */
   readonly accepted: readonly TextFlag[];
   /** Its lines in `canvas --help`, verbatim and in order; the table's order is the help order. */
   readonly usage: readonly string[];
@@ -28,9 +28,22 @@ const answered: readonly TextFlag[] = Object.freeze(['out', ...sent]);
 /** A service command that retains its request under --request. */
 const retained: readonly TextFlag[] = Object.freeze(['request', ...answered]);
 
+/**
+ * `--help` added to a real command line still prints usage, as in the base CLI: help takes and
+ * ignores every flag but the five placed ones (--profile, --id, --title, --section, --object).
+ */
+const besideHelp: readonly TextFlag[] = Object.freeze([
+  'revision',
+  'mode',
+  'namespace',
+  'version',
+  'family',
+  ...retained,
+]);
+
 /** Every command, in `--help` order: a missing, extra or misspelt name is a type error. */
 const commandTable: Readonly<Record<CommandName, CommandRow>> = Object.freeze({
-  help: row({ operands: 0, accepted: [], usage: [] }),
+  help: row({ operands: 0, accepted: besideHelp, usage: [] }),
   describe: row({
     operands: 0,
     accepted: answered,
@@ -151,7 +164,7 @@ export function commandRow(name: CommandName): CommandRow {
   return commandTable[name];
 }
 
-/** Whether the command reads `flag`; any text, so a caller may ask about a flag as given. */
+/** Whether the command takes `flag`; any text, so a caller may ask about a flag as given. */
 export function isAccepted(
   name: CommandName,
   flag: string,
