@@ -21,4 +21,4 @@ export {
 export { resourceInspector } from '../core/export/resources.js';
 export { artifactOutcome, dslFile, markdownFile } from '../core/export/files.js';
 export { historyVersionsOnly } from '../core/session/history-versions.js';
-export { projectCollection } from '../core/workspace/projection.js';
+export { projectCollection } from '../core/workspace/collection-projection.js';

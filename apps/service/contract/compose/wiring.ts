@@ -64,7 +64,7 @@ export async function wireWorkspace(
   ] = await Promise.all([
     import('../../adapters/storage/authoring-store.js'),
     import('../../adapters/builtins/preset-codecs.js'),
-    import('../../adapters/workspace/workspace-reader.js'),
+    import('../../core/workspace/reader.js'),
     import('../../adapters/resources/resource-selection.js'),
     import('../../adapters/resources/resource-leases.js'),
     import('../../adapters/planning/collection-plans.js'),

@@ -1,4 +1,4 @@
-import { projectCollection } from '../../contract/api.js';
+import { projectCollection } from './collection-projection.js';
 import { validate as validateModel } from '@novakai/canvas-model';
 import { validateLibrarySnapshot } from '@novakai/canvas-library';
 import { failure } from '@novakai/canvas-authoring';
