@@ -1,8 +1,9 @@
 /*
  * The print scope of `GET /api/v1/source`, read from its query: the whole collection, one section
- * or one object. Pure. A refused scope is the caller's to correct.
+ * or one object. Pure. IDs follow Model's ID grammar. A refused scope is the caller's to correct.
  */
 import type { Scope } from '../../contract/records/capabilities.js';
+import { objectId, sectionId } from '../../contract/schemas.js';
 import { failure, success, type Result } from '../../contract/errors.js';
 
 /**
@@ -51,17 +52,12 @@ function hasDuplicateScopeValue(value: string | undefined): boolean {
   return value?.includes('\u0000') ?? false;
 }
 
-/**
- * The whole collection when no ID is given. Fails with `invalid-input` at `scope` on a
- * non-canonical ID.
- */
+/** The whole collection when no ID is given; otherwise as `sourceScopeChoice`. */
 function sourceScopeValue(
   section: string | undefined,
   id: string | undefined,
 ): Result<Scope> {
   if (id === undefined) return success({ kind: 'all' });
-  if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(id))
-    return failure('invalid-input', 'scope', 'Scope IDs must be non-empty canonical IDs');
   return sourceScopeChoice(section, id);
 }
 
@@ -70,5 +66,24 @@ function sourceScopeChoice(
   section: string | undefined,
   id: string,
 ): Result<Scope> {
-  return section === undefined ? success({ kind: 'object', id }) : success({ kind: 'section', id });
+  return section === undefined ? objectScope(id) : sectionScope(id);
+}
+
+/** Fails with `invalid-input` at `scope` when the ID breaks Model's object ID grammar. */
+function objectScope(id: string): Result<Scope> {
+  const parsed = objectId.safeParse(id);
+  if (!parsed.success) return nonCanonical();
+  return success({ kind: 'object', id: parsed.data });
+}
+
+/** Fails with `invalid-input` at `scope` when the ID breaks Model's section ID grammar. */
+function sectionScope(id: string): Result<Scope> {
+  const parsed = sectionId.safeParse(id);
+  if (!parsed.success) return nonCanonical();
+  return success({ kind: 'section', id: parsed.data });
+}
+
+/** `invalid-input` at `scope`: the ID is empty or not canonical. */
+function nonCanonical(): Result<Scope> {
+  return failure('invalid-input', 'scope', 'Scope IDs must be non-empty canonical IDs');
 }
