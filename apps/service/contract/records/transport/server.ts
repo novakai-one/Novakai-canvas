@@ -1,5 +1,10 @@
+/*
+ * The HTTP server's startup options, its running handle and the bindings it is started with (the
+ * native socket IO and static files ports). Declarations only. A failed start leaves the workspace
+ * with the caller, which closes it; clients reconcile a retained request's receipt.
+ */
 import type { WorkspaceSession } from '../../types.js';
-import type { HttpAdmission, HttpSecurity } from './http.js';
+import type { HttpAdmission, HttpMetadata, HttpSecurity } from './http.js';
 import type { ApiRouter } from './protocol.js';
 import type { Result } from '../../errors.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -29,7 +34,7 @@ export interface ServerBindings {
 }
 /** Native socket adaptation is injected at composition; policy does not inspect Node request objects. */
 export interface HttpIo {
-  metadata(request: IncomingMessage): import('./http.js').HttpMetadata;
+  metadata(request: IncomingMessage): HttpMetadata;
   body(request: BodyStream): Promise<Result<string>>;
   json(
     response: ServerResponse,

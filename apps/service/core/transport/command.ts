@@ -1,32 +1,36 @@
-import { mutationEnvelope } from '../../contract/records/transport/protocol.js';
+/*
+ * Decodes a mutation body into an admitted Authoring request. Pure; malformed input never reaches
+ * Authoring. A changed generation never grants an automatic retry: the caller rereads and
+ * reconciles its original receipt first. Authoring owns commit and receipt recovery.
+ */
 import type {
   AdmittedMutation,
   CommandAdmission,
 } from '../../contract/records/transport/protocol.js';
-import { httpBodyLimit } from '../../contract/records/transport/http.js';
-import type { Result } from '../../contract/errors.js';
-import { failure } from '../../contract/errors.js';
-/** Decode only bounded JSON with the advertised content type; malformed input never reaches Authoring. */
-function envelope(
+import { mutationEnvelope } from '../../contract/records/transport/protocol.js';
+import { failure, success, type Result } from '../../contract/errors.js';
+import { jsonBody } from './json-body.js';
+
+/** A body that passed the version 1 envelope schema. */
+type MutationEnvelope = ReturnType<typeof mutationEnvelope.parse>;
+
+/**
+ * The body as an admitted mutation. Fails with `invalid-input` at `content-type` or `body` as
+ * `jsonBody` (json-body.ts); otherwise as `admitEnvelope`.
+ */
+export function readCommand(
   body: string,
-  contentType: string,
-): Result<unknown> {
-  if (contentType.split(';')[0]?.trim() !== 'application/json')
-    return failure('invalid-input', 'content-type', 'Use application/json for a mutation');
-  return boundedJson(body);
+  context: CommandAdmission,
+): Result<AdmittedMutation> {
+  const decoded = jsonBody(body, context.metadata.contentType, 'mutation');
+  if (!decoded.ok) return decoded;
+  return admitEnvelope(decoded.value, context);
 }
-/** TextEncoder uses the same UTF-8 byte budget as the socket reader, including non-ASCII source text. */
-function boundedJson(body: string): Result<unknown> {
-  if (new TextEncoder().encode(body).byteLength > httpBodyLimit)
-    return failure('invalid-input', 'body', 'Request exceeds the 24 MiB transport limit');
-  try {
-    const value: unknown = JSON.parse(body);
-    return { ok: true, value };
-  } catch {
-    return failure('invalid-input', 'body', 'Request body must be valid JSON');
-  }
-}
-/** Require generation before owner schema admission; a retained request needs receipt reconciliation after restart. */
+
+/**
+ * Fails with `invalid-input` at `body` unless the value is a version 1 mutation envelope;
+ * otherwise as `admitCurrent`.
+ */
 function admitEnvelope(
   input: unknown,
   context: CommandAdmission,
@@ -36,9 +40,14 @@ function admitEnvelope(
     return failure('invalid-input', 'body', 'Expected a version 1 mutation envelope');
   return admitCurrent(parsed.data, context);
 }
-/** A changed generation never grants an automatic retry; callers reread and reconcile the original receipt first. */
+
+/**
+ * Fails with `conflict` at `generation` when the envelope names another transport generation;
+ * otherwise as the ingress admission: `invalid-input` at `request`, `unauthorized` at `actor` or
+ * `intent.planner`.
+ */
 function admitCurrent(
-  input: ReturnType<typeof mutationEnvelope.parse>,
+  input: MutationEnvelope,
   context: CommandAdmission,
 ): Result<AdmittedMutation> {
   if (input.generation !== context.generation)
@@ -49,17 +58,5 @@ function admitCurrent(
     );
   const request = context.ingress.mutation(input.request, context.caller);
   if (!request.ok) return request;
-  return {
-    ok: true,
-    value: { request: request.value, preview: input.preview, options: input.options },
-  };
-}
-/** The HTTP adapter authenticates before reading a body. This pure boundary validates payload policy before invoking handlers. */
-export function readCommand(
-  body: string,
-  context: CommandAdmission,
-): Result<AdmittedMutation> {
-  const decoded = envelope(body, context.metadata.contentType);
-  if (!decoded.ok) return decoded;
-  return admitEnvelope(decoded.value, context);
+  return success({ request: request.value, preview: input.preview, options: input.options });
 }
