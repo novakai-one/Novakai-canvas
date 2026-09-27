@@ -11,6 +11,7 @@ import type { Collection } from '../../contract/records/owners.js';
 import type { LibraryReader } from '../../contract/records/library.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
+import { libraryFailure } from '../../contract/foreign-failures.js';
 /** Host projections are shared with service validation; Library remains the search and organisation authority. */
 export function createLibraryReader(): LibraryReader {
   return {
@@ -84,7 +85,8 @@ function cursorFilter(cursor: string | null): Readonly<Record<string, unknown>> 
 }
 /** Owner diagnostics remain readable while preserving the browser's stable failure envelope. */
 function checked<T>(result: LibraryResult<T>): Result<T> {
-  if (!result.ok) return failure('invalid-library', 'Library rejected this input', result.error);
+  if (!result.ok)
+    return failure('invalid-library', 'Library rejected this input', libraryFailure(result.error));
   return result;
 }
 

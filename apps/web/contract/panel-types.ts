@@ -3,7 +3,7 @@
  * Declarations only; `adapters/sessions/panel-session.ts` implements the controller. The panel
  * records it names live in `records/panels.ts`, so Web core can read them.
  */
-import type { Result } from './errors.js';
+import type { Diagnostic, Result } from './errors.js';
 import type { DraftRetention } from './ports/draft-retention.js';
 import type {
   InterfaceControl,
@@ -62,5 +62,6 @@ export interface PanelBindings {
     input: unknown,
     workspace: string,
   ): Result<PanelPreferences>;
-  report(message: string): void;
+  /** Show a panel-layout failure (`panel-preferences`); it stays shown across renders. */
+  report(problem: Diagnostic): void;
 }

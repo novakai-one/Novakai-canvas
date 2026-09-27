@@ -1,5 +1,6 @@
 /** Service public boundary. Web and CLI use checked requests; Authoring remains the sole mutation authority. */
 export type { Result, Diagnostic, ErrorCode } from './errors.js';
+export type { OperationSource } from './records/failure-source.js';
 export { transportGeneration } from './brands.js';
 export type { TransportGeneration } from './brands.js';
 

@@ -95,12 +95,7 @@ export function groupChanges(
 export function creationFailure<T = never>(message: string): Extract<Result<T>, { ok: false }> {
   return {
     ok: false,
-    error: diagnostic(
-      'invalid-creation',
-      message,
-      'Correct the Add form and try again.',
-      'workspace',
-    ),
+    error: diagnostic('invalid-creation', message, 'Correct the Add form and try again.'),
   };
 }
 

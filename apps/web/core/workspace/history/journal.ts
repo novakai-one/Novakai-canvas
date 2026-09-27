@@ -41,7 +41,6 @@ export function submissionAllowed(
         'pending-request',
         'Wait for undo or redo to finish',
         'Your draft is retained.',
-        'workspace',
       ),
     };
   return { ok: true, value: undefined };

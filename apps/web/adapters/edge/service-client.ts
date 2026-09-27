@@ -5,6 +5,7 @@ import { receiptSchema } from '@novakai/canvas-authoring';
 import type { BinaryResponse, CommitNotice, ServiceClient } from '../../contract/ports/client.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
+import { foreignFailure } from '../../contract/foreign-failures.js';
 /** Only the receipt's identity is read from a committed event; the rest stays a hint the snapshot read supersedes. */
 const committedEvent = z.looseObject({
   change: z.looseObject({
@@ -99,7 +100,7 @@ async function binaryFailure(response: Response): Promise<Result<BinaryResponse>
     return failure('invalid-response', 'The service returned an unreadable response');
   return checked.data.outcome.ok
     ? failure('invalid-response', 'The service returned no artifact')
-    : { ok: false, error: checked.data.outcome.error };
+    : { ok: false, error: foreignFailure('service', checked.data.outcome.error) };
 }
 
 async function binarySuccess(response: Response): Promise<Result<BinaryResponse>> {

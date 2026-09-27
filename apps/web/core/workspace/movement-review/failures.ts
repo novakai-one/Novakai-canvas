@@ -10,7 +10,6 @@ export function noMoveOnlyOption(review: MoveReview): Diagnostic {
     'unsupported-edit',
     review.reason ?? 'This movement has no valid move-only option; keep the draft for review.',
     'Adjust the position or use the inspector.',
-    'workspace',
   );
 }
 
@@ -20,7 +19,6 @@ export function previewRefused(): Diagnostic {
     'invalid-edit',
     'The movement preview could not be accepted.',
     'Keep the draft and try the gesture again.',
-    'workspace',
   );
 }
 
@@ -30,7 +28,6 @@ export function movementActive(): Diagnostic {
     'pending-request',
     'Review or cancel the current movement before starting another.',
     'Apply or cancel the retained movement review.',
-    'workspace',
   );
 }
 
@@ -40,7 +37,6 @@ export function optionPreviewRefused(): Diagnostic {
     'invalid-edit',
     'The selected movement preview could not be accepted.',
     'Keep the current preview or cancel the draft.',
-    'workspace',
   );
 }
 
@@ -50,7 +46,6 @@ export function operationBusy(): Diagnostic {
     'pending-request',
     'Wait for the current operation to finish',
     'Your movement draft is retained.',
-    'workspace',
   );
 }
 
@@ -60,7 +55,6 @@ export function staleReview(): Diagnostic {
     'stale-gesture',
     'This movement review is stale; the draft was retained.',
     'Reload the diagram before applying it.',
-    'workspace',
   );
 }
 
@@ -70,7 +64,6 @@ export function previewGone(): Diagnostic {
     'invalid-edit',
     'The inspected movement preview is no longer displayed.',
     'Restore the preview or cancel this retained draft.',
-    'workspace',
   );
 }
 
@@ -80,6 +73,5 @@ export function alreadySaving(): Diagnostic {
     'pending-request',
     'This movement is already being saved; wait for confirmation before cancelling.',
     'Check the retained request for its receipt.',
-    'workspace',
   );
 }

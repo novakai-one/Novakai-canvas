@@ -1,4 +1,4 @@
-import type { Result } from '../../contract/errors.js';
+import { diagnostic, type Result } from '../../contract/errors.js';
 import type {
   CapturedCollectionBase,
   EditingBase,
@@ -10,17 +10,15 @@ import type { ObjectDraft } from '../../contract/records/inspector.js';
 import type { WireDraft } from '../../contract/records/wire-editor.js';
 import type { Snapshot, StoredRecord } from '../../contract/records/owners.js';
 
-function rejected(
-  code: string,
-  message: string,
-): Extract<Result<never>, { ok: false }> {
+/** `invalid-recovery`: a retained draft's captured collection cannot be used. */
+function rejected(message: string): Extract<Result<never>, { ok: false }> {
   return {
     ok: false,
-    error: {
-      code,
+    error: diagnostic(
+      'invalid-recovery',
       message,
-      recovery: 'Keep the draft and repair its captured collection before retrying recovery.',
-    },
+      'Keep the draft and repair its captured collection before retrying recovery.',
+    ),
   };
 }
 
@@ -40,20 +38,13 @@ export function collectionRecord(
     (item) => item.key.kind === 'collection' && item.key.id === collection,
   );
   if (matches.length !== 1)
-    return rejected(
-      'invalid-recovery',
-      'The captured base must contain exactly one live collection',
-    );
+    return rejected('The captured base must contain exactly one live collection');
   return collectionMatch(matches[0]);
 }
 function collectionMatch(record: StoredRecord | undefined): Result<StoredRecord> {
   if (record === undefined)
-    return rejected(
-      'invalid-recovery',
-      'The captured base must contain exactly one live collection',
-    );
-  if (!liveCollection(record))
-    return rejected('invalid-recovery', 'The captured collection must be live');
+    return rejected('The captured base must contain exactly one live collection');
+  if (!liveCollection(record)) return rejected('The captured collection must be live');
   return { ok: true, value: record };
 }
 
@@ -68,10 +59,7 @@ function captureExisting(
   collection: string,
 ): Result<CapturedCollectionBase> {
   if (!isCapturedCollection(base.record, collection))
-    return rejected(
-      'invalid-recovery',
-      'The captured collection identity does not match the draft',
-    );
+    return rejected('The captured collection identity does not match the draft');
   return { ok: true, value: base };
 }
 function captureSnapshot(
@@ -113,7 +101,7 @@ export interface SourceRecoveryInput {
 }
 
 export function encodeSourceRecovery(input: SourceRecoveryInput): Result<SourceRecoveryV1> {
-  if (input.base === null) return rejected('invalid-recovery', 'Source has no captured base');
+  if (input.base === null) return rejected('Source has no captured base');
   const base = captureCollectionBase(input.base, input.collection);
   if (!base.ok) return base;
   return {

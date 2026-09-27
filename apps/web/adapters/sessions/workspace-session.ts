@@ -25,6 +25,8 @@ import type {
   TransportResponse,
 } from '../../contract/records/owners.js';
 import type { Diagnostic, Result } from '../../contract/errors.js';
+import { diagnostic } from '../../contract/errors.js';
+import { canvasFailure, foreignFailure, wireOutcome } from '../../contract/foreign-failures.js';
 import type { BinaryResponse, CommitNotice } from '../../contract/ports/client.js';
 import {
   plainMessage,
@@ -54,7 +56,6 @@ import {
   openFailurePatch,
   openingPatch,
   openSuccessPatch,
-  ownedProblem,
   reusedPatch,
   activeRefresh,
   choosePlan,
@@ -291,7 +292,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
       return;
     }
     if (!response.value.outcome.ok) {
-      report(response.value.outcome.error);
+      report(foreignFailure('service', response.value.outcome.error));
       return;
     }
     acceptSnapshot(response.value.outcome.value, response.value.generation);
@@ -444,7 +445,8 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   ): Result<RenderDocument> {
     if (generationChanged(response.generation, request, state.generation))
       return generationMismatch();
-    return response.outcome.ok ? readRender(response.outcome.value, request) : response.outcome;
+    const outcome = wireOutcome('service', response.outcome);
+    return outcome.ok ? readRender(outcome.value, request) : outcome;
   }
   /** Rereading starts before the failure settles. */
   function generationMismatch(): Result<RenderDocument> {
@@ -559,7 +561,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     if (!currentRequest(request)) return;
     request.job.abort();
     rendering = null;
-    update(openFailurePatch(state, request, ownedProblem(error)));
+    update(openFailurePatch(state, request, error));
   }
   /** Transport aborts are an optimisation; invalidation is the ownership boundary. */
   function invalidateRender(): void {
@@ -1498,7 +1500,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   }
   function receiveHistory(response: Awaited<ReturnType<WorkspaceBindings['client']['get']>>): void {
     if (!response.ok) return clearHistory();
-    receiveHistoryOutcome(response.value.outcome);
+    receiveHistoryOutcome(wireOutcome('service', response.value.outcome));
   }
   function receiveHistoryOutcome(outcome: Result<unknown>): void {
     if (!outcome.ok) return clearHistory();
@@ -1677,11 +1679,11 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     if (bindings.client.bytes === undefined)
       return {
         ok: false,
-        error: {
-          code: 'export-unavailable',
-          message: 'Export is unavailable in this service session.',
-          recovery: 'Reconnect to the workspace and try again.',
-        },
+        error: diagnostic(
+          'export-unavailable',
+          'Export is unavailable in this service session.',
+          'Reconnect to the workspace and try again.',
+        ),
       };
     return bindings.client.bytes('/api/v1/export', input);
   }
@@ -1726,6 +1728,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     cancelConnection,
     exportArtifact,
     report,
+    reportCanvas: (error) => report(canvasFailure(error)),
     applyMove,
     chooseMoveOption,
     cancelMove,

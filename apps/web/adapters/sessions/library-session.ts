@@ -7,6 +7,7 @@ import type {
 } from '../../contract/records/library.js';
 import type { Snapshot, Collection } from '../../contract/records/owners.js';
 import type { OrganisationChange, RecentVisit } from '@novakai/canvas-library';
+import { diagnostic } from '../../contract/errors.js';
 /** The session owns browse filters and local visits; every catalog mutation goes to Authoring with a captured revision. */
 export function createLibraryController(bindings: LibraryBindings): LibraryController {
   let state: LibraryView = {
@@ -180,11 +181,11 @@ export function createLibraryController(bindings: LibraryBindings): LibraryContr
     if (base === null) return false;
     if (state.source?.organisation.revision !== revision) {
       publish({
-        problem: {
-          code: 'revision-conflict',
-          message: 'The library changed while this edit was being prepared',
-          recovery: 'Review the current folders before submitting a new edit.',
-        },
+        problem: diagnostic(
+          'library-changed',
+          'The library changed while this edit was being prepared',
+          'Review the current folders before submitting a new edit.',
+        ),
       });
       return false;
     }

@@ -6,7 +6,8 @@
  * also invalidate a ticket before its response arrives. Pure; the session rereads the workspace
  * after a generation, admission or snapshot failure.
  */
-import { diagnostic, type Diagnostic, type Result } from '../../../contract/errors.js';
+import { diagnostic, type Result, type WebDiagnostic } from '../../../contract/errors.js';
+import type { RenderCode } from '../../../contract/records/error-codes.js';
 import type { RenderDocument, Snapshot } from '../../../contract/records/owners.js';
 import type { WorkspaceView } from '../../../contract/records/workspace.js';
 import { listedRevision, type RenderTicket } from './ticket.js';
@@ -20,8 +21,11 @@ export interface LatestSnapshot {
 /** The parts of the workspace view admission reads. */
 export type AdmissionView = Pick<WorkspaceView, 'snapshot' | 'generation' | 'collections'>;
 
+/** A render failure: the web's own, with a render code. */
+export type RenderFailure = WebDiagnostic & { readonly code: RenderCode };
+
 /** A failed step, whatever the success type. */
-export type Refusal = Extract<Result<never>, { readonly ok: false }>;
+export type Refusal = { readonly ok: false; readonly error: RenderFailure };
 
 /** The service answered from another generation than the ticket's, or the view has left it. */
 export function generationChanged(
@@ -45,7 +49,7 @@ export function generationFailure(): Refusal {
 export function documentFor(
   document: RenderDocument,
   ticket: RenderTicket,
-): Result<RenderDocument> {
+): Result<RenderDocument, RenderFailure> {
   if (document.collection.id !== ticket.id)
     return refused(
       'stale-diagram',
@@ -60,7 +64,7 @@ export function renderAdmission(
   view: AdmissionView,
   ticket: RenderTicket,
   document: RenderDocument,
-): Result<void> {
+): Result<void, RenderFailure> {
   if (inputsMoved(view, ticket) || document.collection.revision !== ticket.revision)
     return { ok: false, error: renderInputChanged() };
   return { ok: true, value: undefined };
@@ -71,7 +75,7 @@ export function renderInvalidation(
   ticket: RenderTicket,
   latest: LatestSnapshot,
   generation: string,
-): Diagnostic | null {
+): RenderFailure | null {
   if (ticketMatches(ticket, latest, generation)) return null;
   return renderInputChanged();
 }
@@ -80,7 +84,7 @@ export function renderInvalidation(
 export function snapshotBase(
   view: AdmissionView,
   document: RenderDocument,
-): Result<Snapshot> {
+): Result<Snapshot, RenderFailure> {
   const snapshot = view.snapshot;
   if (snapshot === null || !listsRevision(view.collections, document))
     return refused(
@@ -126,20 +130,19 @@ function listsRevision(
 }
 
 /** `render-input-changed`: the workspace moved while the collection opened. */
-function renderInputChanged(): Diagnostic {
+function renderInputChanged(): RenderFailure {
   return diagnostic(
     'render-input-changed',
     'The workspace changed while opening this collection',
     'Choose the collection again to retry.',
-    'workspace',
   );
 }
 
-/** A failed step carrying a workspace-owned diagnostic. */
+/** A failed step carrying the render failure `code`. */
 function refused(
-  code: string,
+  code: RenderCode,
   message: string,
   recovery: string,
 ): Refusal {
-  return { ok: false, error: diagnostic(code, message, recovery, 'workspace') };
+  return { ok: false, error: diagnostic(code, message, recovery) };
 }

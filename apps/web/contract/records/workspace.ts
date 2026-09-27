@@ -13,6 +13,7 @@ import type { ConnectionDraft, ConnectionEdit } from './connection.js';
 import type { Receipt } from './owners.js';
 import type { Result } from '../errors.js';
 import type { BinaryResponse } from '../ports/client.js';
+import type { Diagnostic as CanvasDiagnostic } from '@novakai/canvas-canvas';
 export type CollectionSwitch =
   | { readonly phase: 'idle'; readonly activeId: string | null }
   | { readonly phase: 'choosing'; readonly activeId: string | null }
@@ -93,6 +94,8 @@ export interface WorkspaceController {
   cancelConnection(): void;
   exportArtifact(input: unknown): Promise<Result<BinaryResponse>>;
   report(error: Diagnostic): void;
+  /** Show a failure the Canvas reported, kept as Canvas's own. */
+  reportCanvas(error: CanvasDiagnostic): void;
   applyMove(optionId: string): Promise<void>;
   chooseMoveOption(optionId: string): void;
   cancelMove(): void;

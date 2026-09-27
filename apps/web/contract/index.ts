@@ -2,7 +2,7 @@
 export { startWeb, createInspectorSession, createWireSession } from './compose.js';
 export { planCanvasEdit, panelVisible, reconcilePanelPreferences } from './api.js';
 export type { CollectionSwitch, WorkspaceController, WorkspaceView } from './records/workspace.js';
-export type { Result, Diagnostic, DiagnosticOwner } from './errors.js';
+export type { Result, Diagnostic } from './errors.js';
 export type { EditContext } from './records/editing.js';
 
 export { failure } from './errors.js';

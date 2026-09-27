@@ -29,20 +29,6 @@ export function submissionStatus(
   return pending.map((item) => (item.request.request === id ? { ...item, state } : item));
 }
 
-/** These owner refusals occur before commit. Infrastructure/cancellation responses require receipt reconciliation. */
-export function refused(code: string): boolean {
-  return [
-    'invalid-input',
-    'unsupported-version',
-    'unknown-reference',
-    'invariant-violation',
-    'constraint-conflict',
-    'revision-conflict',
-    'missing-asset',
-    'permission-denied',
-  ].includes(code);
-}
-
 /** When each retained request first appeared and when it was refused, on one increasing counter. */
 export interface RefusalOrder {
   readonly tick: number;

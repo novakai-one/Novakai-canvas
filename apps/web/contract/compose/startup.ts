@@ -5,6 +5,7 @@
  */
 import type { Diagnostic, Result } from '../errors.js';
 import { failure } from '../errors.js';
+import { designSystemFailure, ownerResult, wireOutcome } from '../foreign-failures.js';
 import type { ServiceClient } from '../ports/client.js';
 import type { PanelSizing } from '../records/panels.js';
 import type { ThemeChoice } from '../records/preferences.js';
@@ -31,7 +32,7 @@ export function accepted<T>(result: Result<T>): T {
 /** Sources are authenticated transport data and then admitted through their public owner schemas. */
 export async function resources(client: ServiceClient): Promise<Installation> {
   const response = accepted(await client.get('/api/v1/installation'));
-  return installationSchema.parse(accepted(response.outcome));
+  return installationSchema.parse(accepted(wireOutcome('service', response.outcome)));
 }
 
 /** Shipped theme pins come from the owner; labels do not substitute for release identity. */
@@ -42,18 +43,21 @@ export function themeChoices(
 ): readonly ThemeChoice[] {
   return (['light', 'dark'] as const).map((scheme) => {
     const resolved = accepted(
-      tokens.resolve({
-        scope: 'ui',
-        sources,
-        preferences: {
-          schemaVersion: 1,
-          theme: { mode: 'system' },
-          textSize: 14,
-          density: 'comfortable',
-          motion: 'system',
-        },
-        environment: { ...environment, scheme },
-      }),
+      ownerResult(
+        tokens.resolve({
+          scope: 'ui',
+          sources,
+          preferences: {
+            schemaVersion: 1,
+            theme: { mode: 'system' },
+            textSize: 14,
+            density: 'comfortable',
+            motion: 'system',
+          },
+          environment: { ...environment, scheme },
+        }),
+        designSystemFailure,
+      ),
     );
     const pin = resolved.provenance.ui;
     if (pin === null) throw new InitializationRejected('UI theme provenance is missing');

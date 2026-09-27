@@ -46,6 +46,12 @@ import { createProblemBar, StatusBar } from '../adapters/react/ShellAlerts.js';
 import { createShellHooks } from '../adapters/react/shell-hooks.js';
 import { mountWorkspace, observeWorkspaceWidth } from '../adapters/edge/browser-host.js';
 import type { Result } from './errors.js';
+import {
+  canvasFailure,
+  designSystemFailure,
+  ownerResult,
+  presentationFailure,
+} from './foreign-failures.js';
 import type { BrowserGlobals } from './ports/browser-globals.js';
 import type { PanelController } from './panel-types.js';
 import type { WorkspaceController } from './records/workspace.js';
@@ -82,8 +88,10 @@ async function mount(
   const client = createServiceClient();
   const retention = createDraftRetention(globals.storage());
   const installed = await resources(client);
-  const design = accepted(await designBindings());
-  const scope = accepted(createScopeInstaller(design.createScopeTarget(element)));
+  const design = accepted(ownerResult(await designBindings(), designSystemFailure));
+  const scope = accepted(
+    ownerResult(createScopeInstaller(design.createScopeTarget(element)), designSystemFailure),
+  );
   const tokens = composeDesignSystem();
   const environment = readEnvironment(globals.window);
   const themes = themeChoices(tokens, installed.tokens, environment);
@@ -98,8 +106,12 @@ async function mount(
     }),
   );
   const stopPreferences = observeEnvironment(globals.window, preferences.environment);
-  const presentation = accepted(await presentationBindings(installed.fonts));
-  const surface = accepted(await canvasBindings({ ...presentation, Button: design.Button }));
+  const presentation = accepted(
+    ownerResult(await presentationBindings(installed.fonts), presentationFailure),
+  );
+  const surface = accepted(
+    ownerResult(await canvasBindings({ ...presentation, Button: design.Button }), canvasFailure),
+  );
   const Browser = createLibraryBrowser([
     { id: 'filters', Content: createLibraryFilters(design) },
     { id: 'results', Content: createLibraryResults(design) },
@@ -130,13 +142,7 @@ async function mount(
     initialWidth: element.getBoundingClientRect().width,
     retention,
     read: readPanelPreferences,
-    report: (message) =>
-      runtime.report({
-        code: 'panel-preferences',
-        message,
-        recovery: 'Customize or reset the panel layout.',
-        owner: 'panel-preferences',
-      }),
+    report: (problem) => runtime.report(problem),
   });
   const runtime: WorkspaceController = composeWorkspace({
     element,

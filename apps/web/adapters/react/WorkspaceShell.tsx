@@ -144,7 +144,7 @@ export function createWorkspaceShell({
         session={active.session}
         reader={active.canvas}
         nextGestureId={nextGestureId}
-        onError={controller.report}
+        onError={controller.reportCanvas}
         paint={paint}
         label={active.document.collection.title}
         chrome={layout.chrome}
@@ -170,7 +170,7 @@ interface CanvasHostProps extends FeatureProps {
 /** The open diagram, where its drops and errors go, and the chrome, roads and labels core allows. */
 interface DiagramCanvasProps {
   readonly active: ActiveDiagram;
-  readonly controller: DropReceiver;
+  readonly controller: DropReceiver & Pick<WorkspaceController, 'reportCanvas'>;
   readonly layout: Pick<ShellLayout, 'chrome' | 'roads' | 'labels'>;
 }
 

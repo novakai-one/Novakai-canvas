@@ -11,11 +11,11 @@ export { planCanvasEdit } from '../core/editing/plan.js';
 export {
   blocksSubmission,
   submissionStatus,
-  refused,
   emptyRefusalOrder,
   observeRefusals,
   supersededRefusal,
 } from '../core/editing/submissions.js';
+export { refused } from '../core/workspace/rules/refusal-classes.js';
 
 export {
   defaultPanels,
@@ -135,7 +135,6 @@ export {
   openFailurePatch,
   openingPatch,
   openSuccessPatch,
-  ownedProblem,
   reusedPatch,
 } from '../core/workspace/render/patches.js';
 export {

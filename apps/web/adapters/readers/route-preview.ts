@@ -5,6 +5,7 @@ import type { VisualSection } from '@novakai/canvas-presentation';
 import type { EditIntent, PlacementIntent, GeometryPreview } from '@novakai/canvas-canvas';
 import type { RenderDocument } from '@novakai/canvas-service';
 import type { Result } from '../../contract/errors.js';
+import { layoutFailure } from '../../contract/foreign-failures.js';
 
 /** Reuse the exact Authoring placement merge; moving retains prior explicit dimensions. */
 function placed(
@@ -86,7 +87,7 @@ function previewMove(
     document.options,
     document.scene,
   );
-  if (!result.ok) return result;
+  if (!result.ok) return { ok: false, error: layoutFailure(result.error) };
   return {
     ok: true,
     value: {

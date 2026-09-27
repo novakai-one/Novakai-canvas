@@ -6,7 +6,9 @@ import type {
 } from '../../contract/records/submission.js';
 import type { Receipt } from '../../contract/records/owners.js';
 import type { Result } from '../../contract/errors.js';
+import type { Diagnostic } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
+import { wireOutcome } from '../../contract/foreign-failures.js';
 import { blocksSubmission, submissionStatus, refused } from '../../contract/api.js';
 
 /** Durable browser recovery coordinates transmission only; Authoring remains the sole commit/idempotency authority.
@@ -85,7 +87,7 @@ export function createSubmissionSession(bindings: SubmissionBindings): Submissio
       mark(item, 'uncertain');
       return response;
     }
-    return received(response.value.outcome, item);
+    return received(wireOutcome('authoring', response.value.outcome), item);
   }
   /** Even a typed rejection is reconciled before releasing its slot; a receipt may already exist after a lost earlier response. */
   function received(
@@ -93,7 +95,7 @@ export function createSubmissionSession(bindings: SubmissionBindings): Submissio
     item: Submission,
   ): Result<Receipt> {
     if (!outcome.ok) {
-      rejectOutcome(item, outcome.error.code);
+      rejectOutcome(item, outcome.error);
       return outcome;
     }
     return readAppliedReceipt(outcome.value, item);
@@ -101,9 +103,9 @@ export function createSubmissionSession(bindings: SubmissionBindings): Submissio
   /** Proven owner refusal releases the collection slot; infrastructure uncertainty retains it. */
   function rejectOutcome(
     item: Submission,
-    code: string,
+    problem: Diagnostic,
   ): void {
-    const status = refused(code) ? 'rejected' : 'uncertain';
+    const status = refused(problem) ? 'rejected' : 'uncertain';
     mark(item, status);
   }
   /** Decode a claimed success through Authoring before clearing any local state; it must carry its receipt and workspace. */
@@ -158,8 +160,9 @@ export function createSubmissionSession(bindings: SubmissionBindings): Submissio
       `/api/v1/receipt?id=${encodeURIComponent(item.request.request)}`,
     );
     if (!response.ok) return response;
-    if (!response.value.outcome.ok) return response.value.outcome;
-    return lookedUp(response.value.outcome.value, item);
+    const outcome = wireOutcome('authoring', response.value.outcome);
+    if (!outcome.ok) return outcome;
+    return lookedUp(outcome.value, item);
   }
   /** Confirmed and absent outcomes are distinct; absence cannot be called Saved. */
   function lookedUp(

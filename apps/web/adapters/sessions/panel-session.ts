@@ -1,4 +1,6 @@
 import type { PanelBindings, PanelController } from '../../contract/panel-types.js';
+import type { Diagnostic } from '../../contract/errors.js';
+import { diagnostic } from '../../contract/errors.js';
 import type {
   PanelState,
   PanelPreferences,
@@ -42,7 +44,7 @@ export function createPanelController(bindings: PanelBindings): PanelController 
   function save(preferences: PanelPreferences): void {
     publish({ ...state, preferences });
     const saved = bindings.retention.write(`panels.${preferences.workspace}`, preferences);
-    if (!saved.ok) bindings.report(saved.error.message);
+    if (!saved.ok) bindings.report(panelProblem(saved.error.message));
   }
   /** Workspace identity scopes personal panel preferences independently from diagram theme records. */
   function restore(workspace: string): void {
@@ -52,7 +54,7 @@ export function createPanelController(bindings: PanelBindings): PanelController 
     });
     const stored = bindings.retention.read(`panels.${workspace}`);
     if (!stored.ok) {
-      bindings.report(stored.error.message);
+      bindings.report(panelProblem(stored.error.message));
       return;
     }
     if (stored.value !== null) restoreChecked(stored.value, workspace);
@@ -64,7 +66,7 @@ export function createPanelController(bindings: PanelBindings): PanelController 
   ): void {
     const checked = bindings.read(input, workspace);
     if (!checked.ok) {
-      bindings.report(checked.error.message);
+      bindings.report(panelProblem(checked.error.message));
       return;
     }
     const preferences = reconcilePanelPreferences(
@@ -74,7 +76,7 @@ export function createPanelController(bindings: PanelBindings): PanelController 
     );
     publish({ ...state, preferences });
     if (JSON.stringify(preferences.sections) !== JSON.stringify(checked.value.sections))
-      bindings.report('Panel layout was updated for available features');
+      bindings.report(panelProblem('Panel layout was updated for available features'));
   }
   /** Only trusted registered section IDs may change preference membership. */
   function membership(
@@ -177,4 +179,9 @@ function defaultInterfaceVisibility(): InterfaceVisibility {
     roads: false,
     labels: false,
   };
+}
+
+/** A panel-layout failure. It stays shown across renders until dismissed (`problemAfterRender`). */
+function panelProblem(message: string): Diagnostic {
+  return diagnostic('panel-preferences', message, 'Customize or reset the panel layout.');
 }

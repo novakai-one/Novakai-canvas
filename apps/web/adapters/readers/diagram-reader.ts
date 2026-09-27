@@ -34,7 +34,13 @@ export function createSceneAdmission(): SceneAdmission {
       if (!document.ok)
         return {
           ok: false,
-          error: { ...document.error, code: 'invalid-input', path: 'diagram', targets: [] },
+          error: {
+            code: 'invalid-input',
+            path: 'diagram',
+            targets: [],
+            message: document.error.message,
+            recovery: document.error.recovery,
+          },
         };
       return { ok: true, value: document.value.scene };
     },

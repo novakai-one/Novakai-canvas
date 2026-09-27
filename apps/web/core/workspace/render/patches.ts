@@ -83,15 +83,9 @@ export function reusedPatch(
   };
 }
 
-/** A render failure is the workspace's unless another owner already claimed it. */
-export function ownedProblem(error: Diagnostic): Diagnostic {
-  if (error.owner !== undefined) return error;
-  return { ...error, owner: 'workspace' };
-}
-
-/** A render attempt clears the problem, unless the panel preferences own it. */
+/** A render attempt clears the problem, unless it is a panel-preference failure. */
 export function problemAfterRender(view: Pick<WorkspaceView, 'problem'>): ViewPatch {
-  if (view.problem?.owner === 'panel-preferences') return {};
+  if (view.problem?.code === 'panel-preferences') return {};
   return { problem: null };
 }
 

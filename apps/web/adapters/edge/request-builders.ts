@@ -12,6 +12,8 @@ import type { OrganisationChange } from '@novakai/canvas-library';
 import type { RequestBuilders } from '../../contract/ports/request-builders.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
+import { languageFailure } from '../../contract/foreign-failures.js';
+import type { WebErrorCode } from '../../contract/records/error-codes.js';
 import type { EditingBase } from '../../contract/records/editor-recovery.js';
 import { baseWorkspace, collectionRecord } from '../../contract/api.js';
 
@@ -51,7 +53,7 @@ interface RequestParts {
 
 /** The failure a builder answers when Authoring's schema rejects its request. */
 interface Refusal {
-  readonly code: string;
+  readonly code: WebErrorCode;
   readonly message: string;
 }
 
@@ -203,7 +205,11 @@ function printSource(
 ): Result<string> {
   const result = language.print({ collection, scope: { kind: 'all' } });
   if (!result.ok)
-    return failure('source-unavailable', 'Language could not print this collection', result.error);
+    return failure(
+      'source-unavailable',
+      'Language could not print this collection',
+      languageFailure(result.error),
+    );
   return { ok: true, value: result.value.source };
 }
 

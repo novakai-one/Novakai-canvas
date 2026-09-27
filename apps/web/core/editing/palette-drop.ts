@@ -1,5 +1,5 @@
 import type { AddObjectDraft } from '../../contract/records/creation.js';
-import type { Diagnostic } from '../../contract/errors.js';
+import { diagnostic, type Diagnostic } from '../../contract/errors.js';
 
 /** Object types the canvas palette offers. */
 export const palette = [{ kind: 'module', label: 'Module' }] as const;
@@ -38,9 +38,9 @@ function treeRefusal(
   label: string,
   title: string,
 ): Diagnostic {
-  return {
-    code: 'tree-section-drop',
-    message: `${label}s can't be dropped into a tree. Drop it into a diagram section instead.`,
-    recovery: `"${title}" is a tree outline. Nothing was changed.`,
-  };
+  return diagnostic(
+    'tree-section-drop',
+    `${label}s can't be dropped into a tree. Drop it into a diagram section instead.`,
+    `"${title}" is a tree outline. Nothing was changed.`,
+  );
 }
