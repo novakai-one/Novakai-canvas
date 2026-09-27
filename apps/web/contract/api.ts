@@ -1,3 +1,8 @@
+/*
+ * Web core's public surface: adapters reach core only through these re-exports, so core files can
+ * move without adapter edits. One function of its own, `definitionDraftId`, which throws only for
+ * text outside Model's ID grammar. Pure; no state, nothing to recover.
+ */
 import { definitionId, type DefinitionId } from '@novakai/canvas-model';
 
 export { planCanvasEdit } from '../core/editing/plan.js';
@@ -114,7 +119,7 @@ export {
   renderTicket,
   type RenderMode,
   type RenderTicket,
-} from '../core/workspace/render/ticket.js';
+} from '../core/workspace/diagram/ticket.js';
 export {
   documentFor,
   generationChanged,
@@ -123,7 +128,7 @@ export {
   renderInvalidation,
   snapshotBase,
   type LatestSnapshot,
-} from '../core/workspace/render/admission.js';
+} from '../core/workspace/diagram/admission.js';
 export {
   installedPatch,
   openFailurePatch,

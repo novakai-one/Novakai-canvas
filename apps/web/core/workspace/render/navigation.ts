@@ -10,7 +10,7 @@ import type { WorkspaceView } from '../../../contract/records/workspace.js';
 import type { ActiveDiagram } from '../../../contract/records/active-diagram.js';
 import { renderChanged } from '../session-reuse.js';
 import { activeCollectionId, problemAfterRender, type ViewPatch } from './patches.js';
-import type { RenderTicket } from './ticket.js';
+import type { RenderTicket } from '../diagram/ticket.js';
 
 /** What a snapshot means for the open collection: nothing, gone from the catalogue, or reopen. */
 export type ActiveRefresh =

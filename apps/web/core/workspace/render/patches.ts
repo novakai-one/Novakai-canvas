@@ -8,7 +8,7 @@ import type { Diagnostic } from '../../../contract/errors.js';
 import type { RenderDocument, Snapshot } from '../../../contract/records/owners.js';
 import type { WorkspaceView } from '../../../contract/records/workspace.js';
 import type { ActiveDiagram } from '../../../contract/records/active-diagram.js';
-import type { RenderTicket } from './ticket.js';
+import type { RenderTicket } from '../diagram/ticket.js';
 
 /** The fields the session publishes in one update. */
 export type ViewPatch = Partial<WorkspaceView>;

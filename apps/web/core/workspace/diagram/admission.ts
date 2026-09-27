@@ -55,7 +55,7 @@ export function documentFor(
   return { ok: true, value: document };
 }
 
-/** Whether the document may install: the ticket's inputs still hold and the document is at its revision. */
+/** Whether the document may install: the ticket's inputs still hold and the document is at its revision; otherwise `render-input-changed`. */
 export function renderAdmission(
   view: AdmissionView,
   ticket: RenderTicket,
@@ -66,7 +66,7 @@ export function renderAdmission(
   return { ok: true, value: undefined };
 }
 
-/** The failure a newer snapshot gives an in-flight ticket; null while the snapshot still matches it. */
+/** The failure a newer snapshot gives an in-flight ticket (`render-input-changed`); null while the snapshot still matches it. */
 export function renderInvalidation(
   ticket: RenderTicket,
   latest: LatestSnapshot,
