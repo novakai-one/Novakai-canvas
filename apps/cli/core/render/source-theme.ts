@@ -1,10 +1,10 @@
 /*
- * Render source reading: collection matching by parsed identity, theme override as text surgery
- * on parser-provided spans, and asset attribution fields. Raw text stays unbranded until
- * Language parses it; nothing here trusts filenames or mutates sources. The source envelope
- * schema lives with the boundary vocabulary in contract/records.
+ * Render source reading: collection matching by parsed identity, and theme override as text
+ * surgery on parser-provided spans. Raw text stays unbranded until Language parses it; nothing
+ * here trusts filenames or mutates sources. The source envelope schema lives with the boundary
+ * vocabulary in contract/records.
  */
-import type { Collection, Language, ResourceRequest } from '../../contract/records/foreign.js';
+import type { Collection, Language } from '../../contract/records/foreign.js';
 import type { CollectionName } from '../../contract/brands.js';
 import { RenderAbort, accepted } from './faults.js';
 
@@ -44,13 +44,4 @@ function insertTheme(
 ): string {
   if (offset === undefined) throw new RenderAbort({ code: 'collection-title-required' });
   return source.slice(0, offset) + ' theme=' + JSON.stringify(theme) + source.slice(offset);
-}
-
-/** The license and attribution fields of a resource request, present ones only. */
-export function assetAttribution(request: ResourceRequest): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries({ license: request.license, attribution: request.attribution }).filter(
-      (entry): entry is [string, string] => entry[1] !== undefined,
-    ),
-  );
 }

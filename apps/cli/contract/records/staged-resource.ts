@@ -1,11 +1,18 @@
 /*
- * One declared font or image as the resource reader returns it, and after staging. Pure
- * declarations. The resource reader builds `StagedResource`; core stages it with Assets and keeps
- * the backup of its exact normalized bytes for replay.
+ * One declared font or image: the bytes the resource reader read for it, the resource core stages,
+ * and the result of staging. Pure declarations. The resource reader returns `LocalBytes`; core
+ * decides pinned or local, stages it with Assets and keeps the backup of its exact normalized bytes
+ * for replay.
  */
 import type { AssetDigest } from '../brands.js';
-import type { StageInput } from './foreign.js';
+import type { StageInput, SupportedMedia } from './foreign.js';
 import type { ByteBackup } from './retained-request.js';
+
+/** A declared file's bytes as base64, with the media type its extension names. Assets checks the bytes. */
+export interface LocalBytes {
+  readonly base64: string;
+  readonly mediaType: SupportedMedia;
+}
 
 /**
  * A declaration the source pins by digest (nothing was read), or local bytes to stage with Assets.

@@ -1,8 +1,9 @@
 /*
- * Resource staging for authoring and preset admission: read each declared font or image, stage it
- * with Assets (or keep its pinned digest), back up the normalised bytes, then freeze the aliases
- * into the Authoring request. Uses injected ports only. A failure stops before any Authoring
- * request is sent; staged bytes left behind are collectable Assets orphans.
+ * Resource staging for authoring and preset admission: each declared font or image is either a
+ * pinned `sha256:` digest (nothing is read) or a file read through the confined resource reader and
+ * staged with Assets; the normalized bytes are backed up, then the aliases are frozen into the
+ * Authoring request. Uses injected ports only. A failure stops before any Authoring request is
+ * sent; staged bytes left behind are collectable Assets orphans.
  */
 import type { ResourceReader } from '../../contract/ports/resource-reader.js';
 import type { ServiceResources } from '../../contract/ports/service-resources.js';
@@ -14,9 +15,11 @@ import type {
 } from '../../contract/records/staged-resource.js';
 import type { ResourceRequest, StageInput } from '../../contract/records/foreign.js';
 import type { AssetDigest, FilePath } from '../../contract/brands.js';
-import type { Result } from '../../contract/errors.js';
+import type { LocalFailure, Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
 import { combined } from '../shared/results.js';
+import { assetOfPin } from './digests.js';
+import { stageInput } from './provenance.js';
 
 /** What staging uses: the confined resource reader and the service's stage and blob calls. */
 export interface StagingDependencies {
@@ -57,11 +60,31 @@ export async function stageResources(
   const read = await Promise.all(
     requests
       .filter((item) => item.kind !== 'theme')
-      .map((item) => dependencies.reader.read(file, item)),
+      .map((item) => declaredResource(file, item, dependencies.reader)),
   );
   const checked = combined(read);
   if (!checked.ok) return checked;
   return combined(await Promise.all(checked.value.map((item) => stage(item, dependencies))));
+}
+
+/**
+ * One declaration, read relative to `file`: its pinned digest when its source is a Model
+ * `sha256:` pin (nothing is read), otherwise its file's bytes as an Assets stage input. Fails as
+ * the resource read does: `absolute-path`, `path-escape`, `source-unavailable`,
+ * `unsupported-media`, `resource-mismatch` or `resource-too-large`, with the declaration's
+ * `location`.
+ */
+export async function declaredResource(
+  file: FilePath,
+  request: ResourceRequest,
+  reader: ResourceReader,
+): Promise<Result<StagedResource, LocalFailure>> {
+  const pinned = assetOfPin(request.source);
+  if (pinned !== undefined)
+    return success({ kind: 'pinned', alias: request.alias, digest: pinned });
+  const bytes = await reader.read(file, request);
+  if (!bytes.ok) return bytes;
+  return success({ kind: 'local', alias: request.alias, input: stageInput(request, bytes.value) });
 }
 
 /** Each staged alias and the digest of its bytes, in declaration order. */

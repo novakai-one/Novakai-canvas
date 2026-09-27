@@ -6,18 +6,20 @@
 import type { FilePath } from '../brands.js';
 import type { LocalFailure, Result } from '../errors.js';
 import type { ResourceRequest } from '../records/foreign.js';
-import type { StagedResource } from '../records/staged-resource.js';
+import type { LocalBytes } from '../records/staged-resource.js';
 
-/** Reads are confined to the directory of `file`, the DSL or theme source that declares them. */
+/**
+ * Reads are confined to the directory of `file`, the DSL or theme source that declares them. Core
+ * calls it only for a declaration whose source is a path, never for a pinned `sha256:` digest.
+ */
 export interface ResourceReader {
   /**
-   * The declaration's pinned digest (nothing is read), or its bytes ready to stage. Fails with
-   * `absolute-path`, `path-escape`, `source-unavailable`, `unsupported-media`,
-   * `resource-mismatch` or `resource-too-large`; the message starts with
-   * `file:line:column asset @alias`.
+   * The declared file's bytes and media type. Fails with `absolute-path`, `path-escape`,
+   * `source-unavailable`, `unsupported-media`, `resource-mismatch` or `resource-too-large`; every
+   * failure carries the declaration's `location`.
    */
   read(
     file: FilePath,
     request: ResourceRequest,
-  ): Promise<Result<StagedResource, LocalFailure>>;
+  ): Promise<Result<LocalBytes, LocalFailure>>;
 }

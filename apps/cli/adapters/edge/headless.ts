@@ -27,8 +27,11 @@ import type { ResourceRequest } from '../../contract/records/foreign.js';
 import {
   RenderAbort,
   accepted,
-  assetAttribution,
+  altText,
+  credit,
+  declaredResource,
   evidence,
+  pinOf,
   renderReport,
   sourceMatches,
   sourceWithTheme,
@@ -154,7 +157,7 @@ async function admitResource(
   assets: Pick<Assets, 'stage' | 'resolve'>,
   owners: HeadlessOwners,
 ): Promise<AssetDigest> {
-  const resource = accepted(await owners.resources.read(file, request));
+  const resource = accepted(await declaredResource(file, request, owners.resources));
   if (resource.kind === 'pinned') return resource.digest;
   return accepted(await assets.stage(resource.input)).descriptor.digest;
 }
@@ -260,10 +263,10 @@ async function sourceAssets(
         const blob = accepted(env.assets.resolve(digest));
         return {
           id: request.alias,
-          digest: 'sha256:' + digest,
+          digest: pinOf(digest),
           mediaType: blob.descriptor.mediaType,
-          alt: request.alt ?? request.alias,
-          ...assetAttribution(request),
+          alt: altText(request),
+          ...credit(request),
         };
       }),
   );

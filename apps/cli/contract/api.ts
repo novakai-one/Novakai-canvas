@@ -22,6 +22,12 @@ export { RenderAbort, accepted, evidence } from '../core/render/faults.js';
 
 export { retainedResources, resourceInspector } from '../core/render/snapshot.js';
 
-export { assetAttribution, sourceMatches, sourceWithTheme } from '../core/render/source-theme.js';
+export { sourceMatches, sourceWithTheme } from '../core/render/source-theme.js';
+
+export { declaredResource } from '../core/resources/stage.js';
+
+export { altText, credit } from '../core/resources/provenance.js';
+
+export { pinOf } from '../core/resources/digests.js';
 
 export { renderReport } from '../core/render/report.js';

@@ -3,7 +3,7 @@
  * layer returns. Pure. Nothing throws across a boundary; `cli/canvas.ts` prints the failure and
  * sets the exit code. Consumers branch on the code, never on the message.
  */
-import type { RequestId } from './brands.js';
+import type { FilePath, RequestId } from './brands.js';
 import type { FailureSource, OperationSource } from './records/foreign.js';
 
 /**
@@ -31,7 +31,7 @@ import type { FailureSource, OperationSource } from './records/foreign.js';
  * - `request-unavailable`: the retained request cannot be read.
  * - `request-reused`: the request ID is already retained for a different request.
  *
- * Resources (the message starts with `file:line:column asset @alias`):
+ * Resources (`location` names the declaration; printed before the message):
  * - `absolute-path`: the resource path is absolute.
  * - `path-escape`: the resource path leaves the source file's directory.
  * - `unsupported-media`: the file extension is not a supported font or image type.
@@ -102,6 +102,19 @@ export type ForeignCode = 'service-rejected' | 'credential-unavailable';
 /** Every code a CLI failure can carry. */
 export type CliErrorCode = LocalCode | ForeignCode;
 
+/**
+ * Where a source declares the font or image a failure is about. Printed as
+ * `file:line:column asset @alias` before the message.
+ */
+export interface SourceLocation {
+  /** The DSL or theme file that declares the resource. */
+  readonly file: FilePath;
+  readonly line: number;
+  readonly column: number;
+  /** The name the declaration gives the resource. */
+  readonly alias: string;
+}
+
 /** A failure the CLI found. */
 export interface LocalFailure {
   readonly code: LocalCode;
@@ -109,6 +122,8 @@ export interface LocalFailure {
   readonly message: string;
   /** What to do next. */
   readonly recovery: string;
+  /** The resource declaration a resource failure is about. */
+  readonly location?: SourceLocation;
   /** Language, Model or service evidence, kept whole. */
   readonly source?: FailureSource;
 }
@@ -138,12 +153,11 @@ export function success<T>(value: T): Result<T, never> {
 
 /**
  * Builds a local failure. `recovery` defaults to 'Correct the named input and retry.'; an absent
- * `source` stays absent.
+ * `location` or `source` stays absent.
  */
 export function failure(input: FailureInput): Result<never, LocalFailure> {
-  const { code, message, recovery = correctAndRetry, source } = input;
-  if (source === undefined) return { ok: false, error: { code, message, recovery } };
-  return { ok: false, error: { code, message, recovery, source } };
+  const { code, message, recovery = correctAndRetry, ...context } = input;
+  return { ok: false, error: { code, message, recovery, ...context } };
 }
 
 /**

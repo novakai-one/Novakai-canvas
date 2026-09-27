@@ -1,8 +1,8 @@
 /*
  * Render resource retention: the export snapshot retains every asset, font and preset
  * byte-for-byte, and Export may inspect only what the snapshot already retained. Pure; the
- * asset resolve port is injected. Theme pins live in contract/render.js: digest parsing is a
- * capability value, which app core never imports.
+ * asset resolve port is injected. Model checked every asset pin; Assets refuses anything else with
+ * its own failure. Theme pins live in contract/render.js.
  */
 import type {
   Assets,
@@ -12,6 +12,7 @@ import type {
   Resource,
   Resources,
 } from '../../contract/records/foreign.js';
+import { assetOfPin } from '../resources/digests.js';
 import { accepted } from './faults.js';
 
 /** Every byte the exact export snapshot needs: collection assets, document fonts, catalog presets. */
@@ -23,7 +24,7 @@ export function retainedResources(
 ): readonly Resource[] {
   return [
     ...collection.assets.map((asset): Resource => {
-      const blob = accepted(resolve(asset.digest.slice(7)));
+      const blob = accepted(resolve(assetOfPin(asset.digest)));
       return {
         kind: 'asset',
         digest: blob.descriptor.digest,

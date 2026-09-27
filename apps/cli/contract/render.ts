@@ -1,12 +1,12 @@
 /*
  * Render-time capability wiring for the headless boundary: the factories that compose real
- * capability values — Model digests and validation, Language, Templates admission, the service
+ * capability values — Model validation, Language, Templates admission, the service
  * installation — into the environment one render consumes. Capability values live here because
  * app core never imports capabilities; the pure render rules stay in core/render behind
  * contract/api.js.
  */
 import { join } from 'node:path';
-import { digest, validate } from '@novakai/canvas-model';
+import { validate } from '@novakai/canvas-model';
 import type { LoweredIntent } from '@novakai/canvas-language';
 import {
   prepareInstallation,
@@ -17,7 +17,7 @@ import { composeDesignSystem, type DesignSystem } from '@novakai/canvas-design-s
 import { composeTemplates, type Templates } from '@novakai/canvas-templates';
 import { validateLibrarySnapshot, type LibrarySnapshot } from '@novakai/canvas-library';
 import type { Snapshot } from '@novakai/canvas-export';
-import { accepted, retainedResources } from './api.js';
+import { accepted, pinOf, retainedResources } from './api.js';
 import { composeLanguage } from './compose/language.js';
 import type { RenderRequest } from './records/render.js';
 import type { HeadlessOwners } from './ports/render.js';
@@ -54,7 +54,7 @@ export function pinResources(
           {
             id: preset.id,
             version: preset.version,
-            digest: digest.parse('sha256:' + preset.digest),
+            digest: pinOf(preset.digest),
             roles: preset.payload.roles,
           },
         ]),
