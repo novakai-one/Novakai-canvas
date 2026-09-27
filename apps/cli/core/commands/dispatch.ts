@@ -85,7 +85,7 @@ async function output(
   dependencies: CliDependencies,
 ): Promise<Result<string>> {
   if (path === undefined) return success(text);
-  const saved = await dependencies.files.output(path, text);
+  const saved = await dependencies.files.writeOutput(path, text);
   if (!saved.ok) return saved;
   return success(`Written: ${path}`);
 }

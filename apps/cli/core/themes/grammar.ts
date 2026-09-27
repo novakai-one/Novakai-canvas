@@ -3,7 +3,7 @@
  * font requests. Pure. Grammar faults are thrown privately and returned as `invalid-theme` or
  * `duplicate-token`; the caller fixes the theme file and runs the command again.
  */
-import type { ResourceRequest } from '../../contract/records/resources.js';
+import type { ResourceRequest } from '../../contract/records/foreign.js';
 import type { PortableToken } from '../../contract/records/foreign.js';
 import { chromeName, type ChromeName } from '../../contract/brands.js';
 import type { LocalCode, LocalFailure, Result } from '../../contract/errors.js';

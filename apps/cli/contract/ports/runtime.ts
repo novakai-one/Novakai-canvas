@@ -1,20 +1,24 @@
 /*
- * What the service commands get injected: the HTTP transport, local files and the request
- * journal, the semantic readers and request IDs. Declarations only; compose binds the adapters.
- * Every method returns its failure as a value.
+ * What the service commands get injected: the HTTP transport, local files, the request journal,
+ * the resource reader, the semantic and preset readers, and request IDs. Declarations only;
+ * compose binds the adapters. Every method returns its failure as a value.
  */
-import type {
-  ByteBackup,
-  ResourceFiles,
-  ResourceSyntax,
-  PresetInputs,
-} from '../records/resources.js';
+import type { LocalFiles } from './local-files.js';
+import type { RequestJournal } from './request-journal.js';
+import type { ResourceReader } from './resource-reader.js';
 import type { LocalFailure, Result } from '../errors.js';
-import type { Snapshot, Request, TransportResponse } from '../records/foreign.js';
-import type { ChangeIntent } from '../records/command.js';
-import type { SourceFile } from '../records/source-file.js';
-import type { AssetDigest, FilePath, Generation, RequestId } from '../brands.js';
-import type { ParsedSource } from '@novakai/canvas-language';
+import type {
+  ParsedSource,
+  Request,
+  ResourceRequest,
+  Snapshot,
+  TransportResponse,
+} from '../records/foreign.js';
+import type { ByteBackup } from '../records/retained-request.js';
+import type { AssetBinding } from '../records/staged-resource.js';
+import type { AdmitCommand, ChangeIntent } from '../records/command.js';
+import type { AssetDigest, Generation, RequestId } from '../brands.js';
+
 /** One service answer: the generation that sent it, checked, and the service's outcome, kept whole. */
 export interface ServiceAnswer {
   readonly generation: Generation;
@@ -31,32 +35,12 @@ export interface Transport {
     body: unknown,
   ): Promise<Result<ServiceAnswer, LocalFailure>>;
 }
-/**
- * A request as the journal returns it: the Authoring request and its byte backups (`[]` when
- * none). The generation it was first sent under is not returned: a replay is always sent under
- * the service's current generation.
- */
-export interface JournalRecord {
-  readonly request: Request;
-  readonly backups: readonly ByteBackup[];
+
+/** The resource declarations of a DSL source, read by Language. Fails with `invalid-source`. */
+export interface ResourceSyntax {
+  requests(source: string): Result<readonly ResourceRequest[]>;
 }
-/** A request ready to retain and send: a journal record and the service generation it goes under. */
-export interface RequestDraft extends JournalRecord {
-  readonly generation: Generation;
-}
-export interface RequestFiles {
-  /** The file's path and its text. Fails with `source-unavailable` or `source-too-large`. */
-  source(path: FilePath): Promise<Result<SourceFile, LocalFailure>>;
-  /** Fails with `request-reused` or `retention-unavailable`. */
-  save(draft: RequestDraft): Promise<Result<void>>;
-  /** Fails with `request-unavailable`. */
-  read(id: RequestId): Promise<Result<JournalRecord>>;
-  /** Fails with `output-unavailable`. */
-  output(
-    path: FilePath,
-    text: string,
-  ): Promise<Result<void, LocalFailure>>;
-}
+
 export interface SemanticInputs extends ResourceSyntax {
   profileParse(source: string): Result<ParsedSource>;
   checkedRequest(input: unknown): Result<Request>;
@@ -81,11 +65,35 @@ export interface SemanticInputs extends ResourceSyntax {
     request: RequestId,
   ): Result<string>;
 }
-/** Narrow effects are bound once at CLI composition. Tests exercise the same flow without booting a process or server. */
+
+/** A preset file's admission, checked by Templates, and the font or image declarations to stage first. */
+export interface PresetSource {
+  readonly admission: unknown;
+  readonly resources: readonly ResourceRequest[];
+}
+
+/** Preset inputs use semantic sources and exact owner-prepared identities, never JSON coordinates. */
+export interface PresetInputs {
+  /** The admission of `theme admit` or `recipe admit`. Fails with `invalid-theme`, `duplicate-token` or `invalid-source`. */
+  source(
+    command: AdmitCommand,
+    source: string,
+  ): Result<PresetSource>;
+  /** The Authoring request for a prepared preset. Fails with `invalid-response`. */
+  request(
+    input: unknown,
+    snapshot: Snapshot,
+    id: RequestId,
+    assets: readonly AssetBinding[],
+  ): Result<Request>;
+}
+
+/** Narrow effects are bound once at CLI composition. */
 export interface CliDependencies {
   readonly transport: Transport;
-  readonly files: RequestFiles;
-  readonly resourceFiles: ResourceFiles;
+  readonly files: LocalFiles;
+  readonly journal: RequestJournal;
+  readonly resources: ResourceReader;
   readonly presets: PresetInputs;
   readonly semantic: SemanticInputs;
   nextRequestId(): RequestId;

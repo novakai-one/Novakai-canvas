@@ -5,27 +5,16 @@
  */
 import { readFile, mkdir, open } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { z } from 'zod';
-import { requestSchema } from '../../contract/schemas.js';
 import type { RequestId } from '../../contract/brands.js';
-import { byteBackup } from '../../contract/records/resources.js';
-import type { JournalRecord, RequestFiles, RequestDraft } from '../../contract/ports/runtime.js';
-import type { Result } from '../../contract/errors.js';
+import { journalFile } from '../../contract/records/retained-request.js';
+import type { JournalRecord, RetainedRequest } from '../../contract/records/retained-request.js';
+import type { RequestJournal } from '../../contract/ports/request-journal.js';
+import type { LocalFailure, Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 
-/**
- * One journal file: the generation it was sent under, the Authoring request and its byte backups.
- * A file written before backups were always retained has no `backups` key; it reads as `[]`. The
- * generation is only checked to be text: nothing reads it back (see {@link JournalRecord}).
- */
-const retained = z.strictObject({
-  generation: z.string(),
-  request: requestSchema,
-  backups: z.array(byteBackup).readonly().default([]),
-});
 /** Bind one local request directory; each operation reports its own I/O failure and recovery. */
-export function createRequestJournal(root: string): Pick<RequestFiles, 'save' | 'read'> {
-  return { save: (draft) => save(root, draft), read: (id) => read(root, id) };
+export function createRequestJournal(root: string): RequestJournal {
+  return { save: (retained) => save(root, retained), read: (id) => read(root, id) };
 }
 /** A request's journal file. Authoring's request ID grammar has no path separator or leading dot. */
 function location(
@@ -37,10 +26,10 @@ function location(
 /** Existing records may update only their transport generation; the canonical Authoring envelope must be byte-equivalent. */
 async function existing(
   path: string,
-  draft: RequestDraft,
-): Promise<Result<void>> {
-  const old = retained.parse(JSON.parse(await readFile(path, 'utf8')));
-  if (JSON.stringify(old.request) !== JSON.stringify(draft.request))
+  retained: RetainedRequest,
+): Promise<Result<void, LocalFailure>> {
+  const old = journalFile.parse(JSON.parse(await readFile(path, 'utf8')));
+  if (JSON.stringify(old.request) !== JSON.stringify(retained.request))
     return failure({
       code: 'request-reused',
       message: 'This request ID is already retained for different authoring',
@@ -50,12 +39,12 @@ async function existing(
 /** Exclusive creation plus fsync retains the immutable Authoring request before any possible commit. */
 async function persist(
   path: string,
-  draft: RequestDraft,
-): Promise<Result<void>> {
+  retained: RetainedRequest,
+): Promise<Result<void, LocalFailure>> {
   const file = await open(path, 'wx', 0o600).catch(() => null);
-  if (file === null) return existing(path, draft);
+  if (file === null) return existing(path, retained);
   try {
-    await file.writeFile(JSON.stringify(draft));
+    await file.writeFile(JSON.stringify(retained));
     await file.sync();
     return success(undefined);
   } finally {
@@ -65,11 +54,11 @@ async function persist(
 /** Failed retention prevents submission; the user fixes the local directory before retrying. */
 async function save(
   root: string,
-  draft: RequestDraft,
-): Promise<Result<void>> {
+  retained: RetainedRequest,
+): Promise<Result<void, LocalFailure>> {
   try {
     await mkdir(root, { recursive: true, mode: 0o700 });
-    return await persist(location(root, draft.request.request), draft);
+    return await persist(location(root, retained.request.request), retained);
   } catch {
     return failure({
       code: 'retention-unavailable',
@@ -78,15 +67,16 @@ async function save(
   }
 }
 /**
- * Retained JSON is host data, never agent-authored syntax; it is checked again before replay.
- * Fails with `request-unavailable` (missing, unreadable or not a journal file).
+ * Retained JSON is host data, never agent-authored syntax; it is checked again before replay. A
+ * file without `backups` reads as `[]`. Fails with `request-unavailable` (missing, unreadable or
+ * not a journal file).
  */
 async function read(
   root: string,
   id: RequestId,
-): Promise<Result<JournalRecord>> {
+): Promise<Result<JournalRecord, LocalFailure>> {
   try {
-    const file = retained.parse(JSON.parse(await readFile(location(root, id), 'utf8')));
+    const file = journalFile.parse(JSON.parse(await readFile(location(root, id), 'utf8')));
     return success({ request: file.request, backups: file.backups });
   } catch {
     return failure({

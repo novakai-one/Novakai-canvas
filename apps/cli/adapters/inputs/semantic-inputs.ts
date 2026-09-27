@@ -12,7 +12,7 @@ import { requestSchema } from '../../contract/schemas.js';
 import { assetDigest, type CollectionRevision, type RequestId } from '../../contract/brands.js';
 import { validate } from '@novakai/canvas-model';
 import type { Language } from '@novakai/canvas-language';
-import { byteBackup } from '../../contract/records/resources.js';
+import { byteBackup } from '../../contract/records/retained-request.js';
 import { z } from 'zod';
 import type { SemanticInputs, ReceiptExpectation } from '../../contract/ports/runtime.js';
 import type { ChangeIntent } from '../../contract/records/command.js';

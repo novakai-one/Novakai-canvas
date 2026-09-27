@@ -5,11 +5,8 @@
  */
 import { submit } from './submit.js';
 import { receiptPath } from '../reads/queries.js';
-import type {
-  CliDependencies,
-  JournalRecord,
-  ServiceAnswer,
-} from '../../contract/ports/runtime.js';
+import type { CliDependencies, ServiceAnswer } from '../../contract/ports/runtime.js';
+import type { JournalRecord } from '../../contract/records/retained-request.js';
 import type { RequestId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { rejected } from '../../contract/errors.js';
@@ -19,7 +16,7 @@ export async function retry(
   request: RequestId,
   dependencies: CliDependencies,
 ): Promise<Result<string>> {
-  const retained = await dependencies.files.read(request);
+  const retained = await dependencies.journal.read(request);
   if (!retained.ok) return retained;
   const receipt = await dependencies.transport.get(receiptPath(request));
   if (!receipt.ok) return receipt;

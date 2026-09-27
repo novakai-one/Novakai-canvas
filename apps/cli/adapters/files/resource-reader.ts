@@ -8,8 +8,13 @@
 import { open, realpath } from 'node:fs/promises';
 import type { FileHandle } from 'node:fs/promises';
 import { dirname, resolve, relative, isAbsolute, extname, sep } from 'node:path';
-import type { ResourceRequest } from '@novakai/canvas-language';
-import type { ResourceFiles, LocalInput } from '../../contract/records/resources.js';
+import type {
+  ResourceRequest,
+  StageInput,
+  SupportedMedia,
+} from '../../contract/records/foreign.js';
+import type { StagedResource } from '../../contract/records/staged-resource.js';
+import type { ResourceReader } from '../../contract/ports/resource-reader.js';
 import type { LocalFailure, Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 import {
@@ -21,7 +26,8 @@ import {
 const byteLimit = 16 * 1024 * 1024;
 /** What Model's pinned digest puts before the hex; stripped only after Model's schema passed. */
 const pinPrefix = 'sha256:';
-const media: Readonly<Record<string, string>> = {
+/** The media type each supported file extension declares; Assets checks the bytes later. */
+const media: Readonly<Record<string, SupportedMedia>> = Object.freeze({
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
@@ -31,7 +37,11 @@ const media: Readonly<Record<string, string>> = {
   '.otf': 'font/otf',
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
-};
+});
+/** Files remain local preparation inputs; retry uses retained normalized bytes and never calls this reader. */
+export function createResourceReader(): ResourceReader {
+  return { read };
+}
 /** A path is admitted only beneath the real source directory; absolute and symlink escapes are explicit outcomes. */
 async function confined(
   file: FilePath,
@@ -134,9 +144,9 @@ async function readOpen(handle: FileHandle): Promise<Result<Buffer, LocalFailure
 function mediaType(
   path: string,
   request: ResourceRequest,
-): Result<string, LocalFailure> {
+): Result<SupportedMedia, LocalFailure> {
   const type = media[extname(path).toLowerCase()];
-  if (!type)
+  if (type === undefined)
     return failure({ code: 'unsupported-media', message: 'Resource extension is unsupported' });
   if (!type.startsWith(expectedMedia(request.kind)))
     return failure({
@@ -149,9 +159,10 @@ function mediaType(
 async function read(
   file: FilePath,
   request: ResourceRequest,
-): Promise<Result<LocalInput, LocalFailure>> {
+): Promise<Result<StagedResource, LocalFailure>> {
   const pinned = pinnedAsset(request.source);
-  if (pinned !== undefined) return success({ alias: request.alias, digest: pinned, stage: null });
+  if (pinned !== undefined)
+    return success({ kind: 'pinned', alias: request.alias, digest: pinned });
   const path = await confined(file, request.source);
   if (!path.ok) return contextual(file, request, path.error);
   return readLocated(file, request, path.value);
@@ -161,36 +172,39 @@ async function readLocated(
   file: FilePath,
   request: ResourceRequest,
   path: string,
-): Promise<Result<LocalInput, LocalFailure>> {
+): Promise<Result<StagedResource, LocalFailure>> {
   const type = mediaType(path, request);
   if (!type.ok) return contextual(file, request, type.error);
   const content = await bytes(path);
   if (!content.ok) return contextual(file, request, content.error);
-  return localInput(request, type.value, content.value);
+  return success({
+    kind: 'local',
+    alias: request.alias,
+    input: stageInput(request, type.value, content.value),
+  });
 }
 /** Successful filesystem preparation returns only normalized staging input, never an authoritative binding. */
-function localInput(
+function stageInput(
   request: ResourceRequest,
-  mediaType: string,
+  mediaType: SupportedMedia,
   buffer: Buffer,
-): Result<LocalInput, LocalFailure> {
-  return success({
-    alias: request.alias,
-    digest: null,
-    stage: {
-      base64: buffer.toString('base64'),
-      mediaType,
-      alt: request.alt ?? request.alias,
-      provenance: {
-        source: request.source,
-        ...Object.fromEntries(
-          Object.entries({ license: request.license, attribution: request.attribution }).filter(
-            ([, value]) => value !== undefined,
-          ),
-        ),
-      },
-    },
-  });
+): StageInput {
+  return {
+    base64: buffer.toString('base64'),
+    mediaType,
+    alt: request.alt ?? request.alias,
+    provenance: { source: request.source, ...licensed(request), ...attributed(request) },
+  };
+}
+/** The declaration's license, or nothing when it names none. */
+function licensed(request: ResourceRequest): { readonly license?: string } {
+  if (request.license === undefined) return {};
+  return { license: request.license };
+}
+/** The declaration's attribution, or nothing when it names none. */
+function attributed(request: ResourceRequest): { readonly attribution?: string } {
+  if (request.attribution === undefined) return {};
+  return { attribution: request.attribution };
 }
 /** Add source location without replacing the stable failure code or recovery instruction. */
 function contextual<T>(
@@ -200,10 +214,6 @@ function contextual<T>(
 ): Result<T, LocalFailure> {
   const location = `${file}:${request.span.start.line}:${request.span.start.column} asset @${request.alias}`;
   return { ok: false, error: { ...error, message: `${location}: ${error.message}` } };
-}
-/** Files remain local preparation inputs; retry uses retained normalized bytes and never calls this reader. */
-export function createResourceFiles(): ResourceFiles {
-  return { read };
 }
 
 /** Font declarations select font media; other resource declarations select images. */

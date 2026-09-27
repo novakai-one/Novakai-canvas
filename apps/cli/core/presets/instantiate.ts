@@ -4,10 +4,10 @@
  * values; the caller fixes the pin or namespace and runs the command again.
  */
 import type { ExpansionRequest } from '../../contract/records/foreign.js';
-import type { CliDependencies } from '../../contract/ports/runtime.js';
 import type { Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 import { resourceCall } from '../resources/stage.js';
+import type { ResourcePoster } from '../resources/stage.js';
 
 /**
  * Recipe expansion is read-only and returns ordinary pinned DSL; dispatch owns explicit --out file
@@ -15,7 +15,7 @@ import { resourceCall } from '../resources/stage.js';
  */
 export async function instantiateRecipe(
   expansion: ExpansionRequest,
-  dependencies: Pick<CliDependencies, 'transport'>,
+  dependencies: ResourcePoster,
 ): Promise<Result<string>> {
   const result = await resourceCall('instantiate', expansion, dependencies);
   if (!result.ok) return result;

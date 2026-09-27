@@ -5,9 +5,14 @@
 import type { TransportResponse } from '@novakai/canvas-service';
 import type { Admission } from '@novakai/canvas-templates';
 export type { Collection } from '@novakai/canvas-model';
-export type { Language, ResolvedResources } from '@novakai/canvas-language';
+export type {
+  Language,
+  ParsedSource,
+  ResolvedResources,
+  ResourceRequest,
+} from '@novakai/canvas-language';
 export type { RenderDocument } from '@novakai/canvas-service';
-export type { Assets } from '@novakai/canvas-assets';
+export type { Assets, StageInput, SupportedMedia } from '@novakai/canvas-assets';
 export type { Catalog, ExpansionRequest, ThemePreset } from '@novakai/canvas-templates';
 export type { Documents, Resource, Resources } from '@novakai/canvas-export';
 /** Owner records: CLI core imports only these local aliases. */

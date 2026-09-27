@@ -12,7 +12,7 @@ import { createLanguage } from '@novakai/canvas-language';
 import { validate, plan, stage } from '@novakai/canvas-model';
 import { readArguments } from '../adapters/inputs/arguments.js';
 import { createPresetInputs } from '../adapters/inputs/preset-inputs.js';
-import { createResourceFiles } from '../adapters/files/resource-reader.js';
+import { createResourceReader } from '../adapters/files/resource-reader.js';
 import { createLocalFiles } from '../adapters/files/local-files.js';
 import { createRequestJournal } from '../adapters/files/request-journal.js';
 import { createTransport } from '../adapters/service-http/transport.js';
@@ -68,11 +68,9 @@ async function run(
   const semantic = createSemanticInputs(language);
   return executeCommand(command, {
     transport: transport.value,
-    resourceFiles: createResourceFiles(),
-    files: {
-      ...createLocalFiles(),
-      ...createRequestJournal(resolve(options.workspace, 'requests')),
-    },
+    files: createLocalFiles(),
+    journal: createRequestJournal(resolve(options.workspace, 'requests')),
+    resources: createResourceReader(),
     semantic,
     presets: createPresetInputs(semantic, readThemeConfig),
     nextRequestId,
@@ -132,7 +130,7 @@ export async function runHeadless(
     ]);
     return adapter.renderHeadless(options, {
       service: await service.createHeadlessBindings(),
-      resourceFiles: createResourceFiles(),
+      resources: createResourceReader(),
       readTheme: readThemeConfig,
       temp: temp.createTempAssets(),
       files: { ...files.createRenderFiles(options), ...raster.createRaster(options.root) },

@@ -8,7 +8,8 @@ import { displayDescriptor, findingLine } from './format.js';
 import { lintBuildSpec } from './lint/lint.js';
 import type { ProfileCommand } from '../../contract/records/command.js';
 import type { ProfileSource } from '../../contract/records/profiles.js';
-import type { RequestFiles, SemanticInputs } from '../../contract/ports/runtime.js';
+import type { SemanticInputs } from '../../contract/ports/runtime.js';
+import type { LocalFiles } from '../../contract/ports/local-files.js';
 import type { FilePath } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
@@ -16,7 +17,7 @@ import { unsupported } from '../shared/results.js';
 
 /** What the profile commands read and write: local files and the Language parser. */
 export interface ProfileDependencies {
-  readonly files: Pick<RequestFiles, 'source' | 'output'>;
+  readonly files: LocalFiles;
   readonly semantic: Pick<SemanticInputs, 'profileParse'>;
 }
 
@@ -48,7 +49,7 @@ async function scaffold(
 ): Promise<Result<string>> {
   const source = scaffoldBuildSpec(command.collection, command.title);
   if (command.out === undefined) return success(source);
-  const saved = await dependencies.files.output(command.out, source);
+  const saved = await dependencies.files.writeOutput(command.out, source);
   if (!saved.ok) return saved;
   return success(`Written: ${command.out}`);
 }
@@ -58,9 +59,9 @@ async function lintFile(
   file: FilePath,
   dependencies: ProfileDependencies,
 ): Promise<Result<string>> {
-  const source = await dependencies.files.source(file);
+  const source = await dependencies.files.readSource(file);
   if (!source.ok) return source;
-  const parsed = dependencies.semantic.profileParse(source.value.source);
+  const parsed = dependencies.semantic.profileParse(source.value);
   if (!parsed.ok) return parsed;
   return lintParsedProfile(parsed.value);
 }

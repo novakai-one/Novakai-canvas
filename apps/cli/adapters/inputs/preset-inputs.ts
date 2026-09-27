@@ -7,8 +7,9 @@
 import { z } from 'zod';
 import type { Snapshot, Request } from '@novakai/canvas-authoring';
 import { requestSchema } from '../../contract/schemas.js';
-import type { AssetDigest, RequestId } from '../../contract/brands.js';
-import type { PresetInputs, ResourceSyntax } from '../../contract/records/resources.js';
+import type { RequestId } from '../../contract/brands.js';
+import type { AssetBinding } from '../../contract/records/staged-resource.js';
+import type { PresetInputs, PresetSource, ResourceSyntax } from '../../contract/ports/runtime.js';
 import type { RecipeHeader } from '../../contract/records/command.js';
 import type { Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
@@ -21,7 +22,7 @@ function recipe(
   header: RecipeHeader,
   source: string,
   syntax: ResourceSyntax,
-): ReturnType<PresetInputs['source']> {
+): Result<PresetSource> {
   const resources = syntax.requests(source);
   if (!resources.ok) return resources;
   return success({
@@ -34,7 +35,7 @@ function request(
   input: unknown,
   snapshot: Snapshot,
   id: RequestId,
-  assets: readonly { readonly alias: string; readonly digest: AssetDigest }[],
+  assets: readonly AssetBinding[],
 ): Result<Request> {
   const parsed = prepared.safeParse(input);
   if (!parsed.success)
@@ -78,7 +79,7 @@ function checkedResult(checked: ReturnType<typeof requestSchema.safeParse>): Res
 /** Theme grammar is injected; this adapter owns only command-to-owner envelope construction. */
 export function createPresetInputs(
   syntax: ResourceSyntax,
-  theme: (source: string) => ReturnType<PresetInputs['source']>,
+  theme: (source: string) => Result<PresetSource>,
 ): PresetInputs {
   return {
     source: (command, source) =>

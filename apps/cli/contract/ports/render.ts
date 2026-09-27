@@ -8,7 +8,7 @@ import type { createHeadlessBindings } from '@novakai/canvas-service';
 import type { AssetError, Assets } from '@novakai/canvas-assets';
 import type { Diagnostic as ExportDiagnostic } from '@novakai/canvas-export';
 import type { readThemeConfig } from '../theme-reader.js';
-import type { ResourceFiles } from '../records/resources.js';
+import type { ResourceReader } from './resource-reader.js';
 import type { ProviderFault } from '../records/headless.js';
 import type { SourceFile } from '../records/source-file.js';
 import type { RecipeFamily } from '../records/foreign.js';
@@ -17,7 +17,7 @@ import type { Result } from '../errors.js';
 
 /** Everything compose injects into one headless render. */
 export interface HeadlessOwners {
-  readonly resourceFiles: ResourceFiles;
+  readonly resources: ResourceReader;
   readonly service: Awaited<ReturnType<typeof createHeadlessBindings>>;
   readonly readTheme: readThemeConfig;
   readonly temp: TempAssets;

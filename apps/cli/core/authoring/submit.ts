@@ -7,37 +7,38 @@
 import { restoreResources } from '../resources/restore.js';
 import { prepare } from './prepare.js';
 import type { ChangeCommand } from '../../contract/records/command.js';
-import type { CliDependencies, RequestDraft, ServiceAnswer } from '../../contract/ports/runtime.js';
+import type { CliDependencies, ServiceAnswer } from '../../contract/ports/runtime.js';
+import type { RetainedRequest } from '../../contract/records/retained-request.js';
 import type { RequestId } from '../../contract/brands.js';
 import type { LocalFailure, Result } from '../../contract/errors.js';
 import { rejected, success } from '../../contract/errors.js';
 
 /** Retention failure prevents a write because an uncertain result could not be reconciled safely without the request. */
 export async function submit(
-  draft: RequestDraft,
+  retained: RetainedRequest,
   preview: boolean,
   dependencies: CliDependencies,
 ): Promise<Result<string>> {
-  const saved = await dependencies.files.save(draft);
+  const saved = await dependencies.journal.save(retained);
   if (!saved.ok) return saved;
-  const restored = await restoreResources(draft, dependencies);
+  const restored = await restoreResources(retained.backups, dependencies);
   if (!restored.ok) return restored;
-  return transmit(draft, preview, dependencies);
+  return transmit(retained, preview, dependencies);
 }
 /** Transport receives only the canonical envelope, never local byte backups. */
 async function transmit(
-  draft: RequestDraft,
+  retained: RetainedRequest,
   preview: boolean,
   dependencies: CliDependencies,
 ): Promise<Result<string>> {
   const path = preview ? '/api/v1/authoring/preview' : '/api/v1/authoring/apply';
   const outcome = await dependencies.transport.post(path, {
     version: 1,
-    generation: draft.generation,
-    request: draft.request,
+    generation: retained.generation,
+    request: retained.request,
     preview,
   });
-  return submitted(outcome, draft.request.request, preview, dependencies);
+  return submitted(outcome, retained.request.request, preview, dependencies);
 }
 /** Network uncertainty names the retained request instead of suggesting a new request ID. */
 function submitted(

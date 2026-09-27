@@ -6,7 +6,8 @@
  */
 import { prepareResources } from '../resources/stage.js';
 import type { ChangeCommand, ChangeIntent, ChangeMode } from '../../contract/records/command.js';
-import type { CliDependencies, RequestDraft, ServiceAnswer } from '../../contract/ports/runtime.js';
+import type { CliDependencies, ServiceAnswer } from '../../contract/ports/runtime.js';
+import type { RetainedRequest } from '../../contract/records/retained-request.js';
 import type { Snapshot } from '../../contract/records/foreign.js';
 import type { SourceFile } from '../../contract/records/source-file.js';
 import type { CollectionRevision, Generation } from '../../contract/brands.js';
@@ -17,12 +18,17 @@ import { rejected, success } from '../../contract/errors.js';
 export async function prepare(
   command: ChangeCommand,
   dependencies: CliDependencies,
-): Promise<Result<RequestDraft>> {
-  const source = await dependencies.files.source(command.file);
+): Promise<Result<RetainedRequest>> {
+  const source = await dependencies.files.readSource(command.file);
   if (!source.ok) return source;
   const current = await dependencies.transport.get('/api/v1/workspace');
   if (!current.ok) return current;
-  return prepareCaptured(command, source.value, current.value, dependencies);
+  return prepareCaptured(
+    command,
+    { file: command.file, source: source.value },
+    current.value,
+    dependencies,
+  );
 }
 /** Capture and resource preparation finish before retention or canonical submission. */
 async function prepareCaptured(
@@ -30,7 +36,7 @@ async function prepareCaptured(
   source: SourceFile,
   current: ServiceAnswer,
   dependencies: CliDependencies,
-): Promise<Result<RequestDraft>> {
+): Promise<Result<RetainedRequest>> {
   const draft = captured(command, source.source, current, dependencies);
   if (!draft.ok) return draft;
   return prepareResources(source, draft.value, dependencies);
@@ -41,7 +47,7 @@ function captured(
   source: string,
   current: ServiceAnswer,
   dependencies: CliDependencies,
-): Result<RequestDraft> {
+): Result<RetainedRequest> {
   if (!current.outcome.ok) return rejected('service-rejected', current.outcome.error);
   const snapshot = dependencies.semantic.snapshot(current.outcome.value);
   if (!snapshot.ok) return snapshot;
@@ -54,7 +60,7 @@ function draft(
   snapshot: Snapshot,
   generation: Generation,
   dependencies: CliDependencies,
-): Result<RequestDraft> {
+): Result<RetainedRequest> {
   const request = dependencies.semantic.request(
     intentOf(command),
     source,

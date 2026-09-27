@@ -22,7 +22,7 @@ import { filePath, type AssetDigest, type FilePath } from '../../contract/brands
 import type { SourceFile } from '../../contract/records/source-file.js';
 import type { HeadlessOwners, TempDirectory } from '../../contract/ports/render.js';
 import type { Result } from '../../contract/errors.js';
-import type { ResourceRequest } from '../../contract/records/resources.js';
+import type { ResourceRequest } from '../../contract/records/foreign.js';
 import {
   RenderFault,
   accepted,
@@ -154,9 +154,9 @@ async function admitResource(
   assets: Pick<Assets, 'stage' | 'resolve'>,
   owners: HeadlessOwners,
 ): Promise<AssetDigest> {
-  const resource = accepted(await owners.resourceFiles.read(file, request));
-  if (resource.digest !== null) return resource.digest;
-  return accepted(await assets.stage(resource.stage)).descriptor.digest;
+  const resource = accepted(await owners.resources.read(file, request));
+  if (resource.kind === 'pinned') return resource.digest;
+  return accepted(await assets.stage(resource.input)).descriptor.digest;
 }
 
 /** Override an ephemeral validated copy; never write or mutate the source collection or its pin. */
