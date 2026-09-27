@@ -18,39 +18,6 @@ import type { CanvasEvent } from '../../contract/events.js';
 import type { SessionState } from '../../contract/records/state.js';
 /** The React Flow change records selection reads. */
 type FlowChange = NodeChange<FlowNode> | EdgeChange<FlowEdge>;
-/** Incoming selection change carries its scoped node/edge ID; no generated ID parsing is needed. */
-function selectedTargets(
-  owners: InteractionOwners,
-  changes: readonly FlowChange[],
-): readonly Target[] {
-  const state = owners.session.getSnapshot();
-  const selected = new Map(state.selection.map((target) => [targetAddress(target), target]));
-  changes.forEach((change) => applySelectionChange(selected, state.index.targets, change));
-  return [...selected.values()];
-}
-/** Apply only selection deltas; geometry dimensions/positions never become canonical React Flow JSON. */
-function applySelectionChange(
-  selected: Map<string, Target>,
-  targets: SessionState['index']['targets'],
-  change: FlowChange,
-): void {
-  if (change.type !== 'select') return;
-  const target = targets[change.id]?.target;
-  if (!target) return;
-  setSelected(selected, target, change.selected);
-}
-/** Immutable domain selection is assembled outside the temporary local Map. */
-function setSelected(
-  selected: Map<string, Target>,
-  target: Target,
-  enabled: boolean,
-): void {
-  if (enabled) {
-    selected.set(targetAddress(target), target);
-    return;
-  }
-  selected.delete(targetAddress(target));
-}
 /** Translate React Flow events to public Canvas commands; drag, resize and keys come from `parts`. */
 export function createInteractions(
   parts: InteractionParts,
@@ -179,12 +146,6 @@ export function createInteractions(
     },
   };
 }
-/** Runs `act` on the diagram item an edge draws; an edge without data is ignored. */
-function onEdge(act: (target: Target) => void): (event: unknown, edge: FlowEdge) => void {
-  return (_event, edge) => {
-    if (edge.data) act(edge.data.view.target);
-  };
-}
 /** True when both targets name the same diagram item; the geometry and keyboard parts compare with it. */
 function sameTarget(
   left: Target,
@@ -195,4 +156,43 @@ function sameTarget(
 /** Opaque structural target identity is shared by adapter comparisons; no generated ID encoding is parsed. */
 function targetAddress(target: Target): string {
   return JSON.stringify(target);
+}
+/** Incoming selection change carries its scoped node/edge ID; no generated ID parsing is needed. */
+function selectedTargets(
+  owners: InteractionOwners,
+  changes: readonly FlowChange[],
+): readonly Target[] {
+  const state = owners.session.getSnapshot();
+  const selected = new Map(state.selection.map((target) => [targetAddress(target), target]));
+  changes.forEach((change) => applySelectionChange(selected, state.index.targets, change));
+  return [...selected.values()];
+}
+/** Apply only selection deltas; geometry dimensions/positions never become canonical React Flow JSON. */
+function applySelectionChange(
+  selected: Map<string, Target>,
+  targets: SessionState['index']['targets'],
+  change: FlowChange,
+): void {
+  if (change.type !== 'select') return;
+  const target = targets[change.id]?.target;
+  if (!target) return;
+  setSelected(selected, target, change.selected);
+}
+/** Immutable domain selection is assembled outside the temporary local Map. */
+function setSelected(
+  selected: Map<string, Target>,
+  target: Target,
+  enabled: boolean,
+): void {
+  if (enabled) {
+    selected.set(targetAddress(target), target);
+    return;
+  }
+  selected.delete(targetAddress(target));
+}
+/** Runs `act` on the diagram item an edge draws; an edge without data is ignored. */
+function onEdge(act: (target: Target) => void): (event: unknown, edge: FlowEdge) => void {
+  return (_event, edge) => {
+    if (edge.data) act(edge.data.view.target);
+  };
 }
