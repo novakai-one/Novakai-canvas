@@ -1,8 +1,8 @@
 /*
  * HTTP serving and headless bindings: expose one already-open workspace through authenticated
  * loopback transport; the caller closes transport before draining its workspace. Read-only
- * headless composition shares service adapters; the CLI owns retry after dependencies are
- * restored.
+ * headless composition shares the service's preset rules and render adapters; the CLI owns retry
+ * after dependencies are restored.
  */
 import type { WorkspaceSession } from '../types.js';
 import type { LocalServer, ServerOptions } from '../records/transport/server.js';
@@ -62,7 +62,7 @@ export async function readAgentCredential(path: string): Promise<Result<string>>
   return credentials.readAgentCredential(path);
 }
 
-/** Read-only headless composition shares service adapters. CLI runHeadless catches import failures, reports render-unavailable and owns retry after dependencies are restored. */
+/** Read-only headless composition shares the preset codecs, theme admission, render jobs and producer. CLI runHeadless catches import failures, reports render-unavailable and owns retry after dependencies are restored. */
 export async function createHeadlessBindings() {
   const [jobs, rendering] = await Promise.all([
     import('../../adapters/rendering/render-jobs.js'),

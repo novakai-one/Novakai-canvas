@@ -1,3 +1,10 @@
+/*
+ * Theme admission: translates a theme written in source syntax (a base name or exact pin, hex
+ * colours, font aliases) into the exact admission Templates and Design System check. The base
+ * becomes an exact preset pin, each font alias the family Assets verified, each hex colour an
+ * sRGB record. Any other admission passes through unchanged. Pure over the injected owners;
+ * Authoring keeps the draft on every failure and owns commit and retry.
+ */
 import type {
   Assets,
   AuthoringResult,
@@ -18,12 +25,24 @@ import {
 import { admissionFields } from '../../contract/records/presets/preparation.js';
 import { chromeName } from '../../contract/schemas.js';
 import { authoringFailure } from '../../contract/errors.js';
+
+/** What theme admission uses: Assets to verify fonts, Templates to select the base theme. */
 export interface ThemeAdmissionOwners {
   readonly assets: Pick<Assets, 'resolve'>;
   readonly templates: Pick<Templates<LoweredIntent>, 'read'>;
 }
+
+/** One font alias the theme names and the digest of the uploaded font bytes it binds. */
 type FontBinding = { readonly alias: string; readonly digest: string };
-/** Prepare exact identities and owner-validated tokens; Authoring retains the draft on any typed failure. */
+
+/**
+ * Prepares one admission. An admission that is not a source-syntax theme is returned unchanged.
+ * Fails with `invalid-input` at Templates' path when the base theme cannot be selected
+ * (Templates' failure kept as source), `missing-asset` at Assets' path when a font's bytes are
+ * not stored (Assets' failure kept as source), `invalid-input` at the font alias when the bytes
+ * are not a verified font, and `invalid-input` at `theme` ("Theme preparation failed") for a
+ * malformed hex colour, chrome name or admission header.
+ */
 export function prepareTheme(
   admission: Json,
   catalog: Catalog,
@@ -36,11 +55,16 @@ export function prepareTheme(
     return authoringFailure('invalid-input', 'theme', 'Theme preparation failed');
   }
 }
-/** Only this protected adapter translates source syntax; Design System remains the token policy owner. */
+
+/**
+ * Selects the exact base through Templates, then binds fonts and overrides (see `withFonts`).
+ * Returns a non-theme admission unchanged. Fails with `invalid-input` at Templates' path when no
+ * base matches (Templates' failure kept as source). Throws on a malformed override or chrome.
+ */
 function prepareSourceTheme(
   admission: Json,
   catalog: Catalog,
-  bindings: readonly { readonly alias: string; readonly digest: string }[],
+  bindings: readonly FontBinding[],
   owners: ThemeAdmissionOwners,
 ): AuthoringResult<Json> {
   const parsed = themeConfig.safeParse(admission);
@@ -50,12 +74,28 @@ function prepareSourceTheme(
     return authoringFailure('invalid-input', base.error.path, base.error.message, [], base.error);
   return withFonts(admission, parsed.data.raw.overrides, base.value, bindings, owners.assets);
 }
-/** Resolve the two font descriptors only after the base selection is exact. */
+
+/**
+ * The Templates selection for a base: an exact `id@version#sha256:hex` pin (the syntax Language
+ * prints), otherwise a bare ID Templates resolves to its latest version.
+ */
+function selection(source: string): unknown {
+  const exact = /^([^@]+)@([^#]+)#sha256:([a-f0-9]{64})$/.exec(source);
+  if (exact) return { kind: 'theme', id: exact[1], version: exact[2], digest: exact[3] };
+  return { kind: 'theme', id: source };
+}
+
+/**
+ * The admission with its raw block rewritten: the authored chrome kept, the base as an exact
+ * preset pin, each font alias bound to its verified family and each override translated. Other
+ * admission keys stay. Fails with the first font's failure (see `font`). Throws on a malformed
+ * header, chrome name or hex colour.
+ */
 function withFonts(
   admission: Json,
   overrides: ThemeConfig['raw']['overrides'],
   base: Preset,
-  bindings: readonly { readonly alias: string; readonly digest: string }[],
+  bindings: readonly FontBinding[],
   assets: Pick<Assets, 'resolve'>,
 ): AuthoringResult<Json> {
   const fonts = bindings.map((item) => font(item, assets));
@@ -83,15 +123,15 @@ function withFonts(
     },
   };
 }
-/** Exact pin syntax matches canonical Language readouts; bare IDs resolve once through Templates ordering. */
-function selection(source: string): unknown {
-  const exact = /^([^@]+)@([^#]+)#sha256:([a-f0-9]{64})$/.exec(source);
-  if (exact) return { kind: 'theme', id: exact[1], version: exact[2], digest: exact[3] };
-  return { kind: 'theme', id: source };
-}
-/** Font family is the Assets descriptor's verified family, never a caller-supplied name or OS fallback. */
+
+/**
+ * The approved font pin for one alias, with the family from the Assets descriptor (never a
+ * caller-supplied name or an OS fallback). Fails with `missing-asset` at Assets' path when the
+ * bytes are not stored (Assets' failure kept as source), and `invalid-input` at the alias when
+ * they are not a font with a verified family.
+ */
 function font(
-  input: { readonly alias: string; readonly digest: string },
+  input: FontBinding,
   assets: Pick<Assets, 'resolve'>,
 ): AuthoringResult<
   readonly [string, { readonly family: string; readonly digest: string; readonly approved: true }]
@@ -114,13 +154,24 @@ function font(
   };
 }
 
-/** Numbers retain their owner-defined meaning; colors translate to the existing sRGB record. */
+/**
+ * The authored chrome selector as its own field, or no field when none was authored. Throws
+ * when the raw block is not a record or the chrome is not a Design System chrome name.
+ */
+function chromeField(raw: unknown): { readonly chrome?: ChromeName } {
+  // Project one field from the guarded source envelope; unrelated admission keys stay intact.
+  const record = rawFields.parse(raw);
+  if (record.chrome === undefined) return {};
+  return { chrome: chromeName.parse(record.chrome) };
+}
+
+/** One override: numbers and pixel dimensions unchanged, a hex colour as an sRGB record. Throws on bad hex. */
 function tokenValue(value: ThemeOverride): Json {
   if (typeof value !== 'string') return value;
   return color(value);
 }
 
-/** Translate semantic hexadecimal color syntax into the existing Design System sRGB input shape. */
+/** The Design System sRGB record for `#rrggbb` or `#rrggbbaa`. Throws on any other text. */
 function color(value: string): Json {
   const hex = hexColour.parse(value);
   return {
@@ -130,16 +181,8 @@ function color(value: string): Json {
   };
 }
 
-/** Six-digit colors are opaque; the optional final byte supplies the only alpha override. */
+/** Opaque (1) for six digits; the final byte over 255 for eight. */
 function colorAlpha(hex: string): number {
   if (hex.length !== 9) return 1;
   return Number.parseInt(hex.slice(7, 9), 16) / 255;
-}
-
-/** Preserve an explicitly authored chrome selector through resource preparation. */
-function chromeField(raw: unknown): { readonly chrome?: ChromeName } {
-  // Project one field from the guarded source envelope; unrelated admission keys stay intact.
-  const record = rawFields.parse(raw);
-  if (record.chrome === undefined) return {};
-  return { chrome: chromeName.parse(record.chrome) };
 }
