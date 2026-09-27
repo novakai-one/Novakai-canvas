@@ -103,7 +103,8 @@ interface AdmissionRuntime {
   readonly validation: CandidateValidator;
   readonly resources: ResourceAdmission;
   readonly changes: Notifications;
-  readonly feasibility: FeasibilityOwners;
+  /** Feasibility's owners; each request adds its own signal. */
+  readonly feasibility: Omit<FeasibilityOwners, 'signal'>;
 }
 
 /** Binds the store, planners, validator, leases, notifications and feasibility. Never fails. */
@@ -156,11 +157,6 @@ function requestAuthoring(
     resources: runtime.resources,
     notifications: runtime.changes,
     cancellation: { cancelled: () => signal.aborted },
-    feasibility: createFeasibility({
-      ...runtime.feasibility,
-      producer: {
-        produce: (job) => runtime.feasibility.producer.produce(job, signal),
-      },
-    }),
+    feasibility: createFeasibility({ ...runtime.feasibility, signal }),
   });
 }

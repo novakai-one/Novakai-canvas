@@ -31,17 +31,23 @@ export async function createDiagramProducer(): Promise<Result<DiagramProducer>> 
       import('../../adapters/render-worker/reply-reader.js'),
     ]);
     const transport = worker.createRenderTransport(WORKER_ENTRY, RENDER_TIMEOUT_MS);
-    await transport.ready;
+    const ready = await transport.ready;
+    if (!ready.ok) return notInitialized();
     return success({
       produce: (job, signal) =>
         produce(job, signal, transport, { read: output.readRenderDocument }),
     });
   } catch {
-    return failure('unavailable', 'render', 'Rendering bindings could not initialize');
+    return notInitialized();
   }
 }
 
 /** The libavoid wasm path every render job carries, under `resourceRoot`. Never fails. */
 export function libavoidWasm(resourceRoot: HostPath): HostPath {
   return hostPath.parse(`${resourceRoot}/${LIBAVOID_WASM}`);
+}
+
+/** `unavailable` at `render`: the pool or reader could not load, or the first worker did not start. */
+function notInitialized(): Result<DiagramProducer> {
+  return failure('unavailable', 'render', 'Rendering bindings could not initialize');
 }

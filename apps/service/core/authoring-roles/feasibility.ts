@@ -25,6 +25,8 @@ export interface FeasibilityOwners {
   readonly workspace: WorkspaceReader;
   readonly jobs: RenderJobs;
   readonly producer: DiagramProducer;
+  /** The request's cancellation; every feasibility render runs under it. */
+  readonly signal: AbortSignal;
 }
 
 /**
@@ -79,9 +81,10 @@ async function append(
 }
 
 /**
- * Builds the `admission` job for one collection and renders it, preview or not. Fails with
- * `constraint-conflict` at the producer's path when the producer cannot render it (the
- * producer's failure kept as source). Job failures pass through unchanged.
+ * Builds the `admission` job for one collection and renders it under the request's signal,
+ * preview or not. Fails with `constraint-conflict` at the producer's path when the producer cannot
+ * render it or the request is cancelled (the producer's failure kept as source). Job failures pass
+ * through unchanged.
  */
 async function render(
   collection: Collection,
@@ -90,7 +93,7 @@ async function render(
 ): Promise<AuthoringResult<RenderDocument>> {
   const job = owners.jobs.create(collection, view, 'admission');
   if (!job.ok) return job;
-  const result = await owners.producer.produce(job.value, new AbortController().signal);
+  const result = await owners.producer.produce(job.value, owners.signal);
   if (!result.ok)
     return authoringFailure(
       'constraint-conflict',
