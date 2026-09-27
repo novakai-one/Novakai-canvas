@@ -14,6 +14,8 @@ import type { ReactBindings as DesignBindings } from '@novakai/canvas-design-sys
 import { descendantId } from '@novakai/canvas-model';
 import panelDefaults from '../../../../resources/ui/panels.default.json' with { type: 'json' };
 import { createAddTools } from '../../adapters/react/AddTools.js';
+import { createAddForms } from '../../adapters/react/AddForms.js';
+import { createAddFields } from '../../adapters/react/AddFields.js';
 import { createSectionNavigator } from '../../adapters/react/SectionNavigator.js';
 import { ObjectOutline } from '../../adapters/react/ObjectOutline.js';
 import { createExportPanel } from '../../adapters/react/ExportPanel.js';
@@ -40,7 +42,12 @@ export function featureSections(
     return createElement(Browser, { controller: props.controller, view: props.view });
   }
   return [
-    { tab: 'add', id: 'creation', title: 'Create', Content: createAddTools(design) },
+    {
+      tab: 'add',
+      id: 'creation',
+      title: 'Create',
+      Content: createAddTools(createAddForms({ ...design, ...createAddFields(design) })),
+    },
     { tab: 'browse', id: 'collections', title: 'Collections', Content: LibrarySection },
     { tab: 'browse', id: 'sections', title: 'Diagrams', Content: createSectionNavigator(design) },
     { tab: 'browse', id: 'objects', title: 'Objects', Content: ObjectOutline },
