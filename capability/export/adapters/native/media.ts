@@ -4,7 +4,7 @@
  */
 import sharp from 'sharp';
 import type { MediaConverter } from '../../contract/render-types.js';
-import type { Resource } from '../../contract/records/bundle.js';
+import type { Resource } from '../../contract/records/resource.js';
 import type { Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 

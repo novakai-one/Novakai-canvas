@@ -21,7 +21,7 @@ import type {
 import type { Result } from './errors.js';
 import type { RenderInput } from './ports/formats.js';
 import type { Encoding } from './ports/encoding.js';
-import type { Resource } from './records/bundle.js';
+import type { Resource } from './records/resource.js';
 /** Presentation and Layout types re-exported for the adapters. */
 export type {
   ReactBindings,

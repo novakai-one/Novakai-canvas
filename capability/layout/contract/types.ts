@@ -1,10 +1,10 @@
-import type { NestedLayout } from './records/engine-scene.js';
 import type { LayoutInputKey } from './brands.js';
 import { z } from 'zod';
 import type { ProjectionReader } from './ports/projection.js';
 import type { Result, Diagnostic } from './errors.js';
-import type { Projection, MeasuredContent, MarkerKind } from './records/input.js';
-import type { Scene } from './records/geometry.js';
+import type { Projection, MeasuredContent, MarkerKind, VisualSection } from './records/input.js';
+import type { Scene, PlacedNode, PlacedSection } from './records/geometry.js';
+import type { PrototypeLayoutMeasure } from './records/road-prototype.js';
 import type { PlacementPort } from './ports/placement.js';
 import type { SolverPort } from './ports/solver.js';
 import type { RoutingPort } from './ports/routing.js';
@@ -60,6 +60,18 @@ export interface InspectionRequest {
 export interface Inspection {
   readonly valid: boolean;
   readonly diagnostics: readonly Diagnostic[];
+}
+/** The module-roads engine: places one section from measured content, optionally around fixed nodes. */
+export interface NestedLayout {
+  readonly version: string;
+  section(
+    source: VisualSection,
+    metrics: SupplementalMeasurements,
+    options: LayoutOptions,
+    versions: readonly string[],
+    fixedNodes?: readonly PlacedNode[],
+  ): PlacedSection;
+  readonly measure?: PrototypeLayoutMeasure;
 }
 export interface Dependencies {
   readonly nested?: NestedLayout;

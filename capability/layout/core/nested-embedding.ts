@@ -12,8 +12,8 @@ import { embedNestedPlan } from './nested-embedding-plan.js';
 import { roadNetwork } from './prototype-road-network.js';
 import { bridgeSpanGrowth, expandedSupportLedger } from './nested-support-expansion.js';
 import { projectNestedWires, readNestedProjectionSupports } from './nested-lane-projection.js';
-import { SupportRejection, reject } from './nested-support-graph.js';
-import { required, type retainSupportInput } from './nested-support-input.js';
+import { SupportRejection, reject, required } from './nested-support-graph.js';
+import type { retainSupportInput } from './nested-support-input.js';
 type Input = ReturnType<typeof retainSupportInput>;
 
 /** Materialize one admitted reservation with frozen choices. Not a scene-legality certificate.

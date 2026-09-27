@@ -1,6 +1,6 @@
 import type { Result } from '../errors.js';
 import type { Collection } from '../records/artifact.js';
-import type { Resource } from '../records/bundle.js';
+import type { Resource } from '../records/resource.js';
 
 /**
  * Collection records and their DSL text, supplied by the host: Model validates records and

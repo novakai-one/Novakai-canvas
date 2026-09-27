@@ -1,12 +1,12 @@
 import type { PrototypeRoadProof, PrototypeProofPath } from '../contract/records/road-proof.js';
 import type {
-  RoadPrototypeScene,
   PrototypeLaneConnection,
   PrototypeLane,
   PrototypePoint,
   PrototypeJunction,
   PrototypeRoad,
 } from '../contract/records/road-prototype.js';
+import type { RoadPrototypeScene } from '../contract/records/road-scene.js';
 import { directionVector } from './prototype-road-geometry.js';
 
 type Context = ReturnType<typeof context>;

@@ -2,20 +2,18 @@ import type {
   NestedSupportGate,
   NestedSupportFootprint,
 } from '../contract/records/nested-support.js';
-import type {
-  PrototypePortLocation,
-  PrototypeRoad,
-  RoadPrototypeScene,
-} from '../contract/records/road-prototype.js';
+import type { PrototypePortLocation, PrototypeRoad } from '../contract/records/road-prototype.js';
+import type { RoadPrototypeScene } from '../contract/records/road-scene.js';
 import { terminalDepth } from './nested-terminal-pins.js';
 import { axes } from './prototype-road-geometry.js';
 import { nestedLanePitch } from './prototype-nested-placement.js';
-import { required, type retainSupportInput } from './nested-support-input.js';
+import type { retainSupportInput } from './nested-support-input.js';
 import {
   anchor,
   equate,
   equateOffset,
   reject,
+  required,
   type Anchor,
   type SupportGraph,
 } from './nested-support-graph.js';

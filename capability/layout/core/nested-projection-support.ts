@@ -1,9 +1,8 @@
 import type { NestedWire, NestedWireSegment } from '../contract/records/nested-wires.js';
 import type { PrototypePortLocation, PrototypeRoad } from '../contract/records/road-prototype.js';
-import type { AssignedTravel } from './nested-wire-lanes.js';
+import type { AssignedTravel } from './nested-travel.js';
 import { axes, contains } from './prototype-road-geometry.js';
-import { required } from './nested-support-input.js';
-import { reject } from './nested-support-graph.js';
+import { reject, required } from './nested-support-graph.js';
 
 /** Consume materialized support: every piece is orthogonal and owned; every retained gate
  * has a straight, gate-owned crossing at its solved plane and assigned tangential offset.

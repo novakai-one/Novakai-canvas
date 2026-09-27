@@ -62,6 +62,8 @@ module.exports = {
     ...readdirSync('apps').flatMap((name) => rulesFor(name, 'apps')),
   ],
   options: {
+    /** Type-only imports count: a cycle or a wrong-direction import through `import type` fails. */
+    tsPreCompilationDeps: true,
     doNotFollow: { path: 'node_modules' },
     tsConfig: { fileName: 'tsconfig.json' },
     enhancedResolveOptions: { conditionNames: ['import', 'default'], exportsFields: ['exports'] },

@@ -1,7 +1,6 @@
 import type { PrototypePoint, PrototypePortSide } from '../contract/records/road-prototype.js';
 import type { NestedWireSegment } from '../contract/records/nested-wires.js';
-import type { Access, Terminal } from './nested-wire-access.js';
-import type { WireRegistry, Crossing } from './nested-wire-registry.js';
+import type { Access, Crossing, Terminal, WireRegistry } from './nested-wire-access.js';
 import { clear, coverPath } from './nested-wire-corridors.js';
 import type { OwnedLine } from './nested-wire-corridors.js';
 import { searchTrunk } from './nested-wire-search.js';

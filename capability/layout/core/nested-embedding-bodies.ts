@@ -1,10 +1,7 @@
 import { axes } from './prototype-road-geometry.js';
-import type {
-  RoadPrototypeScene,
-  PrototypePortLocation,
-  PrototypeBlock,
-} from '../contract/records/road-prototype.js';
-import { required } from './nested-support-input.js';
+import type { PrototypePortLocation, PrototypeBlock } from '../contract/records/road-prototype.js';
+import type { RoadPrototypeScene } from '../contract/records/road-scene.js';
+import { required } from './nested-support-graph.js';
 import { readPrototypeNodePorts } from './prototype-road-nodes.js';
 
 function sectionBounds(

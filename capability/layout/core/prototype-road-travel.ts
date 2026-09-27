@@ -1,11 +1,11 @@
 import type {
-  RoadPrototypeScene,
   PrototypeTravel,
   PrototypeTravelResult,
   PrototypeLane,
   PrototypePoint,
   PrototypeBounds,
 } from '../contract/records/road-prototype.js';
+import type { RoadPrototypeScene } from '../contract/records/road-scene.js';
 import { contains, follows, samePoint, directionVector } from './prototype-road-geometry.js';
 
 const allowed: PrototypeTravelResult = { ok: true, value: null };

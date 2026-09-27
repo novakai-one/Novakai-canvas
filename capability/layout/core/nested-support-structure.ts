@@ -7,10 +7,11 @@ import {
   equate,
   relate,
   reject,
+  required,
   type Anchor,
   type SupportGraph,
 } from './nested-support-graph.js';
-import { required, type retainSupportInput } from './nested-support-input.js';
+import type { retainSupportInput } from './nested-support-input.js';
 
 type Input = ReturnType<typeof retainSupportInput>;
 type Axis = Anchor['axis'];

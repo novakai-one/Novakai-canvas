@@ -2,12 +2,19 @@ import type {
   NestedSupportAdjustment,
   NestedSupportFootprint,
 } from '../contract/records/nested-support.js';
-import type { PrototypePoint, RoadPrototypeScene } from '../contract/records/road-prototype.js';
+import type { PrototypePoint } from '../contract/records/road-prototype.js';
+import type { RoadPrototypeScene } from '../contract/records/road-scene.js';
 import { readNestedProjectionSupports } from './nested-lane-projection.js';
 import { axes, contains } from './prototype-road-geometry.js';
 import { nestedLanePitch } from './prototype-nested-placement.js';
-import { required, type retainSupportInput } from './nested-support-input.js';
-import { anchor, reject, type Anchor, type SupportGraph } from './nested-support-graph.js';
+import type { retainSupportInput } from './nested-support-input.js';
+import {
+  anchor,
+  reject,
+  required,
+  type Anchor,
+  type SupportGraph,
+} from './nested-support-graph.js';
 import { directedRelation } from './nested-support-structure.js';
 
 type Input = ReturnType<typeof retainSupportInput>;

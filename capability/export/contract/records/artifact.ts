@@ -8,7 +8,7 @@ import type { Scene, PlacedSection, Box } from '@novakai/canvas-layout';
 import type { Paint } from '@novakai/canvas-presentation';
 import type { Diagnostic } from '../errors.js';
 import type { Scope } from './input.js';
-import type { Resource } from './bundle.js';
+import type { Resource } from './resource.js';
 import type { Page } from './pages.js';
 
 /**

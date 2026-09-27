@@ -11,8 +11,8 @@ import type {
 import type {
   PrototypeNodePort,
   PrototypeLayoutMeasure,
-  RoadPrototypeScene,
 } from '../contract/records/road-prototype.js';
+import type { RoadPrototypeScene } from '../contract/records/road-scene.js';
 import { createNestedRoadScene } from './prototype-nested-scene.js';
 import { inspectNestedWires } from './nested-wire-inspection.js';
 import { reject } from './validation/outcomes.js';

@@ -4,8 +4,7 @@ import type {
   NestedSupportSpanGrowth,
 } from '../contract/records/nested-support.js';
 import { axes } from './prototype-road-geometry.js';
-import { required } from './nested-support-input.js';
-import { reject } from './nested-support-graph.js';
+import { reject, required } from './nested-support-graph.js';
 import type { RoadContact } from './prototype-road-registry.js';
 
 interface Context {

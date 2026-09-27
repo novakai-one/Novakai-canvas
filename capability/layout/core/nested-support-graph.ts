@@ -1,9 +1,9 @@
 import { collapseSupportEqualities } from './nested-support-equalities.js';
 import type {
   NestedSupportConstraint,
-  NestedSupportFailure,
   NestedSupportVertex,
 } from '../contract/records/nested-support.js';
+import type { NestedSupportFailure } from '../contract/records/nested-support-failure.js';
 
 export interface Anchor {
   readonly key: string;
@@ -42,6 +42,16 @@ export function reject(
     required,
     available,
   });
+}
+
+/** Absence is a typed contact failure; no substitute identity is invented. */
+export function required<T>(
+  index: ReadonlyMap<string, T>,
+  key: string,
+): T {
+  const value = index.get(key);
+  if (value === undefined) return reject('missing-contact', [key]);
+  return value;
 }
 
 /** Invocation-local graph state; no positions are relaxed or materialized by Increment A. */

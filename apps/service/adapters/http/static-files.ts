@@ -2,7 +2,8 @@ import { readFile, realpath } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
-import type { StaticFile, StaticFiles } from '../../contract/records/server.js';
+import type { StaticFiles } from '../../contract/records/server.js';
+import type { StaticFile } from '../../contract/records/protocol.js';
 /** A checked real path must remain below the built root, including when an installation contains symlinks. */
 async function locate(
   root: string,

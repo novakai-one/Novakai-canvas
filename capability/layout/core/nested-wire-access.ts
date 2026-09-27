@@ -1,10 +1,16 @@
+/*
+ * Wire access records and the registry the wire router reads: a port's driveway onto its street
+ * (`Access`), a node's entry or exit terminal (`Terminal`), a road crossing (`Crossing`) and the
+ * `WireRegistry` holding them, which `nested-wire-registry.ts` builds once per scene. Pure: the
+ * lookups below only read the registry and return `undefined` for an unknown key.
+ */
 import type {
   PrototypeBlock,
+  PrototypeBounds,
   PrototypePoint,
   PrototypePortSide,
   PrototypeRoad,
 } from '../contract/records/road-prototype.js';
-import type { WireRegistry } from './nested-wire-registry.js';
 export interface Access {
   readonly portId: string;
   readonly side: PrototypePortSide;
@@ -17,6 +23,18 @@ export interface Access {
 export interface Terminal {
   readonly point: PrototypePoint;
   readonly accesses: readonly Access[];
+}
+export interface Crossing {
+  readonly roadId: string;
+  readonly at: number;
+}
+export interface WireRegistry {
+  readonly roads: ReadonlyMap<string, PrototypeRoad>;
+  readonly crossings: ReadonlyMap<string, readonly Crossing[]>;
+  readonly accesses: ReadonlyMap<string, Access>;
+  readonly terminals: ReadonlyMap<string, Terminal>;
+  /** Node bodies a route must never cross; a moved node can sit on top of a road. */
+  readonly bodies: readonly PrototypeBounds[];
 }
 export function center(block: PrototypeBlock): PrototypePoint {
   return {

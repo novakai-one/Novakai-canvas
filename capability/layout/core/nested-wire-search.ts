@@ -1,6 +1,5 @@
 import type { PrototypePoint, PrototypeRoad } from '../contract/records/road-prototype.js';
-import type { Access } from './nested-wire-access.js';
-import type { WireRegistry } from './nested-wire-registry.js';
+import type { Access, WireRegistry } from './nested-wire-access.js';
 import type { OwnedLine } from './nested-wire-corridors.js';
 import { clear } from './nested-wire-corridors.js';
 

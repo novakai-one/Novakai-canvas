@@ -1,5 +1,7 @@
 import type { NestedSceneSpec } from './nested-scene-spec.js';
-import type { RoadPrototypeScene, PrototypeRoad } from './road-prototype.js';
+import type { NestedSupportFailure } from './nested-support-failure.js';
+import type { PrototypeRoad } from './road-prototype.js';
+import type { RoadPrototypeScene } from './road-scene.js';
 
 /** A read-only query against a built reservation; callers reconstruct inputs to retry. */
 export interface NestedSupportRequest {
@@ -128,22 +130,6 @@ export interface NestedSupportLedger {
     readonly V: number;
     readonly E: number;
   };
-}
-
-/** Deterministic admission failures retain the producing identities and numeric witness. */
-export interface NestedSupportFailure {
-  readonly code: 'infeasible-embedding';
-  readonly reason:
-    | 'missing-contact'
-    | 'mismatched-contact'
-    | 'empty-interval'
-    | 'insufficient-terminal-pins'
-    | 'unsupported-support'
-    | 'cyclic-constraints'
-    | 'unroutable-reservation';
-  readonly provenance: readonly string[];
-  readonly required: readonly number[];
-  readonly available: readonly number[];
 }
 
 /** Query success means graph admission only; failures never publish partial ledgers. */

@@ -3,7 +3,7 @@
  * export or bundle can never silently lose a theme, asset, font or image.
  */
 import type { Collection, Snapshot } from '../../contract/records/artifact.js';
-import type { Resource } from '../../contract/records/bundle.js';
+import type { Resource } from '../../contract/records/resource.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
 import { success } from '../validation/outcomes.js';

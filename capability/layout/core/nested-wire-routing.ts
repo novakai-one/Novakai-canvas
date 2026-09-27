@@ -1,15 +1,14 @@
 import type { NestedSceneSpec } from '../contract/records/nested-scene-spec.js';
 import type { PrototypeNode } from '../contract/records/road-prototype.js';
-import type { WireRegistry } from './nested-wire-registry.js';
 import type {
   PrototypeBlock,
   PrototypeLayoutMeasure,
   PrototypePoint,
   PrototypePortLocation,
-  RoadPrototypeScene,
 } from '../contract/records/road-prototype.js';
+import type { RoadPrototypeScene } from '../contract/records/road-scene.js';
 import type { NestedWire, NestedWireResult } from '../contract/records/nested-wires.js';
-import type { Access, Terminal } from './nested-wire-access.js';
+import type { Access, Terminal, WireRegistry } from './nested-wire-access.js';
 import { access, gateTerminal, nodeTerminal } from './nested-wire-access.js';
 import type { Leg, LegPreference } from './nested-wire-law.js';
 import { lawLeg, lawPreference } from './nested-wire-law.js';

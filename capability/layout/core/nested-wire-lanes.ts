@@ -1,33 +1,10 @@
-import type {
-  NestedWire,
-  NestedWireLane,
-  NestedWireSegment,
-} from '../contract/records/nested-wires.js';
+import type { NestedWire, NestedWireSegment } from '../contract/records/nested-wires.js';
 import type { PrototypeRoad } from '../contract/records/road-prototype.js';
+import type { AssignedTravel, TransferChannel, Travel } from './nested-travel.js';
 import { axes } from './prototype-road-geometry.js';
 import { roadLanePitch, terminalStem } from './nested-terminal-pins.js';
 import { laneOrder } from './nested-lane-order.js';
 
-export interface Travel {
-  readonly road: PrototypeRoad;
-  readonly wireId: string;
-  readonly first: number;
-  readonly last: number;
-  readonly direction: 1 | -1;
-}
-export interface AssignedTravel extends Travel {
-  readonly lane: NestedWireLane;
-  readonly at: number;
-  readonly count: number;
-  readonly fanIndex: number;
-  readonly fanCount: number;
-  readonly pitch: number;
-  readonly transfer?: TransferChannel;
-}
-export interface TransferChannel {
-  readonly roadId: string;
-  readonly coordinates: readonly number[];
-}
 export function transferKey(
   t: AssignedTravel,
   next: AssignedTravel,

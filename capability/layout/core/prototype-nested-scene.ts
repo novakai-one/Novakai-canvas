@@ -13,10 +13,8 @@ import { routeNestedWires, resolveNestedRequests } from './nested-wire-routing.j
 import { allocateNestedLanes, type LaneAnnotation } from './nested-wire-lanes.js';
 import { capacityRoads } from './nested-road-capacity.js';
 import { projectNestedWires } from './nested-lane-projection.js';
-import type {
-  PrototypeLayoutOptions,
-  RoadPrototypeScene,
-} from '../contract/records/road-prototype.js';
+import type { PrototypeLayoutOptions } from '../contract/records/road-prototype.js';
+import type { RoadPrototypeScene } from '../contract/records/road-scene.js';
 import {
   sizeNestedSections,
   positionNestedSections,

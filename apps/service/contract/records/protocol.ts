@@ -4,7 +4,6 @@ import { z } from 'zod';
 import type { Result } from '../errors.js';
 import type { Caller, HttpAdmission, HttpMetadata } from './http.js';
 import type { Request } from './owners.js';
-import type { StaticFile } from './server.js';
 /** A transport generation prevents a retained request from silently targeting a restarted/restored owner set. */
 export const mutationEnvelope = z.strictObject({
   version: z.literal(1),
@@ -23,6 +22,13 @@ export interface CommandAdmission {
   readonly metadata: HttpMetadata;
   readonly generation: string;
   readonly ingress: Pick<HttpAdmission, 'mutation'>;
+}
+/** A file answer (static web asset or export artifact): its bytes plus response metadata. */
+export interface StaticFile {
+  readonly bytes: Uint8Array;
+  readonly mediaType: string;
+  readonly filename?: string;
+  readonly headers?: Readonly<Record<string, string>>;
 }
 /** Owner error codes remain stable in transport; consumers can retain richer owner-specific diagnostics. */
 export type WireOutcome = Result<unknown, OperationSource>;

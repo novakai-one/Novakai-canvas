@@ -3,10 +3,10 @@ import type {
   PrototypeBounds,
   PrototypeBlock,
   PrototypeRoad,
-  RoadPrototypeScene,
   PrototypeLayoutOptions,
   PrototypeLayoutMeasure,
 } from '../contract/records/road-prototype.js';
+import type { RoadPrototypeScene } from '../contract/records/road-scene.js';
 import { roadNetwork } from './prototype-road-network.js';
 import {
   placePrototypeNode,

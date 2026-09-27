@@ -3,7 +3,8 @@
  * the owners' resource check. Nothing is trusted or admitted until every step has passed.
  */
 import { bundleSchema } from '../../contract/records/bundle.js';
-import type { Bundle, BundleInspection, Resource } from '../../contract/records/bundle.js';
+import type { Bundle, BundleInspection } from '../../contract/records/bundle.js';
+import type { Resource } from '../../contract/records/resource.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
 import type { InspectionDependencies } from '../../contract/types.js';

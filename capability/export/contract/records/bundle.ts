@@ -10,29 +10,10 @@
 import { z } from 'zod';
 import { digest, identity } from '../brands.js';
 import { manualSchema } from './manual.js';
+import { resourceKind } from './resource.js';
+import type { Resource } from './resource.js';
 import type { Identity, Collection } from './artifact.js';
 import type { Diagnostic } from '../errors.js';
-
-/** The kind of a transferred resource: `asset`, `preset` or `font`. */
-export const resourceKind = z.enum(['asset', 'preset', 'font']);
-
-/** One transferred blob with its identity and the owner's metadata. */
-export interface Resource {
-  /** Which owner checks it: `asset`, `preset` or `font`. */
-  readonly kind: z.infer<typeof resourceKind>;
-
-  /** SHA-256 of `bytes`, as 64 lowercase hex characters (no `sha256:` prefix). */
-  readonly digest: string;
-
-  /** The blob's media type, for example `image/png` or `font/woff2`. */
-  readonly mediaType: string;
-
-  /** The blob's exact bytes. */
-  readonly bytes: Uint8Array;
-
-  /** The owner's metadata, a JSON record. The owner validates it, not Export. */
-  readonly metadata: Readonly<Record<string, unknown>>;
-}
 
 /**
  * A resource as stored in the bundle file. `base64` is limited to 28 Mi characters (string

@@ -1,5 +1,5 @@
 import type { Result } from '../errors.js';
-import type { Resource } from '../records/bundle.js';
+import type { Resource } from '../records/resource.js';
 
 /**
  * The owning capabilities' check of transferred resources (assets, presets, fonts), supplied by

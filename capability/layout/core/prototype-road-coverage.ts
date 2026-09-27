@@ -1,8 +1,5 @@
-import type {
-  RoadPrototypeScene,
-  PrototypeBounds,
-  PrototypeRoadCoverage,
-} from '../contract/records/road-prototype.js';
+import type { PrototypeBounds, PrototypeRoadCoverage } from '../contract/records/road-prototype.js';
+import type { RoadPrototypeScene } from '../contract/records/road-scene.js';
 import { contains } from './prototype-road-geometry.js';
 
 interface Cell {

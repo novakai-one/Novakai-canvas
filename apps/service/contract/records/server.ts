@@ -3,7 +3,7 @@ import type { HttpAdmission, HttpSecurity } from './http.js';
 import type { ApiRouter, CommandDecoder } from './protocol.js';
 import type { Result } from '../errors.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { WireOutcome } from './protocol.js';
+import type { StaticFile, WireOutcome } from './protocol.js';
 import type { Scope } from '@novakai/canvas-language';
 /** Body readers expose only the iterator control needed to preserve a rejected native socket. */
 export interface BodyStream {
@@ -41,12 +41,6 @@ export interface HttpIo {
     response: ServerResponse,
     file: StaticFile,
   ): void;
-}
-export interface StaticFile {
-  readonly bytes: Uint8Array;
-  readonly mediaType: string;
-  readonly filename?: string;
-  readonly headers?: Readonly<Record<string, string>>;
 }
 export interface StaticFiles {
   read(path: string): Promise<Result<StaticFile>>;

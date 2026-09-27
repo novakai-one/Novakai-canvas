@@ -5,8 +5,7 @@ import type {
 } from '../contract/records/nested-support.js';
 import { readNestedProjectionSupports } from './nested-lane-projection.js';
 import { axes } from './prototype-road-geometry.js';
-import { required } from './nested-support-input.js';
-import { reject } from './nested-support-graph.js';
+import { reject, required } from './nested-support-graph.js';
 
 type Supports = ReturnType<typeof readNestedProjectionSupports>;
 type Join = Supports[number]['joins'][number];

@@ -3,8 +3,8 @@ import type { HttpMetadata } from '../../contract/records/http.js';
 import { httpBodyLimit } from '../../contract/records/http.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
-import type { BodyStream, HttpIo, StaticFile } from '../../contract/records/server.js';
-import type { WireOutcome } from '../../contract/records/protocol.js';
+import type { BodyStream, HttpIo } from '../../contract/records/server.js';
+import type { StaticFile, WireOutcome } from '../../contract/records/protocol.js';
 /** Ambiguous duplicated headers are rejected by returning a value that cannot pass exact admission. */
 function header(
   request: IncomingMessage,

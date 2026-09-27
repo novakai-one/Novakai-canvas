@@ -1,6 +1,6 @@
 import type { NestedWire } from '../contract/records/nested-wires.js';
 import type { PrototypePoint } from '../contract/records/road-prototype.js';
-import type { Travel } from './nested-wire-lanes.js';
+import type { Travel } from './nested-travel.js';
 import { reject } from './validation/outcomes.js';
 
 interface Step {

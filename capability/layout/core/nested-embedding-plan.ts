@@ -1,9 +1,8 @@
 import type { NestedWire, NestedWireSegment } from '../contract/records/nested-wires.js';
 import type { PrototypeRoad, PrototypePortLocation } from '../contract/records/road-prototype.js';
-import type { AssignedTravel } from './nested-wire-lanes.js';
+import type { AssignedTravel } from './nested-travel.js';
 import { axes } from './prototype-road-geometry.js';
-import { required } from './nested-support-input.js';
-import { reject } from './nested-support-graph.js';
+import { reject, required } from './nested-support-graph.js';
 
 function assigned(
   travel: AssignedTravel,

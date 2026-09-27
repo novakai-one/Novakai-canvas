@@ -5,8 +5,8 @@ import type {
   PrototypePoint,
   PrototypePortLocation,
   PrototypeRoad,
-  RoadPrototypeScene,
 } from '../contract/records/road-prototype.js';
+import type { RoadPrototypeScene } from '../contract/records/road-scene.js';
 
 /** Independent invariant observations, not the router's own feasibility predicates. */
 export interface NestedWireInspection {

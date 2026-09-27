@@ -1,28 +1,15 @@
 import type {
-  PrototypeBounds,
   PrototypeLayoutMeasure,
   PrototypePoint,
   PrototypePortLocation,
   PrototypeRoad,
-  RoadPrototypeScene,
 } from '../contract/records/road-prototype.js';
-import type { Access, Terminal } from './nested-wire-access.js';
+import type { RoadPrototypeScene } from '../contract/records/road-scene.js';
+import type { Access, Crossing, Terminal, WireRegistry } from './nested-wire-access.js';
 import { center } from './nested-wire-access.js';
 import type { RoadContact } from './prototype-road-registry.js';
 import { roadRegistry } from './prototype-road-registry.js';
 
-export interface Crossing {
-  readonly roadId: string;
-  readonly at: number;
-}
-export interface WireRegistry {
-  readonly roads: ReadonlyMap<string, PrototypeRoad>;
-  readonly crossings: ReadonlyMap<string, readonly Crossing[]>;
-  readonly accesses: ReadonlyMap<string, Access>;
-  readonly terminals: ReadonlyMap<string, Terminal>;
-  /** Node bodies a route must never cross; a moved node can sit on top of a road. */
-  readonly bodies: readonly PrototypeBounds[];
-}
 const inverse = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' } as const;
 function contactAccess(
   scene: RoadPrototypeScene,

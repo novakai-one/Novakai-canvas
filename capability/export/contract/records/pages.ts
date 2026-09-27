@@ -2,7 +2,7 @@
  * One planned PDF page. Page planning creates the list (PDF only; other formats get an empty
  * list), the PDF encoder draws it, and the finished artifact returns it to the caller.
  */
-import type { Box } from './artifact.js';
+import type { Box } from '@novakai/canvas-layout';
 
 /**
  * One printed page: which part of which section it shows, and how it is placed on paper.

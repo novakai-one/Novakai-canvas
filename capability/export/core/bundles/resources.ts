@@ -3,7 +3,7 @@
  * checks first, then the resource owners' check, then a check that the owners' returned list
  * matches the input list as it is after the owners' call.
  */
-import type { Resource } from '../../contract/records/bundle.js';
+import type { Resource } from '../../contract/records/resource.js';
 import type { InspectionDependencies } from '../../contract/types.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';

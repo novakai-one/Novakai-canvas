@@ -5,7 +5,7 @@ import type {
   PrototypeRoad,
   PrototypePortLocation,
 } from '../contract/records/road-prototype.js';
-import type { AssignedTravel } from './nested-wire-lanes.js';
+import type { AssignedTravel } from './nested-travel.js';
 import { needsMedianBridge, terminalFanDistance } from './nested-wire-lanes.js';
 import { axes, contains, samePoint } from './prototype-road-geometry.js';
 import { reject } from './nested-support-graph.js';
