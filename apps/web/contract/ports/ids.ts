@@ -17,7 +17,10 @@ import type {
   SectionId,
 } from '../brands.js';
 
-/** New IDs, each checked with its owner's schema. Every method fails with `id-unavailable`. */
+/**
+ * New IDs, each built from one UUID from `random` and checked with its owner's schema. Every
+ * method either returns a new ID or fails with `id-unavailable`. Uniqueness comes from `random`.
+ */
 export interface IdSource {
   /** A new Authoring request ID: `<uuid>`. */
   requestId(): Result<RequestId>;

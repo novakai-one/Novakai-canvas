@@ -1,9 +1,9 @@
 /*
- * The ID source: builds each new ID from the browser's random text and checks it with its owner's
- * schema (Authoring the request ID, Library the folder ID, Model the rest) using `safeParse`.
- * Pure apart from the random text supplied at composition; nothing is written. Every method
- * answers a `Result` and never throws; on `id-unavailable` the caller reports it and keeps its
- * draft.
+ * The ID source: reads one UUID from the browser's random text per ID, prefixes it with the ID's
+ * kind and checks the result with its owner's schema (Authoring the request ID, Library the folder
+ * ID, Model the rest) using `safeParse`. It checks shape only; uniqueness comes from `random`.
+ * Pure apart from calling `random`; nothing is written. Every method answers a `Result` and never
+ * throws, even when `random` throws; on `id-unavailable` the caller reports it and keeps its draft.
  */
 import type { z } from 'zod';
 import { requestId } from '@novakai/canvas-authoring';
@@ -26,14 +26,15 @@ import { diagnostic } from '../../contract/errors.js';
 type IdSchema = z.ZodType<string, string>;
 
 /**
- * The ID source over `random`. Each call reads fresh random text and prefixes it with the ID's
- * kind (`<uuid>` for a request, `collection-<uuid>`, `folder-<uuid>` and so on; the text of each is
- * on `IdSource`). Every method fails with `id-unavailable` when the owner's schema rejects the text.
+ * The ID source over `random`. Each call reads one UUID and prefixes it with the ID's kind
+ * (`<uuid>` for a request, `collection-<uuid>`, `folder-<uuid>` and so on; the text of each is on
+ * `IdSource`). Every method either returns a new ID or fails with `id-unavailable`: when `random`
+ * throws, when its text is not a UUID, or when the owner's schema rejects the ID.
  */
 export function createIdSource(random: BrowserGlobals['random']): IdSource {
   const folderId = folderIdSchema();
   const mint = <S extends IdSchema>(schema: S, prefix: string): Result<z.output<S>> =>
-    checkedId(schema, `${prefix}${random()}`);
+    checkedId(schema, prefix, randomUuid(random));
   return {
     requestId: () => mint(requestId, ''),
     collectionId: () => mint(collectionId, 'collection-'),
@@ -47,17 +48,44 @@ export function createIdSource(random: BrowserGlobals['random']): IdSource {
   };
 }
 
-/** Checks `text` with the owner's `schema`. Fails with `id-unavailable` when it is rejected. */
+/**
+ * Checks `prefix` + `uuid` with the owner's `schema`. Fails with `id-unavailable` when there is
+ * no UUID or the schema rejects the text.
+ */
 function checkedId<S extends IdSchema>(
   schema: S,
-  text: string,
+  prefix: string,
+  uuid: Result<string>,
 ): Result<z.output<S>> {
-  const checked = schema.safeParse(text);
+  if (!uuid.ok) return uuid;
+  const checked = schema.safeParse(`${prefix}${uuid.value}`);
   if (!checked.success) return { ok: false, error: idUnavailable };
   return { ok: true, value: checked.data };
 }
 
-/** The one failure: the random text did not make a valid ID. Nothing was sent or stored. */
+/**
+ * Calls `random` once. Fails with `id-unavailable` when it throws (`crypto.randomUUID` is missing
+ * outside a secure context) or its text is not a UUID (`8-4-4-4-12` hex digits).
+ */
+function randomUuid(random: BrowserGlobals['random']): Result<string> {
+  const text = readRandom(random);
+  if (text === undefined || !uuidShape.test(text)) return { ok: false, error: idUnavailable };
+  return { ok: true, value: text };
+}
+
+/** Calls `random` once. Answers `undefined` when it throws. */
+function readRandom(random: BrowserGlobals['random']): string | undefined {
+  try {
+    return random();
+  } catch {
+    return undefined;
+  }
+}
+
+/** A UUID's text: 8-4-4-4-12 hex digits, either case. */
+const uuidShape = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i;
+
+/** The one failure: no valid ID could be made. Nothing was sent or stored. */
 const idUnavailable = Object.freeze(
   diagnostic(
     'id-unavailable',
