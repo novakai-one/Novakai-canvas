@@ -25,7 +25,8 @@ import type {
   ServiceCommand,
   ServiceOptions,
 } from './records/command.js';
-import type { HeadlessFailure, HeadlessOptions, HeadlessReport } from './records/headless.js';
+import type { RenderReport, RenderRequest } from './records/render.js';
+import type { RenderFailure } from './records/render-failure.js';
 import { failure, rejected, success } from './errors.js';
 import { agentToken, requestId, type AgentToken, type RequestId } from './brands.js';
 /** Bind the actual CLI to protected credentials and real HTTP; failed setup cannot submit a diagram mutation. */
@@ -118,8 +119,8 @@ async function runProfile(command: ProfileCommand): Promise<Result<string>> {
  * lazily, like the headless adapter.
  */
 export async function runHeadless(
-  options: HeadlessOptions,
-): Promise<Result<HeadlessReport, HeadlessFailure | LocalFailure>> {
+  request: RenderRequest,
+): Promise<Result<RenderReport, RenderFailure | LocalFailure>> {
   try {
     const [adapter, service, temp, files, raster] = await Promise.all([
       import('../adapters/edge/headless.js'),
@@ -128,12 +129,12 @@ export async function runHeadless(
       import('../adapters/render/render-files.js'),
       import('../adapters/render/raster.js'),
     ]);
-    return adapter.renderHeadless(options, {
+    return adapter.renderHeadless(request, {
       service: await service.createHeadlessBindings(),
       resources: createResourceReader(),
       readTheme: readThemeSource,
       temp: temp.createTempAssets(),
-      files: { ...files.createRenderFiles(options), ...raster.createRaster(options.root) },
+      files: { ...files.createRenderFiles(request), ...raster.createRaster(request.root) },
     });
   } catch {
     return failure({

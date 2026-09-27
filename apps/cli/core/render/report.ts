@@ -1,17 +1,17 @@
 /*
- * The headless render report: written files, the collection's theme, scene inspection counts
+ * The render report: written files, the collection's theme, scene inspection counts
  * and the admitted theme digests. Pure assembly from the document the owners produced.
  */
 import type { Catalog, Collection, RenderDocument } from '../../contract/records/foreign.js';
-import type { HeadlessReport } from '../../contract/records/headless.js';
+import type { RenderReport } from '../../contract/records/render.js';
 
 /** The report of one completed render. */
 export function renderReport(
-  files: HeadlessReport['files'],
+  files: RenderReport['files'],
   collection: Collection,
   document: RenderDocument,
   catalog: Catalog,
-): HeadlessReport {
+): RenderReport {
   return {
     files,
     theme: collection.theme,
@@ -21,7 +21,7 @@ export function renderReport(
 }
 
 /** Validity is asserted by the producing owners; warnings are counted by code. */
-function sceneInspection(document: RenderDocument): HeadlessReport['inspection'] {
+function sceneInspection(document: RenderDocument): RenderReport['inspection'] {
   return {
     valid: true,
     diagnostics: [],
@@ -35,7 +35,7 @@ function sceneInspection(document: RenderDocument): HeadlessReport['inspection']
 }
 
 /** The admitted theme ids and digests. */
-function themeDigests(catalog: Catalog): HeadlessReport['digests'] {
+function themeDigests(catalog: Catalog): RenderReport['digests'] {
   return catalog
     .filter((preset) => preset.kind === 'theme')
     .map((preset) => ({ id: preset.id, digest: preset.digest }));

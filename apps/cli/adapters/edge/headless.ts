@@ -4,27 +4,22 @@
  * rules live in core/render behind contract/api.js, capability wiring in contract/render.js and
  * the Export stage in contract/render-export.js; file I/O, the temporary asset store and raster
  * start-up are injected (adapters/render/). This adapter owns the owner sequence and the
- * RenderFault boundary: accepted() throws, renderHeadless converts the fault to a typed failure,
- * and the temporary directory is always removed.
+ * RenderAbort boundary: accepted() throws, renderHeadless converts it to a typed failure, and the
+ * temporary directory is always removed.
  */
 import { z } from 'zod';
 import type { Assets } from '@novakai/canvas-assets';
 import type { Catalog } from '@novakai/canvas-templates';
 import { validate, type Collection } from '@novakai/canvas-model';
-import {
-  headlessFault,
-  type HeadlessFailure,
-  type HeadlessOptions,
-  type HeadlessReport,
-  type ProviderFault,
-} from '../../contract/records/headless.js';
-import { filePath, type AssetDigest, type FilePath } from '../../contract/brands.js';
+import type { RenderReport, RenderRequest } from '../../contract/records/render.js';
+import type { ProviderFault, RenderFailure } from '../../contract/records/render-failure.js';
+import type { AssetDigest, CollectionName, FilePath } from '../../contract/brands.js';
 import type { SourceFile } from '../../contract/records/source-file.js';
 import type { HeadlessOwners, TempDirectory } from '../../contract/ports/render.js';
 import type { Result } from '../../contract/errors.js';
 import type { ResourceRequest } from '../../contract/records/foreign.js';
 import {
-  RenderFault,
+  RenderAbort,
   accepted,
   assetAttribution,
   evidence,
@@ -38,7 +33,6 @@ import {
   pinResources,
   renderJob,
   renderSnapshot,
-  themeSelection,
   type Environment,
 } from '../../contract/render.js';
 
@@ -51,12 +45,12 @@ import {
  * that directory is not a `render-failed` value: it escapes as an Error with the OS message.
  */
 export async function renderHeadless(
-  options: HeadlessOptions,
+  request: RenderRequest,
   owners: HeadlessOwners,
-): Promise<Result<HeadlessReport, HeadlessFailure>> {
+): Promise<Result<RenderReport, RenderFailure>> {
   const temp = escaped(await owners.temp.create());
   try {
-    return { ok: true, value: await render(options, owners, temp) };
+    return { ok: true, value: await render(request, owners, temp) };
   } catch (error) {
     return {
       ok: false,
@@ -84,13 +78,13 @@ function escaped<T>(result: Result<T, ProviderFault>): T {
 
 /** Owner sequence: admission, lowering, projection, layout, export; assets always close. */
 async function render(
-  options: HeadlessOptions,
+  request: RenderRequest,
   owners: HeadlessOwners,
   temp: TempDirectory,
-): Promise<HeadlessReport> {
+): Promise<RenderReport> {
   const assets = accepted(temp.openAssets());
   try {
-    return await renderEnvironment(options, owners, await environment(options, owners, assets));
+    return await renderEnvironment(request, owners, await environment(request, owners, assets));
   } finally {
     accepted(assets.close());
   }
@@ -98,22 +92,22 @@ async function render(
 
 /** One prepared environment drives the whole render. */
 async function renderEnvironment(
-  options: HeadlessOptions,
+  request: RenderRequest,
   owners: HeadlessOwners,
   env: Environment,
-): Promise<HeadlessReport> {
-  const catalog = await themes(options, env, owners);
-  const collection = await input(options, env, catalog, owners);
-  const job = renderJob(options, owners, env, catalog, collection);
+): Promise<RenderReport> {
+  const catalog = await themes(request, env, owners);
+  const collection = await input(request, env, catalog, owners);
+  const job = renderJob(request, owners, env, catalog, collection);
   const document = accepted(await owners.service.produceDiagram(job, new AbortController().signal));
   const snapshot = renderSnapshot(collection, document, catalog, env);
-  const files = await exportSections(options, owners.files, snapshot, document, env, catalog);
+  const files = await exportSections(request, owners.files, snapshot, document, env, catalog);
   return renderReport(files, collection, document, catalog);
 }
 
 /** Shipped themes, then the --theme file, follow the same admission lifecycle as user files. */
 async function themes(
-  options: HeadlessOptions,
+  request: RenderRequest,
   env: Environment,
   owners: HeadlessOwners,
 ): Promise<Catalog> {
@@ -122,8 +116,8 @@ async function themes(
     async (prior, file) => admitTheme(file, await prior, env, owners),
     Promise.resolve(env.installation.presets),
   );
-  if (!options.themeFile) return catalog;
-  return admitTheme(options.themeFile, catalog, env, owners);
+  if (request.themeFile === undefined) return catalog;
+  return admitTheme(request.themeFile, catalog, env, owners);
 }
 
 /** Admitted theme files reuse the service preparation path and actual font asset descriptors. */
@@ -161,13 +155,13 @@ async function admitResource(
 
 /** Override an ephemeral validated copy; never write or mutate the source collection or its pin. */
 async function input(
-  options: HeadlessOptions,
+  request: RenderRequest,
   env: Environment,
   catalog: Catalog,
   owners: HeadlessOwners,
 ): Promise<Collection> {
-  const originalSource = await collectionSource(options, env, catalog, owners);
-  const source = await overrideSource(originalSource, options, owners, env);
+  const originalSource = await collectionSource(request, env, catalog, owners);
+  const source = await overrideSource(originalSource, request, owners, env);
   const pins = pinResources(catalog);
   const assets = await sourceAssets(source, env, owners, pins.themes.paper);
   const bindings = pinResources(catalog, assets);
@@ -179,62 +173,66 @@ async function input(
       resources: bindings,
     }),
   ).collection;
-  const theme = (await selectedTheme(options, owners, original.theme.id)) ?? original.theme.id;
+  const theme = (await selectedTheme(request, owners, original.theme.id)) ?? original.theme.id;
   const pin = bindings.themes[theme];
-  if (!pin) throw new RenderFault(headlessFault.parse({ code: 'missing-theme', theme }));
+  if (!pin) throw new RenderAbort({ code: 'missing-theme', theme });
   return accepted(validate({ ...original, theme: pin }));
 }
 
-/** A recipe id, a .canvas path or a bare collection id selects the source to render. */
+/** A `.canvas` file is read as given; a name selects a recipe, then a shipped collection. */
 async function collectionSource(
-  options: HeadlessOptions,
+  request: RenderRequest,
   env: Environment,
   catalog: Catalog,
   owners: HeadlessOwners,
 ): Promise<SourceFile> {
-  const recipe = catalog.find(
-    (preset) => preset.kind === 'recipe' && preset.id === String(options.collection),
-  );
+  if (request.collection.kind === 'file')
+    return accepted(await owners.files.read(request.collection.path));
+  return namedSource(request.collection.name, env, catalog, owners);
+}
+
+/** A recipe ID selects the recipe's shipped source; any other name, a shipped collection ID. */
+async function namedSource(
+  name: CollectionName,
+  env: Environment,
+  catalog: Catalog,
+  owners: HeadlessOwners,
+): Promise<SourceFile> {
+  const recipe = catalog.find((preset) => preset.kind === 'recipe' && preset.id === String(name));
   if (recipe?.kind === 'recipe')
     return {
       source: recipe.payload.source,
       file: owners.files.recipeFile(recipe.payload.family),
     };
-  if (options.collection.endsWith('.canvas'))
-    return accepted(await owners.files.read(filePath.parse(options.collection)));
-  return sourceFromId(options, env, owners);
+  return sourceFromId(name, env, owners);
 }
 
 /** Bare collection ids resolve from shipped semantic sources; filesystem paths stay explicit. */
 async function sourceFromId(
-  options: HeadlessOptions,
+  name: CollectionName,
   env: Environment,
   owners: HeadlessOwners,
 ): Promise<SourceFile> {
   const sources = accepted(await owners.files.shippedCollections());
   const matches = sources.filter((source) =>
-    sourceMatches(source.source, options.collection, env.language.parse),
+    sourceMatches(source.source, name, env.language.parse),
   );
   const [match] = matches;
   if (matches.length !== 1 || match === undefined)
-    throw new RenderFault({
-      code: 'collection-selection',
-      id: options.collection,
-      matches: matches.length,
-    });
+    throw new RenderAbort({ code: 'collection-selection', id: name, matches: matches.length });
   return match;
 }
 
-/** A file selector names the prepared theme; --theme takes precedence when both are supplied. */
+/** A theme file names its own `@id`; --theme takes precedence when both are supplied. */
 async function selectedTheme(
-  options: HeadlessOptions,
+  request: RenderRequest,
   owners: HeadlessOwners,
   original: Collection['theme']['id'] | null,
 ): Promise<Collection['theme']['id'] | null> {
-  if (options.theme) return options.theme;
-  if (!options.themeFile) return original;
-  const theme = accepted(await owners.files.read(options.themeFile));
-  return themeSelection(accepted(owners.readTheme(theme.source)).admission);
+  if (request.theme !== undefined) return request.theme;
+  if (request.themeFile === undefined) return original;
+  const theme = accepted(await owners.files.read(request.themeFile));
+  return accepted(owners.readTheme(theme.source)).admission.id;
 }
 
 /** Source media uses normal confined reads, normalized bytes and Model-owned metadata validation. */
@@ -276,11 +274,11 @@ async function sourceAssets(
 /** A render-only source copy replaces only the parsed theme value, even over unavailable pins. */
 async function overrideSource(
   source: SourceFile,
-  options: HeadlessOptions,
+  request: RenderRequest,
   owners: HeadlessOwners,
   env: Environment,
 ): Promise<SourceFile> {
-  const selected = await selectedTheme(options, owners, null);
+  const selected = await selectedTheme(request, owners, null);
   if (selected === null) return source;
   return { ...source, source: sourceWithTheme(source.source, selected, env.language.parse) };
 }

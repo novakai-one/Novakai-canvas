@@ -14,11 +14,11 @@ import {
   type RenderingJob,
 } from '@novakai/canvas-service';
 import { composeDesignSystem, type DesignSystem } from '@novakai/canvas-design-system';
-import { composeTemplates, themeInput, type Templates } from '@novakai/canvas-templates';
+import { composeTemplates, type Templates } from '@novakai/canvas-templates';
 import { validateLibrarySnapshot, type LibrarySnapshot } from '@novakai/canvas-library';
 import type { Snapshot } from '@novakai/canvas-export';
-import { RenderFault, accepted, retainedResources } from './api.js';
-import type { HeadlessOptions } from './records/headless.js';
+import { accepted, retainedResources } from './api.js';
+import type { RenderRequest } from './records/render.js';
 import type { HeadlessOwners } from './ports/render.js';
 import type {
   Assets,
@@ -62,18 +62,6 @@ export function pinResources(
   };
 }
 
-/** The theme id of a validated admission envelope; an invalid envelope terminates the render. */
-export function themeSelection(admission: unknown): Collection['theme']['id'] {
-  const input = themeInput.safeParse(admission);
-  if (!input.success)
-    throw new RenderFault({
-      code: 'invalid-theme',
-      message: 'Invalid theme admission envelope',
-      recovery: 'Correct the theme file and retry.',
-    });
-  return input.data.id;
-}
-
 /** The documents port Export reads, prints and parses through for one render. */
 export function exportDocuments(
   language: Pick<Language, 'lower' | 'print'>,
@@ -102,14 +90,14 @@ export function exportDocuments(
 
 /** One prepared language and token environment drives every section render of one render. */
 export async function environment(
-  options: HeadlessOptions,
+  request: RenderRequest,
   owners: HeadlessOwners,
   assets: Pick<Assets, 'stage' | 'resolve'>,
 ): Promise<Environment> {
   const installation = accepted(
     await prepareInstallation(
-      join(options.root, 'resources'),
-      join(options.root, 'capability/design-system'),
+      join(request.root, 'resources'),
+      join(request.root, 'capability/design-system'),
       assets,
     ),
   );
@@ -129,7 +117,7 @@ export async function environment(
 
 /** The render job over one collection, the admitted catalog and an empty headless library. */
 export function renderJob(
-  options: HeadlessOptions,
+  request: RenderRequest,
   owners: HeadlessOwners,
   env: Environment,
   catalog: Catalog,
@@ -138,7 +126,7 @@ export function renderJob(
   const jobs = owners.service.createRenderJobs({
     ...env,
     sources: env.installation.tokens,
-    wasmResource: join(options.root, 'resources/vendor/layout/libavoid.wasm'),
+    wasmResource: join(request.root, 'resources/vendor/layout/libavoid.wasm'),
   });
   return accepted(
     jobs.create(

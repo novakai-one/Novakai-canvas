@@ -1,8 +1,8 @@
 import { parseArgs } from 'node:util';
 import { resolve } from 'node:path';
-import { runHeadless, headlessOptions, type HeadlessOptions } from '../contract/index.js';
+import { runHeadless, renderRequest, type RenderRequest } from '../contract/index.js';
 /** CLI owns malformed arguments and terminal display; render failures retain owner diagnostics. */
-function options(args: readonly string[]): HeadlessOptions {
+function options(args: readonly string[]): RenderRequest {
   const { values } = parseArgs({
     args: args.filter((arg) => arg !== '--'),
     options: {
@@ -14,7 +14,7 @@ function options(args: readonly string[]): HeadlessOptions {
       labels: { type: 'boolean', default: false },
     },
   });
-  return headlessOptions.parse({
+  return renderRequest.parse({
     collection: required(values.collection, '--collection'),
     theme: values.theme,
     themeFile: values['theme-file'],
@@ -24,7 +24,7 @@ function options(args: readonly string[]): HeadlessOptions {
     root: new URL('../../../', import.meta.url).pathname,
   });
 }
-/** Raw argv text is guarded for presence here and branded by headlessOptions; required arguments fail before any temporary asset store is created; main prints usage and permits retry. */
+/** Raw argv text is guarded for presence here and branded by renderRequest; required arguments fail before any temporary asset store is created; main prints usage and permits retry. */
 function required(
   value: string | undefined,
   name: string,

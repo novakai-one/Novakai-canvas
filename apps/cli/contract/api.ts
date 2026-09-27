@@ -14,7 +14,7 @@ export { readThemeSource } from '../core/themes/grammar.js';
 
 export { formatFailure } from '../core/diagnostics/format.js';
 
-export { RenderFault, accepted, evidence } from '../core/render/faults.js';
+export { RenderAbort, accepted, evidence } from '../core/render/faults.js';
 
 export { retainedResources, resourceInspector } from '../core/render/snapshot.js';
 

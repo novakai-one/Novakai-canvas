@@ -4,21 +4,21 @@
  * adapters in adapters/render/ implement TempAssets and RenderFiles; compose binds them. Every
  * method returns its failure as a value; the headless render decides what each one means.
  */
-import type { createHeadlessBindings } from '@novakai/canvas-service';
 import type { AssetError, Assets } from '@novakai/canvas-assets';
 import type { Diagnostic as ExportDiagnostic } from '@novakai/canvas-export';
 import type { ResourceReader } from './resource-reader.js';
 import type { ThemeSource } from '../records/theme-source.js';
-import type { ProviderFault } from '../records/headless.js';
+import type { ProviderFault } from '../records/render-failure.js';
 import type { SourceFile } from '../records/source-file.js';
-import type { RecipeFamily } from '../records/foreign.js';
+import type { HeadlessBindings, RecipeFamily } from '../records/foreign.js';
 import type { FilePath, SectionId } from '../brands.js';
 import type { Result } from '../errors.js';
 
 /** Everything compose injects into one headless render. */
 export interface HeadlessOwners {
   readonly resources: ResourceReader;
-  readonly service: Awaited<ReturnType<typeof createHeadlessBindings>>;
+  /** Theme preparation, preset codecs, render jobs and the diagram producer. */
+  readonly service: HeadlessBindings;
   /** The theme grammar. Fails with `invalid-theme` or `duplicate-token`. */
   readTheme(source: string): Result<ThemeSource>;
   readonly temp: TempAssets;

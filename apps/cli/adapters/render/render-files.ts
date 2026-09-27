@@ -6,18 +6,15 @@
  */
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import {
-  nativeFault,
-  type HeadlessOptions,
-  type ProviderFault,
-} from '../../contract/records/headless.js';
+import { nativeFault, type ProviderFault } from '../../contract/records/render-failure.js';
+import type { RenderRequest } from '../../contract/records/render.js';
 import { filePath, type FilePath, type SectionId } from '../../contract/brands.js';
 import type { SourceFile } from '../../contract/records/source-file.js';
 import type { RenderFiles } from '../../contract/ports/render.js';
 import type { Result } from '../../contract/errors.js';
 
 /** Where one render reads shipped files and writes its sections. */
-export type RenderTarget = Pick<HeadlessOptions, 'root' | 'out' | 'format'>;
+export type RenderTarget = Pick<RenderRequest, 'root' | 'out' | 'format'>;
 
 /** Build the render file adapter for one render. Raster start-up is bound separately. */
 export function createRenderFiles(target: RenderTarget): Omit<RenderFiles, 'prepareRaster'> {
