@@ -1,7 +1,8 @@
 /*
  * The render abort boundary: owner failures stay structured until the CLI prints them, and no
  * partial render is reported as success. accepted() throws the typed RenderAbort; evidence()
- * converts whatever arrives at the entry point. Shared by core/render and the edge adapter.
+ * converts whatever arrives at the entry point. Used only by the headless adapter and the render
+ * wiring in contract/; the render rules in core/render return Results and never throw.
  */
 import { nativeFault, type RenderEvidence } from '../../contract/records/render-failure.js';
 import type { Result } from '../../contract/errors.js';

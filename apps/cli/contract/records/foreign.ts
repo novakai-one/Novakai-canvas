@@ -14,9 +14,14 @@ export type {
   Span,
 } from '@novakai/canvas-language';
 export type { InspectionReport, RenderDocument } from '@novakai/canvas-service';
-export type { Assets, StageInput, SupportedMedia } from '@novakai/canvas-assets';
+export type { Assets, StageInput, StoredBlob, SupportedMedia } from '@novakai/canvas-assets';
 export type { Admission, Catalog, ExpansionRequest, ThemePreset } from '@novakai/canvas-templates';
-export type { Documents, Resource, Resources } from '@novakai/canvas-export';
+export type {
+  Documents,
+  Resource,
+  Resources,
+  Snapshot as ExportSnapshot,
+} from '@novakai/canvas-export';
 /** Owner records: CLI core imports only these local aliases. */
 export type {
   Snapshot,

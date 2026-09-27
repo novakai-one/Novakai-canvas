@@ -10,22 +10,18 @@ export { usage } from '../core/commands/help.js';
 
 export { parseCommand } from '../core/commands/parse.js';
 
-export { readThemeSource } from '../core/themes/grammar.js';
-
 export { formatFailure } from '../core/diagnostics/format.js';
 
 export { parseRenderChoice } from '../core/render/request.js';
 
-export { RenderAbort, accepted, evidence } from '../core/render/faults.js';
+export { accepted, evidence } from '../core/render/faults.js';
 
-export { retainedResources, resourceInspector } from '../core/render/snapshot.js';
+export { admitThemes } from '../core/render/themes.js';
 
-export { sourceMatches, sourceWithTheme } from '../core/render/source-theme.js';
+export { renderCollection } from '../core/render/collection.js';
 
-export { declaredResource } from '../core/resources/stage.js';
+export { pinResources } from '../core/render/pins.js';
 
-export { altText, credit } from '../core/resources/provenance.js';
-
-export { pinOf } from '../core/resources/digests.js';
+export { renderSnapshot, resourceInspector } from '../core/render/snapshot.js';
 
 export { renderReport } from '../core/render/report.js';

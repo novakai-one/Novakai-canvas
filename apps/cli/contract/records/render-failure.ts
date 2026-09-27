@@ -1,18 +1,14 @@
 /*
  * render:png's failure contract: the faults the render finds itself, the evidence a failure can
- * carry, the `render-failed` record printed as JSON, and nativeFault, which turns a thrown native
- * error into `provider-failed` evidence. Pure. The render adapters catch their own native throws
- * and call nativeFault; the caller corrects the named input or resource and runs render:png again.
+ * carry, the `render-failed` record printed as JSON, faulted, which returns a fault as a failed
+ * Result, and nativeFault, which turns a thrown native error into `provider-failed` evidence. Pure.
+ * The render adapters catch their own native throws and call nativeFault; the caller corrects the
+ * named input or resource and runs render:png again.
  */
-import type { CliFailure } from '../errors.js';
+import type { CliFailure, Result } from '../errors.js';
 import type { Collection, FailureSource } from './foreign.js';
-import {
-  filePath,
-  type CollectionName,
-  type FilePath,
-  type PresetId,
-  type ThemeName,
-} from '../brands.js';
+import type { ThemeChoice } from './render.js';
+import { filePath, type CollectionName, type FilePath } from '../brands.js';
 
 /** A native error's failing path, raw OS code (e.g. `ENOENT`) and syscall (e.g. `open`), when given. */
 export interface NativeDetail {
@@ -35,8 +31,7 @@ export interface NativeDetail {
 export type RenderFault =
   | {
       readonly code: 'missing-theme';
-      /** The override: --theme, or else the --theme-file's `@id`. */
-      readonly theme: ThemeName | PresetId;
+      readonly theme: ThemeChoice;
     }
   | {
       readonly code: 'collection-selection';
@@ -73,6 +68,11 @@ export interface RenderFailure {
   readonly message: string;
   readonly recovery: string;
   readonly source: RenderEvidence;
+}
+
+/** `fault` as a failed Result; nothing else is returned with it. */
+export function faulted(fault: RenderFault): Result<never, RenderFault> {
+  return { ok: false, error: fault };
 }
 
 /**

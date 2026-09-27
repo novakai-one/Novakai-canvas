@@ -1,17 +1,27 @@
 /*
- * What one headless render gets injected: the service bindings, confined resource reads, the
- * theme grammar, a temporary asset store and the render's file I/O. Declarations only. The
- * adapters in adapters/render/ implement TempAssets and RenderFiles; compose binds them. Every
- * method returns its failure as a value; the headless render decides what each one means.
+ * What one headless render gets injected: the service bindings, confined resource reads, a
+ * temporary asset store, the render's file I/O, and the capability rules the render calls once its
+ * environment is open. Declarations only. The adapters in adapters/render/ implement TempAssets and
+ * RenderFiles; compose binds them. Every method returns its failure as a value; the headless render
+ * decides what each one means.
  */
 import type { AssetError, Assets } from '@novakai/canvas-assets';
 import type { Diagnostic as ExportDiagnostic } from '@novakai/canvas-export';
 import type { ResourceReader } from './resource-reader.js';
-import type { ThemeSource } from '../records/theme-source.js';
-import type { ProviderFault } from '../records/render-failure.js';
+import type { FontRole, ThemeAdmission } from '../records/theme-source.js';
+import type { ProviderFault, RenderEvidence } from '../records/render-failure.js';
 import type { SourceFile } from '../records/source-file.js';
-import type { HeadlessBindings, RecipeFamily } from '../records/foreign.js';
-import type { FilePath, SectionId } from '../brands.js';
+import type {
+  Catalog,
+  Collection,
+  HeadlessBindings,
+  ParsedSource,
+  RecipeFamily,
+  ResolvedResources,
+  StageInput,
+  StoredBlob,
+} from '../records/foreign.js';
+import type { AssetDigest, FilePath, SectionId } from '../brands.js';
 import type { Result } from '../errors.js';
 
 /** Everything compose injects into one headless render. */
@@ -19,10 +29,47 @@ export interface HeadlessOwners {
   readonly resources: ResourceReader;
   /** Theme preparation, preset codecs, render jobs and the diagram producer. */
   readonly service: HeadlessBindings;
-  /** The theme grammar. Fails with `invalid-theme` or `duplicate-token`. */
-  readTheme(source: string): Result<ThemeSource>;
   readonly temp: TempAssets;
   readonly files: RenderFiles;
+}
+
+/** A theme font as the theme admission binds it: its role and the Assets digest of its bytes. */
+export interface FontBinding {
+  readonly alias: FontRole;
+  readonly digest: AssetDigest;
+}
+
+/**
+ * The capability rules of one render, bound over its temporary asset store. Each failure is the
+ * owner's own evidence, returned whole: Language, Model, Assets, Templates or the service.
+ */
+export interface RenderEnvironment {
+  /** The installation's shipped presets, before any `.theme` file is admitted. */
+  readonly catalog: Catalog;
+  /** Language's parse of one source. Fails with Language's diagnostics. */
+  parse(source: string): Result<ParsedSource, RenderEvidence>;
+  /** Lower `source` as a new collection against `resources`. Fails with Language's diagnostics. */
+  lower(
+    source: string,
+    resources: ResolvedResources,
+  ): Result<Collection, RenderEvidence>;
+  /** Model's check of a whole collection. Fails with Model's diagnostics. */
+  validate(value: unknown): Result<Collection, RenderEvidence>;
+  /** Normalize and store one file's bytes; returns their digest. Fails with Assets' failure. */
+  stageAsset(input: StageInput): Promise<Result<AssetDigest, RenderEvidence>>;
+  /** The stored, verified bytes of one digest. Fails with Assets' failure. */
+  resolveAsset(digest: AssetDigest): Result<StoredBlob, RenderEvidence>;
+  /**
+   * `catalog` with `theme` admitted over its staged `fonts`. Fails with the service's theme
+   * preparation or Templates' admission failure.
+   */
+  admitTheme(
+    catalog: Catalog,
+    theme: ThemeAdmission,
+    fonts: readonly FontBinding[],
+  ): Result<Catalog, RenderEvidence>;
+  /** The bytes a base64 text holds. Assets and the service verified the text; cannot fail. */
+  decodeBase64(text: string): Uint8Array;
 }
 
 /** Creates the private temporary directory one render stages its assets in. */

@@ -21,6 +21,12 @@ export type CollectionSelector =
   | { readonly kind: 'file'; readonly path: FilePath }
   | { readonly kind: 'named'; readonly name: CollectionName };
 
+/**
+ * The theme a render draws with in place of the collection's own: --theme, or else the
+ * --theme-file's `@id`.
+ */
+export type ThemeChoice = ThemeName | PresetId;
+
 /** What render:png's flags ask for. */
 export interface RenderChoice {
   readonly collection: CollectionSelector;
