@@ -56,10 +56,9 @@ async function render(
 }
 
 /**
- * Builds the read job (id `read:<collection>:<revision>`, no previous scene) and produces it. A
- * stale read is discarded by the browser's requested-generation check. Fails with `unavailable`
- * at the job's path when the job cannot be built (job failure kept as source); producer failures
- * pass through.
+ * Builds the `read` job and produces it. A stale read is discarded by the browser's
+ * requested-generation check. Fails with `unavailable` at the job's path when the job cannot be
+ * built (job failure kept as source); producer failures pass through.
  */
 async function produce(
   collection: Collection,
@@ -67,12 +66,7 @@ async function produce(
   signal: AbortSignal,
   owners: CollectionRenderOwners,
 ): Promise<Result<RenderDocument>> {
-  const job = owners.jobs.create(
-    collection,
-    workspace,
-    null,
-    `read:${collection.id}:${collection.revision}`,
-  );
+  const job = owners.jobs.create(collection, workspace, 'read');
   if (!job.ok) return failure('unavailable', job.error.path, job.error.message, job.error);
   return owners.producer.produce(job.value, signal);
 }

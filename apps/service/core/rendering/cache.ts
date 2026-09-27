@@ -13,24 +13,23 @@ const KEEP = 8;
 
 /**
  * Wraps the producer with a cache of the last `KEEP` successful renders. A job with the same
- * input as a kept render gets the kept result; any other job, and any job with a previous scene,
- * goes to the producer. Failures pass through unchanged and are not kept.
+ * input as a kept render gets the kept result; any other job goes to the producer. Failures pass
+ * through unchanged and are not kept.
  */
 export function cacheRenders(producer: DiagramProducer): DiagramProducer {
   const kept = new Map<string, Result<RenderDocument>>();
   return {
     async produce(job, signal) {
       const key = inputKey(job);
-      const known = key === null ? undefined : kept.get(key);
+      const known = kept.get(key);
       if (known !== undefined) return known;
       return remember(kept, key, await producer.produce(job, signal));
     },
   };
 }
 
-/** Everything that shapes the output except the job id. Jobs with a previous scene are never cached. */
-function inputKey(job: RenderingJob): string | null {
-  if (job.previous !== null) return null;
+/** Everything that shapes the output except the job id. */
+function inputKey(job: RenderingJob): string {
   return JSON.stringify([
     job.collection,
     job.style,
@@ -41,13 +40,13 @@ function inputKey(job: RenderingJob): string | null {
   ]);
 }
 
-/** Only successful, cacheable renders are kept; the oldest entry is evicted past KEEP. */
+/** Only successful renders are kept; the oldest entry is evicted past KEEP. */
 function remember(
   kept: Map<string, Result<RenderDocument>>,
-  key: string | null,
+  key: string,
   result: Result<RenderDocument>,
 ): Result<RenderDocument> {
-  if (key === null || !result.ok) return result;
+  if (!result.ok) return result;
   kept.set(key, result);
   evictOldest(kept);
   return result;

@@ -6,8 +6,8 @@
  * admission and retry.
  */
 import type { Result } from '../errors.js';
-import type { AuthoringResult, Collection, Scene } from '../records/capabilities.js';
-import type { RenderDocument, RenderingJob } from '../records/rendering/job.js';
+import type { AuthoringResult, Collection } from '../records/capabilities.js';
+import type { RenderDocument, RenderingJob, RenderPurpose } from '../records/rendering/job.js';
 import type { WorkspaceContents } from '../records/workspace/contents.js';
 
 /** Service schedules real worker work; callers keep the last accepted scene until this request succeeds. */
@@ -51,15 +51,14 @@ export interface RenderReader {
 /** Resource-backed job construction remains separate from scheduling and rendered scene admission. */
 export interface RenderJobs {
   /**
-   * The job for one collection with its resources resolved. Fails with `missing-asset` at
-   * `render-resources` when an owner rejects a resource or the pin is not a theme, and
-   * `invalid-input` at `render-resources` when a resource does not fit its schema.
+   * The job for one collection with its resources resolved, named after its purpose. Fails with
+   * `missing-asset` at `render-resources` when an owner rejects a resource or the pin is not a
+   * theme, and `invalid-input` at `render-resources` when a resource does not fit its schema.
    */
   create(
     collection: Collection,
     view: WorkspaceContents,
-    previous: Scene | null,
-    id: string,
+    purpose: RenderPurpose,
   ): AuthoringResult<RenderingJob>;
 }
 

@@ -79,7 +79,7 @@ async function append(
 }
 
 /**
- * Builds the render job for one collection and renders it, preview or not. Fails with
+ * Builds the `admission` job for one collection and renders it, preview or not. Fails with
  * `constraint-conflict` at the producer's path when the producer cannot render it (the
  * producer's failure kept as source). Job failures pass through unchanged.
  */
@@ -88,12 +88,7 @@ async function render(
   view: WorkspaceContents,
   owners: FeasibilityOwners,
 ): Promise<AuthoringResult<RenderDocument>> {
-  const job = owners.jobs.create(
-    collection,
-    view,
-    null,
-    `admission:${collection.id}:${collection.revision}`,
-  );
+  const job = owners.jobs.create(collection, view, 'admission');
   if (!job.ok) return job;
   const result = await owners.producer.produce(job.value, new AbortController().signal);
   if (!result.ok)

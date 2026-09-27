@@ -9,7 +9,6 @@ import type {
   AuthoringResult,
   Collection,
   FontSource,
-  Scene,
   VisualAsset,
 } from '../../contract/records/capabilities.js';
 import {
@@ -24,21 +23,22 @@ import { authoringFailure, success } from '../../contract/errors.js';
 import { bareDigest } from '../../contract/brands.js';
 import type { RenderResourceOwners } from '../../contract/ports/headless.js';
 import type { WorkspaceContents } from '../../contract/records/workspace/contents.js';
-import type { RenderingJob } from '../../contract/records/rendering/job.js';
+import type { RenderingJob, RenderPurpose } from '../../contract/records/rendering/job.js';
 import type { RenderJobs } from '../../contract/ports/rendering.js';
+import { jobId } from './job-id.js';
 
 /**
- * Binds job building to the given owners. `create` returns the job for one collection (see
- * `create` below). It fails with `missing-asset` at `render-resources` when an owner rejects a
- * resource (the owner's failure kept as source) or the pinned preset is not a theme, and with
- * `invalid-input` at `render-resources` when anything else throws, such as a resource that does
- * not fit its Presentation or Layout schema.
+ * Binds job building to the given owners. `create` returns the job for one collection, named after
+ * its purpose (see `create` below). It fails with `missing-asset` at `render-resources` when an
+ * owner rejects a resource (the owner's failure kept as source) or the pinned preset is not a
+ * theme, and with `invalid-input` at `render-resources` when anything else throws, such as a
+ * resource that does not fit its Presentation or Layout schema.
  */
 export function createRenderJobs(owners: RenderResourceOwners): RenderJobs {
   return {
-    create(collection, view, previous, id): AuthoringResult<RenderingJob> {
+    create(collection, view, purpose): AuthoringResult<RenderingJob> {
       try {
-        return success(create(collection, view, previous, id, owners));
+        return success(create(collection, view, purpose, owners));
       } catch (error) {
         return rejected(error);
       }
@@ -50,14 +50,14 @@ export function createRenderJobs(owners: RenderResourceOwners): RenderJobs {
  * Builds the job from the collection's exact pinned theme; personal UI scope cannot enter it.
  * Reads the theme through Templates, each theme font and each image asset through Assets, and
  * resolves then projects the diagram tokens through Design System. The layout options scale with
- * the resolved style. Throws `RenderResourceFault` when an owner rejects a resource or the preset
- * is not a theme, and a schema error when a resource does not fit Presentation or Layout.
+ * the resolved style; the ID comes from `jobId`. Throws `RenderResourceFault` when an owner
+ * rejects a resource or the preset is not a theme, and a schema error when a resource does not
+ * fit Presentation or Layout.
  */
 function create(
   collection: Collection,
   view: WorkspaceContents,
-  previous: Scene | null,
-  id: string,
+  purpose: RenderPurpose,
   owners: RenderResourceOwners,
 ): RenderingJob {
   const preset = accepted(
@@ -86,11 +86,10 @@ function create(
     digest: preset.digest,
   });
   return {
-    id,
+    id: jobId(purpose, collection),
     collection,
     fonts,
     style,
-    previous,
     wasmResource: owners.wasmResource,
     assets: collection.assets
       .filter((item) => item.mediaType.startsWith('image/'))

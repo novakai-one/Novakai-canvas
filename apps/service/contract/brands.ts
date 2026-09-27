@@ -50,6 +50,12 @@ export const loopbackPort = z.number().int().min(1024).max(65535).brand<'Loopbac
  */
 export const hostPath = z.string().min(1).brand<'HostPath'>();
 
+/**
+ * Checks a render job ID: 1–256 characters. Minted by core/rendering/job-id.ts; parsed from the
+ * worker's job envelope.
+ */
+export const renderJobId = z.string().min(1).max(256).brand<'RenderJobId'>();
+
 /** A generation that passed {@link generation}. */
 export type Generation = z.infer<typeof generation>;
 
@@ -64,6 +70,9 @@ export type LoopbackPort = z.infer<typeof loopbackPort>;
 
 /** A host path that passed {@link hostPath}. */
 export type HostPath = z.infer<typeof hostPath>;
+
+/** A render job ID that passed {@link renderJobId}. */
+export type RenderJobId = z.infer<typeof renderJobId>;
 
 /** Model's pinned digest text: `sha256:` then the bare digest. */
 export type PinnedDigest = `sha256:${string}`;

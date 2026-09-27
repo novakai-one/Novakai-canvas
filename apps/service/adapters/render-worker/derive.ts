@@ -105,7 +105,8 @@ async function derive(
       jobs: { isCurrent: () => !signal.aborted, yield: yieldJob },
     }),
   );
-  const request = { projection, measurements, options: job.options, previous: job.previous };
+  // Layout can keep a previous scene's geometry; the service always lays out from scratch.
+  const request = { projection, measurements, options: job.options, previous: null };
   const inputKey = accepted(layout.key(request));
   const scene = accepted(await layout.arrange({ ...request, job: { id: job.id, inputKey } }));
   return {

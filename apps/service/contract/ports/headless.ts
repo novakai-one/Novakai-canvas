@@ -14,6 +14,7 @@ import type {
   Templates,
 } from '../records/capabilities.js';
 import type { PresetCodecs, PresetContext } from '../records/presets/codecs.js';
+import type { HostPath } from '../brands.js';
 import type { DiagramProducer, RenderJobs } from './rendering.js';
 
 /** Installed source location and admitted owners are explicit; no worker consults ambient cwd or personal preferences. */
@@ -22,7 +23,7 @@ export interface RenderResourceOwners {
   readonly system: Pick<DesignSystem, 'resolve' | 'projectDiagram'>;
   readonly sources: unknown;
   readonly templates: Pick<Templates<LoweredIntent>, 'read'>;
-  readonly wasmResource: string;
+  readonly wasmResource: HostPath;
 }
 
 /** What theme admission uses: Assets to verify fonts, Templates to select the base theme. */

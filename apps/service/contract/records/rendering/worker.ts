@@ -8,17 +8,17 @@
  */
 import { z } from 'zod';
 import { failureSource } from '../transport/failure-source.js';
+import { hostPath, renderJobId } from '../../brands.js';
 /** Transport validates only host-owned fields; capability payloads are checked by the corresponding public owners. */
 export const renderingEnvelope = z
   .strictObject({
-    id: z.string().min(1).max(256),
+    id: renderJobId,
     collection: z.unknown(),
     fonts: z.unknown(),
     style: z.unknown(),
     assets: z.array(z.unknown()).max(2000),
     options: z.unknown(),
-    previous: z.unknown(),
-    wasmResource: z.string().min(1).max(4096),
+    wasmResource: z.string().max(4096).pipe(hostPath),
   })
   .readonly();
 /** Responses remain unknown until checked against the request's admitted collection and measurement sources. */

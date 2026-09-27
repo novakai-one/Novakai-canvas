@@ -148,13 +148,12 @@ export function renderJob(
   const jobs = owners.service.createRenderJobs({
     ...env,
     sources: env.installation.tokens,
-    wasmResource: join(options.root, 'resources/vendor/layout/libavoid.wasm'),
+    wasmResource: hostPath.parse(join(options.root, 'resources/vendor/layout/libavoid.wasm')),
   });
   return accepted(
     jobs.create(
       collection,
       { collections: [collection], presets: catalog, library: headlessLibrary() },
-      null,
       'headless',
     ),
   );
