@@ -23,7 +23,7 @@ export async function serveWorkspace(
       import('../../adapters/http/request-reader.js'),
       import('../../adapters/http/http-router.js'),
       import('../../adapters/rendering/language-readout.js'),
-      import('../../adapters/http/socket-io.js'),
+      import('../../adapters/http/http-io.js'),
       import('../../adapters/http/static-files.js'),
       import('../../adapters/http/server.js'),
     ]);
