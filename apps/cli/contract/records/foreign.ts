@@ -18,7 +18,13 @@ export type { Assets, StageInput, SupportedMedia } from '@novakai/canvas-assets'
 export type { Admission, Catalog, ExpansionRequest, ThemePreset } from '@novakai/canvas-templates';
 export type { Documents, Resource, Resources } from '@novakai/canvas-export';
 /** Owner records: CLI core imports only these local aliases. */
-export type { Snapshot, Request, Receipt, StoredRecord } from '@novakai/canvas-authoring';
+export type {
+  Snapshot,
+  Request,
+  Receipt,
+  RecordKey,
+  StoredRecord,
+} from '@novakai/canvas-authoring';
 export type { TransportResponse } from '@novakai/canvas-service';
 
 /**

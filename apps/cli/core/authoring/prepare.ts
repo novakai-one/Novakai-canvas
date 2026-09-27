@@ -1,36 +1,41 @@
 /*
- * DSL authoring preparation: read the source file and the workspace snapshot once, build the
- * Authoring request, then stage and freeze its declared resources. Uses injected ports only;
- * nothing is retained or sent to Authoring here. Failures are returned as values; the caller fixes
- * the named input and runs the command again.
+ * DSL authoring preparation: read the source file and the workspace snapshot once, parse the
+ * source once, build its Authoring request, then stage and freeze its declared resources. Uses
+ * injected ports only; nothing is retained or sent to Authoring here. Failures are returned as
+ * values; the caller fixes the named input and runs the command again.
  */
 import { prepareResources } from '../resources/stage.js';
 import type { ResourceDependencies } from '../resources/stage.js';
+import { parseSource } from '../shared/parse-source.js';
+import { changeRequest } from './change-request.js';
+import { requestIdFor } from './envelope.js';
 import type { ChangeCommand, ChangeIntent, ChangeMode } from '../../contract/records/command.js';
-import type { ChangeInputs } from '../../contract/ports/runtime.js';
-import type { ServiceReads } from '../../contract/ports/service-reads.js';
+import type { CollectionReader } from '../../contract/ports/collection-reader.js';
 import type { LocalFiles } from '../../contract/ports/local-files.js';
+import type { RequestIds } from '../../contract/ports/request-ids.js';
+import type { ServiceReads } from '../../contract/ports/service-reads.js';
+import type { SourceLanguage } from '../../contract/ports/source-language.js';
 import type { Snapshot } from '../../contract/records/foreign.js';
 import type { Observed } from '../../contract/records/service-answers.js';
 import type { RetainedRequest } from '../../contract/records/retained-request.js';
-import type { SourceFile } from '../../contract/records/source-file.js';
-import type { CollectionRevision, RequestId } from '../../contract/brands.js';
+import type { CollectionRevision } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 
 /**
- * What `prepare` uses: the source read, the workspace read, request IDs, the request builder and
- * resource staging.
+ * What `prepare` uses: the source read, the workspace read, the parser, Model's collection check,
+ * request IDs and resource staging.
  */
 export interface PrepareDependencies extends ResourceDependencies {
   readonly files: Pick<LocalFiles, 'readSource'>;
   readonly reads: Pick<ServiceReads, 'workspace'>;
-  readonly semantic: ChangeInputs;
-  nextRequestId(): RequestId;
+  readonly language: SourceLanguage;
+  readonly collections: CollectionReader;
+  readonly requestIds: RequestIds;
 }
 
 /**
  * Capture source and observed versions once; neither preview nor apply refreshes the resulting
- * Authoring envelope. Fails as the source read, the workspace read, the request reader or
+ * Authoring envelope. Fails as the source read, the workspace read, the parse, the request or
  * resource staging does; nothing is retained or sent to Authoring.
  */
 export async function prepare(
@@ -41,32 +46,32 @@ export async function prepare(
   if (!source.ok) return source;
   const current = await dependencies.reads.workspace();
   if (!current.ok) return current;
-  return prepareCaptured(
-    command,
-    { file: command.file, source: source.value },
-    current.value,
-    dependencies,
-  );
+  return prepareCaptured(command, source.value, current.value, dependencies);
 }
+
 /**
- * An explicit ID supports scripted receipt lookup, a generated one is retained before any
- * submission. Resource preparation finishes before retention or canonical submission.
+ * The request under the given `--request` or a fresh ID, then its resources. Resource preparation
+ * finishes before retention or submission. Fails with `invalid-source`, as `changeRequest` does,
+ * or as resource staging does.
  */
 async function prepareCaptured(
   command: ChangeCommand,
-  source: SourceFile,
+  source: string,
   current: Observed<Snapshot>,
   dependencies: PrepareDependencies,
 ): Promise<Result<RetainedRequest>> {
-  const request = dependencies.semantic.request(
-    intentOf(command),
-    source.source,
-    current.value,
-    command.request ?? dependencies.nextRequestId(),
-  );
+  const parsed = parseSource(dependencies.language, source);
+  if (!parsed.ok) return parsed;
+  const draft = {
+    intent: intentOf(command),
+    collection: parsed.value.collection,
+    source,
+    request: requestIdFor(command, dependencies.requestIds),
+  };
+  const request = changeRequest(draft, current.value, dependencies.collections);
   if (!request.ok) return request;
   const retained = { generation: current.generation, request: request.value, backups: [] };
-  return prepareResources(source, retained, dependencies);
+  return prepareResources(command.file, parsed.value.resources, retained, dependencies);
 }
 
 /** The preconditions the command asks for: preview by its --mode, the others by their name. */

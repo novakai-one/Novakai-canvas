@@ -4,23 +4,44 @@
  * `cli/canvas.ts` prints them and sets the exit code.
  */
 import type { ServiceCommand } from '../../contract/records/command.js';
-import type { CliDependencies } from '../../contract/ports/runtime.js';
+import type { LocalFiles } from '../../contract/ports/local-files.js';
+import type { ServiceResources } from '../../contract/ports/service-resources.js';
 import type { FilePath } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
 import { admitPreset } from '../presets/admit.js';
+import type { AdmitDependencies } from '../presets/admit.js';
 import { author } from '../authoring/submit.js';
+import type { AuthorDependencies } from '../authoring/submit.js';
 import { retry } from '../authoring/reconcile.js';
+import type { RetryDependencies } from '../authoring/reconcile.js';
 import { describe, inspect, list, read, receipt } from '../reads/queries.js';
+import type { ReadDependencies } from '../reads/queries.js';
 import { unsupported } from '../shared/results.js';
+
+/** What routing itself uses: recipe expansion and the --out write. */
+interface RouteDependencies {
+  readonly resources: Pick<ServiceResources, 'instantiate'>;
+  readonly files: Pick<LocalFiles, 'writeOutput'>;
+}
+
+/**
+ * Every port a service command may use: each flow's own slice, joined. Compose binds each member
+ * once.
+ */
+export type ServicePorts = ReadDependencies &
+  AuthorDependencies &
+  RetryDependencies &
+  AdmitDependencies &
+  RouteDependencies;
 
 /**
  * Runs one service command and returns its text, or `Written: FILE` after writing --out. Fails as
  * the command's flow does, or with `output-unavailable` after the command ran.
  */
-export async function execute(
+export async function executeService(
   command: ServiceCommand,
-  dependencies: CliDependencies,
+  dependencies: ServicePorts,
 ): Promise<Result<string>> {
   const outcome = await run(command, dependencies);
   if (!outcome.ok) return outcome;
@@ -30,7 +51,7 @@ export async function execute(
 /** The one flow each command names; retry and apply replay the retained request after a receipt lookup. */
 function run(
   command: ServiceCommand,
-  dependencies: CliDependencies,
+  dependencies: ServicePorts,
 ): Promise<Result<string>> {
   switch (command.name) {
     case 'describe':
@@ -65,7 +86,7 @@ function run(
 async function output(
   path: FilePath | undefined,
   text: string,
-  dependencies: CliDependencies,
+  dependencies: RouteDependencies,
 ): Promise<Result<string>> {
   if (path === undefined) return success(text);
   const saved = await dependencies.files.writeOutput(path, text);

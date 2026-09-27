@@ -2,7 +2,9 @@
  * Core entry points for the composition root and the render wiring: the only contract file that
  * reaches core behaviour. Re-exports only; pure. Each entry point names its own failures.
  */
-export { execute as executeCommand } from '../core/commands/dispatch.js';
+export { executeService } from '../core/commands/dispatch.js';
+
+export type { ServicePorts } from '../core/commands/dispatch.js';
 
 export { usage } from '../core/commands/help.js';
 

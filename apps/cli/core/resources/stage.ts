@@ -4,7 +4,6 @@
  * into the Authoring request. Uses injected ports only. A failure stops before any Authoring
  * request is sent; staged bytes left behind are collectable Assets orphans.
  */
-import type { ResourceSyntax } from '../../contract/ports/runtime.js';
 import type { ResourceReader } from '../../contract/ports/resource-reader.js';
 import type { ServiceResources } from '../../contract/ports/service-resources.js';
 import type { RetainedRequest } from '../../contract/records/retained-request.js';
@@ -14,7 +13,6 @@ import type {
   StagedResource,
 } from '../../contract/records/staged-resource.js';
 import type { ResourceRequest, StageInput } from '../../contract/records/foreign.js';
-import type { SourceFile } from '../../contract/records/source-file.js';
 import type { AssetDigest, FilePath } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
@@ -26,25 +24,23 @@ export interface StagingDependencies {
   readonly resources: Pick<ServiceResources, 'stage' | 'blob'>;
 }
 
-/** What DSL preparation adds: the source's resource declarations and the service's freeze. */
+/** What DSL preparation adds: the service's freeze. */
 export interface ResourceDependencies extends StagingDependencies {
   readonly resources: Pick<ServiceResources, 'stage' | 'blob' | 'freeze'>;
-  readonly semantic: ResourceSyntax;
 }
 
 /**
- * Stage each declaration of `source`, read relative to its file, before freezing aliases. Fails
- * with `invalid-source`, as the resource read or a service call does, or with `invalid-input`
- * when the frozen request fails Authoring's schema.
+ * Stage each of the source's declarations, read relative to its `file`, before freezing aliases
+ * into `retained`'s request. Fails as the resource read or a service call does, or with
+ * `invalid-input` when the frozen request fails Authoring's schema.
  */
 export async function prepareResources(
-  source: SourceFile,
+  file: FilePath,
+  requests: readonly ResourceRequest[],
   retained: RetainedRequest,
   dependencies: ResourceDependencies,
 ): Promise<Result<RetainedRequest>> {
-  const requests = dependencies.semantic.requests(source.source);
-  if (!requests.ok) return requests;
-  const staged = await stageResources(source.file, requests.value, dependencies);
+  const staged = await stageResources(file, requests, dependencies);
   if (!staged.ok) return staged;
   return freeze(retained, staged.value, dependencies);
 }

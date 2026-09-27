@@ -6,8 +6,8 @@
  * contract/api.js.
  */
 import { join } from 'node:path';
-import { digest, plan, stage, validate } from '@novakai/canvas-model';
-import { createLanguage, type LoweredIntent } from '@novakai/canvas-language';
+import { digest, validate } from '@novakai/canvas-model';
+import type { LoweredIntent } from '@novakai/canvas-language';
 import {
   prepareInstallation,
   type BuiltinResources,
@@ -18,6 +18,7 @@ import { composeTemplates, type Templates } from '@novakai/canvas-templates';
 import { validateLibrarySnapshot, type LibrarySnapshot } from '@novakai/canvas-library';
 import type { Snapshot } from '@novakai/canvas-export';
 import { accepted, retainedResources } from './api.js';
+import { composeLanguage } from './compose/language.js';
 import type { RenderRequest } from './records/render.js';
 import type { HeadlessOwners } from './ports/render.js';
 import type {
@@ -103,7 +104,7 @@ export async function environment(
   );
   const system: Pick<DesignSystem, 'resolve' | 'resolveTheme' | 'projectDiagram'> =
     composeDesignSystem();
-  const language = createLanguage({ reader: { validate }, planner: { plan }, stage: { stage } });
+  const language = composeLanguage();
   const templates: Pick<Templates<LoweredIntent>, 'read' | 'planAdmission'> = composeTemplates(
     owners.service.createPresetCodecs({
       system,

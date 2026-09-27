@@ -163,6 +163,15 @@ export function unwritableOutput(path: string): FailureInput {
 }
 
 /**
+ * `invalid-input`: an Authoring request failed Authoring's schema. Core's DSL request builder and
+ * the resources adapter's check of the frozen request report the same text.
+ */
+export const malformedRequest: FailureInput = Object.freeze({
+  code: 'invalid-input',
+  message: 'Request identity or generated preconditions are invalid',
+});
+
+/**
  * `invalid-response` for an apply answer that does not confirm a commit. The write may have
  * happened, so the recovery checks `request`'s receipt before any retry.
  */

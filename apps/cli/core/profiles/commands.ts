@@ -8,17 +8,18 @@ import { displayDescriptor, lintReport, lintSummary } from './format.js';
 import { lintBuildSpec } from './lint/lint.js';
 import type { ProfileCommand } from '../../contract/records/command.js';
 import type { ParsedSource } from '../../contract/records/foreign.js';
-import type { SemanticInputs } from '../../contract/ports/runtime.js';
 import type { LocalFiles } from '../../contract/ports/local-files.js';
+import type { SourceLanguage } from '../../contract/ports/source-language.js';
 import type { FilePath } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
+import { parseSource } from '../shared/parse-source.js';
 import { unsupported } from '../shared/results.js';
 
 /** What the profile commands read and write: local files and the Language parser. */
 export interface ProfileDependencies {
   readonly files: LocalFiles;
-  readonly semantic: Pick<SemanticInputs, 'profileParse'>;
+  readonly language: SourceLanguage;
 }
 
 /**
@@ -61,7 +62,7 @@ async function lintFile(
 ): Promise<Result<string>> {
   const source = await dependencies.files.readSource(file);
   if (!source.ok) return source;
-  const parsed = dependencies.semantic.profileParse(source.value);
+  const parsed = parseSource(dependencies.language, source.value);
   if (!parsed.ok) return parsed;
   return lintParsedProfile(parsed.value);
 }

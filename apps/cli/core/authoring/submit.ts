@@ -24,6 +24,9 @@ export interface SubmitDependencies extends RestoreDependencies {
   readonly authoring: ServiceAuthoring;
 }
 
+/** What `author` uses: what `prepare` uses and what `submit` uses. */
+export type AuthorDependencies = PrepareDependencies & SubmitDependencies;
+
 /**
  * Agent authoring consumes readable source only; JSON envelopes and coordinates are never user
  * input. `preview` sends to preview, the other change commands apply. Fails as `prepare` or
@@ -31,7 +34,7 @@ export interface SubmitDependencies extends RestoreDependencies {
  */
 export async function author(
   command: ChangeCommand,
-  dependencies: PrepareDependencies & SubmitDependencies,
+  dependencies: AuthorDependencies,
 ): Promise<Result<string>> {
   const prepared = await prepare(command, dependencies);
   if (!prepared.ok) return prepared;

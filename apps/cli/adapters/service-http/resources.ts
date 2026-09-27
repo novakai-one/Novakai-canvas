@@ -18,7 +18,7 @@ import {
 import { requestSchema } from '../../contract/schemas.js';
 import type { AssetDigest } from '../../contract/brands.js';
 import type { LocalFailure, Result } from '../../contract/errors.js';
-import { failure, success } from '../../contract/errors.js';
+import { failure, malformedRequest, success } from '../../contract/errors.js';
 
 /** The transport's POST; this adapter never sends a GET. */
 type TransportPost = Pick<HttpTransport, 'post'>;
@@ -81,11 +81,7 @@ function blobBackup(value: unknown): Result<ByteBackup> {
 /** The frozen request, checked by Authoring's request schema. Fails with `invalid-input`. */
 function frozenRequest(value: unknown): Result<Request> {
   const checked = requestSchema.safeParse(value);
-  if (!checked.success)
-    return failure({
-      code: 'invalid-input',
-      message: 'Request identity or generated preconditions are invalid',
-    });
+  if (!checked.success) return failure(malformedRequest);
   return success(checked.data);
 }
 
