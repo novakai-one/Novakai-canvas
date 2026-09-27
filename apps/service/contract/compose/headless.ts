@@ -8,7 +8,7 @@ import type { PresetCodecs, PresetContext } from '../records/presets/codecs.js';
 import type { RenderResourceOwners } from '../records/rendering/resources.js';
 import type { RenderJobs } from '../ports/render-jobs.js';
 import type { DiagramProducer } from '../ports/rendering.js';
-import { createPresetCodecs } from '../../core/presets/codecs.js';
+import { createPresetCodecs } from '../../core/presets/theme-codec.js';
 import { prepareTheme } from '../../core/presets/theme-admission.js';
 import { createRenderJobs } from '../../core/rendering/jobs.js';
 

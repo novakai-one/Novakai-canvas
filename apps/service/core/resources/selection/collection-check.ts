@@ -12,7 +12,7 @@ import type {
   Templates,
 } from '../../../contract/records/capabilities.js';
 import type { WorkspaceContents } from '../../../contract/records/workspace/contents.js';
-import type { AssetBinding } from './model-binding.js';
+import type { AssetBinding } from '../../presets/theme-binding.js';
 import { bare, sortedDigests } from './digests.js';
 import { ResourceFault, accepted } from './refusal.js';
 

@@ -12,7 +12,7 @@ import type {
   ThemePreset,
 } from '../../../contract/records/capabilities.js';
 import type { Intent } from './intent.js';
-import { themeBinding, type BindingModel, type ThemeBinding } from './model-binding.js';
+import { themeBinding, type BindingModel, type ThemeBinding } from '../../presets/theme-binding.js';
 import { prefixed } from './digests.js';
 import { ResourceFault, accepted } from './refusal.js';
 

@@ -18,7 +18,7 @@ import type {
   ModelRules,
   ServiceCapabilities,
 } from '../ports/capabilities.js';
-import { createPresetCodecs } from '../../core/presets/codecs.js';
+import { createPresetCodecs } from '../../core/presets/theme-codec.js';
 
 /**
  * Binds every capability the service uses. `sources` is the installation's raw token source

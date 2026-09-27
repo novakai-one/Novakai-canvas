@@ -21,7 +21,7 @@ import {
   type BindingModel,
   type ThemeBinding,
   type Upload,
-} from './model-binding.js';
+} from '../../presets/theme-binding.js';
 import { PIN_PREFIX, bare, prefixed } from './digests.js';
 import { ResourceFault, accepted } from './refusal.js';
 

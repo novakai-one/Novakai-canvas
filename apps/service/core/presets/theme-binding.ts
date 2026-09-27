@@ -12,10 +12,10 @@ import type {
   Preset,
   Request,
   ResourceRequest,
-} from '../../../contract/records/capabilities.js';
-import type { ModelRules } from '../../../contract/ports/capabilities.js';
-import { prefixed } from './digests.js';
-import { ResourceFault, accepted } from './refusal.js';
+} from '../../contract/records/capabilities.js';
+import type { ModelRules } from '../../contract/ports/capabilities.js';
+import { prefixed } from '../resources/selection/digests.js';
+import { ResourceFault, accepted } from '../resources/selection/refusal.js';
 
 /** The one Model rule a binding needs. */
 export type BindingModel = Pick<ModelRules, 'validate'>;
