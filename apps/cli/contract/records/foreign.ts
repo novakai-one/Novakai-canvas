@@ -8,7 +8,7 @@ export type { Collection } from '@novakai/canvas-model';
 export type { Language, ResolvedResources } from '@novakai/canvas-language';
 export type { RenderDocument } from '@novakai/canvas-service';
 export type { Assets } from '@novakai/canvas-assets';
-export type { Catalog, ThemePreset } from '@novakai/canvas-templates';
+export type { Catalog, ExpansionRequest, ThemePreset } from '@novakai/canvas-templates';
 export type { Documents, Resource, Resources } from '@novakai/canvas-export';
 /** Owner records: CLI core imports only these local aliases. */
 export type { Snapshot, Request, Receipt, StoredRecord } from '@novakai/canvas-authoring';

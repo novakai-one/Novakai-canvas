@@ -1,8 +1,9 @@
 /*
- * Composition root: binds each command to real infrastructure (agent credential, HTTP transport,
- * Language, local files, request journal, headless render bindings, render file I/O). Not pure:
- * reads files, calls HTTP, mints request IDs. Failures are returned as values; `cli/canvas.ts`
- * prints them and sets the exit code. Recovery after a sent request is `receipt` then `retry`.
+ * Composition root: reads the arguments, then binds the parsed command's family to real
+ * infrastructure (agent credential, HTTP transport, Language, local files, request journal,
+ * headless render bindings, render file I/O). Not pure: reads files, calls HTTP, mints request
+ * IDs. Failures are returned as values; `cli/canvas.ts` prints them and sets the exit code.
+ * Recovery after a sent request is `receipt` then `retry`.
  */
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
@@ -16,8 +17,14 @@ import { createLocalFiles } from '../adapters/files/local-files.js';
 import { createRequestJournal } from '../adapters/files/request-journal.js';
 import { createTransport } from '../adapters/service-http/transport.js';
 import { createSemanticInputs } from '../adapters/inputs/semantic-inputs.js';
-import { executeCommand, executeProfile, isProfileCommand, readThemeConfig, usage } from './api.js';
+import { executeCommand, executeProfile, parseCommand, readThemeConfig, usage } from './api.js';
 import type { LocalFailure, Result } from './errors.js';
+import type {
+  ParsedCommand,
+  ProfileCommand,
+  ServiceCommand,
+  ServiceOptions,
+} from './records/command.js';
 import type { HeadlessFailure, HeadlessOptions, HeadlessReport } from './records/headless.js';
 import { failure, rejected, success } from './errors.js';
 import { agentToken, requestId, type AgentToken, type RequestId } from './brands.js';
@@ -27,9 +34,7 @@ export async function runCli(
   defaultWorkspace: string,
 ): Promise<Result<string>> {
   try {
-    const parsed = readArguments(args, defaultWorkspace);
-    if (!parsed.ok) return parsed;
-    return dispatch(parsed.value);
+    return parsedRun(args, defaultWorkspace);
   } catch {
     return failure({
       code: 'cli-unavailable',
@@ -38,20 +43,35 @@ export async function runCli(
     });
   }
 }
+/** The adapter reads the words and flags; core checks every value; then the command runs. */
+function parsedRun(
+  args: readonly string[],
+  defaultWorkspace: string,
+): Promise<Result<string>> {
+  const words = readArguments(args, defaultWorkspace);
+  if (!words.ok) return Promise.resolve(words);
+  const parsed = parseCommand(words.value);
+  if (!parsed.ok) return Promise.resolve(parsed);
+  return dispatch(parsed.value);
+}
+
 /** One owner-composed Language parser drives scope discovery; there is no second DSL implementation in the CLI. */
-async function run(options: import('./records/command.js').CliOptions): Promise<Result<string>> {
-  const token = await readToken(options.workspaceDirectory);
+async function run(
+  command: ServiceCommand,
+  options: ServiceOptions,
+): Promise<Result<string>> {
+  const token = await readToken(options.workspace);
   if (!token.ok) return token;
   const transport = createTransport(options.server, token.value);
   if (!transport.ok) return transport;
   const language = createLanguage({ reader: { validate }, planner: { plan }, stage: { stage } });
   const semantic = createSemanticInputs(language);
-  return executeCommand(options.command, {
+  return executeCommand(command, {
     transport: transport.value,
     resourceFiles: createResourceFiles(),
     files: {
       ...createLocalFiles(),
-      ...createRequestJournal(resolve(options.workspaceDirectory, 'requests')),
+      ...createRequestJournal(resolve(options.workspace, 'requests')),
     },
     semantic,
     presets: createPresetInputs(semantic, readThemeConfig),
@@ -80,20 +100,18 @@ function nextRequestId(): RequestId {
   return requestId.parse(randomUUID());
 }
 
-/** Local help needs no infrastructure; authoring commands bind their real runtime before executing. */
-function dispatch(options: import('./records/command.js').CliOptions): Promise<Result<string>> {
-  if (options.command.name === 'help') return Promise.resolve(success(usage));
-  if (isProfileCommand(options.command)) return runProfile(options);
-  return run(options);
+/** Local help needs no infrastructure; profile commands bind local ports; service commands bind their real runtime. */
+function dispatch(parsed: ParsedCommand): Promise<Result<string>> {
+  if (parsed.kind === 'help') return Promise.resolve(success(usage));
+  if (parsed.kind === 'profile') return runProfile(parsed.command);
+  return run(parsed.command, parsed.options);
 }
 
 /** Profile discovery/scaffold/lint bind only the Language parser and local files. */
-async function runProfile(
-  options: import('./records/command.js').CliOptions,
-): Promise<Result<string>> {
+async function runProfile(command: ProfileCommand): Promise<Result<string>> {
   const language = createLanguage({ reader: { validate }, planner: { plan }, stage: { stage } });
   const semantic = createSemanticInputs(language);
-  return executeProfile(options.command, { files: createLocalFiles(), semantic });
+  return executeProfile(command, { files: createLocalFiles(), semantic });
 }
 
 /**

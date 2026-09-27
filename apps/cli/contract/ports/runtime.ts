@@ -11,9 +11,9 @@ import type {
 } from '../records/resources.js';
 import type { LocalFailure, Result } from '../errors.js';
 import type { Snapshot, Request, TransportResponse } from '../records/foreign.js';
-import type { Command } from '../records/command.js';
+import type { ChangeIntent } from '../records/command.js';
 import type { SourceFile } from '../records/source-file.js';
-import type { AssetDigest, Generation, RequestId } from '../brands.js';
+import type { AssetDigest, FilePath, Generation, RequestId } from '../brands.js';
 import type { ParsedSource } from '@novakai/canvas-language';
 /** One service answer: the generation that sent it, checked, and the service's outcome, kept whole. */
 export interface ServiceAnswer {
@@ -45,15 +45,15 @@ export interface RequestDraft extends JournalRecord {
   readonly generation: Generation;
 }
 export interface RequestFiles {
-  /** The file's checked path and its text. Fails with `source-unavailable` or `source-too-large`. */
-  source(path: string): Promise<Result<SourceFile, LocalFailure>>;
-  /** Fails with `invalid-request`, `request-reused` or `retention-unavailable`. */
+  /** The file's path and its text. Fails with `source-unavailable` or `source-too-large`. */
+  source(path: FilePath): Promise<Result<SourceFile, LocalFailure>>;
+  /** Fails with `request-reused` or `retention-unavailable`. */
   save(draft: RequestDraft): Promise<Result<void>>;
-  /** Fails with `invalid-request` or `request-unavailable`. */
-  read(id: string): Promise<Result<JournalRecord>>;
+  /** Fails with `request-unavailable`. */
+  read(id: RequestId): Promise<Result<JournalRecord>>;
   /** Fails with `output-unavailable`. */
   output(
-    path: string,
+    path: FilePath,
     text: string,
   ): Promise<Result<void, LocalFailure>>;
 }
@@ -64,10 +64,10 @@ export interface SemanticInputs extends ResourceSyntax {
   backup(input: unknown): Result<ByteBackup>;
   snapshot(input: unknown): Result<Snapshot>;
   request(
-    command: Command,
+    intent: ChangeIntent,
     source: string,
     snapshot: Snapshot,
-    id: string,
+    id: RequestId,
   ): Result<Request>;
   readout(input: unknown): Result<string>;
   collections(input: unknown): Result<string>;
@@ -78,7 +78,7 @@ export interface SemanticInputs extends ResourceSyntax {
   /** An apply answer carries the receipt beside the committed snapshot; the CLI reports only the receipt. */
   applied(
     input: unknown,
-    request: string,
+    request: RequestId,
   ): Result<string>;
 }
 /** Narrow effects are bound once at CLI composition. Tests exercise the same flow without booting a process or server. */
@@ -94,5 +94,5 @@ export interface CliDependencies {
 /** Receipt lookup may be absent; claimed apply success requires this exact request's committed receipt. */
 export interface ReceiptExpectation {
   readonly kind: 'lookup' | 'committed';
-  readonly request: string;
+  readonly request: RequestId;
 }

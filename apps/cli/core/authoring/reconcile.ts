@@ -4,25 +4,24 @@
  * the commit; the retained request file is the CLI's recovery record.
  */
 import { submit } from './submit.js';
-import type { Command } from '../../contract/records/command.js';
+import { receiptPath } from '../reads/queries.js';
 import type {
   CliDependencies,
   JournalRecord,
   ServiceAnswer,
 } from '../../contract/ports/runtime.js';
+import type { RequestId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { rejected } from '../../contract/errors.js';
 
 /** Replay checks for a completed receipt first. A restarted host receives the identical Authoring request under its new transport generation. */
 export async function retry(
-  command: Command,
+  request: RequestId,
   dependencies: CliDependencies,
 ): Promise<Result<string>> {
-  const retained = await dependencies.files.read(command.target);
+  const retained = await dependencies.files.read(request);
   if (!retained.ok) return retained;
-  const receipt = await dependencies.transport.get(
-    `/api/v1/receipt?id=${encodeURIComponent(command.target)}`,
-  );
+  const receipt = await dependencies.transport.get(receiptPath(request));
   if (!receipt.ok) return receipt;
   return reconciled(retained.value, receipt.value, dependencies);
 }

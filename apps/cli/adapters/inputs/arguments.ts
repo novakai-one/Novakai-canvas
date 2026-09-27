@@ -1,39 +1,38 @@
 /*
- * `pnpm canvas` argv → CliOptions: Node parses the flags, then the command grammar checks the
- * command word, operand count, mode, --revision and the profile/read-scope flags. Pure apart from
- * Node's argument parser; nothing is read or sent. Fails with `invalid-command`,
- * `invalid-arguments`, `invalid-mode` or `invalid-revision`: the caller corrects the named argument
- * and runs the command again.
+ * `pnpm canvas` argv → CommandArguments: Node parses the flags, then the placement rules check the
+ * command word, the operand count and which commands accept --profile, --id, --title, --section
+ * and --object. Pure apart from Node's argument parser; nothing is read or sent. Fails with
+ * `invalid-command` or `invalid-arguments`: the caller corrects the named argument and runs the
+ * command again. Core checks each value (`core/commands/values.ts`).
  */
 import { parseArgs } from 'node:util';
 import { commandName } from '../../contract/records/command.js';
-import type { CliOptions, Command } from '../../contract/records/command.js';
+import type { CommandName } from '../../contract/records/command.js';
+import type { CommandArguments, CommandFlags } from '../../contract/records/arguments.js';
 import type { LocalFailure, Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
-import { z } from 'zod';
-import { collectionRevision } from '../../contract/brands.js';
-const mode = z.enum(['create', 'replace', 'patch']);
-const revision = z
-  .string()
-  .regex(/^[0-9]+$/)
-  .transform(Number)
-  .pipe(collectionRevision);
-/** The flag values the command grammar reads. */
-interface CommandFlags {
-  readonly preset?: Command['preset'];
-  readonly revision?: string;
-  readonly mode: string;
-  readonly request?: string;
-  readonly out?: string;
-  readonly profile?: string;
-  readonly section?: string;
-  readonly object?: string;
+
+/** A command word and its operand, before the flags are attached. */
+interface CommandWords {
+  readonly name: CommandName;
+  readonly operand: string;
 }
-/** Flags are parsed by Node; unknown flags, extra operands and malformed revision values fail before any file/network I/O. */
+
+/** One parsed argv token; only option names are read. */
+interface Token {
+  readonly kind: string;
+  readonly name?: string;
+}
+
+/**
+ * Flags are parsed by Node; unknown flags, extra operands and misplaced flags fail before any
+ * file or network I/O. Fails with `invalid-arguments` (an unknown or malformed flag, a wrong
+ * operand count, a misplaced flag) or `invalid-command`.
+ */
 export function readArguments(
   args: readonly string[],
   defaultWorkspace: string,
-): Result<CliOptions> {
+): Result<CommandArguments> {
   try {
     const parsed = parseArgs({
       args: [...args],
@@ -57,28 +56,10 @@ export function readArguments(
         object: { type: 'string' },
       },
     });
-    const command = readCommand(
-      commandOperands(parsed.values.help, parsed.positionals),
-      {
-        ...parsed.values,
-        preset: Object.fromEntries(
-          Object.entries({
-            id: parsed.values.id,
-            version: parsed.values.version,
-            family: parsed.values.family,
-            title: parsed.values.title,
-            namespace: parsed.values.namespace,
-          }).filter(([, value]) => value !== undefined),
-        ),
-      },
-      parsed.tokens,
-    );
-    if (!command.ok) return command;
-    return success({
-      command: command.value,
-      server: parsed.values.server,
-      workspaceDirectory: parsed.values.workspace,
-    });
+    const { help, server, workspace, ...flags } = parsed.values;
+    const words = readCommand(commandOperands(help, parsed.positionals), flags, parsed.tokens);
+    if (!words.ok) return words;
+    return success({ ...words.value, flags, options: { server, workspace } });
   } catch {
     return failure({
       code: 'invalid-arguments',
@@ -88,12 +69,13 @@ export function readArguments(
     });
   }
 }
-/** Preserve command intent explicitly; a preview's mode is independent of whether a source parses as a full document or patch. */
+
+/** The command word, then its operand count, then which flags it accepts. */
 function readCommand(
   positionals: readonly string[],
   flags: CommandFlags,
-  tokens: readonly { readonly kind: string; readonly name?: string }[],
-): Result<Command> {
+  tokens: readonly Token[],
+): Result<CommandWords> {
   if (duplicateScopeFlag(tokens))
     return invalidArguments('Each read scope flag may be provided only once.');
   const parsed = commandName.safeParse(positionals[0]);
@@ -104,126 +86,49 @@ function readCommand(
     });
   return operands(parsed.data, positionals, flags);
 }
+
 /** Operands cannot be silently ignored: commands accept exactly the arguments shown in their help vocabulary. */
 function operands(
-  name: Command['name'],
+  name: CommandName,
   positionals: readonly string[],
   flags: CommandFlags,
-): Result<Command> {
+): Result<CommandWords> {
   const count = ['help', 'describe', 'list'].includes(name) ? 1 : 2;
   if (positionals.length !== count)
     return invalidArguments(`${name} requires ${count - 1} operand(s)`);
-  return fields(name, positionals[1] ?? '', flags);
+  return placed({ name, operand: positionals[1] ?? '' }, flags);
 }
-/** Value validation returns named input errors instead of allowing NaN or negative revisions into preconditions. */
-function fields(
-  name: Command['name'],
-  target: string,
+
+/** --profile, --id and --title first, then the read scope flags. */
+function placed(
+  words: CommandWords,
   flags: CommandFlags,
-): Result<Command> {
-  const invalid = profileFlagFailure(name, flags) ?? readScopeFailure(name, flags);
+): Result<CommandWords> {
+  const invalid = profileFlagFailure(words.name, flags) ?? readScopeFailure(words.name, flags);
   if (invalid !== undefined) return invalid;
-  return validFields(name, target, flags);
+  return success(words);
 }
 
-function validFields(
-  name: Command['name'],
-  target: string,
-  flags: CommandFlags,
-): Result<Command> {
-  const checked = validatedMode(name, flags.mode);
-  if (!checked.ok) return checked;
-  const scope = readScope(name, flags);
-  return versioned(
-    {
-      name,
-      target,
-      mode: checked.value,
-      request: flags.request ?? null,
-      output: flags.out ?? null,
-      preset: flags.preset,
-      profile: flags.profile,
-      ...(scope === undefined ? {} : { scope }),
-    },
-    flags.revision,
-  );
-}
-
+/** At most one of --section and --object, and only with read. Core checks their IDs. */
 function readScopeFailure(
-  name: Command['name'],
-  flags: { readonly section?: string; readonly object?: string },
-): Result<Command> | undefined {
+  name: CommandName,
+  flags: Pick<CommandFlags, 'section' | 'object'>,
+): Result<never> | undefined {
   const selected = [flags.section, flags.object].filter((value) => value !== undefined);
   if (selected.length > 1)
     return invalidArguments('--section and --object are mutually exclusive for read.');
-  return selected.length === 0 ? undefined : invalidReadScope(name, selected[0]);
+  return selected.length === 0 || name === 'read'
+    ? undefined
+    : invalidArguments('--section and --object are only valid with read.');
 }
 
-function invalidReadScope(
-  name: Command['name'],
-  selected: string | undefined,
-): Result<Command> | undefined {
-  if (name !== 'read') return invalidArguments('--section and --object are only valid with read.');
-  return invalidScopeId(selected);
-}
-
-function invalidScopeId(selected: string | undefined): Result<Command> | undefined {
-  if (selected === undefined || !/^[A-Za-z][A-Za-z0-9_-]*$/.test(selected))
-    return invalidArguments('Read scope IDs must be non-empty canonical IDs.');
-  return undefined;
-}
-
-function duplicateScopeFlag(
-  tokens: readonly { readonly kind: string; readonly name?: string }[],
-): boolean {
+function duplicateScopeFlag(tokens: readonly Token[]): boolean {
   const names = tokens.flatMap((token) =>
     token.kind === 'option' && (token.name === 'section' || token.name === 'object')
       ? [token.name]
       : [],
   );
   return names.some((name) => names.indexOf(name) !== names.lastIndexOf(name));
-}
-
-function validatedMode(
-  name: Command['name'],
-  fallback: string,
-): Result<Command['mode']> {
-  const selected = ['create', 'replace', 'patch'].includes(name) ? name : fallback;
-  const checked = mode.safeParse(selected);
-  return checked.success
-    ? success(checked.data)
-    : failure({ code: 'invalid-mode', message: 'Mode must be create, replace or patch' });
-}
-
-function readScope(
-  name: Command['name'],
-  flags: { readonly section?: string; readonly object?: string },
-): Command['scope'] {
-  if (name !== 'read') return undefined;
-  return scopeValue(flags);
-}
-
-function scopeValue(flags: {
-  readonly section?: string;
-  readonly object?: string;
-}): Command['scope'] {
-  if (flags.section !== undefined) return { kind: 'section', id: flags.section };
-  if (flags.object !== undefined) return { kind: 'object', id: flags.object };
-  return { kind: 'all' };
-}
-/** A revision is optional for read/create commands; semantic admission makes it mandatory for existing diagram changes. */
-function versioned(
-  command: Omit<Command, 'revision'>,
-  input: string | undefined,
-): Result<Command> {
-  if (input === undefined) return success({ ...command, revision: null });
-  const checked = revision.safeParse(input);
-  if (!checked.success)
-    return failure({
-      code: 'invalid-revision',
-      message: 'Revision must be a non-negative safe integer',
-    });
-  return success({ ...command, revision: checked.data });
 }
 
 /** Help is a local command and never needs a running workspace. */
@@ -238,41 +143,28 @@ function commandOperands(
 }
 
 function profileFlagFailure(
-  name: Command['name'],
-  flags: { readonly preset?: Command['preset']; readonly profile?: string },
-): Result<Command> | undefined {
-  const rules = [
-    profileFlagMessage(name, flags),
-    profileRequirementMessage(name, flags),
-    scaffoldFlagMessage(name, flags),
-  ];
+  name: CommandName,
+  flags: Pick<CommandFlags, 'profile' | 'id' | 'title'>,
+): Result<never> | undefined {
+  const rules = [profileFlagMessage(name, flags), scaffoldFlagMessage(name, flags)];
   const message = rules.find((rule) => rule !== undefined);
   return message === undefined ? undefined : invalidArguments(message.trim());
 }
 
 function profileFlagMessage(
-  name: Command['name'],
-  flags: { readonly profile?: string },
+  name: CommandName,
+  flags: Pick<CommandFlags, 'profile'>,
 ): string | undefined {
   return flags.profile !== undefined && name !== 'profile-lint'
     ? '--profile is only valid with profile lint.'
     : undefined;
 }
 
-function profileRequirementMessage(
-  name: Command['name'],
-  flags: { readonly profile?: string },
-): string | undefined {
-  return name === 'profile-lint' && flags.profile === undefined
-    ? 'profile lint requires --profile build-spec@1.'
-    : undefined;
-}
-
 function scaffoldFlagMessage(
-  name: Command['name'],
-  flags: { readonly preset?: Command['preset'] },
+  name: CommandName,
+  flags: Pick<CommandFlags, 'id' | 'title'>,
 ): string | undefined {
-  const hasScaffoldFlags = flags.preset?.id !== undefined || flags.preset?.title !== undefined;
+  const hasScaffoldFlags = flags.id !== undefined || flags.title !== undefined;
   return name !== 'profile-scaffold' && name !== 'recipe-admit' && hasScaffoldFlags
     ? '--id and --title are only valid with profile scaffold or recipe admit.'
     : undefined;

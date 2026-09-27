@@ -6,7 +6,7 @@
  */
 import { restoreResources } from '../resources/restore.js';
 import { prepare } from './prepare.js';
-import type { Command } from '../../contract/records/command.js';
+import type { ChangeCommand } from '../../contract/records/command.js';
 import type { CliDependencies, RequestDraft, ServiceAnswer } from '../../contract/ports/runtime.js';
 import type { RequestId } from '../../contract/brands.js';
 import type { LocalFailure, Result } from '../../contract/errors.js';
@@ -72,7 +72,7 @@ function confirmed(
 }
 /** Agent authoring consumes readable source only. JSON envelopes and coordinates are never required user input. */
 export async function author(
-  command: Command,
+  command: ChangeCommand,
   dependencies: CliDependencies,
 ): Promise<Result<string>> {
   const prepared = await prepare(command, dependencies);

@@ -3,20 +3,21 @@
  * service does the expansion and nothing is written to the workspace. Failures are returned as
  * values; the caller fixes the pin or namespace and runs the command again.
  */
-import type { Command } from '../../contract/records/command.js';
+import type { ExpansionRequest } from '../../contract/records/foreign.js';
 import type { CliDependencies } from '../../contract/ports/runtime.js';
 import type { Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 import { resourceCall } from '../resources/stage.js';
 
-/** Recipe expansion is read-only and returns ordinary pinned DSL; execute owns explicit --out file output. */
+/**
+ * Recipe expansion is read-only and returns ordinary pinned DSL; dispatch owns explicit --out file
+ * output. Fails as the service call does, or with `invalid-response` when the answer is not text.
+ */
 export async function instantiateRecipe(
-  command: Command,
-  dependencies: CliDependencies,
+  expansion: ExpansionRequest,
+  dependencies: Pick<CliDependencies, 'transport'>,
 ): Promise<Result<string>> {
-  const request = dependencies.presets.expansion(command.target, command.preset?.namespace ?? '');
-  if (!request.ok) return request;
-  const result = await resourceCall('instantiate', request.value, dependencies);
+  const result = await resourceCall('instantiate', expansion, dependencies);
   if (!result.ok) return result;
   return expandedSource(result.value);
 }

@@ -9,13 +9,13 @@
 import { snapshotSchema, receiptSchema } from '@novakai/canvas-authoring';
 import type { Request, Snapshot, StoredRecord } from '@novakai/canvas-authoring';
 import { requestSchema } from '../../contract/schemas.js';
-import { assetDigest, type CollectionRevision } from '../../contract/brands.js';
+import { assetDigest, type CollectionRevision, type RequestId } from '../../contract/brands.js';
 import { validate } from '@novakai/canvas-model';
 import type { Language } from '@novakai/canvas-language';
 import { byteBackup } from '../../contract/records/resources.js';
 import { z } from 'zod';
 import type { SemanticInputs, ReceiptExpectation } from '../../contract/ports/runtime.js';
-import type { Command } from '../../contract/records/command.js';
+import type { ChangeIntent } from '../../contract/records/command.js';
 import type { LocalFailure, Result } from '../../contract/errors.js';
 import type { FailureSource } from '../../contract/records/foreign.js';
 import { failure, success } from '../../contract/errors.js';
@@ -49,7 +49,7 @@ function snapshot(input: unknown): Result<Snapshot> {
 /** Existing edits require the revision the agent actually read; storage preconditions remain tied to the same snapshot. */
 function existingVersion(
   record: StoredRecord | undefined,
-  revision: CollectionRevision | null,
+  revision: CollectionRevision | undefined,
 ): Result<number> {
   if (!record) return failure({ code: 'not-found', message: 'The collection does not exist' });
   const collection = validate(record.value);
@@ -66,9 +66,9 @@ function existingVersion(
 function matchedRevision(
   record: StoredRecord,
   current: number,
-  requested: CollectionRevision | null,
+  requested: CollectionRevision | undefined,
 ): Result<number> {
-  if (requested === null)
+  if (requested === undefined)
     return failure({
       code: 'revision-required',
       message: 'Editing requires --revision from canvas read',
@@ -83,10 +83,10 @@ function matchedRevision(
 }
 /** Create uses an absent precondition; even a tombstoned ID cannot be silently reintroduced as a new collection. */
 function expectedVersion(
-  command: Command,
+  intent: ChangeIntent,
   record: StoredRecord | undefined,
 ): Result<number | 'absent'> {
-  if (command.mode !== 'create') return existingVersion(record, command.revision);
+  if (intent.mode !== 'create') return existingVersion(record, intent.revision);
   if (record)
     return failure({
       code: 'already-exists',
@@ -96,25 +96,25 @@ function expectedVersion(
 }
 /** Authoring's public schema mints every branded identity and verifies the generated envelope. */
 function build(
-  command: Command,
+  intent: ChangeIntent,
   source: string,
   state: Snapshot,
-  id: string,
+  id: RequestId,
   collection: string,
 ): Result<Request> {
   const record = state.records.find(
     (item) => item.key.kind === 'collection' && item.key.id === collection,
   );
-  const expected = expectedVersion(command, record);
+  const expected = expectedVersion(intent, record);
   if (!expected.ok) return expected;
-  return withCatalog(command, source, state, id, collection, expected.value);
+  return withCatalog(intent, source, state, id, collection, expected.value);
 }
 /** New diagrams register in the current library transaction; edits address only their existing collection. */
 function withCatalog(
-  command: Command,
+  intent: ChangeIntent,
   source: string,
   state: Snapshot,
-  id: string,
+  id: RequestId,
   collection: string,
   version: number | 'absent',
 ): Result<Request> {
@@ -122,7 +122,7 @@ function withCatalog(
   if (!catalog) return invalidResponse('Workspace catalog is missing');
   const key = { kind: 'collection', id: collection };
   const expected =
-    command.mode === 'create'
+    intent.mode === 'create'
       ? [
           { key, version },
           { key: catalog.key, version: catalog.version },
@@ -136,7 +136,7 @@ function withCatalog(
     expected,
     scope: expected.map((item) => item.key),
     assets: [],
-    intent: { kind: 'change', planner: 'dsl', payload: { source, mode: command.mode } },
+    intent: { kind: 'change', planner: 'dsl', payload: { source, mode: intent.mode } },
   });
 }
 /** Invalid generated identities are ordinary CLI errors; no partially constructed request is submitted. */
@@ -151,15 +151,15 @@ function checkedRequest(input: unknown): Result<Request> {
 }
 /** The actual Language parser identifies document scope; CLI never uses a regex to infer DSL meaning. */
 function request(
-  command: Command,
+  intent: ChangeIntent,
   source: string,
   state: Snapshot,
-  id: string,
+  id: RequestId,
   language: Pick<Language, 'parse'>,
 ): Result<Request> {
   const parsed = language.parse(source);
   if (!parsed.ok) return invalidSource(parsed.error);
-  return build(command, source, state, id, parsed.value.collection);
+  return build(intent, source, state, id, parsed.value.collection);
 }
 /** List uses Model's checked labels and IDs; invalid canonical data cannot masquerade as an empty library. */
 function collectionLine(record: StoredRecord): string {
@@ -206,7 +206,7 @@ function absentReceipt(expected: ReceiptExpectation): Result<string> {
 /** An apply answer without its receipt half is as unconfirmed as a missing receipt. */
 function appliedReceipt(
   input: unknown,
-  request: string,
+  request: RequestId,
 ): Result<string> {
   const parsed = appliedCommit.safeParse(input);
   if (!parsed.success)
@@ -220,7 +220,7 @@ function appliedReceipt(
 /** Malformed receipts cannot release a pending request or be reported as a successful write. */
 function receiptReadout(
   input: unknown,
-  request: string,
+  request: RequestId,
 ): Result<string> {
   const parsed = receiptSchema.safeParse(input);
   if (!parsed.success) return invalidResponse('Service returned an invalid receipt');
@@ -268,7 +268,7 @@ export function createSemanticInputs(language: Pick<Language, 'parse'>): Semanti
     receipt,
     applied: appliedReceipt,
     readout: sourceReadout,
-    request: (command, source, state, id) => request(command, source, state, id, language),
+    request: (intent, source, state, id) => request(intent, source, state, id, language),
     collections: (input) => {
       const current = snapshot(input);
       if (!current.ok) return current;

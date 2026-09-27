@@ -1,73 +1,91 @@
 /*
- * Command routing: run the one flow each command names, then return its text or write the text to
- * the --out file. Uses injected ports only. Failures are returned as values; `cli/canvas.ts` prints
- * them and sets the exit code.
+ * Service command routing: run the one flow each command names, then return its text or write the
+ * text to the --out file. Uses injected ports only. Failures are returned as values;
+ * `cli/canvas.ts` prints them and sets the exit code.
  */
-import { usage } from './help.js';
-import type { Command, CommandName } from '../../contract/records/command.js';
+import type { ServiceCommand } from '../../contract/records/command.js';
 import type { CliDependencies } from '../../contract/ports/runtime.js';
+import type { FilePath, RequestId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
+import { success } from '../../contract/errors.js';
 import { admitPreset } from '../presets/admit.js';
 import { instantiateRecipe } from '../presets/instantiate.js';
 import { author } from '../authoring/submit.js';
 import { retry } from '../authoring/reconcile.js';
-import { executeProfile } from '../profiles/commands.js';
-import { describe, query, sourcePath } from '../reads/queries.js';
+import { describe, inspectPath, query, receiptPath, sourcePath } from '../reads/queries.js';
+import { unsupported } from '../shared/results.js';
 
-/** Commands share stable transport/files/semantic roles; retry and apply replay the retained envelope after receipt lookup. */
+/**
+ * Runs one service command and returns its text, or `Written: FILE` after writing --out. Fails as
+ * the command's flow does, or with `output-unavailable` after the command ran.
+ */
 export async function execute(
-  command: Command,
+  command: ServiceCommand,
   dependencies: CliDependencies,
 ): Promise<Result<string>> {
-  if (
-    command.name === 'profile-describe' ||
-    command.name === 'profile-scaffold' ||
-    command.name === 'profile-lint'
-  )
-    return executeProfile(command, { files: dependencies.files, semantic: dependencies.semantic });
-  const operations: Record<CommandName, () => Promise<Result<string>>> = {
-    'theme-admit': () => admitPreset(command, dependencies),
-    'recipe-admit': () => admitPreset(command, dependencies),
-    'recipe-instantiate': () => instantiateRecipe(command, dependencies),
-    help: async () => ({ ok: true, value: usage }),
-    describe: () => query('/api/v1/language', describe, dependencies),
-    list: () => query('/api/v1/workspace', dependencies.semantic.collections, dependencies),
-    read: () => query(sourcePath(command), dependencies.semantic.readout, dependencies),
-    receipt: () =>
-      query(
-        `/api/v1/receipt?id=${encodeURIComponent(command.target)}`,
-        (input) =>
-          dependencies.semantic.receipt(input, { kind: 'lookup', request: command.target }),
-        dependencies,
-      ),
-    inspect: () =>
-      query(`/api/v1/inspect?id=${encodeURIComponent(command.target)}`, describe, dependencies),
-    create: () => author(command, dependencies),
-    replace: () => author(command, dependencies),
-    patch: () => author(command, dependencies),
-    preview: () => author(command, dependencies),
-    retry: () => retry(command, dependencies),
-    apply: () => retry(command, dependencies),
-    'profile-describe': () =>
-      executeProfile(command, { files: dependencies.files, semantic: dependencies.semantic }),
-    'profile-scaffold': () =>
-      executeProfile(command, { files: dependencies.files, semantic: dependencies.semantic }),
-    'profile-lint': () =>
-      executeProfile(command, { files: dependencies.files, semantic: dependencies.semantic }),
-  };
-  const outcome = await operations[command.name]();
+  const outcome = await run(command, dependencies);
   if (!outcome.ok) return outcome;
-  return output(command.output, outcome.value, dependencies);
+  return output(command.out, outcome.value, dependencies);
+}
+
+/** The one flow each command names; retry and apply replay the retained request after a receipt lookup. */
+function run(
+  command: ServiceCommand,
+  dependencies: CliDependencies,
+): Promise<Result<string>> {
+  switch (command.name) {
+    case 'describe':
+      return query('/api/v1/language', describe, dependencies);
+    case 'list':
+      return query('/api/v1/workspace', dependencies.semantic.collections, dependencies);
+    case 'read':
+      return query(
+        sourcePath(command.collection, command.scope),
+        dependencies.semantic.readout,
+        dependencies,
+      );
+    case 'inspect':
+      return query(inspectPath(command.collection), describe, dependencies);
+    case 'receipt':
+      return lookup(command.request, dependencies);
+    case 'create':
+    case 'replace':
+    case 'patch':
+    case 'preview':
+      return author(command, dependencies);
+    case 'retry':
+    case 'apply':
+      return retry(command.request, dependencies);
+    case 'theme-admit':
+    case 'recipe-admit':
+      return admitPreset(command, dependencies);
+    case 'recipe-instantiate':
+      return instantiateRecipe(command.expansion, dependencies);
+    default:
+      return Promise.resolve(unsupported(command));
+  }
+}
+
+/** `receipt`: a missing receipt is information, not a failure. */
+function lookup(
+  request: RequestId,
+  dependencies: CliDependencies,
+): Promise<Result<string>> {
+  return query(
+    receiptPath(request),
+    (input) => dependencies.semantic.receipt(input, { kind: 'lookup', request }),
+    dependencies,
+  );
 }
 
 /** Source files are only written at the explicit --out path; stdout remains the default. */
 async function output(
-  path: string | null,
+  path: FilePath | undefined,
   text: string,
   dependencies: CliDependencies,
 ): Promise<Result<string>> {
-  if (path === null) return { ok: true, value: text };
+  if (path === undefined) return success(text);
   const saved = await dependencies.files.output(path, text);
   if (!saved.ok) return saved;
-  return { ok: true, value: `Written: ${path}` };
+  return success(`Written: ${path}`);
 }

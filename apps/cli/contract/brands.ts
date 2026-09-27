@@ -22,8 +22,9 @@ export type { ChromeName } from '@novakai/canvas-design-system';
 
 /**
  * A local file path: any non-empty text. Node resolves it against the working directory; the
- * resource reader enforces confinement. Minted where the file is read (`source-unavailable`), by
- * the render's file adapter, and by render:png's option check.
+ * resource reader enforces confinement. Minted from a FILE operand (`source-unavailable`) and
+ * --out (`output-unavailable`) by core's argument checks, by the render's file adapter, and by
+ * render:png's option check.
  */
 export const filePath = z.string().min(1).brand<'CliFilePath'>();
 
@@ -49,7 +50,7 @@ export const generation = z.string().min(1).max(128).brand<'ServiceGeneration'>(
 
 /**
  * A collection revision the agent read: a whole number from 0 to `Number.MAX_SAFE_INTEGER`.
- * Minted from `--revision` (`invalid-revision`).
+ * Minted from `--revision` by core's argument checks (`invalid-revision`).
  */
 export const collectionRevision = z
   .number()

@@ -5,11 +5,11 @@
  */
 import { z } from 'zod';
 import type { Request, Snapshot } from '@novakai/canvas-authoring';
-import type { Command } from './command.js';
+import type { AdmitCommand } from './command.js';
 import type { ResourceRequest } from '@novakai/canvas-language';
 export type { ResourceRequest } from '@novakai/canvas-language';
 import type { Result } from '../errors.js';
-import { assetDigest, type AssetDigest, type FilePath } from '../brands.js';
+import { assetDigest, type AssetDigest, type FilePath, type RequestId } from '../brands.js';
 /** Normalized byte copies belong to local retry retention, never canonical workspace records. */
 export const byteBackup = z.strictObject({ digest: assetDigest, base64: z.string() });
 export type ByteBackup = z.infer<typeof byteBackup>;
@@ -29,19 +29,15 @@ export interface LocalInput {
 /** Preset inputs use semantic sources and exact owner-prepared identities, never JSON coordinates. */
 export interface PresetInputs {
   source(
-    command: Command,
+    command: AdmitCommand,
     source: string,
   ): Result<{ readonly admission: unknown; readonly resources: readonly ResourceRequest[] }>;
   request(
     input: unknown,
     snapshot: Snapshot,
-    id: string,
+    id: RequestId,
     assets: readonly { readonly alias: string; readonly digest: AssetDigest }[],
   ): Result<Request>;
-  expansion(
-    pin: string,
-    namespace: string,
-  ): Result<unknown>;
 }
 export interface ResourceSyntax {
   requests(source: string): Result<readonly ResourceRequest[]>;

@@ -3,7 +3,7 @@
  * preset through the service, then submit one retained Authoring request. Uses injected ports only.
  * Authoring owns the commit; the retained request file is the recovery record for `retry`.
  */
-import type { Command } from '../../contract/records/command.js';
+import type { AdmitCommand } from '../../contract/records/command.js';
 import type { CliDependencies, ServiceAnswer } from '../../contract/ports/runtime.js';
 import type { ByteBackup, ResourceRequest } from '../../contract/records/resources.js';
 import type { Snapshot } from '../../contract/records/foreign.js';
@@ -15,10 +15,10 @@ import { submit } from '../authoring/submit.js';
 
 /** All bytes and exact preset content are retained before the sole canonical Authoring apply gate. */
 export async function admitPreset(
-  command: Command,
+  command: AdmitCommand,
   dependencies: CliDependencies,
 ): Promise<Result<string>> {
-  const source = await dependencies.files.source(command.target);
+  const source = await dependencies.files.source(command.file);
   if (!source.ok) return source;
   const parsed = dependencies.presets.source(command, source.value.source);
   if (!parsed.ok) return parsed;
@@ -26,7 +26,7 @@ export async function admitPreset(
 }
 /** Byte admission, relative to the preset file, settles before immutable Templates preparation. */
 async function stagePreset(
-  command: Command,
+  command: AdmitCommand,
   file: FilePath,
   parsed: {
     readonly admission: unknown;
@@ -53,7 +53,7 @@ async function stagePreset(
 }
 /** Observe write preconditions after staging; the service still recomputes content and compares all reads during admission. */
 async function retain(
-  command: Command,
+  command: AdmitCommand,
   prepared: unknown,
   assets: readonly { readonly alias: string; readonly digest: AssetDigest }[],
   backups: readonly ByteBackup[],
@@ -66,7 +66,7 @@ async function retain(
 }
 /** Checked snapshot versions and local backups form one retained request. */
 async function retainedSnapshot(
-  command: Command,
+  command: AdmitCommand,
   prepared: unknown,
   assets: readonly { readonly alias: string; readonly digest: AssetDigest }[],
   backups: readonly ByteBackup[],
@@ -88,7 +88,7 @@ async function retainedSnapshot(
 }
 /** Request identity and preconditions are validated before durable local retention. */
 async function retainRequest(
-  command: Command,
+  command: AdmitCommand,
   prepared: unknown,
   assets: readonly { readonly alias: string; readonly digest: AssetDigest }[],
   backups: readonly ByteBackup[],

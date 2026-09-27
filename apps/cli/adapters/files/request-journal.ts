@@ -7,7 +7,7 @@ import { readFile, mkdir, open } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { z } from 'zod';
 import { requestSchema } from '../../contract/schemas.js';
-import { requestId } from '../../contract/brands.js';
+import type { RequestId } from '../../contract/brands.js';
 import { byteBackup } from '../../contract/records/resources.js';
 import type { JournalRecord, RequestFiles, RequestDraft } from '../../contract/ports/runtime.js';
 import type { Result } from '../../contract/errors.js';
@@ -27,15 +27,12 @@ const retained = z.strictObject({
 export function createRequestJournal(root: string): Pick<RequestFiles, 'save' | 'read'> {
   return { save: (draft) => save(root, draft), read: (id) => read(root, id) };
 }
-/** Request IDs are owner-validated before they are used as filenames, excluding path separators and traversal. */
+/** A request's journal file. Authoring's request ID grammar has no path separator or leading dot. */
 function location(
   root: string,
-  id: string,
-): Result<string> {
-  const checked = requestId.safeParse(id);
-  if (!checked.success)
-    return failure({ code: 'invalid-request', message: 'Request ID is invalid' });
-  return success(resolve(root, `${checked.data}.json`));
+  id: RequestId,
+): string {
+  return resolve(root, `${id}.json`);
 }
 /** Existing records may update only their transport generation; the canonical Authoring envelope must be byte-equivalent. */
 async function existing(
@@ -71,10 +68,8 @@ async function save(
   draft: RequestDraft,
 ): Promise<Result<void>> {
   try {
-    const path = location(root, draft.request.request);
-    if (!path.ok) return path;
     await mkdir(root, { recursive: true, mode: 0o700 });
-    return await persist(path.value, draft);
+    return await persist(location(root, draft.request.request), draft);
   } catch {
     return failure({
       code: 'retention-unavailable',
@@ -84,17 +79,14 @@ async function save(
 }
 /**
  * Retained JSON is host data, never agent-authored syntax; it is checked again before replay.
- * Fails with `invalid-request` (the ID) or `request-unavailable` (missing, unreadable or not a
- * journal file).
+ * Fails with `request-unavailable` (missing, unreadable or not a journal file).
  */
 async function read(
   root: string,
-  id: string,
+  id: RequestId,
 ): Promise<Result<JournalRecord>> {
   try {
-    const path = location(root, id);
-    if (!path.ok) return path;
-    const file = retained.parse(JSON.parse(await readFile(path.value, 'utf8')));
+    const file = retained.parse(JSON.parse(await readFile(location(root, id), 'utf8')));
     return success({ request: file.request, backups: file.backups });
   } catch {
     return failure({

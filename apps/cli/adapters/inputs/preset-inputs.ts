@@ -1,43 +1,31 @@
 /*
- * Preset commands' owner inputs: the recipe admission record from `recipe admit` flags, the
- * Authoring request for a prepared preset, and the expansion request for `recipe instantiate`.
- * Pure; the theme grammar is injected. Fails with `invalid-arguments` (the caller fixes the
- * flags) or `invalid-response` (the service's preparation did not form a request).
+ * Preset commands' owner inputs: the recipe admission record from `recipe admit`'s checked header
+ * and source, and the Authoring request for a prepared preset. Pure; the theme grammar and the
+ * resource syntax are injected. Fails with `invalid-source` (the recipe's DSL; the caller fixes
+ * the file) or `invalid-response` (the service's preparation did not form a request).
  */
 import { z } from 'zod';
 import type { Snapshot, Request } from '@novakai/canvas-authoring';
-import { recipeFamily, requestSchema } from '../../contract/schemas.js';
-import type { AssetDigest } from '../../contract/brands.js';
+import { requestSchema } from '../../contract/schemas.js';
+import type { AssetDigest, RequestId } from '../../contract/brands.js';
 import type { PresetInputs, ResourceSyntax } from '../../contract/records/resources.js';
-import type { Command } from '../../contract/records/command.js';
+import type { RecipeHeader } from '../../contract/records/command.js';
 import type { Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
-const flags = z.object({
-  id: z.string().min(1),
-  version: z.string().min(1),
-  family: recipeFamily,
-  title: z.string().min(1),
-});
 const prepared = z.looseObject({
   key: z.strictObject({ kind: z.literal('preset'), id: z.string() }),
   reads: z.array(z.unknown()),
 });
 /** Recipe admission keeps editable DSL as its source; Templates owns canonicalization and immutable identity. */
 function recipe(
-  command: Command,
+  header: RecipeHeader,
   source: string,
   syntax: ResourceSyntax,
 ): ReturnType<PresetInputs['source']> {
-  const parsed = flags.safeParse(command.preset);
-  if (!parsed.success)
-    return failure({
-      code: 'invalid-arguments',
-      message: 'recipe admit requires --id --version --family --title',
-    });
   const resources = syntax.requests(source);
   if (!resources.ok) return resources;
   return success({
-    admission: { schemaVersion: 1, kind: 'recipe', ...parsed.data, description: '', source },
+    admission: { schemaVersion: 1, kind: 'recipe', ...header, description: '', source },
     resources: resources.value,
   });
 }
@@ -45,7 +33,7 @@ function recipe(
 function request(
   input: unknown,
   snapshot: Snapshot,
-  id: string,
+  id: RequestId,
   assets: readonly { readonly alias: string; readonly digest: AssetDigest }[],
 ): Result<Request> {
   const parsed = prepared.safeParse(input);
@@ -87,22 +75,6 @@ function checkedResult(checked: ReturnType<typeof requestSchema.safeParse>): Res
     });
   return success(checked.data);
 }
-/** Expansion requires an exact recipe pin and explicit fresh namespace; Language remaps the resulting editable document. */
-function expansion(
-  pin: string,
-  namespace: string,
-): Result<unknown> {
-  const exact = /^([^@]+)@([^#]+)#sha256:([a-f0-9]{64})$/.exec(pin);
-  if (!exact || namespace.length === 0)
-    return failure({
-      code: 'invalid-arguments',
-      message: 'Use recipe instantiate ID@VERSION#sha256:DIGEST --namespace ID --out FILE',
-    });
-  return success({
-    pin: { kind: 'recipe', id: exact[1], version: exact[2], digest: exact[3] },
-    namespace,
-  });
-}
 /** Theme grammar is injected; this adapter owns only command-to-owner envelope construction. */
 export function createPresetInputs(
   syntax: ResourceSyntax,
@@ -110,8 +82,7 @@ export function createPresetInputs(
 ): PresetInputs {
   return {
     source: (command, source) =>
-      command.name === 'theme-admit' ? theme(source) : recipe(command, source, syntax),
+      command.name === 'theme-admit' ? theme(source) : recipe(command.recipe, source, syntax),
     request,
-    expansion,
   };
 }

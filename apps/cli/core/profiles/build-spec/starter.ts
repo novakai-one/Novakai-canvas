@@ -2,6 +2,7 @@
  * The build-spec@1 starter DSL and `profile scaffold`, which names it with the caller's collection
  * ID and title. Pure; the caller writes the text and owns recovery.
  */
+import type { CollectionId } from '../../../contract/brands.js';
 
 /** Small native current-DSL starter; profile commands never depend on a service or workspace. */
 export const buildSpecStarter = String.raw`# Editable build-spec@1 starter using current native DSL.
@@ -105,7 +106,7 @@ collection @build-spec-starter "Edit a title safely — build spec starter" them
 
 /** The starter renamed to collection `@id` titled `title`, with the title's quotes and backslashes escaped. */
 export function scaffoldBuildSpec(
-  id: string,
+  id: CollectionId,
   title: string,
 ): string {
   const escapedTitle = title.replaceAll('\\', '\\\\').replaceAll('"', '\\"');

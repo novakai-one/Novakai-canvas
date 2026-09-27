@@ -8,20 +8,22 @@ import type { FailureSource, OperationSource } from './records/foreign.js';
 /**
  * A failure the CLI found itself.
  *
- * Arguments (nothing was read or sent):
+ * Arguments (nothing was read or sent; an empty FILE or --out path reports the local-file code its
+ * read or write would give):
  * - `invalid-command`: no such command.
  * - `invalid-arguments`: an unknown flag, a wrong operand count, a flag the command does not
- *   take, or a missing or malformed flag value.
+ *   take, or a missing or malformed operand or flag value (collection ID, recipe header, pin).
  * - `invalid-mode`: `--mode` is not create, replace or patch.
  * - `invalid-revision`: `--revision` is not a non-negative safe integer.
  * - `invalid-server`: `--server` is not an `http://127.0.0.1` origin.
- * - `invalid-request`: a request ID is not a valid Authoring request ID.
+ * - `invalid-request`: a request ID operand or `--request` is not a valid Authoring request ID.
  * - `unknown-profile`: the profile is not `build-spec@1`.
  *
  * Local files:
  * - `source-unavailable`: a source or resource file cannot be opened or read as UTF-8.
  * - `source-too-large`: the source file is over 16 MiB.
- * - `output-unavailable`: the `--out` file cannot be written. The command already ran.
+ * - `output-unavailable`: the `--out` file cannot be written. The command already ran, unless the
+ *   path was empty.
  *
  * Request journal:
  * - `retention-unavailable`: the request could not be retained. Nothing was sent.
