@@ -5,9 +5,13 @@
  * keeps its snapshot when a read fails; Library owns any rejection of a projection.
  */
 import type { Collection } from '../capabilities.js';
-import type { CollectionId, ObjectId, SectionId } from '../../brands.js';
 import type { Catalog as PresetCatalog } from '@novakai/canvas-templates';
-import type { LibrarySnapshot } from '@novakai/canvas-library';
+import type {
+  CollectionProjection,
+  LibrarySnapshot,
+  ObjectProjection,
+  SectionProjection,
+} from '@novakai/canvas-library';
 
 /** Checked owner data for one consistent Authoring snapshot; these are read projections, never writable replicas. */
 export interface WorkspaceContents {
@@ -17,31 +21,18 @@ export interface WorkspaceContents {
 }
 
 /**
- * The Library input for one collection, with Model's identities. Library checks it and mints its
- * own brands when it validates a snapshot or plans a membership change.
+ * The Library input for one collection: Library's own projection record, so a change to Library's
+ * record fails typecheck here instead of failing every create at runtime. Model's identities carry
+ * the same brands. Library still checks the input (nonblank titles, known sections) when it
+ * validates a snapshot or plans a membership change.
  */
-export interface CollectionProjectionInput {
-  readonly id: CollectionId;
-  readonly revision: number;
-  readonly title: string;
-  /** The collection's description, or empty text when it has none. */
-  readonly description: string;
-  readonly sections: readonly SectionProjectionInput[];
-  readonly objects: readonly ObjectProjectionInput[];
-}
+export type CollectionProjectionInput = CollectionProjection;
 
 /** One section of the projection input: its ID and title. */
-export interface SectionProjectionInput {
-  readonly id: SectionId;
-  readonly title: string;
-}
+export type SectionProjectionInput = SectionProjection;
 
-/** One object of the projection input. */
-export interface ObjectProjectionInput {
-  readonly id: ObjectId;
-  readonly label: string;
-  /** The object's text blocks joined by newlines. */
-  readonly description: string;
-  /** The sections that show the object. */
-  readonly visibleIn: readonly SectionId[];
-}
+/**
+ * One object of the projection input: its ID, label, text blocks joined by newlines as the
+ * description, and the sections that show it.
+ */
+export type ObjectProjectionInput = ObjectProjection;
