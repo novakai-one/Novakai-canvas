@@ -1,8 +1,8 @@
 /*
  * The `pnpm canvas` command table: one frozen row per command with the flags it accepts and its
  * `--help` lines, and the commands that take no operand. Pure data plus lookups. The grammar
- * (`parse.ts`, `placement.ts`) and the help text (`help.ts`) read it, so a command's words,
- * operand, flags and usage live in one place.
+ * (`parse.ts`, `command-words.ts`, `operand-count.ts`, `accepted-flags.ts`) and the help text
+ * (`help.ts`) read it, so a command's words, operand, flags and usage live in one place.
  */
 import type { CommandName } from '../../contract/records/command.js';
 import type { TextFlag } from './flags.js';
@@ -34,8 +34,8 @@ const answered: readonly TextFlag[] = Object.freeze(['out', ...sent]);
 const retained: readonly TextFlag[] = Object.freeze(['request', ...answered]);
 
 /**
- * `--help` added to a real command line still prints usage, as in the base CLI: help takes and
- * ignores every flag but the five placed ones (--profile, --id, --title, --section, --object).
+ * `--help` added to a real command line still prints usage, as in the base CLI: `help` accepts and
+ * ignores every flag but five (--profile, --id, --title, --section, --object).
  */
 const besideHelp: readonly TextFlag[] = Object.freeze([
   'revision',
@@ -162,12 +162,13 @@ export function takesNoOperand(name: CommandName): name is NoOperandCommand {
   return Object.hasOwn(noOperandCommands, name);
 }
 
-/** Whether the command accepts `flag`. */
-export function isAccepted(
+/** Whether the command refuses `flag`: its row does not accept it. */
+export function refusesFlag(
   name: CommandName,
   flag: TextFlag,
 ): boolean {
-  return commandTable[name].accepted.includes(flag);
+  const accepted = commandTable[name].accepted.includes(flag);
+  return !accepted;
 }
 
 /** The command as typed: a family command's two words, such as `recipe admit`. */

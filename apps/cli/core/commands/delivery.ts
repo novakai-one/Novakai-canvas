@@ -25,16 +25,16 @@ export interface OutputPorts {
 }
 
 /**
- * Delivers the command's answer where it asked for it, and returns what the terminal prints: the
- * answer itself; or, with --out, `Written: FILE` once the file holds the answer. Fails with
- * `output-unavailable` when the file cannot be written.
+ * Delivers the command's answer where its --out option asks, and returns what the terminal
+ * prints: the answer itself; or, with --out, `Written: FILE` once the file holds the answer. Fails
+ * with `output-unavailable` when the file cannot be written.
  */
 export async function deliverAnswer(
   answer: CommandAnswer,
-  command: Writes,
+  outOption: Writes,
   ports: OutputPorts,
 ): Promise<Result<PrintedText>> {
-  const destination = chooseDestination(command);
+  const destination = chooseDestination(outOption);
   if (destination.kind === 'terminal') {
     return success(answer);
   }
@@ -42,11 +42,11 @@ export async function deliverAnswer(
 }
 
 /** Where the command asked for its answer: the --out file when given, otherwise the terminal. */
-function chooseDestination(command: Writes): AnswerDestination {
-  if (command.out === undefined) {
+function chooseDestination(outOption: Writes): AnswerDestination {
+  if (outOption.out === undefined) {
     return { kind: 'terminal' };
   }
-  return { kind: 'file', path: command.out };
+  return { kind: 'file', path: outOption.out };
 }
 
 /** Writes the answer to the --out file, then says so. Fails with `output-unavailable`. */

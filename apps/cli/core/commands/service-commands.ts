@@ -1,9 +1,9 @@
 /*
- * One builder per service command that takes an operand: the operand is checked first, then the
- * command's own flags, then --request and --out. Pure. `assembly.ts` checks the read scope, --mode
- * and --revision before any builder runs, and passes in the ones a command carries. A rejected
- * value is a failure naming the argument; nothing was read or sent, so the caller corrects it and
- * runs the command again.
+ * One builder per service command: the operand is checked first, then the command's own flags,
+ * then --request and --out. Pure. `assembly.ts` checks the read scope, --mode and --revision
+ * before any builder runs, and passes in the ones a command carries. A rejected value is a failure
+ * naming the argument; nothing was read or sent, so the caller corrects it and runs the command
+ * again.
  */
 import type {
   ChangeMode,
@@ -18,7 +18,7 @@ import type { FilePath } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
 import type { CommandFlags } from './flags.js';
-import { checkExpansion, checkRecipeHeader } from './recipe-values.js';
+import { checkPinAndNamespace, checkRecipeHeader } from './recipe-values.js';
 import {
   checkCollectionId,
   checkOutOption,
@@ -26,6 +26,18 @@ import {
   checkRequestOption,
   checkSourceFile,
 } from './values.js';
+
+/** The commands that take no operand and only --out: `describe` and `list`. */
+type AnswerOnlyCommandName = 'describe' | 'list';
+
+/** The commands whose operand is a request ID. */
+type RequestCommandName = 'receipt' | 'retry' | 'apply';
+
+/** The commands that send one FILE with no revision: a DSL source, or a theme config. */
+type FileCommandName = 'create' | 'theme-admit';
+
+/** The commands whose FILE Authoring checks against the --revision the agent read. */
+type RevisionCheckedCommandName = 'replace' | 'patch';
 
 /** `recipe admit`'s FILE and the recipe header from its --id --version --family --title. */
 interface RecipeSource {
@@ -36,16 +48,28 @@ interface RecipeSource {
 /** --request and --out, which every command that sends a DSL source or preset file takes. */
 type RequestAndOutOptions = Retains & Writes;
 
+/** `describe` or `list`: --out only. Fails with `output-unavailable` (an empty --out). */
+export function buildAnswerOnlyCommand(
+  name: AnswerOnlyCommandName,
+  flags: CommandFlags,
+): Result<ServiceCommand> {
+  const outOption = checkOutOption(flags);
+  if (!outOption.ok) {
+    return outOption;
+  }
+  return success({ name, ...outOption.value });
+}
+
 /**
  * `read ID`: the collection ID, then --out; the read scope was checked first. Fails with
- * `invalid-arguments`, then `output-unavailable` (an empty --out).
+ * `invalid-arguments`, then `output-unavailable`.
  */
 export function buildReadCommand(
-  operand: string,
+  collectionText: string,
   flags: CommandFlags,
   scope: ReadScope,
 ): Result<ServiceCommand> {
-  const collection = checkCollectionId(operand);
+  const collection = checkCollectionId(collectionText);
   if (!collection.ok) {
     return collection;
   }
@@ -61,10 +85,10 @@ export function buildReadCommand(
  * `output-unavailable`.
  */
 export function buildInspectCommand(
-  operand: string,
+  collectionText: string,
   flags: CommandFlags,
 ): Result<ServiceCommand> {
-  const collection = checkCollectionId(operand);
+  const collection = checkCollectionId(collectionText);
   if (!collection.ok) {
     return collection;
   }
@@ -80,11 +104,11 @@ export function buildInspectCommand(
  * `output-unavailable`.
  */
 export function buildRequestCommand(
-  name: 'receipt' | 'retry' | 'apply',
-  operand: string,
+  name: RequestCommandName,
+  requestText: string,
   flags: CommandFlags,
 ): Result<ServiceCommand> {
-  const request = checkRequestId(operand);
+  const request = checkRequestId(requestText);
   if (!request.ok) {
     return request;
   }
@@ -99,12 +123,12 @@ export function buildRequestCommand(
  * `create FILE` or `theme admit FILE`: the file, then --request and --out. Fails with
  * `source-unavailable` (an empty FILE), then `invalid-request`, then `output-unavailable`.
  */
-export function buildSourceCommand(
-  name: 'create' | 'theme-admit',
-  operand: string,
+export function buildFileCommand(
+  name: FileCommandName,
+  fileText: string,
   flags: CommandFlags,
 ): Result<ServiceCommand> {
-  const file = checkSourceFile(operand);
+  const file = checkSourceFile(fileText);
   if (!file.ok) {
     return file;
   }
@@ -119,13 +143,13 @@ export function buildSourceCommand(
  * `replace FILE` or `patch FILE`: the file, then --request and --out; --revision was checked
  * first. Fails with `source-unavailable`, then `invalid-request`, then `output-unavailable`.
  */
-export function buildRevisedSourceCommand(
-  name: 'replace' | 'patch',
-  operand: string,
+export function buildRevisionCheckedCommand(
+  name: RevisionCheckedCommandName,
+  fileText: string,
   flags: CommandFlags,
-  revises: Revises,
+  revisionOption: Revises,
 ): Result<ServiceCommand> {
-  const file = checkSourceFile(operand);
+  const file = checkSourceFile(fileText);
   if (!file.ok) {
     return file;
   }
@@ -133,7 +157,7 @@ export function buildRevisedSourceCommand(
   if (!options.ok) {
     return options;
   }
-  return success({ name, file: file.value, ...revises, ...options.value });
+  return success({ name, file: file.value, ...revisionOption, ...options.value });
 }
 
 /**
@@ -141,12 +165,12 @@ export function buildRevisedSourceCommand(
  * Fails with `source-unavailable`, then `invalid-request`, then `output-unavailable`.
  */
 export function buildPreviewCommand(
-  operand: string,
+  fileText: string,
   flags: CommandFlags,
   mode: ChangeMode,
-  revises: Revises,
+  revisionOption: Revises,
 ): Result<ServiceCommand> {
-  const file = checkSourceFile(operand);
+  const file = checkSourceFile(fileText);
   if (!file.ok) {
     return file;
   }
@@ -158,7 +182,7 @@ export function buildPreviewCommand(
     name: 'preview',
     file: file.value,
     mode,
-    ...revises,
+    ...revisionOption,
     ...options.value,
   });
 }
@@ -169,10 +193,10 @@ export function buildPreviewCommand(
  * `output-unavailable`.
  */
 export function buildRecipeAdmitCommand(
-  operand: string,
+  fileText: string,
   flags: CommandFlags,
 ): Result<ServiceCommand> {
-  const source = checkRecipeSource(operand, flags);
+  const source = checkRecipeSource(fileText, flags);
   if (!source.ok) {
     return source;
   }
@@ -188,10 +212,10 @@ export function buildRecipeAdmitCommand(
  * then `output-unavailable`.
  */
 export function buildRecipeInstantiateCommand(
-  operand: string,
+  pinText: string,
   flags: CommandFlags,
 ): Result<ServiceCommand> {
-  const expansion = checkExpansion(operand, flags.namespace);
+  const expansion = checkPinAndNamespace(pinText, flags.namespace);
   if (!expansion.ok) {
     return expansion;
   }
@@ -207,10 +231,10 @@ export function buildRecipeInstantiateCommand(
  * `invalid-arguments`.
  */
 function checkRecipeSource(
-  operand: string,
+  fileText: string,
   flags: CommandFlags,
 ): Result<RecipeSource> {
-  const file = checkSourceFile(operand);
+  const file = checkSourceFile(fileText);
   if (!file.ok) {
     return file;
   }

@@ -20,9 +20,9 @@ Two executables. The CLI parses argv, binds ports and prints. Capabilities and t
 | `profile describe`, `profile scaffold`, `profile lint` | `core/profiles/commands.ts` (lint rules in `core/profiles/lint/`)         | local files, Language. No service.                                                                               |
 | `render:png`                                           | `core/render/render.ts` (argv in `request.ts`)                            | render ports (`contract/ports/render.ts`), resource reader                                                       |
 
-Argv → command: `core/commands/parse.ts` checks words against `table.ts` (one row per command: flags, help lines; plus the commands that take no operand); `placement.ts` checks each flag is given to a command that accepts it; `placed-command.ts` is what parsing hands on. `assembly.ts` builds the command (`service-commands.ts` holds one builder per service command that takes an operand); values are minted in `values.ts`, `recipe-values.ts`, `profile-operands.ts`. `dispatch.ts` routes; `delivery.ts` prints the answer and is the one `--out` writer.
+Argv → command: `core/commands/parse.ts` runs the steps against `table.ts` (one row per command: flags, help lines; plus the commands that take no operand): `command-words.ts` picks the command's words (`--help` wins), `operand-count.ts` counts the operand, `accepted-flags.ts` checks each flag is one the command accepts, `assembly.ts` builds the command. `command-stages.ts` holds the type each step hands on. Builders: `service-commands.ts`, `profile-commands.ts`; values are minted in `values.ts`, `recipe-values.ts`. `dispatch.ts` routes; `delivery.ts` prints the answer and is the one `--out` writer.
 
-Add a command: its member in `contract/records/command.ts` → its row in `table.ts` (and `NoOperandCommand` when it takes no operand) → its builder in `assembly.ts` or `service-commands.ts` → its case in `dispatch.ts`.
+Add a command: its member in `contract/records/command.ts` → its row in `table.ts` (and `NoOperandCommand` when it takes no operand) → its builder in `service-commands.ts` or `profile-commands.ts` and its cases in `assembly.ts` → its case in `dispatch.ts`.
 
 ## Folder map
 

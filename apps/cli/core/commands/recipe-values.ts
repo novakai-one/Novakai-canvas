@@ -5,28 +5,30 @@
  * through core/resources/digests. Fails with `invalid-arguments`; nothing was read or sent, so the
  * caller corrects the named argument.
  */
-import { presetId, version } from '../../contract/brands.js';
-import type { PresetDigest } from '../../contract/brands.js';
-import { recipeFamily } from '../../contract/schemas.js';
+import { presetId as presetIdSchema, version as versionSchema } from '../../contract/brands.js';
+import type { PresetDigest, PresetId, Version } from '../../contract/brands.js';
+import { recipeFamily as recipeFamilySchema } from '../../contract/schemas.js';
 import type { RecipeHeader } from '../../contract/records/command.js';
 import type { ExpansionRequest } from '../../contract/records/foreign.js';
-import type { Result } from '../../contract/errors.js';
+import type { FailureInput, Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 import { checked } from '../shared/checks.js';
 import type { Parser } from '../shared/checks.js';
-import { joined } from '../shared/results.js';
 import { presetOfPin } from '../resources/digests.js';
+import { invalidArgumentsFailure } from './failures.js';
 import type { CommandFlags } from './flags.js';
 
-/** Missing, empty or unknown-family recipe flags. */
+/** A missing or empty header flag, or an unknown --family. */
 const headerRequired = 'recipe admit requires --id --version --family --title';
 
-/** Any malformed pin or namespace. */
-const instantiateUsage =
-  'Use recipe instantiate ID@VERSION#sha256:DIGEST --namespace ID --out FILE';
+/** Any missing or malformed part of `recipe instantiate`'s arguments: the usage line. */
+const instantiateUsage: FailureInput = Object.freeze({
+  code: 'invalid-arguments',
+  message: 'Use recipe instantiate ID@VERSION#sha256:DIGEST --namespace ID --out FILE',
+});
 
 /** `ID@VERSION#PIN`: the text form of a recipe pin; PIN is Model's `sha256:DIGEST` pin. */
-const pinText = /^([^@]+)@([^#]+)#(.+)$/;
+const pinShape = /^([^@]+)@([^#]+)#(.+)$/;
 
 /** The four header flags as given, each non-empty. */
 interface HeaderText {
@@ -36,113 +38,171 @@ interface HeaderText {
   readonly title: string;
 }
 
+/** The three texts of a pin `ID@VERSION#PIN`. */
+interface PinText {
+  readonly id: string;
+  readonly version: string;
+  readonly digest: string;
+}
+
+/** A preset's checked ID and version. */
+interface PresetIdentity {
+  readonly id: PresetId;
+  readonly version: Version;
+}
+
+/** An exact recipe pin: kind `recipe`, ID, version and digest. */
+type RecipePin = ExpansionRequest['pin'];
+
 /**
- * The recipe header. Fails with `invalid-arguments`: a missing or empty flag or an unknown family
- * (as before), then an --id that is not a preset ID or a --version that is not
- * `MAJOR.MINOR.PATCH`.
+ * The recipe header. Fails with `invalid-arguments`: a missing or empty flag first, then an --id
+ * that is not a preset ID, a --version that is not `MAJOR.MINOR.PATCH`, or an unknown --family.
  */
 export function checkRecipeHeader(flags: CommandFlags): Result<RecipeHeader> {
-  const text = headerText(flags);
-  if (!text.ok) return text;
-  return header(text.value);
+  const headerText = requireHeaderFlags(flags);
+  if (!headerText.ok) {
+    return headerText;
+  }
+  return checkHeaderValues(headerText.value);
 }
 
 /**
  * The expansion request for `recipe instantiate PIN --namespace ID`. Fails with
- * `invalid-arguments` when the pin text, its ID, version or digest, or the namespace is malformed.
+ * `invalid-arguments` (the usage line) when the pin text, its ID, version or digest, or the
+ * namespace is missing or malformed.
  */
-export function checkExpansion(
-  pin: string,
-  namespace: string | undefined,
+export function checkPinAndNamespace(
+  pinText: string,
+  namespaceText: string | undefined,
 ): Result<ExpansionRequest> {
-  const parts = pinText.exec(pin);
-  if (parts === null || namespace === undefined) return invalidArguments(instantiateUsage);
-  const [, id, release, pinned = ''] = parts;
-  return joined(
-    recipePin(id, release, pinned),
-    usage(presetId, namespace),
-    (checkedPin, space) => ({
-      pin: checkedPin,
-      namespace: space,
-    }),
-  );
+  const pin = checkRecipePin(pinText);
+  if (!pin.ok) {
+    return pin;
+  }
+  const namespace = checkNamespace(namespaceText);
+  if (!namespace.ok) {
+    return namespace;
+  }
+  return success({ pin: pin.value, namespace: namespace.value });
 }
 
-/** All four header flags, or `invalid-arguments` naming them. */
-function headerText(flags: CommandFlags): Result<HeaderText> {
-  const { id = '', version: release = '', family = '', title = '' } = flags;
-  if ([id, release, family, title].includes('')) return invalidArguments(headerRequired);
-  return success({ id, version: release, family, title });
+/** All four header flags, each given and not empty. Fails with `invalid-arguments` naming all four. */
+function requireHeaderFlags(flags: CommandFlags): Result<HeaderText> {
+  const { id, version, family, title } = flags;
+  const allGiven = isFilled(id) && isFilled(version) && isFilled(family) && isFilled(title);
+  if (!allGiven) {
+    return invalidArgumentsFailure(headerRequired);
+  }
+  return success({ id, version, family, title });
 }
 
-/** Header text checked in flag order: --id, --version, --family. */
-function header(text: HeaderText): Result<RecipeHeader> {
-  const named = joined(
-    headerValue(
-      presetId,
-      text.id,
-      'recipe admit --id must be a letter, then letters, digits, _ or -',
-    ),
-    headerValue(version, text.version, 'recipe admit --version must be MAJOR.MINOR.PATCH'),
-    (id, release) => ({ id, version: release }),
-  );
-  return joined(
-    named,
-    headerValue(recipeFamily, text.family, headerRequired),
-    (fields, family) => ({
-      ...fields,
-      family,
-      title: text.title,
-    }),
-  );
+/** The header values in flag order: --id and --version, then --family. */
+function checkHeaderValues(headerText: HeaderText): Result<RecipeHeader> {
+  const identity = checkHeaderIdentity(headerText);
+  if (!identity.ok) {
+    return identity;
+  }
+  const family = checkHeaderValue(recipeFamilySchema, headerText.family, headerRequired);
+  if (!family.ok) {
+    return family;
+  }
+  return success({ ...identity.value, family: family.value, title: headerText.title });
 }
 
-/** An exact recipe pin from the pin text's three parts. */
-function recipePin(
-  id: string | undefined,
-  release: string | undefined,
-  pinned: string,
-): Result<ExpansionRequest['pin']> {
-  const named = joined(
-    usage(presetId, id),
-    usage(version, release),
-    (checkedId, checkedVersion) => ({
-      id: checkedId,
-      version: checkedVersion,
-    }),
+/** --id, then --version. Fails with `invalid-arguments` naming the flag. */
+function checkHeaderIdentity(headerText: HeaderText): Result<PresetIdentity> {
+  const id = checkHeaderValue(
+    presetIdSchema,
+    headerText.id,
+    'recipe admit --id must be a letter, then letters, digits, _ or -',
   );
-  return joined(named, pinnedPreset(pinned), (fields, checkedDigest) => ({
-    kind: 'recipe',
-    ...fields,
-    digest: checkedDigest,
-  }));
+  if (!id.ok) {
+    return id;
+  }
+  const version = checkHeaderValue(
+    versionSchema,
+    headerText.version,
+    'recipe admit --version must be MAJOR.MINOR.PATCH',
+  );
+  if (!version.ok) {
+    return version;
+  }
+  return success({ id: id.value, version: version.value });
 }
 
-/** The Templates digest a recipe pin's `sha256:` text names; any other text prints the usage line. */
-function pinnedPreset(pinned: string): Result<PresetDigest> {
-  const digest = presetOfPin(pinned);
-  if (digest === undefined) return invalidArguments(instantiateUsage);
+/** One header value; `message` names the flag. Fails with `invalid-arguments`. */
+function checkHeaderValue<T>(
+  parser: Parser<T>,
+  text: string,
+  message: string,
+): Result<T> {
+  return checked(parser, text, { code: 'invalid-arguments', message });
+}
+
+/** An exact recipe pin from `ID@VERSION#PIN`. Fails with `invalid-arguments` (the usage line). */
+function checkRecipePin(pinText: string): Result<RecipePin> {
+  const pinParts = splitPinText(pinText);
+  if (!pinParts.ok) {
+    return pinParts;
+  }
+  return checkPinParts(pinParts.value);
+}
+
+/** `ID@VERSION#PIN` split at its `@` and `#`. Fails with `invalid-arguments` for any other shape. */
+function splitPinText(pinText: string): Result<PinText> {
+  // Text of any other shape does not match, so it has no parts.
+  const [, id, version, digest] = pinShape.exec(pinText) ?? [];
+  const hasEveryPart = id !== undefined && version !== undefined && digest !== undefined;
+  if (!hasEveryPart) {
+    return failure(instantiateUsage);
+  }
+  return success({ id, version, digest });
+}
+
+/** The pin's ID and version, then its digest. Fails with `invalid-arguments` (the usage line). */
+function checkPinParts(pinParts: PinText): Result<RecipePin> {
+  const identity = checkPinIdentity(pinParts);
+  if (!identity.ok) {
+    return identity;
+  }
+  const digest = checkPinDigest(pinParts.digest);
+  if (!digest.ok) {
+    return digest;
+  }
+  return success({ kind: 'recipe', ...identity.value, digest: digest.value });
+}
+
+/** The pin's ID, then its version. Fails with `invalid-arguments` (the usage line). */
+function checkPinIdentity(pinParts: PinText): Result<PresetIdentity> {
+  const id = checked(presetIdSchema, pinParts.id, instantiateUsage);
+  if (!id.ok) {
+    return id;
+  }
+  const version = checked(versionSchema, pinParts.version, instantiateUsage);
+  if (!version.ok) {
+    return version;
+  }
+  return success({ id: id.value, version: version.value });
+}
+
+/** The Templates digest a `sha256:` pin names. Fails with `invalid-arguments` (the usage line). */
+function checkPinDigest(digestText: string): Result<PresetDigest> {
+  const digest = presetOfPin(digestText);
+  if (digest === undefined) {
+    return failure(instantiateUsage);
+  }
   return success(digest);
 }
 
-/** One header value; `malformed` names the flag. */
-function headerValue<T>(
-  parser: Parser<T>,
-  text: string,
-  malformed: string,
-): Result<T> {
-  return checked(parser, text, { code: 'invalid-arguments', message: malformed });
+/** --namespace, as a preset ID. Missing or malformed fails with `invalid-arguments` (the usage line). */
+function checkNamespace(namespaceText: string | undefined): Result<PresetId> {
+  if (namespaceText === undefined) {
+    return failure(instantiateUsage);
+  }
+  return checked(presetIdSchema, namespaceText, instantiateUsage);
 }
 
-/** One part of `recipe instantiate`'s arguments; any rejection prints the usage line. */
-function usage<T>(
-  parser: Parser<T>,
-  text: string | undefined,
-): Result<T> {
-  return checked(parser, text, { code: 'invalid-arguments', message: instantiateUsage });
-}
-
-/** A malformed recipe argument; nothing was read or sent. */
-function invalidArguments(message: string): Result<never> {
-  return failure({ code: 'invalid-arguments', message });
+/** Whether a header flag was given and is not empty. */
+function isFilled(text: string | undefined): text is string {
+  return text !== undefined && text !== '';
 }

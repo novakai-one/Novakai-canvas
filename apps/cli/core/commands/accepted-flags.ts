@@ -6,55 +6,57 @@
  */
 import type { LocalFailure, Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
-import { invalidArguments } from './failures.js';
-import { listGivenFlags } from './flags.js';
+import type { AcceptedCommand, CountedCommand } from './command-stages.js';
+import { invalidArgumentsFailure, lintProfileRequiredFailure } from './failures.js';
 import type { TextFlag } from './flags.js';
-import type { PlacedCommand } from './placed-command.js';
-import { lintProfileRequired } from './profile-operands.js';
-import { isAccepted, typedName } from './table.js';
+import { refusesFlag, typedName } from './table.js';
 
 /** A rule's verdict: `true` when the command passes it; otherwise the failure naming the flag. */
 type RuleVerdict = Result<true, LocalFailure>;
 
-/** One placement rule, checked against the command and its flags. */
-type PlacementRule = (placed: PlacedCommand) => RuleVerdict;
+/** One flag rule, checked against the command and its flags. */
+type FlagRule = (counted: CountedCommand) => RuleVerdict;
 
-/** The placement rules, in the base CLI's order (listed on `checkFlagPlacement`). */
-const placementRules: readonly PlacementRule[] = Object.freeze([
+/** The flag rules, in the base CLI's order (listed on `checkAcceptedFlags`). */
+const flagRules: readonly FlagRule[] = Object.freeze([
   rejectMisplacedProfile,
   requireLintProfile,
   rejectMisplacedIdOrTitle,
-  rejectBothScopeFlags,
+  rejectSectionWithObject,
   rejectMisplacedScopeFlags,
   rejectUnacceptedFlag,
 ]);
 
 /**
- * The command, unchanged, once every placement rule passes.
+ * The command, once every flag rule passes.
  *
  * Fails with `invalid-arguments` for the first broken rule, in this order:
  * 1. `rejectMisplacedProfile`: --profile given to any command but `profile lint`.
  * 2. `requireLintProfile`: `profile lint` given without --profile.
  * 3. `rejectMisplacedIdOrTitle`: --id or --title given to any command but `profile scaffold` and
  *    `recipe admit`.
- * 4. `rejectBothScopeFlags`: --section and --object given together.
+ * 4. `rejectSectionWithObject`: --section and --object given together.
  * 5. `rejectMisplacedScopeFlags`: --section or --object given to any command but `read`.
  * 6. `rejectUnacceptedFlag`: any other flag the command does not accept, named as
  *    `--X is not valid with COMMAND`.
  *
  * Flag values are not checked here; `assembly.ts` checks them.
  */
-export function checkFlagPlacement(placed: PlacedCommand): Result<PlacedCommand> {
+export function checkAcceptedFlags(counted: CountedCommand): Result<AcceptedCommand> {
   // `checkNextRule` passes the first failure along unchanged, so later rules are skipped.
-  const checked = placementRules.reduce(checkNextRule, success(placed));
-  return checked;
+  const checked = flagRules.reduce(checkNextRule, success(counted));
+  if (!checked.ok) {
+    return checked;
+  }
+  const accepted = keepFlagText(checked.value);
+  return success(accepted);
 }
 
 /** Checks the command against the next rule, or passes an earlier failure on unchanged. */
 function checkNextRule(
-  checked: Result<PlacedCommand>,
-  rule: PlacementRule,
-): Result<PlacedCommand> {
+  checked: Result<CountedCommand>,
+  rule: FlagRule,
+): Result<CountedCommand> {
   if (!checked.ok) {
     return checked;
   }
@@ -65,81 +67,85 @@ function checkNextRule(
   return checked;
 }
 
+/** The checked command with its flags' text only: their order was needed only by rule 6. */
+function keepFlagText(checked: CountedCommand): AcceptedCommand {
+  const flags = checked.flags.text;
+  return { ...checked, flags };
+}
+
 /** Rule 1: --profile only with `profile lint`. */
-function rejectMisplacedProfile(placed: PlacedCommand): RuleVerdict {
-  return rejectMisplacedFlags(placed, ['profile'], '--profile is only valid with profile lint.');
+function rejectMisplacedProfile(counted: CountedCommand): RuleVerdict {
+  return rejectMisplacedFlags(counted, ['profile'], '--profile is only valid with profile lint.');
 }
 
 /** Rule 2: `profile lint` needs --profile. Checked before the scope flags, as the base CLI does. */
-function requireLintProfile(placed: PlacedCommand): RuleVerdict {
-  const lintWithoutProfile = placed.name === 'profile-lint' && placed.flags.profile === undefined;
+function requireLintProfile(counted: CountedCommand): RuleVerdict {
+  const lintWithoutProfile =
+    counted.name === 'profile-lint' && counted.flags.text.profile === undefined;
   if (lintWithoutProfile) {
-    return invalidArguments(lintProfileRequired);
+    return lintProfileRequiredFailure();
   }
   return success(true);
 }
 
 /** Rule 3: --id and --title only with `profile scaffold` and `recipe admit`. */
-function rejectMisplacedIdOrTitle(placed: PlacedCommand): RuleVerdict {
+function rejectMisplacedIdOrTitle(counted: CountedCommand): RuleVerdict {
   return rejectMisplacedFlags(
-    placed,
+    counted,
     ['id', 'title'],
     '--id and --title are only valid with profile scaffold or recipe admit.',
   );
 }
 
 /** Rule 4: --section and --object never together, whichever command is given them. */
-function rejectBothScopeFlags(placed: PlacedCommand): RuleVerdict {
-  const bothScopeFlags = placed.flags.section !== undefined && placed.flags.object !== undefined;
-  if (bothScopeFlags) {
-    return invalidArguments('--section and --object are mutually exclusive for read.');
+function rejectSectionWithObject(counted: CountedCommand): RuleVerdict {
+  const { section, object } = counted.flags.text;
+  const bothGiven = section !== undefined && object !== undefined;
+  if (bothGiven) {
+    return invalidArgumentsFailure('--section and --object are mutually exclusive for read.');
   }
   return success(true);
 }
 
 /** Rule 5: --section and --object only with `read`. */
-function rejectMisplacedScopeFlags(placed: PlacedCommand): RuleVerdict {
+function rejectMisplacedScopeFlags(counted: CountedCommand): RuleVerdict {
   return rejectMisplacedFlags(
-    placed,
+    counted,
     ['section', 'object'],
     '--section and --object are only valid with read.',
   );
 }
 
-/**
- * Rule 6: the first flag the command does not accept fails, in the order the flags were given
- * (`listGivenFlags`).
- */
-function rejectUnacceptedFlag(placed: PlacedCommand): RuleVerdict {
-  const givenFlags = listGivenFlags(placed.flags);
-  const unaccepted = givenFlags.find((flag) => !isAccepted(placed.name, flag));
-  if (unaccepted !== undefined) {
-    return invalidArguments(`--${unaccepted} is not valid with ${typedName(placed.name)}`);
+/** Rule 6: the first flag the command does not accept fails, in the order the flags were given. */
+function rejectUnacceptedFlag(counted: CountedCommand): RuleVerdict {
+  const refusedFlag = counted.flags.givenOrder.find((flag) => refusesFlag(counted.name, flag));
+  if (refusedFlag !== undefined) {
+    return invalidArgumentsFailure(`--${refusedFlag} is not valid with ${typedName(counted.name)}`);
   }
   return success(true);
 }
 
 /**
  * Fails with `message` when any of `restrictedFlags` is given to a command that does not accept
- * it.
+ * it. Rules 1, 3 and 5 are rule 6 for their flags, checked earlier with the base CLI's wording.
  */
 function rejectMisplacedFlags(
-  placed: PlacedCommand,
+  counted: CountedCommand,
   restrictedFlags: readonly TextFlag[],
   message: string,
 ): RuleVerdict {
-  const misplaced = restrictedFlags.some((flag) => isGivenButNotAccepted(placed, flag));
+  const misplaced = restrictedFlags.some((flag) => isGivenButRefused(counted, flag));
   if (misplaced) {
-    return invalidArguments(message);
+    return invalidArgumentsFailure(message);
   }
   return success(true);
 }
 
 /** Whether `flag` was given to a command that does not accept it. */
-function isGivenButNotAccepted(
-  placed: PlacedCommand,
+function isGivenButRefused(
+  counted: CountedCommand,
   flag: TextFlag,
 ): boolean {
-  const isGiven = placed.flags[flag] !== undefined;
-  return isGiven && !isAccepted(placed.name, flag);
+  const isGiven = counted.flags.text[flag] !== undefined;
+  return isGiven && refusesFlag(counted.name, flag);
 }

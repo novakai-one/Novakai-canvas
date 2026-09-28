@@ -1,6 +1,6 @@
 /*
- * Running a parsed command: the one flow the command names answers it, then `delivery.ts` prints
- * the answer or writes it to the --out file. Uses injected ports only. Failures are returned as
+ * Running a parsed command: the flow that answers the command runs, then `delivery.ts` prints the
+ * answer or writes it to the --out file. Uses injected ports only. Failures are returned as
  * values; `cli/canvas.ts` prints them and sets the exit code. After a sent request, recovery is
  * `canvas receipt ID`, then `canvas retry ID`.
  */
@@ -51,7 +51,7 @@ export type ProfilePorts = ProfileDependencies & OutputPorts;
  * Runs one service command and returns the text to print.
  *
  * Steps; a failure is returned unchanged:
- * 1. Answer the command with the one flow it names. Fails as that flow does.
+ * 1. Answer the command with the flow that answers it. Fails as that flow does.
  * 2. Deliver the answer: printed, or written to the --out file. Fails with `output-unavailable`
  *    when the file cannot be written; the command already ran and is not run again.
  */
@@ -86,10 +86,10 @@ export async function runProfileCommand(
 }
 
 /**
- * The answer from the one flow the command names: the service answers reads; `create`, `replace`,
- * `patch` and `preview` go to Authoring; `retry` and `apply` replay a retained request; theme and
- * recipe files are admitted as presets; a recipe is instantiated by the service. Fails as that
- * flow does.
+ * Sends the command to the flow that answers it and returns the answer. Reads → service queries;
+ * `create`, `replace`, `patch`, `preview` → Authoring; `retry`, `apply` → replay the retained
+ * request; `theme admit`, `recipe admit` → preset admission; `recipe instantiate` → one service
+ * call. Fails as that flow does.
  */
 function answerServiceCommand(
   command: ServiceCommand,
