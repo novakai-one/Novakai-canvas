@@ -20,9 +20,9 @@ Two executables. The CLI parses argv, binds ports and prints. Capabilities and t
 | `profile describe`, `profile scaffold`, `profile lint` | `core/profiles/commands.ts` (lint rules in `core/profiles/lint/`)         | local files, Language. No service.                                                                               |
 | `render:png`                                           | `core/render/render.ts` (argv in `request.ts`)                            | render ports (`contract/ports/render.ts`), resource reader                                                       |
 
-Argv → command: `core/commands/parse.ts` checks words against `table.ts` (one row per command: operands, flags, help lines); `placement.ts` checks each flag is given to a command that reads it; `words.ts` is what parsing hands on. Values are minted in `values.ts`, `operands.ts`, `recipe-values.ts`, `profile-operands.ts`. `dispatch.ts` routes and is the one `--out` writer.
+Argv → command: `core/commands/parse.ts` checks words against `table.ts` (one row per command: flags, help lines; plus the commands that take no operand); `placement.ts` checks each flag is given to a command that accepts it; `placed-command.ts` is what parsing hands on. Values are minted in `values.ts`, `operands.ts`, `recipe-values.ts`, `profile-operands.ts`. `dispatch.ts` routes; `delivery.ts` prints the answer and is the one `--out` writer.
 
-Add a command: its member in `contract/records/command.ts` → its row in `table.ts` → its fields in `operands.ts` → its case in `dispatch.ts`.
+Add a command: its member in `contract/records/command.ts` → its row in `table.ts` (and `NoOperandCommand` when it takes no operand) → its fields in `operands.ts` → its case in `dispatch.ts`.
 
 ## Folder map
 

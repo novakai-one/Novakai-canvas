@@ -15,7 +15,7 @@ import { createTransport } from '../../adapters/service-http/transport.js';
 import { createServiceReads } from '../../adapters/service-http/reads.js';
 import { createServiceAuthoring } from '../../adapters/service-http/authoring.js';
 import { createServiceResources } from '../../adapters/service-http/resources.js';
-import { executeService } from '../api.js';
+import { runServiceCommand } from '../api.js';
 import type { ServicePorts } from '../api.js';
 import type { Result } from '../errors.js';
 import { failure, rejected, success } from '../errors.js';
@@ -39,7 +39,7 @@ export async function runService(
 ): Promise<Result<string>> {
   const token = await readToken(options.workspace);
   if (!token.ok) return token;
-  return executeService(command, servicePorts(options, token.value));
+  return runServiceCommand(command, servicePorts(options, token.value));
 }
 
 /**

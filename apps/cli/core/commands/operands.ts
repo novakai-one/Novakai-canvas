@@ -1,10 +1,10 @@
 /*
- * `pnpm canvas` command assembly: the grammar's words and flag text become one `ParsedCommand`,
- * each command carrying only the checked fields it reads. Pure. Runs after `parse.ts` refused
- * every flag the command does not read. Order: the read scope, --mode and --revision, then the
- * command's operand, its own flags, --request and --out, then a service command's --server and
- * --workspace. A rejected value is a failure naming the argument; nothing was read or sent, so the
- * caller corrects it and runs the command again.
+ * `pnpm canvas` command assembly: the placed command's operand and flag text become one
+ * `ParsedCommand`, each command carrying only the checked fields it reads. Pure. Runs after
+ * `placement.ts` refused every flag the command does not accept. Order: the read scope, --mode
+ * and --revision, then the command's operand, its own flags, --request and --out, then a service
+ * command's --server and --workspace. A rejected value is a failure naming the argument; nothing
+ * was read or sent, so the caller corrects it and runs the command again.
  */
 import type {
   ChangeMode,
@@ -21,7 +21,9 @@ import type { FilePath } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
 import { joined, mapped, unsupported } from '../shared/results.js';
-import type { CommandDefaults, CommandFlags } from './flags.js';
+import type { CommandFlags } from './flags.js';
+import { hasOperand } from './placed-command.js';
+import type { PlacedCommand, PlacedWithOperand, PlacedWithoutOperand } from './placed-command.js';
 import { profileCommand } from './profile-operands.js';
 import { expansion, recipeHeader } from './recipe-values.js';
 import {
@@ -35,12 +37,12 @@ import {
   sourceFile,
   writes,
 } from './values.js';
-import type { CommandWords } from './words.js';
+import type { NoOperandCommand } from './table.js';
 
 /**
- * The read scope, change mode and revision, checked first as the base CLI does. `parse.ts` refused
- * these flags on a command that does not read them, so that command sees only defaults and drops
- * them.
+ * The read scope, change mode and revision, checked first as the base CLI does. `placement.ts`
+ * refused these flags on a command that does not accept them, so that command sees only defaults
+ * and drops them.
  */
 interface SharedFlags {
   readonly scope: ReadScope;
@@ -48,18 +50,22 @@ interface SharedFlags {
   readonly revises: Revises;
 }
 
+/** A service command that takes one operand: every service command but `describe` and `list`. */
+type OneOperandServiceCommand = Exclude<ServiceCommand['name'], NoOperandCommand>;
+
 /**
- * The command the words name, with its checked fields. Fails with `invalid-arguments`,
- * `invalid-mode`, `invalid-revision`, `invalid-request`, `unknown-profile`, `source-unavailable`
- * (an empty FILE), `output-unavailable` (an empty --out) or `invalid-server`.
+ * The placed command with its checked fields; `defaultWorkspace` is the --workspace text used when
+ * the flag is absent. Fails with `invalid-arguments`, `invalid-mode`, `invalid-revision`,
+ * `invalid-request`, `unknown-profile`, `source-unavailable` (an empty FILE), `output-unavailable`
+ * (an empty --out) or `invalid-server`.
  */
 export function assembleCommand(
-  words: CommandWords,
-  defaults: CommandDefaults,
+  placed: PlacedCommand,
+  defaultWorkspace: string,
 ): Result<ParsedCommand> {
-  const shared = sharedFlags(words.name, words.flags);
+  const shared = sharedFlags(placed.name, placed.flags);
   if (!shared.ok) return shared;
-  return routed(words, shared.value, defaults);
+  return routed(placed, shared.value, defaultWorkspace);
 }
 
 /** The read scope, then --mode, then --revision. */
@@ -77,16 +83,35 @@ function sharedFlags(
   }));
 }
 
-/** Help, a local profile command, or a service command with its server and workspace. */
+/** A command that takes no operand, or a command with its one operand. */
 function routed(
-  words: CommandWords,
+  placed: PlacedCommand,
   shared: SharedFlags,
-  defaults: CommandDefaults,
+  defaultWorkspace: string,
 ): Result<ParsedCommand> {
-  const { name, operand, flags } = words;
+  if (!hasOperand(placed)) return withoutOperand(placed, defaultWorkspace);
+  return withOperand(placed, shared, defaultWorkspace);
+}
+
+/** Help, or `describe` or `list` with --out, then its server and workspace. */
+function withoutOperand(
+  placed: PlacedWithoutOperand,
+  defaultWorkspace: string,
+): Result<ParsedCommand> {
+  const { name, flags } = placed;
+  if (name === 'help') return success({ kind: 'help' });
+  const command = mapped(writes(flags), (written) => ({ name, ...written }));
+  return withServiceOptions(command, flags, defaultWorkspace);
+}
+
+/** A local profile command, or a service command with its server and workspace. */
+function withOperand(
+  placed: PlacedWithOperand,
+  shared: SharedFlags,
+  defaultWorkspace: string,
+): Result<ParsedCommand> {
+  const { name, operand, flags } = placed;
   switch (name) {
-    case 'help':
-      return success({ kind: 'help' });
     case 'profile-describe':
     case 'profile-scaffold':
     case 'profile-lint':
@@ -95,25 +120,35 @@ function routed(
         command,
       }));
     default:
-      return joined(
+      return withServiceOptions(
         serviceCommand(name, operand, flags, shared),
-        serviceOptions(flags, defaults),
-        (command, options) => ({ kind: 'service', command, options }),
+        flags,
+        defaultWorkspace,
       );
   }
 }
 
-/** One service command: its operand first, then its own flags, --request, then --out. */
+/** The service command, then --server and --workspace, checked in that order. */
+function withServiceOptions(
+  command: Result<ServiceCommand>,
+  flags: CommandFlags,
+  defaultWorkspace: string,
+): Result<ParsedCommand> {
+  return joined(command, serviceOptions(flags, defaultWorkspace), (checked, options) => ({
+    kind: 'service',
+    command: checked,
+    options,
+  }));
+}
+
+/** One service command with an operand: the operand first, then its own flags, --request, --out. */
 function serviceCommand(
-  name: ServiceCommand['name'],
+  name: OneOperandServiceCommand,
   operand: string,
   flags: CommandFlags,
   shared: SharedFlags,
 ): Result<ServiceCommand> {
   switch (name) {
-    case 'describe':
-    case 'list':
-      return mapped(writes(flags), (written) => ({ name, ...written }));
     case 'read':
       return joined(collection(operand), writes(flags), (id, written) => ({
         name,

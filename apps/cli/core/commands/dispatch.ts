@@ -1,15 +1,14 @@
 /*
- * Executing a parsed command: the one flow the command names answers it, then the answer is
- * printed or written to the --out file. The one --out writer. Uses injected ports only. Failures
- * are returned as values; `cli/canvas.ts` prints them and sets the exit code. After a sent
- * request, recovery is `canvas receipt ID`, then `canvas retry ID`.
+ * Running a parsed command: the one flow the command names answers it, then `delivery.ts` prints
+ * the answer or writes it to the --out file. Uses injected ports only. Failures are returned as
+ * values; `cli/canvas.ts` prints them and sets the exit code. After a sent request, recovery is
+ * `canvas receipt ID`, then `canvas retry ID`.
  */
 import type { ProfileCommand, ServiceCommand } from '../../contract/records/command.js';
-import type { LocalFiles } from '../../contract/ports/local-files.js';
+import type { ExpansionRequest } from '../../contract/records/foreign.js';
 import type { ServiceResources } from '../../contract/ports/service-resources.js';
-import type { FilePath } from '../../contract/brands.js';
+import type { RequestId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
-import { success } from '../../contract/errors.js';
 import { admitPreset } from '../presets/admit.js';
 import type { AdmitDependencies } from '../presets/admit.js';
 import { author } from '../authoring/submit.js';
@@ -21,17 +20,8 @@ import type { ReadDependencies } from '../reads/queries.js';
 import { answerProfile } from '../profiles/commands.js';
 import type { ProfileDependencies } from '../profiles/commands.js';
 import { unsupported } from '../shared/results.js';
-
-/** A command's answer: the text its flow returns. */
-type CommandAnswer = string;
-
-/** What the terminal prints: the answer itself, or `Written: FILE` once the --out file holds it. */
-export type PrintedText = string;
-
-/** The one port the --out write uses. */
-interface OutputPorts {
-  readonly files: Pick<LocalFiles, 'writeOutput'>;
-}
+import { chooseDestination, deliverAnswer } from './delivery.js';
+import type { CommandAnswer, OutputPorts, PrintedText } from './delivery.js';
 
 /** The one port `recipe instantiate` uses: it is a single service call, made here. */
 interface InstantiatePorts {
@@ -60,13 +50,16 @@ export type ProfilePorts = ProfileDependencies & OutputPorts;
  * 2. Deliver the answer: printed, or written to the --out file. Fails with `output-unavailable`
  *    when the file cannot be written; the command already ran and is not run again.
  */
-export async function executeService(
+export async function runServiceCommand(
   command: ServiceCommand,
   ports: ServicePorts,
 ): Promise<Result<PrintedText>> {
-  const answer = await answerService(command, ports);
-  if (!answer.ok) return answer;
-  return deliverAnswer(answer.value, command.out, ports);
+  const answer = await answerServiceCommand(command, ports);
+  if (!answer.ok) {
+    return answer;
+  }
+  const destination = chooseDestination(command);
+  return deliverAnswer(answer.value, destination, ports);
 }
 
 /**
@@ -77,21 +70,25 @@ export async function executeService(
  * 2. Deliver the answer: printed, or written to the --out file. Fails with `output-unavailable`
  *    when the file cannot be written.
  */
-export async function executeProfile(
+export async function runProfileCommand(
   command: ProfileCommand,
   ports: ProfilePorts,
 ): Promise<Result<PrintedText>> {
   const answer = await answerProfile(command, ports);
-  if (!answer.ok) return answer;
-  return deliverAnswer(answer.value, command.out, ports);
+  if (!answer.ok) {
+    return answer;
+  }
+  const destination = chooseDestination(command);
+  return deliverAnswer(answer.value, destination, ports);
 }
 
 /**
  * The answer from the one flow the command names: the service answers reads; `create`, `replace`,
- * `patch` and `preview` go to Authoring; `apply` and `retry` look up the receipt, then replay the
- * retained request; theme and recipe files are admitted as presets. Fails as that flow does.
+ * `patch` and `preview` go to Authoring; `retry` and `apply` replay a retained request; theme and
+ * recipe files are admitted as presets; a recipe is instantiated by the service. Fails as that
+ * flow does.
  */
-function answerService(
+function answerServiceCommand(
   command: ServiceCommand,
   ports: ServicePorts,
 ): Promise<Result<CommandAnswer>> {
@@ -113,29 +110,36 @@ function answerService(
       return author(command, ports);
     case 'retry':
     case 'apply':
-      return retry(command.request, ports);
+      return replayRetainedRequest(command.request, ports);
     case 'theme-admit':
     case 'recipe-admit':
       return admitPreset(command, ports);
     case 'recipe-instantiate':
-      return ports.resources.instantiate(command.expansion);
+      return instantiateRecipe(command.expansion, ports);
     default:
       return Promise.resolve(unsupported(command));
   }
 }
 
 /**
- * The answer as the terminal prints it: the answer itself when no --out file is given; otherwise
- * `Written: FILE` once the file holds the answer. Fails with `output-unavailable`.
+ * `retry`, and `apply` of a retained preview: looks up the request's receipt first, and replays
+ * the identical retained request only when none exists. Fails as `retry` in
+ * `core/authoring/reconcile.ts` does.
  */
-async function deliverAnswer(
-  answer: CommandAnswer,
-  outFile: FilePath | undefined,
-  ports: OutputPorts,
-): Promise<Result<PrintedText>> {
-  if (outFile === undefined) return success(answer);
-  const written = await ports.files.writeOutput(outFile, answer);
-  if (!written.ok) return written;
-  const notice = `Written: ${outFile}`;
-  return success(notice);
+function replayRetainedRequest(
+  request: RequestId,
+  ports: RetryDependencies,
+): Promise<Result<CommandAnswer>> {
+  return retry(request, ports);
+}
+
+/**
+ * `recipe instantiate`: the service expands the pinned recipe under the namespace, as editable
+ * DSL. Nothing is written. Fails as the service call does.
+ */
+function instantiateRecipe(
+  expansion: ExpansionRequest,
+  ports: InstantiatePorts,
+): Promise<Result<CommandAnswer>> {
+  return ports.resources.instantiate(expansion);
 }

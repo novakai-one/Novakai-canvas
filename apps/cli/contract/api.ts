@@ -6,8 +6,8 @@
 
 /** `pnpm canvas`: compose.ts parses and answers --help; compose/ runs every other command. */
 export { parseCommand } from '../core/commands/parse.js';
-export { usage } from '../core/commands/help.js';
-export { executeProfile, executeService } from '../core/commands/dispatch.js';
+export { helpText } from '../core/commands/help.js';
+export { runProfileCommand, runServiceCommand } from '../core/commands/dispatch.js';
 export type { ServicePorts } from '../core/commands/dispatch.js';
 
 /** `pnpm render:png`: compose.ts checks the argv, then runs the render over compose/render.ts. */

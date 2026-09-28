@@ -7,7 +7,7 @@
  * nothing.
  */
 import { readArguments } from '../adapters/argv/node-args.js';
-import { parseCommand, parseRenderChoice, renderCollection, usage } from './api.js';
+import { helpText, parseCommand, parseRenderChoice, renderCollection } from './api.js';
 import { canvasFlags, renderFlags } from './records/arguments.js';
 import type { ParsedCommand } from './records/command.js';
 import type { RenderChoice, RenderReport, RenderRequest } from './records/render.js';
@@ -64,7 +64,7 @@ function parsedRun(
   args: readonly string[],
   defaultWorkspace: string,
 ): Promise<Result<string>> {
-  const parsed = parseCommand(readArguments(args, canvasFlags), { workspace: defaultWorkspace });
+  const parsed = parseCommand(readArguments(args, canvasFlags), defaultWorkspace);
   if (!parsed.ok) return Promise.resolve(parsed);
   return dispatch(parsed.value);
 }
@@ -76,7 +76,7 @@ function parsedRun(
 function dispatch(parsed: ParsedCommand): Promise<Result<string>> {
   switch (parsed.kind) {
     case 'help':
-      return Promise.resolve(success(usage));
+      return Promise.resolve(success(helpText));
     case 'profile':
       return runProfile(parsed.command);
     case 'service':

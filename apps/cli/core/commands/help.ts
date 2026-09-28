@@ -22,12 +22,12 @@ const notes: readonly string[] = Object.freeze([
 ]);
 
 /** Every command's usage lines, in the command table's order. */
-const commandUsage: readonly string[] = commandRows().flatMap(readUsageLines);
+const commandUsage: readonly string[] = commandRows().flatMap(usageLinesOf);
 
 /** The help text: the title, the commands, then the notes, with no trailing line break. */
-export const usage = [title, blankLine, ...commandUsage, blankLine, ...notes].join('\n');
+export const helpText = [title, blankLine, ...commandUsage, blankLine, ...notes].join('\n');
 
 /** One command's lines in `canvas --help`, as its table row gives them. */
-function readUsageLines(row: CommandRow): readonly string[] {
+function usageLinesOf(row: CommandRow): readonly string[] {
   return row.usage;
 }

@@ -4,12 +4,12 @@
  * them.
  */
 import { createLocalFiles } from '../../adapters/files/local-files.js';
-import { executeProfile } from '../api.js';
+import { runProfileCommand } from '../api.js';
 import type { Result } from '../errors.js';
 import type { ProfileCommand } from '../records/command.js';
 import { composeLanguage } from './language.js';
 
 /** Runs one profile command. Fails as the command does. */
 export async function runProfile(command: ProfileCommand): Promise<Result<string>> {
-  return executeProfile(command, { files: createLocalFiles(), language: composeLanguage() });
+  return runProfileCommand(command, { files: createLocalFiles(), language: composeLanguage() });
 }

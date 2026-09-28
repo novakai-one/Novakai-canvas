@@ -30,7 +30,7 @@ import { failure, success, unreadableSource, unwritableOutput } from '../../cont
 import { checked } from '../shared/checks.js';
 import type { Parser } from '../shared/checks.js';
 import { joined, mapped } from '../shared/results.js';
-import type { CommandDefaults, CommandFlags } from './flags.js';
+import type { CommandFlags } from './flags.js';
 
 /** The service origin when --server is absent: the local service's default port. */
 const defaultServer = 'http://127.0.0.1:5174';
@@ -138,15 +138,15 @@ export function profile(text: string): Result<ProfileId> {
 }
 
 /**
- * --server (the local service's default port when absent), then --workspace (the executable's
- * default when absent; an empty one is the current directory). Fails with `invalid-server`, before
- * the credential is read.
+ * --server (the local service's default port when absent), then --workspace (`defaultWorkspace`,
+ * the executable's default, when absent; an empty one is the current directory). Fails with
+ * `invalid-server`, before the credential is read.
  */
 export function serviceOptions(
   flags: Pick<CommandFlags, 'server' | 'workspace'>,
-  defaults: CommandDefaults,
+  defaultWorkspace: string,
 ): Result<ServiceOptions> {
-  const { server = defaultServer, workspace = defaults.workspace } = flags;
+  const { server = defaultServer, workspace = defaultWorkspace } = flags;
   return joined(origin(server), workspacePath(workspace), (address, directory) => ({
     server: address,
     workspace: directory,
