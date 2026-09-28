@@ -14,7 +14,7 @@ import type { ApiRouter } from '../../contract/ports/transport.js';
 export type RouteHandler = ApiRouter['invoke'];
 
 /** Answers one API call with an outcome sent as JSON. */
-export type JsonHandler = (call: ApiCall) => Promise<WireOutcome>;
+type JsonHandler = (call: ApiCall) => Promise<WireOutcome>;
 
 /** The route that answers `handler`'s outcome as JSON. Fails as `handler`. */
 export function answerJson(handler: JsonHandler): RouteHandler {

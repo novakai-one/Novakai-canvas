@@ -46,26 +46,26 @@ function admitEnvelope(
  * `intent.planner`. The envelope's `preview` flag becomes the prepare mode.
  */
 function admitCurrent(
-  input: MutationEnvelope,
+  envelope: MutationEnvelope,
   context: CommandAdmission,
 ): Result<AdmittedMutation> {
-  if (input.generation !== context.generation)
+  if (envelope.generation !== context.generation)
     return failure(
       'conflict',
       'generation',
       'Workspace session changed; reconcile the request receipt',
     );
-  const request = context.ingress.mutation(input.request, context.caller);
+  const request = context.ingress.mutation(envelope.request, context.caller);
   if (!request.ok) return request;
   return success({
     request: request.value,
-    mode: prepareMode(input.preview),
-    options: input.options,
+    mode: prepareMode(envelope),
+    options: envelope.options,
   });
 }
 
 /** `with-preview` when the envelope asks for preview images, `without-preview` otherwise. */
-function prepareMode(preview: boolean): PrepareMode {
-  if (preview) return 'with-preview';
+function prepareMode(envelope: MutationEnvelope): PrepareMode {
+  if (envelope.preview) return 'with-preview';
   return 'without-preview';
 }

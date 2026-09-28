@@ -27,7 +27,7 @@ type ResourceHandler = (input: unknown) => Promise<WireOutcome>;
 type SnapshotCommand = 'freeze' | 'preparePreset' | 'instantiate';
 
 /**
- * The frozen resource route table; every route answers JSON. Every route fails as `resource`;
+ * The frozen resource route table; every route answers JSON. Every route fails as `runOnJsonBody`;
  * freeze, prepare and instantiate also as `onSnapshot`. Resource command outcomes pass through.
  */
 export function resourceRoutes(
@@ -35,25 +35,25 @@ export function resourceRoutes(
 ): Readonly<Record<ResourceRouteKey, RouteHandler>> {
   const { resources } = owners;
   return Object.freeze({
-    'POST /api/v1/resources/stage': resource((input) => resources.stage(input)),
-    'POST /api/v1/resources/restore': resource((input) => resources.restore(input)),
-    'POST /api/v1/resources/blob': resource(async (input) => resources.blob(input)),
-    'POST /api/v1/resources/freeze': resource(onSnapshot(owners, 'freeze')),
-    'POST /api/v1/resources/prepare': resource(onSnapshot(owners, 'preparePreset')),
-    'POST /api/v1/resources/instantiate': resource(onSnapshot(owners, 'instantiate')),
+    'POST /api/v1/resources/stage': resourceRoute((input) => resources.stage(input)),
+    'POST /api/v1/resources/restore': resourceRoute((input) => resources.restore(input)),
+    'POST /api/v1/resources/blob': resourceRoute(async (input) => resources.blob(input)),
+    'POST /api/v1/resources/freeze': resourceRoute(onSnapshot(owners, 'freeze')),
+    'POST /api/v1/resources/prepare': resourceRoute(onSnapshot(owners, 'preparePreset')),
+    'POST /api/v1/resources/instantiate': resourceRoute(onSnapshot(owners, 'instantiate')),
   });
 }
 
-/** The route that runs `handler` on the body read as JSON (`jsonInput`). */
-function resource(handler: ResourceHandler): RouteHandler {
-  return answerJson((call) => jsonInput(call, handler));
+/** The route that runs `handler` on the body read as JSON (`runOnJsonBody`). */
+function resourceRoute(handler: ResourceHandler): RouteHandler {
+  return answerJson((call) => runOnJsonBody(call, handler));
 }
 
 /**
  * Runs `handler` on the body read as JSON. Fails with `invalid-input` at `content-type` or `body`
  * as `jsonBody` (json-body.ts). The server authenticates before reading the body.
  */
-async function jsonInput(
+async function runOnJsonBody(
   call: ApiCall,
   handler: ResourceHandler,
 ): Promise<WireOutcome> {

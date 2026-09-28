@@ -29,8 +29,17 @@ export function requestKind(
 
 /** Every value given for each query key, in order. Cannot fail. */
 export function apiQuery(params: URLSearchParams): ApiQuery {
-  const keys = new Set(params.keys());
-  return Object.freeze(Object.fromEntries([...keys].map((key) => [key, params.getAll(key)])));
+  const keys = [...new Set(params.keys())];
+  const entries = keys.map((key) => queryEntry(params, key));
+  return Object.freeze(Object.fromEntries(entries));
+}
+
+/** One query key with every value given for it, in order. */
+function queryEntry(
+  params: URLSearchParams,
+  key: string,
+): readonly [string, readonly string[]] {
+  return [key, params.getAll(key)];
 }
 
 /** Every value given for `key`, in order; none when the key is absent. */

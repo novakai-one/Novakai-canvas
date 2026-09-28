@@ -84,7 +84,9 @@ async function workspace(
   session: RouteSession,
 ): Promise<WireOutcome> {
   const read = await session.read();
-  if (!read.ok || readLastValue(call.query, 'history') !== 'versions') return read;
+  if (!read.ok) return read;
+  const versionsOnly = readLastValue(call.query, 'history') === 'versions';
+  if (!versionsOnly) return read;
   return success(historyVersionsOnly(read.value));
 }
 
@@ -98,7 +100,8 @@ async function exportArtifact(
 ): Promise<RouteOutcome> {
   const input = jsonBody(call.body, call.metadata.contentType, 'resource');
   if (!input.ok) return answerOutcome(input);
-  return answerFile(await session.exportArtifact(input.value, call.signal));
+  const file = await session.exportArtifact(input.value, call.signal);
+  return answerFile(file);
 }
 
 /**

@@ -30,15 +30,15 @@ export interface MutationRouteOwners {
 type MutationRoute = 'prepare' | 'apply';
 
 /**
- * The frozen mutation route table; both answer JSON. Both routes fail as `admitted`; Authoring
+ * The frozen mutation route table; both answer JSON. Both routes fail as `runMutation`; Authoring
  * outcomes pass through.
  */
 export function mutationRoutes(
   owners: MutationRouteOwners,
 ): Readonly<Record<MutationRouteKey, RouteHandler>> {
   return Object.freeze({
-    'POST /api/v1/authoring/preview': answerJson((call) => admitted(call, owners, 'prepare')),
-    'POST /api/v1/authoring/apply': answerJson((call) => admitted(call, owners, 'apply')),
+    'POST /api/v1/authoring/preview': answerJson((call) => runMutation(call, owners, 'prepare')),
+    'POST /api/v1/authoring/apply': answerJson((call) => runMutation(call, owners, 'apply')),
   });
 }
 
@@ -47,7 +47,7 @@ export function mutationRoutes(
  * `invalid-input` at `content-type`, `body` or `request`, `conflict` at `generation`,
  * `unauthorized` at `actor` or `intent.planner`.
  */
-async function admitted(
+async function runMutation(
   call: ApiCall,
   owners: MutationRouteOwners,
   route: MutationRoute,
@@ -59,7 +59,7 @@ async function admitted(
     ingress: owners.admission,
   });
   if (!mutation.ok) return mutation;
-  return STEPS[route](mutation.value, call.signal, owners.session);
+  return MUTATION_STEPS[route](mutation.value, call.signal, owners.session);
 }
 
 /** Runs one Authoring step on an admitted mutation. */
@@ -73,7 +73,7 @@ type MutationStep = (
  * The session call of each step. `prepare` passes the envelope's prepare mode; `apply` its
  * options. Authoring outcomes pass through.
  */
-const STEPS: Readonly<Record<MutationRoute, MutationStep>> = Object.freeze({
+const MUTATION_STEPS: Readonly<Record<MutationRoute, MutationStep>> = Object.freeze({
   prepare: (mutation, signal, session) => session.prepare(mutation.request, signal, mutation.mode),
   apply: (mutation, signal, session) => session.apply(mutation.request, signal, mutation.options),
 });

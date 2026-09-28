@@ -15,7 +15,8 @@ import { readAllValues } from './request-kind.js';
 export function sourceScope(query: ApiQuery): Result<Scope> {
   const sections = readAllValues(query, 'section');
   const objects = readAllValues(query, 'object');
-  if (sections.length > 0 && objects.length > 0)
+  const bothScopes = sections.length > 0 && objects.length > 0;
+  if (bothScopes)
     return failure('invalid-input', 'scope', 'Use either section or object, not both');
   return parseSingleScope(sections, objects);
 }
@@ -28,7 +29,8 @@ function parseSingleScope(
   sections: readonly string[],
   objects: readonly string[],
 ): Result<Scope> {
-  if (sections.length > 1 || objects.length > 1)
+  const repeatedScope = sections.length > 1 || objects.length > 1;
+  if (repeatedScope)
     return failure('invalid-input', 'scope', 'Each read scope query may be provided only once');
   return parseScope(sections[0], objects[0]);
 }

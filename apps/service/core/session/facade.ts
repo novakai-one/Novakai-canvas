@@ -60,7 +60,7 @@ export function createWorkspaceSession(owners: SessionOwners): WorkspaceSession 
       ),
     prepare: (request, signal, mode) =>
       lifetime.run(
-        () => owners.authoring(signal).prepare(request, PREVIEW[mode]),
+        () => owners.authoring(signal).prepare(request, PREVIEW_FLAG[mode]),
         owners.unavailable,
       ),
     apply: (request, signal, options) =>
@@ -94,7 +94,7 @@ export function createWorkspaceSession(owners: SessionOwners): WorkspaceSession 
 }
 
 /** Authoring's `preview` flag for each prepare mode. */
-const PREVIEW: Readonly<Record<PrepareMode, boolean>> = Object.freeze({
+const PREVIEW_FLAG: Readonly<Record<PrepareMode, boolean>> = Object.freeze({
   'with-preview': true,
   'without-preview': false,
 });
