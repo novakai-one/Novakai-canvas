@@ -36,16 +36,14 @@ function moduleProjectionFinding(
   repoObjects: ReadonlySet<string>,
   modules: Declaration,
 ): readonly ProfileFinding[] {
-  return isCanonicalModule(node, objectId, repoObjects)
-    ? []
-    : [
-        findingAt(modules, {
-          code: 'module-projection',
-          path: `section @modules show @${objectId}`,
-          message:
-            'Modules must show canonical module/interface objects also shown by the repo tree.',
-        }),
-      ];
+  if (isCanonicalModule(node, objectId, repoObjects)) return [];
+  return [
+    findingAt(modules, {
+      code: 'module-projection',
+      path: `section @modules show @${objectId}`,
+      message: 'Modules must show canonical module/interface objects also shown by the repo tree.',
+    }),
+  ];
 }
 
 /** The node exists, is a module or interface, and the repo tree shows it. */

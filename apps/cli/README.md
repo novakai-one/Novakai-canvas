@@ -31,9 +31,9 @@ Add a command: its member in `contract/records/command.ts` → its row in `table
 | `cli/`                                          | The two executables. Import `contract/index.ts` and Node only.                                                                                                    |
 | `contract/index.ts`                             | Public surface: `runCli`, `runRender`, `formatFailure`, result types.                                                                                             |
 | `contract/api.ts`                               | Core entry points for compose. The only contract file that imports core.                                                                                          |
-| `contract/compose.ts`, `contract/compose/`      | Composition root: binds ports per command family (`service.ts`, `profiles.ts`, `render*.ts`, `language.ts`). The only files that import adapters.                 |
-| `contract/brands.ts`, `schemas.ts`, `errors.ts` | Branded IDs (capability brands re-exported), foreign schemas, closed failure codes and `Result`.                                                                  |
-| `contract/records/`                             | Data shapes: command union, argv, retained request, service answers, theme source, render request/report/failure, profiles.                                       |
+| `contract/compose.ts`, `contract/compose/`      | Composition root: builds and injects ports per command family (`service.ts`, `profiles.ts`, `render.ts`, `language.ts`). The only files that import adapters.     |
+| `contract/brands.ts`, `schemas.ts`, `errors.ts` | Branded IDs (capability brands re-exported), foreign schemas, closed failure codes, `Result` and the `provider-failed` fault a native throw becomes.              |
+| `contract/records/`                             | Data shapes: command union, argv, retained request, service answers, theme source, render request/report/failure, provider fault, profiles.                       |
 | `contract/ports/`                               | One interface per I/O seam: HTTP transport, service reads/authoring/resources, journal, local files, resource reader, Language, Model check, request IDs, render. |
 | `core/commands/`                                | Argv grammar, command table, help, routing.                                                                                                                       |
 | `core/reads/`                                   | Read-only service commands and their text.                                                                                                                        |
@@ -46,7 +46,7 @@ Add a command: its member in `contract/records/command.ts` → its row in `table
 | `adapters/argv/`                                | Node `parseArgs` → raw arguments.                                                                                                                                 |
 | `adapters/service-http/`                        | Loopback HTTP transport and the three service-call adapters over it.                                                                                              |
 | `adapters/files/`                               | Source and `--out` files, request journal, confined resource reads.                                                                                               |
-| `adapters/render/`                              | Temp asset store, render file I/O, PNG raster start-up.                                                                                                           |
+| `adapters/render/`                              | Temp asset store, file I/O, PNG raster start-up; the render environment's parts: capability rules, lowering and documents port, the service's drawing, Export.    |
 
 ## Import rules
 

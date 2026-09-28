@@ -8,11 +8,10 @@ import type { RenderEnvironment, RenderFiles } from '../../contract/ports/render
 import type { Catalog } from '../../contract/records/foreign.js';
 import type { CollectionSelector } from '../../contract/records/render.js';
 import type { RenderEvidence, RenderFault } from '../../contract/records/render-failure.js';
-import { faulted } from '../../contract/records/render-failure.js';
 import type { SourceFile } from '../../contract/records/source-file.js';
 import type { CollectionName } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
-import { success } from '../../contract/errors.js';
+import { faulted, success } from '../../contract/errors.js';
 
 /** What choosing a source uses: the render's file reads and Language's parse. */
 export interface SourceDependencies {
@@ -25,8 +24,8 @@ type RecipePreset = Extract<Catalog[number], { readonly kind: 'recipe' }>;
 
 /**
  * The source `selector` names, with the file its resources resolve against. Fails with
- * `provider-failed` when a file cannot be read, or `collection-selection` when a name is no recipe
- * and not exactly one shipped collection.
+ * `provider-failed` when a file cannot be read or its path fails its check, or
+ * `collection-selection` when a name is no recipe and not exactly one shipped collection.
  */
 export function collectionSource(
   selector: CollectionSelector,
@@ -39,7 +38,7 @@ export function collectionSource(
 
 /**
  * A recipe's shipped source when `name` is a recipe ID; otherwise the shipped collection it names.
- * Fails as {@link shippedSource} does.
+ * Fails as {@link recipeSource} or {@link shippedSource} does.
  */
 function namedSource(
   name: CollectionName,
@@ -48,12 +47,20 @@ function namedSource(
 ): Promise<Result<SourceFile, RenderEvidence>> {
   const recipe = catalog.find((preset) => isRecipeNamed(preset, name));
   if (recipe === undefined) return shippedSource(name, dependencies);
-  return Promise.resolve(
-    success({
-      source: recipe.payload.source,
-      file: dependencies.files.recipeFile(recipe.payload.family),
-    }),
-  );
+  return Promise.resolve(recipeSource(recipe, dependencies.files));
+}
+
+/**
+ * The recipe's source, with its family's shipped file for its resources to resolve against. Fails
+ * with `provider-failed` when that file's path fails its check.
+ */
+function recipeSource(
+  recipe: RecipePreset,
+  files: SourceDependencies['files'],
+): Result<SourceFile, RenderEvidence> {
+  const file = files.recipeFile(recipe.payload.family);
+  if (!file.ok) return file;
+  return success({ source: recipe.payload.source, file: file.value });
 }
 
 /**

@@ -39,24 +39,23 @@ function appendixContentFindings(
   indexed: DeclarationIndex,
 ): readonly ProfileFinding[] {
   const mode = text(appendix.section, 'mode');
-  return mode === 'sequence'
-    ? sequenceAppendixFinding(appendix)
-    : nodeAppendixFindings(appendix, nativeContent(mode), indexed);
+  if (mode === 'sequence') return sequenceAppendixFinding(appendix);
+  return nodeAppendixFindings(appendix, nativeContent(mode), indexed);
 }
 
 /** A sequence appendix must contain native event or fragment declarations. */
 function sequenceAppendixFinding(appendix: Appendix): readonly ProfileFinding[] {
-  return appendix.section.children.some(
+  const holdsSequenceContent = appendix.section.children.some(
     (child) => child.kind === 'event' || child.kind === 'fragment',
-  )
-    ? []
-    : [
-        findingAt(appendix.section, {
-          code: 'appendix-sequence-content',
-          path: `section @${appendix.id}`,
-          message: 'Sequence appendix must contain native event or fragment declarations.',
-        }),
-      ];
+  );
+  if (holdsSequenceContent) return [];
+  return [
+    findingAt(appendix.section, {
+      code: 'appendix-sequence-content',
+      path: `section @${appendix.id}`,
+      message: 'Sequence appendix must contain native event or fragment declarations.',
+    }),
+  ];
 }
 
 /**
@@ -110,15 +109,14 @@ function nativeNodesFinding(
   content: NativeContent,
   nodes: readonly Declaration[],
 ): readonly ProfileFinding[] {
-  return nodes.some((node) => hasKindIn(node, content.nodeKinds))
-    ? []
-    : [
-        findingAt(appendix.section, {
-          code: 'appendix-native-nodes',
-          path: `section @${appendix.id}`,
-          message: `${content.mode} appendix must show native ${content.mode} objects.`,
-        }),
-      ];
+  if (nodes.some((node) => hasKindIn(node, content.nodeKinds))) return [];
+  return [
+    findingAt(appendix.section, {
+      code: 'appendix-native-nodes',
+      path: `section @${appendix.id}`,
+      message: `${content.mode} appendix must show native ${content.mode} objects.`,
+    }),
+  ];
 }
 
 /** The node's kind field is one of `kinds`. */
@@ -137,15 +135,15 @@ function nativeWireFinding(
   wires: readonly Declaration[],
 ): readonly ProfileFinding[] {
   const connectedIds = new Set(connected(appendix.section));
-  return wires.some(
+  const connectsNativeWire = wires.some(
     (wire) => isConnectedWire(wire, connectedIds) && text(wire, 'kind') === content.wireKind,
-  )
-    ? []
-    : [
-        findingAt(appendix.section, {
-          code: 'appendix-native-wires',
-          path: `section @${appendix.id}`,
-          message: `${content.mode} appendix must connect native ${content.mode} wires.`,
-        }),
-      ];
+  );
+  if (connectsNativeWire) return [];
+  return [
+    findingAt(appendix.section, {
+      code: 'appendix-native-wires',
+      path: `section @${appendix.id}`,
+      message: `${content.mode} appendix must connect native ${content.mode} wires.`,
+    }),
+  ];
 }

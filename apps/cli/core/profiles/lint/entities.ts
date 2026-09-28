@@ -48,13 +48,12 @@ function invariantFinding(
   entity: Declaration,
   entityId: string,
 ): readonly ProfileFinding[] {
-  return entity.children.some((child) => child.kind === 'text')
-    ? []
-    : [
-        findingAt(entity, {
-          code: 'entity-invariant',
-          path: `node @${entityId}`,
-          message: 'Entity must contain at least one invariant text child.',
-        }),
-      ];
+  if (entity.children.some((child) => child.kind === 'text')) return [];
+  return [
+    findingAt(entity, {
+      code: 'entity-invariant',
+      path: `node @${entityId}`,
+      message: 'Entity must contain at least one invariant text child.',
+    }),
+  ];
 }

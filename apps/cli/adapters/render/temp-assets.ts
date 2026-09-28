@@ -8,10 +8,10 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openAssets, type AssetError, type Assets } from '@novakai/canvas-assets';
-import { faulted, nativeFault, type ProviderFault } from '../../contract/records/render-failure.js';
+import type { ProviderFault } from '../../contract/records/provider-fault.js';
 import { filePath, type FilePath } from '../../contract/brands.js';
 import type { TempAssetStore } from '../../contract/ports/render.js';
-import { success, type Result } from '../../contract/errors.js';
+import { faulted, nativeFault, success, type Result } from '../../contract/errors.js';
 
 /** What opening or closing the store fails with. */
 type StoreFailure = ProviderFault | AssetError;

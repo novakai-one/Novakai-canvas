@@ -9,9 +9,10 @@ import type { RequestIds } from '../../contract/ports/request-ids.js';
 import type { ServiceReads } from '../../contract/ports/service-reads.js';
 import type { ServiceResources } from '../../contract/ports/service-resources.js';
 import type { SourceLanguage } from '../../contract/ports/source-language.js';
-import type { Admission, ResourceRequest } from '../../contract/records/foreign.js';
+import type { Admission, ResourceRequest, Snapshot } from '../../contract/records/foreign.js';
+import type { RetainedRequest } from '../../contract/records/retained-request.js';
 import type { StagedBackup } from '../../contract/records/staged-resource.js';
-import type { PresetPreparation } from '../../contract/records/service-answers.js';
+import type { Observed, PresetPreparation } from '../../contract/records/service-answers.js';
 import type { ThemeSource } from '../../contract/records/theme-source.js';
 import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
@@ -52,7 +53,7 @@ interface PreparedPreset {
 /**
  * All bytes and exact preset content are retained before the sole canonical Authoring apply gate.
  * Fails as the source read, the preset file's grammar, staging, preparation, the workspace read,
- * the preset request or `submit` does.
+ * the fresh request ID, the preset request or `submit` does.
  */
 export async function admitPreset(
   command: AdmitCommand,
@@ -115,7 +116,10 @@ async function preparePreset(
   return success({ staged: staged.value, preparation: preparation.value });
 }
 
-/** Observe write preconditions after staging; the service still recomputes content and compares all reads during admission. */
+/**
+ * Observe write preconditions after staging; the service still recomputes content and compares all
+ * reads during admission. Fails as the workspace read, {@link retainedPreset} or `submit` does.
+ */
 async function retain(
   command: AdmitCommand,
   prepared: PreparedPreset,
@@ -123,17 +127,30 @@ async function retain(
 ): Promise<Result<string>> {
   const current = await dependencies.reads.workspace();
   if (!current.ok) return current;
+  const retained = retainedPreset(command, prepared, current.value, dependencies.requestIds);
+  if (!retained.ok) return retained;
+  return submit(retained.value, 'apply', dependencies);
+}
+
+/**
+ * The preset's Authoring request under `--request` or a fresh ID, observed against `current`,
+ * with the staged byte backups. Fails as the fresh request ID or the preset request does.
+ */
+function retainedPreset(
+  command: AdmitCommand,
+  prepared: PreparedPreset,
+  current: Observed<Snapshot>,
+  requestIds: RequestIds,
+): Result<RetainedRequest> {
+  const requestId = requestIdFor(command, requestIds);
+  if (!requestId.ok) return requestId;
   const draft = {
     preparation: prepared.preparation,
     assets: assetBindings(prepared.staged),
-    request: requestIdFor(command, dependencies.requestIds),
+    request: requestId.value,
   };
-  const request = presetRequest(draft, current.value.value);
+  const request = presetRequest(draft, current.value);
   if (!request.ok) return request;
   const backups = prepared.staged.map((item) => item.backup);
-  return submit(
-    { generation: current.value.generation, request: request.value, backups },
-    'apply',
-    dependencies,
-  );
+  return success({ generation: current.generation, request: request.value, backups });
 }

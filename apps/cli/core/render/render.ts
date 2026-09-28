@@ -15,13 +15,8 @@ import type {
   RenderDocument,
 } from '../../contract/records/foreign.js';
 import type { RenderReport, RenderRequest } from '../../contract/records/render.js';
-import {
-  faulted,
-  nativeFault,
-  type RenderEvidence,
-  type RenderFailure,
-} from '../../contract/records/render-failure.js';
-import type { Result } from '../../contract/errors.js';
+import type { RenderEvidence, RenderFailure } from '../../contract/records/render-failure.js';
+import { faulted, nativeFault, type Result } from '../../contract/errors.js';
 import { mapped } from '../shared/results.js';
 import { chosenCollection } from './collection.js';
 import { pinResources } from './pins.js';

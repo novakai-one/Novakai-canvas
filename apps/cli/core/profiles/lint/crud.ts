@@ -49,23 +49,26 @@ function crudTables(
 ): readonly Declaration[] {
   return shown(ownership).flatMap((objectId) => {
     const note = indexed.nodes.find((node) => id(node) === objectId);
-    return note !== undefined && note.kind === 'node' && text(note, 'kind') === 'note'
-      ? descendants(note, 'table')
-      : [];
+    if (!isNoteNode(note)) return [];
+    return descendants(note, 'table');
   });
+}
+
+/** The declaration exists, is a node, and its kind field is 'note'. */
+function isNoteNode(node: Declaration | undefined): node is Declaration {
+  return node !== undefined && node.kind === 'node' && text(node, 'kind') === 'note';
 }
 
 /** The CRUD table's columns must be exactly Object, Create, Read, Update, Delete. */
 function columnFinding(table: Declaration): readonly ProfileFinding[] {
-  return validColumns(field(table, 'columns'))
-    ? []
-    : [
-        fieldFinding(table, 'columns', {
-          code: 'crud-columns',
-          path: 'table',
-          message: 'CRUD table columns must be exactly Object, Create, Read, Update, Delete.',
-        }),
-      ];
+  if (validColumns(field(table, 'columns'))) return [];
+  return [
+    fieldFinding(table, 'columns', {
+      code: 'crud-columns',
+      path: 'table',
+      message: 'CRUD table columns must be exactly Object, Create, Read, Update, Delete.',
+    }),
+  ];
 }
 
 /** The columns field is exactly {@link crudColumns}. */
@@ -111,15 +114,14 @@ function rowCellsFinding(
   rowId: string | undefined,
 ): readonly ProfileFinding[] {
   const cells = field(row, 'cells');
-  return Array.isArray(cells) && cells.length === crudColumns.length
-    ? []
-    : [
-        fieldFinding(row, 'cells', {
-          code: 'crud-cells',
-          path: rowLabel(rowId),
-          message: 'CRUD rows must contain five cells.',
-        }),
-      ];
+  if (Array.isArray(cells) && cells.length === crudColumns.length) return [];
+  return [
+    fieldFinding(row, 'cells', {
+      code: 'crud-cells',
+      path: rowLabel(rowId),
+      message: 'CRUD rows must contain five cells.',
+    }),
+  ];
 }
 
 /** The display path of a row whose id may be missing. */
@@ -133,33 +135,45 @@ function missingRowFindings(
   rows: readonly Declaration[],
   expectedRows: ReadonlySet<string>,
 ): readonly ProfileFinding[] {
-  return [...expectedRows].flatMap((expectedRow) =>
-    rows.some((row) => id(row) === expectedRow)
-      ? []
-      : [
-          findingAt(table, {
-            code: 'crud-missing-row',
-            path: `row @${expectedRow}`,
-            message: 'CRUD table is missing a row for an entity.',
-          }),
-        ],
-  );
+  return [...expectedRows].flatMap((expectedRow) => missingRowFinding(table, rows, expectedRow));
+}
+
+/** An entity row the table does not contain is reported at the table. */
+function missingRowFinding(
+  table: Declaration,
+  rows: readonly Declaration[],
+  expectedRow: string,
+): readonly ProfileFinding[] {
+  if (rows.some((row) => id(row) === expectedRow)) return [];
+  return [
+    findingAt(table, {
+      code: 'crud-missing-row',
+      path: `row @${expectedRow}`,
+      message: 'CRUD table is missing a row for an entity.',
+    }),
+  ];
 }
 
 /** A row id used more than once is reported once, at its first row. */
 function duplicateRowFindings(rows: readonly Declaration[]): readonly ProfileFinding[] {
   const rowIds = rows.map(id);
-  return rows.flatMap((row, index) =>
-    firstOfRepeated(rowIds, index)
-      ? [
-          findingAt(row, {
-            code: 'crud-duplicate-row',
-            path: rowLabel(rowIds[index]),
-            message: 'CRUD table must contain exactly one row for each entity.',
-          }),
-        ]
-      : [],
-  );
+  return rows.flatMap((row, index) => duplicateRowFinding(row, rowIds, index));
+}
+
+/** The row at `index` is reported when it is the first of a repeated row id. */
+function duplicateRowFinding(
+  row: Declaration,
+  rowIds: readonly (string | undefined)[],
+  index: number,
+): readonly ProfileFinding[] {
+  if (!firstOfRepeated(rowIds, index)) return [];
+  return [
+    findingAt(row, {
+      code: 'crud-duplicate-row',
+      path: rowLabel(rowIds[index]),
+      message: 'CRUD table must contain exactly one row for each entity.',
+    }),
+  ];
 }
 
 /** The row at `index` has an id, is the first row with it, and a later row repeats it. */

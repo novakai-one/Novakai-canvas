@@ -50,15 +50,14 @@ function rootCountFinding(
   roots: readonly Declaration[],
   rootIds: readonly string[],
 ): readonly ProfileFinding[] {
-  return roots.length !== 1 || rootIds.length !== 1
-    ? [
-        fieldFinding(section, 'id', {
-          code: 'repo-root',
-          path: 'section @repo',
-          message: 'Tree section must declare one root.',
-        }),
-      ]
-    : [];
+  if (roots.length === 1 && rootIds.length === 1) return [];
+  return [
+    fieldFinding(section, 'id', {
+      code: 'repo-root',
+      path: 'section @repo',
+      message: 'Tree section must declare one root.',
+    }),
+  ];
 }
 
 /** The declared root must be shown in the repo projection. */
@@ -68,15 +67,14 @@ function rootShownFinding(
   shownIds: ReadonlySet<string>,
 ): readonly ProfileFinding[] {
   const rootId = rootIds[0];
-  return rootId !== undefined && !shownIds.has(rootId)
-    ? [
-        findingAt(section, {
-          code: 'repo-root-hidden',
-          path: `section @repo root @${rootId}`,
-          message: 'Tree root must be shown in the repo projection.',
-        }),
-      ]
-    : [];
+  if (rootId === undefined || shownIds.has(rootId)) return [];
+  return [
+    findingAt(section, {
+      code: 'repo-root-hidden',
+      path: `section @repo root @${rootId}`,
+      message: 'Tree root must be shown in the repo projection.',
+    }),
+  ];
 }
 
 /** The tree must connect at least one parent wire. */
@@ -84,15 +82,14 @@ function wirePresenceFinding(
   section: Declaration,
   count: number,
 ): readonly ProfileFinding[] {
-  return count === 0
-    ? [
-        findingAt(section, {
-          code: 'repo-wires',
-          path: 'section @repo',
-          message: 'Tree section must show and connect parent wires.',
-        }),
-      ]
-    : [];
+  if (count > 0) return [];
+  return [
+    findingAt(section, {
+      code: 'repo-wires',
+      path: 'section @repo',
+      message: 'Tree section must show and connect parent wires.',
+    }),
+  ];
 }
 
 /** The parent-kind wires whose ids the repo section connects. */
@@ -120,15 +117,14 @@ function wireFieldsFinding(
   wire: Declaration,
   ends: WireEnds,
 ): readonly ProfileFinding[] {
-  return ends.kind === 'complete'
-    ? []
-    : [
-        findingAt(wire, {
-          code: 'repo-wire-endpoints',
-          path: wireLabel(ends),
-          message: 'Parent wire must have source and target objects.',
-        }),
-      ];
+  if (ends.kind === 'complete') return [];
+  return [
+    findingAt(wire, {
+      code: 'repo-wire-endpoints',
+      path: wireLabel(ends),
+      message: 'Parent wire must have source and target objects.',
+    }),
+  ];
 }
 
 /** Both wire endpoints must be shown in the repo projection. */
@@ -137,15 +133,14 @@ function wireEndpointsFinding(
   ends: WireEnds,
   shownIds: ReadonlySet<string>,
 ): readonly ProfileFinding[] {
-  return endpointHidden(ends, shownIds)
-    ? [
-        findingAt(wire, {
-          code: 'repo-wire-hidden',
-          path: wireLabel(ends),
-          message: 'Parent wire endpoints must be shown in the repo projection.',
-        }),
-      ]
-    : [];
+  if (!endpointHidden(ends, shownIds)) return [];
+  return [
+    findingAt(wire, {
+      code: 'repo-wire-hidden',
+      path: wireLabel(ends),
+      message: 'Parent wire endpoints must be shown in the repo projection.',
+    }),
+  ];
 }
 
 /** The display path of a wire whose id may be missing. */

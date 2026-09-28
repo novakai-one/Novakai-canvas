@@ -1,15 +1,16 @@
 /*
  * What one headless render gets injected: an opener for the render's environment, the render's file
  * I/O and confined resource reads. Also the temporary asset store the environment is opened over.
- * Declarations only. Adapters in adapters/render/ implement TempAssetStore and RenderFiles; compose
- * binds them and the capability values. Every method returns its failure as a value;
+ * Declarations only. Adapters in adapters/render/ implement them; compose builds the adapters and
+ * the capability values and injects them. Every method returns its failure as a value;
  * core/render/render.ts decides what each one means.
  */
 import type { Assets } from '@novakai/canvas-assets';
 import type { Diagnostic as ExportDiagnostic } from '@novakai/canvas-export';
 import type { ResourceReader } from './resource-reader.js';
 import type { FontRole, ThemeAdmission } from '../records/theme-source.js';
-import type { ProviderFault, RenderEvidence } from '../records/render-failure.js';
+import type { RenderEvidence } from '../records/render-failure.js';
+import type { ProviderFault } from '../records/provider-fault.js';
 import type { SourceFile } from '../records/source-file.js';
 import type {
   Catalog,
@@ -115,8 +116,8 @@ export interface TempAssetStore {
 }
 
 /**
- * File I/O of one render, bound to its repo root, output directory and format. Every method
- * except `recipeFile` fails with `provider-failed` (the OS path, code and syscall).
+ * File I/O of one render, bound to its repo root, output directory and format. Every method fails
+ * with `provider-failed` (the OS path, code and syscall).
  */
 export interface RenderFiles {
   /** The `.theme` files directly under `resources/`, sorted by name. */
@@ -125,8 +126,8 @@ export interface RenderFiles {
   shippedCollections(): Promise<Result<readonly SourceFile[], ProviderFault>>;
   /** One file's UTF-8 text; a relative path resolves against the working directory. */
   read(path: FilePath): Promise<Result<SourceFile, ProviderFault>>;
-  /** Where the shipped source of a recipe family lives. Reads nothing and cannot fail. */
-  recipeFile(family: RecipeFamily): FilePath;
+  /** Where the shipped source of a recipe family lives. Reads nothing. */
+  recipeFile(family: RecipeFamily): Result<FilePath, ProviderFault>;
   /** Start the PNG raster engine. Can also fail with Export's own diagnostic. */
   prepareRaster(): Promise<Result<void, ProviderFault | ExportDiagnostic>>;
   /** Create the output directory, parents included. */

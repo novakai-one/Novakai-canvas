@@ -20,13 +20,12 @@ function duplicateFinding(
   earlier: readonly (string | undefined)[],
 ): readonly ProfileFinding[] {
   const sectionId = id(section);
-  return sectionId !== undefined && earlier.includes(sectionId)
-    ? [
-        fieldFinding(section, 'id', {
-          code: 'duplicate-section',
-          path: `section @${sectionId}`,
-          message: 'Section ID is duplicated.',
-        }),
-      ]
-    : [];
+  if (sectionId === undefined || !earlier.includes(sectionId)) return [];
+  return [
+    fieldFinding(section, 'id', {
+      code: 'duplicate-section',
+      path: `section @${sectionId}`,
+      message: 'Section ID is duplicated.',
+    }),
+  ];
 }

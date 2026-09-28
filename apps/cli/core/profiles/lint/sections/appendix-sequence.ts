@@ -38,15 +38,14 @@ function appendixPresenceFinding(
   count: number,
   declaration: Declaration,
 ): readonly ProfileFinding[] {
-  return count === 0
-    ? [
-        findingAt(declaration, {
-          code: 'missing-appendix',
-          path: 'appendices',
-          message: 'At least one @flow-5N, @sequence-5N or @state-5N appendix is required.',
-        }),
-      ]
-    : [];
+  if (count > 0) return [];
+  return [
+    findingAt(declaration, {
+      code: 'missing-appendix',
+      path: 'appendices',
+      message: 'At least one @flow-5N, @sequence-5N or @state-5N appendix is required.',
+    }),
+  ];
 }
 
 /**
@@ -99,28 +98,26 @@ function duplicateNumberFinding(
   appendix: Appendix,
   previousNumber: number | undefined,
 ): readonly ProfileFinding[] {
-  return appendix.number === previousNumber
-    ? [
-        fieldFinding(appendix.section, 'id', {
-          code: 'duplicate-appendix-number',
-          path: `section @${appendix.id}`,
-          message: 'Appendix number is duplicated.',
-        }),
-      ]
-    : [];
+  if (appendix.number !== previousNumber) return [];
+  return [
+    fieldFinding(appendix.section, 'id', {
+      code: 'duplicate-appendix-number',
+      path: `section @${appendix.id}`,
+      message: 'Appendix number is duplicated.',
+    }),
+  ];
 }
 
 /** An appendix ID prefix fixes the section's mode. */
 function appendixModeFinding(appendix: Appendix): readonly ProfileFinding[] {
-  return text(appendix.section, 'mode') === appendix.mode
-    ? []
-    : [
-        fieldFinding(appendix.section, 'mode', {
-          code: 'appendix-mode',
-          path: `section @${appendix.id}`,
-          message: `Appendix ID prefix requires mode ${appendix.mode}.`,
-        }),
-      ];
+  if (text(appendix.section, 'mode') === appendix.mode) return [];
+  return [
+    fieldFinding(appendix.section, 'mode', {
+      code: 'appendix-mode',
+      path: `section @${appendix.id}`,
+      message: `Appendix ID prefix requires mode ${appendix.mode}.`,
+    }),
+  ];
 }
 
 /** An appendix's order must exceed the order anchor; a missing order on either side fails. */
@@ -129,14 +126,12 @@ function appendixOrderFinding(
   current: number | undefined,
   previous: number | undefined,
 ): readonly ProfileFinding[] {
-  return current !== undefined && previous !== undefined && current > previous
-    ? []
-    : [
-        fieldFinding(appendix.section, 'order', {
-          code: 'appendix-order',
-          path: `section @${appendix.id}`,
-          message:
-            'Appendix order must be greater than the ownership order and strictly increasing.',
-        }),
-      ];
+  if (current !== undefined && previous !== undefined && current > previous) return [];
+  return [
+    fieldFinding(appendix.section, 'order', {
+      code: 'appendix-order',
+      path: `section @${appendix.id}`,
+      message: 'Appendix order must be greater than the ownership order and strictly increasing.',
+    }),
+  ];
 }

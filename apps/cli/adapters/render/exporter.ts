@@ -1,33 +1,45 @@
 /*
  * Export for one headless render: Presentation's React drawing over the document's fonts, and
- * Export composed over a lease that always hands back the one snapshot, the documents port and
- * the snapshot's resource inspector. Each section exports in the request's format and label mode.
- * Pure apart from Presentation's font loading. Failures are values; core/render/render.ts owns
- * recovery.
+ * Export composed over a lease that always hands back the one snapshot, the injected documents
+ * port and the snapshot's resource inspector. Each section exports in the request's format and
+ * label mode. Pure apart from Presentation's font loading. Failures are values;
+ * core/render/render.ts owns recovery.
  */
 import { createReactBindings } from '@novakai/canvas-presentation';
 import { composeExport, type ExportBindings, type SnapshotReader } from '@novakai/canvas-export';
-import type { ExportInput, SectionExporter } from '../ports/render.js';
-import type { RenderEvidence } from '../records/render-failure.js';
-import type { LabelMode, RenderFormat } from '../records/render.js';
-import type { ExportSnapshot, Language } from '../records/foreign.js';
-import type { SectionId } from '../brands.js';
-import { success, type Result } from '../errors.js';
-import { exportDocuments } from './render-documents.js';
+import type {
+  ExportInput,
+  RenderEnvironment,
+  SectionExporter,
+} from '../../contract/ports/render.js';
+import type { RenderEvidence } from '../../contract/records/render-failure.js';
+import type { LabelMode, RenderFormat } from '../../contract/records/render.js';
+import type {
+  Documents,
+  ExportSnapshot,
+  ResolvedResources,
+} from '../../contract/records/foreign.js';
+import type { SectionId } from '../../contract/brands.js';
+import { success, type Result } from '../../contract/errors.js';
 
 /** What Export needs from the render besides one snapshot. */
 export interface ExportChoices {
   readonly format: RenderFormat;
   readonly labels: LabelMode;
-  /** Prints and lowers DSL for the documents port. */
-  readonly language: Pick<Language, 'lower' | 'print'>;
+  /** The documents port Export reads, prints and parses collections through, over `pins`. */
+  documentsFor(pins: ResolvedResources): Documents;
+}
+
+/** The environment's Export. Builds nothing and cannot fail; `exporter` fails as {@link openExporter}. */
+export function createExporter(choices: ExportChoices): Pick<RenderEnvironment, 'exporter'> {
+  return { exporter: (input) => openExporter(input, choices) };
 }
 
 /**
  * Export over `input`'s snapshot, drawing with the document's fonts. Fails with Presentation's
  * font failure.
  */
-export async function openExporter(
+async function openExporter(
   input: ExportInput,
   choices: ExportChoices,
 ): Promise<Result<SectionExporter, RenderEvidence>> {
@@ -38,7 +50,7 @@ export async function openExporter(
     readerCss: '',
     allLabels: choices.labels === 'all',
     snapshots: lease(input.snapshot),
-    documents: exportDocuments(choices.language, input.pins),
+    documents: choices.documentsFor(input.pins),
     resources: input.resources,
   });
   return success({

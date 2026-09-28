@@ -15,8 +15,7 @@ import type {
   Resources,
 } from '../../contract/records/foreign.js';
 import type { RenderEvidence } from '../../contract/records/render-failure.js';
-import { faulted } from '../../contract/records/render-failure.js';
-import type { Result } from '../../contract/errors.js';
+import { faulted, type Result } from '../../contract/errors.js';
 import { assetOfPin } from '../resources/digests.js';
 import { combined, mapped } from '../shared/results.js';
 

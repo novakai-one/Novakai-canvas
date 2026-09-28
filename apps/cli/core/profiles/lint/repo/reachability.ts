@@ -30,16 +30,14 @@ function unreachableFinding(
   objectId: string,
   reachable: ReadonlySet<string>,
 ): readonly ProfileFinding[] {
-  return reachable.has(objectId)
-    ? []
-    : [
-        findingAt(section, {
-          code: 'repo-unreachable',
-          path: `section @repo show @${objectId}`,
-          message:
-            'Every shown repo object must be connected to the declared root by parent wires.',
-        }),
-      ];
+  if (reachable.has(objectId)) return [];
+  return [
+    findingAt(section, {
+      code: 'repo-unreachable',
+      path: `section @repo show @${objectId}`,
+      message: 'Every shown repo object must be connected to the declared root by parent wires.',
+    }),
+  ];
 }
 
 /** The children of each parent, in wire order, over the fully-specified wires. */
@@ -51,7 +49,8 @@ function childrenByParentOf(wires: readonly Declaration[]): ReadonlyMap<string, 
 /** The wire's edge as a one-item list; empty unless the wire has an id, a source and a target. */
 function parentEdge(wire: Declaration): readonly ParentEdge[] {
   const ends = wireEnds(wire);
-  return ends.kind === 'complete' ? [{ source: ends.source, target: ends.target }] : [];
+  if (ends.kind !== 'complete') return [];
+  return [{ source: ends.source, target: ends.target }];
 }
 
 /** The targets of the edges leaving one parent. */

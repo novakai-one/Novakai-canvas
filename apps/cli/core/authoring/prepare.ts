@@ -69,7 +69,7 @@ async function prepareCaptured(
 
 /**
  * The change's Authoring request under the given `--request` or a fresh ID, for the collection
- * the source declares. Fails as `collectionRecordId` or `changeRequest` does.
+ * the source declares. Fails as `collectionRecordId`, `requestIdFor` or `changeRequest` does.
  */
 function requestOf(
   command: ChangeCommand,
@@ -81,8 +81,9 @@ function requestOf(
   const intent = intentOf(command);
   const collection = collectionRecordId(intent, declared);
   if (!collection.ok) return collection;
-  const request = requestIdFor(command, dependencies.requestIds);
-  const draft = { intent, collection: collection.value, source, request };
+  const requestId = requestIdFor(command, dependencies.requestIds);
+  if (!requestId.ok) return requestId;
+  const draft = { intent, collection: collection.value, source, request: requestId.value };
   return changeRequest(draft, snapshot, dependencies.collections);
 }
 

@@ -1,10 +1,12 @@
 /*
- * The CLI's failure vocabulary: closed codes, the two failure shapes and the Result helpers every
- * layer returns. Pure. Nothing throws across a boundary; `cli/canvas.ts` prints the failure and
- * sets the exit code. Consumers branch on the code, never on the message.
+ * The CLI's failure vocabulary: closed codes, the two failure shapes, the `provider-failed` fault a
+ * native throw becomes, and the Result helpers every layer returns. Pure. Nothing throws across a
+ * boundary; `cli/canvas.ts` prints the failure and sets the exit code. Consumers branch on the
+ * code, never on the message.
  */
-import type { FilePath, RequestId } from './brands.js';
+import { filePath, type FilePath, type RequestId } from './brands.js';
 import type { FailureSource, OperationSource } from './records/foreign.js';
+import type { NativeDetail, ProviderFault } from './records/provider-fault.js';
 
 /**
  * A failure the CLI found itself.
@@ -61,6 +63,8 @@ import type { FailureSource, OperationSource } from './records/foreign.js';
  *   needs, such as a committed receipt; or the service's credential reader returned no token.
  *
  * Setup: `cli-unavailable` and `render-unavailable` (an unexpected throw at the entry point).
+ *   `cli-unavailable` also reports a fresh request ID that fails Authoring's grammar; nothing was
+ *   sent.
  */
 export type LocalCode =
   | 'invalid-command'
@@ -210,4 +214,68 @@ export function rejected(
   foreign: OperationSource,
 ): Result<never, ForeignFailure> {
   return { ok: false, error: { code, foreign } };
+}
+
+/** `fault` as a failed Result, typed as its own fault; nothing else is returned with it. */
+export function faulted<F extends { readonly code: string }>(fault: F): Result<never, F> {
+  return { ok: false, error: fault };
+}
+
+/**
+ * A thrown native error as `provider-failed` evidence: its message, path, OS code and syscall.
+ * Only data fields are read, never methods; absent evidence stays absent. Cannot fail.
+ */
+export function nativeFault(error: unknown): ProviderFault {
+  return {
+    code: 'provider-failed',
+    message: nativeMessage(error),
+    detail: nativeDetail(error),
+  };
+}
+
+/** The error's message as human context; no machine-readable field is invented. */
+function nativeMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
+/**
+ * The error's path, OS code and syscall, present ones only. When any present field is malformed
+ * (not text, or an empty path) none is kept, so checked and unchecked evidence never mix.
+ */
+function nativeDetail(error: unknown): NativeDetail {
+  const present = Object.fromEntries(
+    Object.entries(nativeFields(error)).filter((field) => field[1] !== undefined),
+  );
+  if (!isNativeDetail(present)) return {};
+  return present;
+}
+
+/** The three data fields of an object error under their detail names, unchecked; none otherwise. */
+function nativeFields(error: unknown): { readonly [K in keyof NativeDetail]?: unknown } {
+  if (typeof error !== 'object' || error === null) return {};
+  return {
+    path: Reflect.get(error, 'path'),
+    systemCode: Reflect.get(error, 'code'),
+    syscall: Reflect.get(error, 'syscall'),
+  };
+}
+
+/** Whether every present field has its type: a non-empty path, a text code and a text syscall. */
+function isNativeDetail(fields: object): fields is NativeDetail {
+  return (
+    isOptionalPath(Reflect.get(fields, 'path')) &&
+    isOptionalText(Reflect.get(fields, 'systemCode')) &&
+    isOptionalText(Reflect.get(fields, 'syscall'))
+  );
+}
+
+/** Whether `value` is absent or a non-empty path. */
+function isOptionalPath(value: unknown): value is FilePath | undefined {
+  return value === undefined || filePath.safeParse(value).success;
+}
+
+/** Whether `value` is absent or text. */
+function isOptionalText(value: unknown): value is string | undefined {
+  return value === undefined || typeof value === 'string';
 }

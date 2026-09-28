@@ -43,15 +43,14 @@ function requiredSectionFinding(
         message: `Missing required ${slot.id} section.`,
       }),
     ];
-  return text(section, 'mode') === slot.modes[0]
-    ? []
-    : [
-        fieldFinding(section, 'mode', {
-          code: 'section-mode',
-          path: `section ${slot.id}`,
-          message: `Expected mode ${slot.modes[0]}.`,
-        }),
-      ];
+  if (text(section, 'mode') === slot.modes[0]) return [];
+  return [
+    fieldFinding(section, 'mode', {
+      code: 'section-mode',
+      path: `section ${slot.id}`,
+      message: `Expected mode ${slot.modes[0]}.`,
+    }),
+  ];
 }
 
 /** The first section whose ID is the slot's ID without its `@`. */
@@ -84,15 +83,14 @@ function requiredOrderFinding(
   current: RequiredSection,
 ): readonly ProfileFinding[] {
   if (previous === undefined) return [];
-  return orderIncreases(previous.section, current.section)
-    ? []
-    : [
-        fieldFinding(current.section, 'order', {
-          code: 'section-order',
-          path: `section ${current.slot.id}`,
-          message: `Required section order must increase after ${previous.slot.id}; extra sections may appear anywhere.`,
-        }),
-      ];
+  if (orderIncreases(previous.section, current.section)) return [];
+  return [
+    fieldFinding(current.section, 'order', {
+      code: 'section-order',
+      path: `section ${current.slot.id}`,
+      message: `Required section order must increase after ${previous.slot.id}; extra sections may appear anywhere.`,
+    }),
+  ];
 }
 
 /** Both orders exist and the current one is larger. */

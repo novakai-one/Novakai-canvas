@@ -1,8 +1,9 @@
 /*
- * `pnpm render:png` wiring: the ports of one read-only render. The service's headless bindings,
- * the resource reader and the render's file and raster adapters are bound once; `open` makes the
- * render's temporary asset store, prepares the installation in it and composes Language, the
- * Design System and Templates over it. Not pure: the adapters touch the filesystem. Failures are
+ * `pnpm render:png` wiring: builds the ports of one read-only render and injects them. The
+ * service's headless bindings, the resource reader and the render's file and raster adapters are
+ * built once; `open` makes the render's temporary asset store, prepares the installation in it,
+ * builds Language, the Design System and Templates over it, and joins the environment port from
+ * the adapters in adapters/render/. Not pure: the adapters touch the filesystem. Failures are
  * values, and a failed `open` closes the store it made; a render changes nothing stored, so the
  * caller fixes the input and runs it again.
  */
@@ -15,16 +16,19 @@ import {
 import { composeDesignSystem } from '@novakai/canvas-design-system';
 import { composeTemplates } from '@novakai/canvas-templates';
 import { createResourceReader } from '../../adapters/files/resource-reader.js';
+import { createCapabilityRules, type Environment } from '../../adapters/render/capability-rules.js';
+import { createLowering, exportDocuments } from '../../adapters/render/documents.js';
+import { createExporter, type ExportChoices } from '../../adapters/render/exporter.js';
+import { createProduction, type Production } from '../../adapters/render/production.js';
 import { createRaster } from '../../adapters/render/raster.js';
 import { createRenderFiles } from '../../adapters/render/render-files.js';
 import { openTempAssets } from '../../adapters/render/temp-assets.js';
 import type { RenderEnvironment, RenderPorts, TempAssetStore } from '../ports/render.js';
 import type { RenderRequest } from '../records/render.js';
-import { faulted, nativeFault, type RenderEvidence } from '../records/render-failure.js';
+import type { RenderEvidence } from '../records/render-failure.js';
 import type { HeadlessBindings } from '../records/foreign.js';
-import { success, type Result } from '../errors.js';
+import { faulted, nativeFault, success, type Result } from '../errors.js';
 import { composeLanguage } from './language.js';
-import { renderEnvironment, type Environment } from './render-environment.js';
 
 /**
  * The ports of one render. Rejects when the service's render adapters cannot be imported; the
@@ -56,9 +60,16 @@ async function openEnvironment(
   return environment;
 }
 
+/** What the environment port is joined from besides the capability values. */
+interface PortOwners {
+  readonly service: HeadlessBindings;
+  readonly request: RenderRequest;
+  readonly store: TempAssetStore;
+}
+
 /**
- * The installation prepared in `store` and the capability values over both. Fails with the
- * service's installation failure.
+ * The installation prepared in `store` and the environment port over it. Fails with the service's
+ * installation failure.
  */
 async function environmentIn(
   request: RenderRequest,
@@ -72,7 +83,7 @@ async function environmentIn(
   );
   if (!installation.ok) return installation;
   const env = capabilities(service, store.assets, installation.value);
-  return success(renderEnvironment(env, { service, request, store }));
+  return success(environmentPort(env, { service, request, store }));
 }
 
 /** A step that threw instead of returning its failure, as `provider-failed` with its evidence. */
@@ -104,4 +115,46 @@ function capabilities(
     resources: { themes: {}, assets: {} },
   });
   return { assets, installation, system, language, templates: composeTemplates(codecs) };
+}
+
+/**
+ * The environment port over `env`, joined from the render adapters: capability rules, lowering,
+ * the service's drawing and Export. Closing it closes the store. Cannot fail.
+ */
+function environmentPort(
+  env: Environment,
+  owners: PortOwners,
+): RenderEnvironment {
+  return {
+    ...createCapabilityRules(env, owners.service),
+    ...createLowering(env.language),
+    ...createProduction(serviceProduction(env, owners)),
+    ...createExporter(exportChoices(env, owners.request)),
+    close: () => owners.store.close(),
+  };
+}
+
+/** The service's render jobs over `env`, with the layout engine's wasm below the repo root. */
+function serviceProduction(
+  env: Environment,
+  owners: PortOwners,
+): Production {
+  const jobs = owners.service.createRenderJobs({
+    ...env,
+    sources: env.installation.tokens,
+    wasmResource: join(owners.request.root, 'resources/vendor/layout/libavoid.wasm'),
+  });
+  return { jobs, produceDiagram: owners.service.produceDiagram };
+}
+
+/** The request's format and label mode, and Export's documents port over Language. */
+function exportChoices(
+  env: Environment,
+  request: RenderRequest,
+): ExportChoices {
+  return {
+    format: request.format,
+    labels: request.labels,
+    documentsFor: (pins) => exportDocuments(env.language, pins),
+  };
 }

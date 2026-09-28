@@ -35,9 +35,8 @@ function appendixOf(
 ): Appendix[] {
   const [, prefix, digits] = appendixIdShape.exec(sectionId) ?? [];
   const mode = appendixMode(prefix);
-  return mode === undefined || digits === undefined
-    ? []
-    : [{ section, id: sectionId, number: Number(digits), mode }];
+  if (mode === undefined || digits === undefined) return [];
+  return [{ section, id: sectionId, number: Number(digits), mode }];
 }
 
 /** The descriptor's appendix mode an ID prefix names, or nothing when it names none. */
