@@ -1,28 +1,24 @@
 /*
  * Why this file exists
  *
- * Every command needs a set number of words after it. `list` needs none. `read` needs exactly one,
- * the collection to read: `pnpm canvas read my-diagram`. That word is called the operand. So
- * `pnpm canvas read` alone, or `read a b`, is a mistake:
+ * Each command needs a set number of words after it, called operands. `list` needs none. `read`
+ * needs one, the collection to read: `pnpm canvas read my-diagram`. So `read` alone is a mistake.
  *
- *   invalid-arguments: read requires 1 operand(s)
- *
- * This file checks the number of words after the command. Which commands need none is written
- * once, in `table.ts`. This runs before any flag is checked. It never checks what the word says:
- * `assembly.ts` does that later, using the checks in `values.ts`.
+ * This file checks that number, before any flag is checked. It never checks what the word says:
+ * each value is checked in `values.ts`.
  */
 import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
 import type { CommandWithRightOperandCount, IdentifiedCommand } from './command-stages.js';
 import { operandCountFailure } from './failures.js';
-import type { FlagTextAndOrder } from './flags.js';
+import type { TypedFlags } from './flags.js';
 import { takesNoOperand } from './table.js';
 import type { NoOperandCommand, OneOperandCommand } from './table.js';
 
 /**
- * Checks the command got the number of words it needs after it: none for the no-operand commands
- * in `table.ts`, and exactly one for every other command.
+ * Checks the command got the right number of words after it.
  *
+ * `help`, `describe` and `list` take none. Every other command takes exactly one.
  * The mistake it can find: too many or too few words (`invalid-arguments`).
  */
 export function checkOperandCount(
@@ -39,7 +35,7 @@ export function checkOperandCount(
 function requireNoOperand(
   name: NoOperandCommand,
   operandWords: readonly string[],
-  flags: FlagTextAndOrder,
+  flags: TypedFlags,
 ): Result<CommandWithRightOperandCount> {
   if (operandWords.length > 0) {
     return operandCountFailure(name, 0);
@@ -54,7 +50,7 @@ function requireNoOperand(
 function requireOneOperand(
   name: OneOperandCommand,
   operandWords: readonly string[],
-  flags: FlagTextAndOrder,
+  flags: TypedFlags,
 ): Result<CommandWithRightOperandCount> {
   const [operand, ...extraWords] = operandWords;
   const hasExactlyOne = operand !== undefined && extraWords.length === 0;

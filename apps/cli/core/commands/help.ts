@@ -2,15 +2,10 @@
  * Why this file exists
  *
  * An agent that doesn't know the commands types `pnpm canvas --help`. It should get every command
- * and how to type it, such as `canvas read ID [--section ID | --object ID] [--out FILE]`, plus
- * a few notes. For example, one note tells the agent not to take a change as saved until a
- * receipt says so. (A receipt is the service's record that a change was saved.)
+ * and how to type it, such as `canvas read ID [--section ID | --object ID] [--out FILE]`.
  *
  * This file writes that text once, from the command rows in `table.ts`, so the help and the
- * commands can't drift apart.
- *
- * It's plain text, made once. The CLI prints it before it reads any credential or file, or
- * contacts the service.
+ * commands can't drift apart. It never reads a credential or a file, or contacts the service.
  */
 import { commandRows } from './table.js';
 import type { CommandRow } from './table.js';

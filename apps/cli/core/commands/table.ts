@@ -1,19 +1,11 @@
 /*
  * Why this file exists
  *
- * Several parts of the CLI need the same facts about each command. Parsing needs to know
- * that `read` accepts `--section`. `--help` needs the line that shows how to type `read`. If each
- * part kept its own list, the lists would drift apart.
+ * Several parts of the CLI need the same facts about each command. Parsing needs to know that
+ * `read` accepts `--section`. `--help` needs the line that shows how to type `read`.
  *
- * This file keeps one row per command, with the flags it accepts and its `--help` lines. It also
- * lists the commands typed with no word after them (`help`, `describe`, `list`), and the command
- * groups: `theme`, `recipe` and `profile`, the words that start a two-word command.
- *
- * The word typed after a command is its operand: `my-diagram` in `read my-diagram`. A command takes
- * no operand or exactly one.
- *
- * It holds data and simple lookups only. The rows are frozen, so nothing can change them while the
- * CLI runs.
+ * This file keeps one row per command, so those facts are written once and can't drift apart. It
+ * holds data and simple lookups only, and nothing can change a row while the CLI runs.
  */
 import type { CommandName } from '../../contract/records/command.js';
 import type { TextFlag } from './flags.js';

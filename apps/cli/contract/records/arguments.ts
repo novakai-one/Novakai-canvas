@@ -91,4 +91,4 @@ export type ArgvReading<F extends string> =
  * holding the words and flags, or `malformed`, when a flag couldn't be read (a flag the CLI
  * doesn't have, or one missing its value).
  */
-export type CanvasArgv = ArgvReading<CanvasFlag>;
+export type CommandLine = ArgvReading<CanvasFlag>;

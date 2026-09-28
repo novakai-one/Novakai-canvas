@@ -1,13 +1,11 @@
 /*
  * Why this file exists
  *
- * When an agent types `--section intro`, Node's `parseArgs` reads `intro` as the value of
- * `--section`. The CLI keeps `intro` exactly as typed. Nothing is checked yet, so every value here
- * is plain text, and the types say so. Checking comes later: `assembly.ts` checks each value,
- * using the checks in `values.ts`. That is where `--revision 3` becomes a checked revision number.
+ * Node reads `--section intro` as the flag `section` with the text `intro`. Nothing is checked
+ * yet, so the CLI keeps that text exactly as typed, and the types here say so.
  *
- * This file reads two things from what Node found, for the next steps: the text typed after each
- * flag, and the order the flags were typed in.
+ * This file collects the text typed after each flag, and the order the flags were typed in. It
+ * never checks a value: each value is checked in `values.ts`.
  */
 import type { CanvasFlag } from '../../contract/records/arguments.js';
 
@@ -20,10 +18,11 @@ export type TextFlag = Exclude<CanvasFlag, 'help'>;
  */
 export type FlagTextAsTyped = Readonly<Partial<Record<TextFlag, string>>>;
 
-/** The text typed after each flag, plus the order the flags were typed in. */
-export interface FlagTextAndOrder {
+/** The text typed after each flag, and the order the flags were typed in. Not checked yet. */
+export interface TypedFlags {
+  /** The text typed after each flag: `{ revision: '3' }` for `--revision 3`. */
   readonly text: FlagTextAsTyped;
-  /** The flags in the order they were typed. Kept only to name the first one a command doesn't accept. */
+  /** The flags in the order typed. Kept only to name the first one a command doesn't accept. */
   readonly order: readonly TextFlag[];
 }
 
@@ -34,12 +33,12 @@ export type FlagValue = string | boolean;
 type TextEntry = [TextFlag, string];
 
 /**
- * Reads the text typed after each flag, and the order the flags were typed in, from what Node
- * read. Leaves out `--help`, which has no text.
+ * Collects the text typed after each flag, and the order the flags were typed in.
+ *
+ * `--revision 3 --out a.canvas` gives `{ revision: '3', out: 'a.canvas' }` and
+ * `['revision', 'out']`. `--help` is left out: it has no text.
  */
-export function readFlagTextAndOrder(
-  flagValues: ReadonlyMap<CanvasFlag, FlagValue>,
-): FlagTextAndOrder {
+export function collectTypedFlags(flagValues: ReadonlyMap<CanvasFlag, FlagValue>): TypedFlags {
   const textEntries = [...flagValues].filter(isTextEntry);
   const text: FlagTextAsTyped = Object.fromEntries(textEntries);
   const order = textEntries.map(flagOfEntry);

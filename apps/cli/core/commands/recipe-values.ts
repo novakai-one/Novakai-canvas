@@ -1,28 +1,11 @@
 /*
  * Why this file exists
  *
- * Two recipe commands need several values typed right before anything is sent:
+ * A recipe is a saved diagram to start new ones from. Two commands need recipe values typed right,
+ * such as the pin that names one exact recipe: `er@1.0.0#sha256:DIGEST` (ID, version, digest).
  *
- *   pnpm canvas recipe admit er.canvas --id er --version 1.0.0 --family er --title "ER diagram"
- *   pnpm canvas recipe instantiate er@1.0.0#sha256:DIGEST --namespace shop --out shop.canvas
- *
- * `recipe admit` saves a diagram file as a reusable recipe. Its four flags describe the recipe:
- * its ID, version, family and title. Together they are called the recipe's header. The family is
- * the kind of diagram the recipe makes, such as `er` (entity-relationship).
- *
- * `recipe instantiate` makes a new diagram from a saved recipe, as text the agent can edit. It
- * needs the exact recipe, written as its pin: `ID@VERSION#sha256:DIGEST`. The digest is a
- * fingerprint of the recipe's content.
- *
- * `--namespace` is the new diagram's collection ID. The flag uses Templates' word for it:
- * Templates says the recipe is expanded "into a namespace".
- *
- * This file checks those values and returns them as checked types. The rules come from the
- * Templates capability, which stores recipes, so the CLI can't disagree with it.
- *
- * It never reads the file or asks the service. Each check answers with a `Result` (see
- * `contract/errors.ts`). Every mistake here is `invalid-arguments`, written by the check that
- * finds it.
+ * This file checks those values, with the same rules as Templates, which stores recipes. It never
+ * reads a file or asks the service.
  */
 import { presetId as presetIdSchema, version as versionSchema } from '../../contract/brands.js';
 import type { PresetDigest, PresetId, Version } from '../../contract/brands.js';
@@ -84,9 +67,9 @@ type RecipePin = ExpansionRequest['pin'];
 /**
  * Checks the four flags `recipe admit` needs: `--id`, `--version`, `--family` and `--title`.
  *
- * The mistakes it can find, in this order: any of the four missing or empty; an `--id` that isn't
- * a letter followed by letters, digits, `_` or `-`; a `--version` not written like `1.0.0`; a
- * `--family` that isn't a recipe family.
+ * `--id er --version 1.0.0 --family er --title "ER diagram"`.
+ * The mistakes it can find: a flag missing or empty, or an `--id`, `--version` or `--family` that
+ * isn't valid.
  */
 export function checkRecipeHeader(flags: FlagTextAsTyped): Result<RecipeHeader> {
   const headerText = requireHeaderFlags(flags);
@@ -97,15 +80,11 @@ export function checkRecipeHeader(flags: FlagTextAsTyped): Result<RecipeHeader> 
 }
 
 /**
- * Checks what `recipe instantiate` asks for: the recipe's pin, and `--namespace`, the new
- * collection's ID.
+ * Checks what `recipe instantiate` asks for: the recipe's pin, and `--namespace`, the new ID.
  *
- * `typedPin` is the pin as typed after the command, such as `er@1.0.0#sha256:DIGEST`.
- * `typedNamespace` is the text after `--namespace`, or `undefined` when it wasn't typed.
- *
- * The mistakes it can find: a pin not in that shape; a pin whose ID, version or digest isn't
- * valid; `--namespace` missing or not a valid ID. Each one's message is the same usage line:
- * `Use recipe instantiate ID@VERSION#sha256:DIGEST --namespace ID --out FILE`.
+ * `typedPin` is the pin as typed, such as `er@1.0.0#sha256:DIGEST`.
+ * The mistakes it can find: a bad pin, or `--namespace` missing or not a valid ID. Each one's
+ * message is the usage line.
  */
 export function checkRecipeToInstantiate(
   typedPin: string,

@@ -1,30 +1,16 @@
 /*
  * Why this file exists
  *
- * `parse.ts` checks a typed command line in steps, and each step hands the next one what it has
- * checked so far. The word typed after a command is called its operand: `my-diagram` in
- * `pnpm canvas read my-diagram --section intro`. For that line, the steps hand on:
+ * `parse.ts` checks a typed line in steps, and each step hands the next what it has checked so
+ * far. In `pnpm canvas read my-diagram`, one step finds the command `read` and its operand (the
+ * word after it) `my-diagram`. The next checks that `read` got exactly one operand.
  *
- *   1. `WellFormedArguments`: every flag could be read, and neither `--section` nor `--object`
- *      was typed twice.
- *   2. `IdentifiedCommand`: the command is `read`, and `my-diagram` was typed after it.
- *   3. `CommandWithRightOperandCount`: `read` got the one operand it needs.
- *   4. `AcceptedCommand`: `read` accepts `--section`, so every flag fits. It is either an
- *      `AcceptedNoOperandCommand` (such as `list`) or an `AcceptedOneOperandCommand` (such as
- *      `read my-diagram`).
- *
- * This file names what each step hands on, so each step's type says how far the checking got.
- * Every word and flag value in them is still the text as typed. `assembly.ts` checks them last,
- * using the checks in `values.ts`.
- *
- * Step 4 drops the order the flags were typed in; it was only needed to name the first flag the
- * command doesn't accept.
- *
- * It holds types only. No code runs here.
+ * This file names what each step hands on, so a type says how far the checking got. It holds
+ * types only, and never checks a value: every word and flag in them is still text as typed.
  */
 import type { CanvasFlag } from '../../contract/records/arguments.js';
 import type { CommandName } from '../../contract/records/command.js';
-import type { FlagValue, FlagTextAsTyped, FlagTextAndOrder } from './flags.js';
+import type { FlagValue, FlagTextAsTyped, TypedFlags } from './flags.js';
 import type { NoOperandCommand, OneOperandCommand } from './table.js';
 
 /**
@@ -43,25 +29,24 @@ export interface IdentifiedCommand {
   readonly name: CommandName;
   /** The words after the command: `['my-diagram']` in `read my-diagram`. */
   readonly operandWords: readonly string[];
-  readonly flags: FlagTextAndOrder;
+  readonly flags: TypedFlags;
 }
 
 /**
- * Step 3: a command with the right number of operands. Its flags aren't checked yet.
- * - `no-operand`: `help`, `describe` or `list`, typed alone.
- * - `one-operand`: any other command, with its one `operand` as typed, such as `my-diagram`.
+ * Step 3: a command with the right number of operands: none for `help`, `describe` or `list`, one
+ * for any other. Its flags aren't checked yet.
  */
 export type CommandWithRightOperandCount =
   | {
       readonly kind: 'no-operand';
       readonly name: NoOperandCommand;
-      readonly flags: FlagTextAndOrder;
+      readonly flags: TypedFlags;
     }
   | {
       readonly kind: 'one-operand';
       readonly name: OneOperandCommand;
       readonly operand: string;
-      readonly flags: FlagTextAndOrder;
+      readonly flags: TypedFlags;
     };
 
 /** Step 4, for `help`, `describe` or `list`: the command, typed alone, and its accepted flags. */
@@ -82,5 +67,8 @@ export interface AcceptedOneOperandCommand {
   readonly flags: FlagTextAsTyped;
 }
 
-/** Step 4: a command whose flags are all ones it accepts. Only `checkCommandFlags` makes one. */
+/**
+ * Step 4: a command whose flags are all ones it accepts. Only `checkAcceptedFlags` makes one. Its
+ * flags keep their text but not their order.
+ */
 export type AcceptedCommand = AcceptedNoOperandCommand | AcceptedOneOperandCommand;

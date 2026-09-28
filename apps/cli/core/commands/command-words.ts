@@ -1,14 +1,10 @@
 /*
  * Why this file exists
  *
- * The first word an agent types usually names the command: `pnpm canvas list`. Two things make it
- * less simple:
+ * The first word usually names the command, but not always. `recipe admit er.canvas` is the
+ * command `recipe-admit`, and `--help` anywhere means the `help` command.
  *
- *   - `theme`, `recipe` and `profile` start two-word commands. `recipe admit er.canvas` is the
- *     command `recipe-admit`, with `er.canvas` typed after it.
- *   - `--help` (or `-h`) anywhere means the `help` command, whatever words were typed.
- *
- * This file picks the command's word, and the words typed after it. It never checks that the word
+ * This file picks the command's word and the words typed after it. It never checks that the word
  * is a real command: `parse.ts` does that next.
  */
 import type { WellFormedArguments } from './command-stages.js';
@@ -34,10 +30,8 @@ const helpCommandWords: CommandWords = Object.freeze({
 /**
  * Picks the command's word, and the words typed after it.
  *
- * `--help` wins: the command is `help`, and every typed word is dropped. The flags are still
- * checked later, against the `help` command, in `accepted-flags.ts`. Otherwise the words are kept
- * in order, and `theme`, `recipe` or `profile` joins the word after it: `recipe admit` becomes
- * `recipe-admit`.
+ * `recipe admit er.canvas` gives `recipe-admit` and `['er.canvas']`. With `--help`, the command is
+ * `help` and every typed word is dropped.
  */
 export function pickCommandWords(wellFormed: WellFormedArguments): CommandWords {
   if (asksForHelp(wellFormed)) {

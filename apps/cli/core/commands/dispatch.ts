@@ -1,20 +1,11 @@
 /*
  * Why this file exists
  *
- * Once a command line is parsed, something has to run it. `pnpm canvas read my-diagram` has to ask
- * the service for that collection. `pnpm canvas profile lint plan.canvas` has to check the file on
- * this machine. Each command has its own code that does the work, in `core/reads`,
- * `core/authoring`, `core/presets` and `core/profiles`. (`core/presets` saves themes and recipes;
- * a preset is either one.)
+ * A parsed command still has to be run. `pnpm canvas read my-diagram` asks the service for that
+ * collection. `pnpm canvas profile lint plan.canvas` checks the file on this machine.
  *
- * This file runs each command. It dispatches the command, which means it passes it to the code
- * that does its work. Then it hands the answer to `delivery.ts`, which keeps it for the screen or
- * writes it to the `--out` file.
- *
- * It does no I/O itself. The code it calls uses only the tools it is handed (its dependencies),
- * such as the service connection or the file reader. It never prints and never sets the exit
- * code: `cli/canvas.ts` does that with what comes back. Each step answers with a `Result` (see
- * `contract/errors.ts`).
+ * This file passes each command to the code that does its work, and returns the answer. It never
+ * prints, and never touches the disk or the network itself: it only uses the tools it is handed.
  */
 import type { ProfileCommand, ServiceCommand } from '../../contract/records/command.js';
 import type { ExpansionRequest } from '../../contract/records/foreign.js';
@@ -37,14 +28,10 @@ import type { ReadDependencies } from '../reads/queries.js';
 import { answerProfile } from '../profiles/commands.js';
 import type { ProfileDependencies } from '../profiles/commands.js';
 import { unsupported } from '../shared/results.js';
-import { deliverAnswer } from './delivery.js';
+import { printOrWriteAnswer } from './delivery.js';
 import type { OutFileWriter } from './delivery.js';
 
-/**
- * What `recipe instantiate` uses: the one service call that turns a recipe into diagram text.
- * `resources` is the service's calls for recipes and for the files a diagram uses
- * (`ServiceResources`); this command uses only `instantiate`.
- */
+/** What `recipe instantiate` uses: the one service call that turns a recipe into diagram text. */
 export interface RecipeInstantiateDependencies {
   readonly resources: Pick<ServiceResources, 'instantiate'>;
 }
@@ -55,19 +42,8 @@ export interface OutFileDependencies {
 }
 
 /**
- * Every tool a service command may need, joined from each part's own list.
- * `contract/compose/service.ts` makes each one once:
- * - `reads`: the service's read calls (collections, receipts, the DSL vocabulary).
- * - `authoring`: the service's calls that preview or save a change.
- * - `resources`: the service's calls for recipes and for the files a diagram uses.
- * - `files`: reads a file on this machine, such as `plan.canvas`.
- * - `writer`: writes the `--out` file.
- * - `journal`: the request journal, a copy of each change the CLI sends, kept in the workspace so
- *   `retry` can send it again.
- * - `reader`: reads the files a diagram points to, such as an image.
- * - `collections`: Model's check that a collection is valid.
- * - `language`: Language, which reads DSL (the text language diagrams are written in).
- * - `requestIds`: makes a new request ID for each change.
+ * Every tool a service command may need, such as the service's calls, the file reader and the
+ * `--out` writer. `contract/compose/service.ts` makes each one once.
  */
 export type ServiceCommandDependencies = ReadDependencies &
   AuthorDependencies &
@@ -85,14 +61,9 @@ export type ProfileCommandDependencies = ProfileDependencies & OutFileDependenci
 /**
  * Runs a command on the local service, and returns the text to show on screen.
  *
- * It takes two steps. If a step finds a mistake, it stops there and returns that mistake.
- * 1. Pass the command to the code that does its work. For example, `read` goes to the code that
- *    reads a collection.
- * 2. Keep the answer to show on screen, or write it to the `--out` file (`delivery.ts`).
- *
- * The mistakes it can find: whatever that code reports (a missing collection, a stale
- * `--revision`, no answer from the service, …), or an `--out` file that can't be written. In that
- * last case the command already ran (see `delivery.ts`).
+ * `read my-diagram` asks the service for that collection. With `--out`, the answer goes to a file.
+ * The mistakes it can find: whatever the service reports, such as a missing collection or a stale
+ * `--revision`, or an `--out` file that can't be written.
  */
 export async function runServiceCommand(
   command: ServiceCommand,
@@ -102,15 +73,11 @@ export async function runServiceCommand(
   if (!answer.ok) {
     return answer;
   }
-  return deliverAnswer(answer.value, command, dependencies.writer);
+  return printOrWriteAnswer(answer.value, command, dependencies.writer);
 }
 
 /**
  * Runs a profile command on this machine, and returns the text to show on screen.
- *
- * It takes two steps. If a step finds a mistake, it stops there and returns that mistake.
- * 1. Answer the command: describe the profile, make the scaffold, or lint the file.
- * 2. Keep the answer to show on screen, or write it to the `--out` file (`delivery.ts`).
  *
  * The mistakes it can find: a lint file that can't be read or doesn't parse, a file that breaks
  * the profile's rules, or an `--out` file that can't be written.
@@ -123,7 +90,7 @@ export async function runProfileCommand(
   if (!answer.ok) {
     return answer;
   }
-  return deliverAnswer(answer.value, command, dependencies.writer);
+  return printOrWriteAnswer(answer.value, command, dependencies.writer);
 }
 
 /**

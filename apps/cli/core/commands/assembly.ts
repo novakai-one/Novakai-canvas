@@ -1,24 +1,12 @@
 /*
  * Why this file exists
  *
- * By this point the CLI knows the command, and that its words and flags fit. But every value is
- * still text as the agent typed it. In `pnpm canvas replace plan.canvas --revision 3`, the `3` is
- * only text. The rest of the CLI needs checked values: a real revision number, a file path, a
- * service address on this machine.
+ * Once the command and its flags fit, every value is still text as typed. In
+ * `pnpm canvas replace plan.canvas --revision 3`, the `3` is text, not yet a revision number.
  *
- * This file assembles the command: it checks every value and builds one `ParsedCommand`, with
- * every left-out option filled in.
- *
- *   1. It checks `--section`, `--object`, `--mode` and `--revision`, the same way for every
- *      command.
- *   2. It checks the command's own values with the command's `build…Command` function, in
- *      `service-commands.ts` or `profile-commands.ts`.
- *   3. For a command sent to the service, it adds `--server` (the service's address, where the
- *      command is sent) and `--workspace` (the folder that holds the agent's access token).
- *
- * It never reads a file or talks to the service. Each step answers with a `Result` (see
- * `contract/errors.ts`). A mistake about one typed value is written by the check that finds it, in
- * `values.ts` or `recipe-values.ts`.
+ * This file checks every value and builds the one `ParsedCommand` the CLI runs, filling in any
+ * option left out. It never reads a file or talks to the service. Each value is checked in
+ * `values.ts`.
  */
 import type {
   ChangeMode,
@@ -94,21 +82,11 @@ const profileCommands: Readonly<Record<ProfileCommandName, ProfileCommandName>> 
 /**
  * Checks every value typed with the command, and builds the `ParsedCommand` the CLI runs.
  *
- * It takes three steps. If a step finds a mistake, it stops there and returns that mistake.
  * 1. Check `--section` or `--object`, then `--mode`, then `--revision`.
- * 2. Check the word after the command, then the command's own flags. `help` has nothing to check.
- *    A profile command, such as `profile lint plan.canvas`, runs on this machine and stops here.
- * 3. For a command sent to the service, check `--server` and `--workspace`. If `--workspace`
- *    wasn't typed, the command uses `defaultWorkspace`.
+ * 2. Check the word after the command, then the command's own flags.
+ * 3. For a service command, check `--server` and `--workspace` (or use `defaultWorkspace`).
  *
- * The mistakes it can find:
- * - a bad `--section` or `--object` ID, an unknown `--mode`, or a bad `--revision`;
- * - a bad collection ID or request ID;
- * - a bad recipe pin (the exact recipe, such as `er@1.0.0#sha256:DIGEST`; see `recipe-values.ts`);
- * - an unknown profile;
- * - a missing or bad `recipe admit` flag, or `profile scaffold` `--id` or `--title`;
- * - an empty file path or `--out` path;
- * - a `--server` not on this machine.
+ * The mistakes it can find: any value typed wrong, such as a bad `--revision` or collection ID.
  */
 export function assembleCommand(
   accepted: AcceptedCommand,

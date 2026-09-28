@@ -1,23 +1,12 @@
 /*
  * Why this file exists
  *
- * Each command accepts only some flags. `pnpm canvas list --revision 3` makes no sense, because
- * `list` doesn't use a revision. If the CLI quietly ignored the flag, the agent would think it had
- * asked for something it didn't get. So a flag the command doesn't accept is a mistake:
+ * Each command accepts only some flags. If the CLI quietly ignored an extra flag, the agent would
+ * think it got something it didn't. For example, `pnpm canvas list --revision 3` is refused:
+ * `list` has no revision.
  *
- *   invalid-arguments: --revision is not valid with list
- *
- * One command also has a flag it must have: `profile lint` needs `--profile`. This file is the one
- * place that reports it missing.
- *
- * This file checks every typed flag against the command's row in `table.ts`. A few flags get their
- * own message. For example, `--profile` only goes with `profile lint`, and `--section` and
- * `--object` can't be typed together. The checks run in a fixed order, and only the first mistake
- * is reported.
- *
- * It only checks which flags were typed, never the text typed after them: `assembly.ts` checks
- * that next. Each check answers with a `Result` (see `contract/errors.ts`), and the mistakes are
- * made in `failures.ts`.
+ * This file checks every typed flag against the flags its command accepts (its row in `table.ts`).
+ * It never checks the text typed after a flag.
  */
 import type { LocalFailure, Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
@@ -39,7 +28,7 @@ type RuleVerdict = Result<true, LocalFailure>;
 /** One flag rule, checked against the command and its flags. */
 type FlagRule = (command: CommandWithRightOperandCount) => RuleVerdict;
 
-/** The flag rules, in the order listed on `checkCommandFlags`. */
+/** The flag rules, checked in this order. Only the first mistake is reported. */
 const flagRules: readonly FlagRule[] = Object.freeze([
   checkProfileFlag,
   checkLintHasProfile,
@@ -50,20 +39,13 @@ const flagRules: readonly FlagRule[] = Object.freeze([
 ]);
 
 /**
- * Checks the command got only flags it accepts, and the one flag it must have.
+ * Checks that every typed flag is one the command accepts, and that `profile lint` has `--profile`.
  *
- * It checks these six rules in order, and stops at the first mistake:
- * 1. `--profile` is only for `profile lint`.
- * 2. `profile lint` needs `--profile`.
- * 3. `--id` and `--title` are only for `profile scaffold` and `recipe admit`.
- * 4. `--section` and `--object` aren't typed together.
- * 5. `--section` and `--object` are only for `read`.
- * 6. Every other flag is one the command accepts. If not, the first flag it doesn't accept is
- *    named: `--revision is not valid with list`.
- *
- * Every mistake it finds is `invalid-arguments`, a missing `--profile` included.
+ * `list --revision 3` gets `invalid-arguments: --revision is not valid with list`.
+ * The mistakes it can find: a flag the command doesn't accept, `--section` with `--object`, or
+ * `profile lint` without `--profile`.
  */
-export function checkCommandFlags(command: CommandWithRightOperandCount): Result<AcceptedCommand> {
+export function checkAcceptedFlags(command: CommandWithRightOperandCount): Result<AcceptedCommand> {
   // `checkNextRule` passes the first failure along unchanged, so later rules are skipped.
   const checked = flagRules.reduce(checkNextRule, success(command));
   if (!checked.ok) {

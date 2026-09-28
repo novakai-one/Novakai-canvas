@@ -1,32 +1,12 @@
 /*
  * Why this file exists
  *
- * Most commands are sent to the local Canvas service, and each needs different values. `read`
- * needs a collection ID. `receipt` needs a request ID. `create` needs a file. Take
- * `pnpm canvas read my-diagram --out read.canvas`: before it is sent, `my-diagram` has to be a
- * valid collection ID, and `read.canvas` a usable path.
+ * Most commands are sent to the local Canvas service, and each needs different values checked
+ * first. In `pnpm canvas read my-diagram --out read.canvas`, `my-diagram` must be a valid
+ * collection ID and `read.canvas` a usable path.
  *
- * This file has one `build…Command` function per kind of service command. Each checks the word
- * typed after the command, then the command's own flags, then `--request` and `--out`. It returns
- * its command's record in `ServiceCommand`: one record per command, told apart by `name`, with
- * only the fields that command uses.
- *
- * Parameters named `typed…`, and `flags`, are text as the agent typed it. `scope`, `mode` and
- * `revisionOption` are already checked: `assembly.ts` checks them first and passes in the ones a
- * command uses.
- *
- * Words used below:
- *   - A collection is one saved diagram.
- *   - A receipt is the service's record that a change was saved.
- *   - `--request ID` sets the ID of the change a command sends, so its receipt can be found later.
- *   - To admit a file is to save it on the service: `theme admit` saves a theme.
- *   - A pin names one exact recipe: `ID@VERSION#sha256:DIGEST`.
- *   - An `…Option` type holds one flag that may be left out: `RevisionOption` is
- *     `{ revision?: CollectionRevision }`.
- *
- * This file never sends anything; it only builds the command. Each check answers with a `Result`
- * (see `contract/errors.ts`). A mistake about one typed value is written by the check that finds
- * it, in `values.ts` or `recipe-values.ts`.
+ * This file has one `build…Command` function per kind of service command. Each checks the typed
+ * values and builds its command's record. It never sends anything.
  */
 import type {
   ChangeMode,
@@ -60,7 +40,7 @@ interface RecipeSource {
 type RequestAndOutOptions = RequestOption & OutOption;
 
 /**
- * Builds `describe` or `list`. Neither has a word after it. The only flag checked here is `--out`.
+ * Builds `describe` or `list`. Neither has a word after it.
  *
  * The mistake it can find: an empty `--out` path.
  */
@@ -77,9 +57,9 @@ export function buildDescribeOrListCommand(
 
 /**
  * Builds `read`: which collection to read, and which part of it (`scope`, already checked).
- * `typedCollectionId` is the collection ID as typed, such as `my-diagram`.
  *
- * The mistakes it can find: a collection ID that isn't valid, then an empty `--out` path.
+ * `typedCollectionId` is the collection ID as typed, such as `my-diagram`.
+ * The mistakes it can find: a collection ID that isn't valid, or an empty `--out` path.
  */
 export function buildReadCommand(
   typedCollectionId: string,
@@ -98,10 +78,10 @@ export function buildReadCommand(
 }
 
 /**
- * Builds `inspect`, which reports on a collection: whether it is valid, its warnings, and how
- * many connecting lines cross. `typedCollectionId` is the collection ID as typed.
+ * Builds `inspect`, which reports whether a collection is valid, its warnings, and crossing lines.
  *
- * The mistakes it can find: a collection ID that isn't valid, then an empty `--out` path.
+ * `typedCollectionId` is the collection ID as typed.
+ * The mistakes it can find: a collection ID that isn't valid, or an empty `--out` path.
  */
 export function buildInspectCommand(
   typedCollectionId: string,
@@ -119,14 +99,10 @@ export function buildInspectCommand(
 }
 
 /**
- * Builds `receipt`, `retry` or `apply`. Each acts on a change sent earlier, named by the request ID
- * typed after it: `pnpm canvas receipt req-1`. `typedRequestId` is that ID as typed.
+ * Builds `receipt`, `retry` or `apply`, which act on a change sent earlier, named by request ID.
  *
- * - `receipt` shows whether the change was saved.
- * - `retry` sends the same change again, when no receipt says it was saved.
- * - `apply` saves a change that `preview` showed earlier.
- *
- * The mistakes it can find: a request ID that isn't valid, then an empty `--out` path.
+ * `receipt req-1` shows whether it was saved, `retry` sends it again, `apply` saves a preview.
+ * The mistakes it can find: a request ID that isn't valid, or an empty `--out` path.
  */
 export function buildReceiptRetryOrApplyCommand(
   name: 'receipt' | 'retry' | 'apply',
@@ -145,11 +121,10 @@ export function buildReceiptRetryOrApplyCommand(
 }
 
 /**
- * Builds `create` or `theme admit`. The command sends one file: a diagram to create, or a theme to
- * save. `typedFilePath` is the file's path as typed.
+ * Builds `create` or `theme admit`, which send one file: a diagram to create, or a theme to save.
  *
- * The mistakes it can find: an empty file path, then a bad `--request` ID, then an empty `--out`
- * path.
+ * `typedFilePath` is the file's path as typed.
+ * The mistakes it can find: an empty file path, a bad `--request` ID, or an empty `--out` path.
  */
 export function buildCreateOrThemeAdmitCommand(
   name: 'create' | 'theme-admit',
@@ -168,12 +143,10 @@ export function buildCreateOrThemeAdmitCommand(
 }
 
 /**
- * Builds `replace` or `patch`. The command sends a file that changes a collection, with the
- * revision the agent last read (`revisionOption`, already checked). `typedFilePath` is the file's
- * path as typed.
+ * Builds `replace` or `patch`, which send a file that changes a collection.
  *
- * The mistakes it can find: an empty file path, then a bad `--request` ID, then an empty `--out`
- * path.
+ * `typedFilePath` is the path as typed. `revisionOption` is the `--revision`, already checked.
+ * The mistakes it can find: an empty file path, a bad `--request` ID, or an empty `--out` path.
  */
 export function buildReplaceOrPatchCommand(
   name: 'replace' | 'patch',
@@ -193,12 +166,10 @@ export function buildReplaceOrPatchCommand(
 }
 
 /**
- * Builds `preview`, which shows what a file would change without saving it. `mode` says whether
- * the file creates, replaces or patches the collection (`--mode`). `mode` and `revisionOption`
- * were already checked. `typedFilePath` is the file's path as typed.
+ * Builds `preview`, which shows what a file would change without saving it.
  *
- * The mistakes it can find: an empty file path, then a bad `--request` ID, then an empty `--out`
- * path.
+ * `mode` (`--mode`) and `revisionOption` (`--revision`) are already checked.
+ * The mistakes it can find: an empty file path, a bad `--request` ID, or an empty `--out` path.
  */
 export function buildPreviewCommand(
   typedFilePath: string,
@@ -224,11 +195,10 @@ export function buildPreviewCommand(
 }
 
 /**
- * Builds `recipe admit`, which saves a diagram file as a reusable recipe. `typedFilePath` is the
- * file's path as typed.
+ * Builds `recipe admit`, which saves a diagram file as a recipe to start new diagrams from.
  *
- * The mistakes it can find: an empty file path, then a missing or bad recipe flag (`--id`,
- * `--version`, `--family`, `--title`), then a bad `--request` ID, then an empty `--out` path.
+ * The mistakes it can find: an empty file path, a missing or bad recipe flag (`--id`, `--version`,
+ * `--family`, `--title`), a bad `--request` ID, or an empty `--out` path.
  */
 export function buildRecipeAdmitCommand(
   typedFilePath: string,
@@ -246,11 +216,10 @@ export function buildRecipeAdmitCommand(
 }
 
 /**
- * Builds `recipe instantiate`, which turns a saved recipe into diagram text. `typedPin` is the
- * exact recipe as typed, such as `er@1.0.0#sha256:DIGEST`. `--namespace` is the new collection's
- * ID.
+ * Builds `recipe instantiate`, which turns a saved recipe into diagram text.
  *
- * The mistakes it can find: a bad pin or `--namespace`, then an empty `--out` path.
+ * `typedPin` is the exact recipe as typed, such as `er@1.0.0#sha256:DIGEST`.
+ * The mistakes it can find: a bad pin or `--namespace`, or an empty `--out` path.
  */
 export function buildRecipeInstantiateCommand(
   typedPin: string,

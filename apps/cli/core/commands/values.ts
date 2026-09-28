@@ -2,24 +2,11 @@
  * Why this file exists
  *
  * Everything an agent types is text. In `pnpm canvas replace plan.canvas --revision 3`, the `3` is
- * text, not a number. Before the CLI can use a value, it has to check the text makes sense and
- * turn it into a checked type. `3` becomes a checked revision number. A `--server` address must be
- * this machine (`http://127.0.0.1:…`), so the agent's access token (read from the workspace) is
- * never sent anywhere else.
+ * text, not a number, and has to be checked before the CLI can use it.
  *
- * This file has one check per kind of value: which part of a collection to read, the change mode,
- * the revision, a collection ID, a request ID, a file path, a profile, and where to send the
- * command. When a flag was left out, its check fills in the usual value, such as `--mode create`.
- *
- * A request ID names one change the CLI sends, such as `req-1`, so its receipt (the service's
- * record that the change was saved) can be found later with `receipt req-1`.
- *
- * A check named `check…Option` is for a flag that may be left out, and returns an `…Option` type:
- * `{ revision: 3 }` for `--revision 3`, or `{}` when `--revision` wasn't typed.
- *
- * It only checks text. It never opens a file or talks to the service. Each check answers with a
- * `Result` (see `contract/errors.ts`), and a value typed wrong comes back as a mistake naming it.
- * Those mistakes are written here, by the check that finds them.
+ * This file has one check per kind of value, such as a revision, a collection ID or a file path.
+ * Each turns the text into a checked type, or says what was wrong. It never opens a file or talks
+ * to the service.
  */
 import {
   collectionId,
@@ -85,9 +72,9 @@ const invalidRevision: FailureInput = Object.freeze({
 });
 
 /**
- * Works out which part of a collection `read` returns: one section (`--section intro`), one object
- * (`--object customer`), or all of it when neither was typed.
+ * Works out which part of a collection `read` returns: one section, one object, or all of it.
  *
+ * `--section intro` gives that section. With neither flag, it is the whole collection.
  * The mistake it can find: a section or object ID that isn't valid (`invalid-arguments`).
  */
 export function checkReadScope(
@@ -105,10 +92,8 @@ export function checkReadScope(
 /**
  * Works out how a file changes a collection: `create`, `replace` or `patch`.
  *
- * The commands `create`, `replace` and `patch` are their own mode. Every other command gets
- * `--mode`, or `create` when it wasn't typed, but only `preview` uses it.
- *
- * The mistake it can find: a `--mode` that isn't one of the three (`invalid-mode`).
+ * The commands `create`, `replace` and `patch` are their own mode. Any other gets `--mode`, or
+ * `create` when it wasn't typed. The mistake it can find: a `--mode` that isn't one of the three.
  */
 export function checkChangeMode(
   name: CommandName,
@@ -125,11 +110,10 @@ export function checkChangeMode(
 }
 
 /**
- * Checks `--revision`, the collection revision the agent last read. It must be a whole number from
- * 0 up, such as `3`. When it wasn't typed, it stays left out.
+ * Checks `--revision`, the revision of the collection the agent last read.
  *
- * The mistake it can find: anything else, such as `-1`, `abc` or a number too large
- * (`invalid-revision`).
+ * `--revision 3` gives `{ revision: 3 }`. With no `--revision`, it gives `{}`.
+ * The mistake it can find: anything but a whole number from 0 up, such as `-1` or `abc`.
  */
 export function checkRevisionOption(
   flags: Pick<FlagTextAsTyped, 'revision'>,
@@ -145,11 +129,9 @@ export function checkRevisionOption(
 }
 
 /**
- * Checks the collection ID typed after `read` or `inspect`. `typedCollectionId` is the text as
- * typed, such as `my-diagram`.
+ * Checks the collection ID typed after `read` or `inspect`, such as `my-diagram`.
  *
- * The mistake it can find: an ID that isn't a letter followed by letters, digits, `_` or `-`
- * (`invalid-arguments`).
+ * The mistake it can find: an ID that isn't a letter followed by letters, digits, `_` or `-`.
  */
 export function checkCollectionId(typedCollectionId: string): Result<CollectionId> {
   return checked(collectionId, typedCollectionId, {
@@ -159,11 +141,11 @@ export function checkCollectionId(typedCollectionId: string): Result<CollectionI
 }
 
 /**
- * Checks a request ID: the word typed after `receipt`, `retry` or `apply`, or the text after
- * `--request`. `typedRequestId` is the text as typed.
+ * Checks a request ID, the name of one change the CLI sends, such as `req-1`.
  *
- * The mistake it can find: an ID that isn't 1 to 120 characters, a letter or digit followed by
- * letters, digits, `_`, `.`, `:` or `-` (`invalid-request`).
+ * It is typed after `receipt`, `retry` or `apply`, or after `--request`.
+ * The mistake it can find: an ID that isn't 1 to 120 letters, digits, `_`, `.`, `:` or `-`,
+ * starting with a letter or digit (`invalid-request`).
  */
 export function checkRequestId(typedRequestId: string): Result<RequestId> {
   return checked(requestId, typedRequestId, {
@@ -173,9 +155,9 @@ export function checkRequestId(typedRequestId: string): Result<RequestId> {
 }
 
 /**
- * Checks `--request`, the request ID the agent picks for the change the command sends. When it
- * wasn't typed, it stays left out, and a new ID is made when the change is sent.
+ * Checks `--request`, the request ID the agent picks for the change the command sends.
  *
+ * With no `--request`, it gives `{}`, and a new ID is made when the change is sent.
  * The mistake it can find: text that isn't a valid request ID (`invalid-request`).
  */
 export function checkRequestOption(flags: Pick<FlagTextAsTyped, 'request'>): Result<RequestOption> {
@@ -191,22 +173,19 @@ export function checkRequestOption(flags: Pick<FlagTextAsTyped, 'request'>): Res
 
 /**
  * Checks the file path typed after the command, such as `plan.canvas` in `create plan.canvas`.
- * `typedFilePath` is the path as typed. The file itself is read later.
  *
- * The mistake it can find: an empty path. It is reported as `source-unavailable`, the same mistake
- * as a file that can't be read, so the agent gets one message for any bad file. It is found before
- * anything is sent.
+ * The file itself is read later.
+ * The mistake it can find: an empty path (`source-unavailable`, as for a file that can't be read).
  */
 export function checkFilePath(typedFilePath: string): Result<FilePath> {
   return checked(filePath, typedFilePath, unreadableSource(typedFilePath));
 }
 
 /**
- * Checks `--out`, the file the command's answer is written to. When it wasn't typed, it stays left
- * out, and the answer is printed instead.
+ * Checks `--out`, the file the command's answer is written to.
  *
- * The mistake it can find: an empty path (`output-unavailable`, the same message a failed write
- * gives). It is found before the command runs, so nothing is sent or saved.
+ * With no `--out`, it gives `{}`, and the answer is printed instead.
+ * The mistake it can find: an empty path (`output-unavailable`), found before anything is sent.
  */
 export function checkOutOption(flags: Pick<FlagTextAsTyped, 'out'>): Result<OutOption> {
   if (flags.out === undefined) {
@@ -220,8 +199,7 @@ export function checkOutOption(flags: Pick<FlagTextAsTyped, 'out'>): Result<OutO
 }
 
 /**
- * Checks a profile ID, typed after `profile describe`, `profile scaffold` or `--profile`.
- * `typedProfileId` is the text as typed, such as `build-spec@1`.
+ * Checks a profile ID as typed, such as `build-spec@1`.
  *
  * The mistake it can find: a profile the CLI doesn't know (`unknown-profile`).
  */
@@ -235,11 +213,10 @@ export function checkProfileId(typedProfileId: string): Result<ProfileId> {
 
 /**
  * Checks where to send the command (`--server`) and which workspace folder to use (`--workspace`).
- * If `--server` wasn't typed, the local service's usual address is used. If `--workspace` wasn't
- * typed, `defaultWorkspace` is used.
  *
- * The mistake it can find: a `--server` that isn't an address on this machine, such as
- * `http://example.com` (`invalid-server`). It is found before any credential is read.
+ * Left out, they are the local service's usual address and `defaultWorkspace`.
+ * The mistake it can find: a `--server` not on this machine, such as `http://example.com`, so the
+ * agent's access token is never sent anywhere else (`invalid-server`).
  */
 export function checkServerAndWorkspace(
   flags: Pick<FlagTextAsTyped, 'server' | 'workspace'>,

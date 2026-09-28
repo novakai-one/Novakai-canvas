@@ -6,26 +6,22 @@
  *   pnpm canvas read my-diagram --section intro
  *
  * Before the CLI can do anything, it has to work out what that line asks for: which command it is,
- * what it acts on, and which options came with it. This file does that. Node has already split the
- * line into words and flags (the argv). This file turns them into one `ParsedCommand` the rest of
- * the CLI can run. If something was typed wrong, it says what, so the agent can fix it and try
- * again.
+ * what it acts on, and which options came with it. This file does that. It turns the typed line
+ * into one `ParsedCommand` the rest of the CLI can run. If something was typed wrong, it says what,
+ * so the agent can fix it and try again.
  *
- * `my-diagram` above is a collection ID. A collection is one saved diagram.
- *
- * It only looks at the words. It never opens a file or talks to the service.
+ * It only looks at the words. It never opens a file or talks to the server.
  *
  * How to read the steps below: every step answers with a `Result` (see `contract/errors.ts`).
  * `ok: true` means the step worked and `value` holds what it made. `ok: false` means it found a
- * mistake. Mistakes about which words and flags were typed are made in `failures.ts`. A mistake
- * about one typed value is made by the check that finds it, in `values.ts` or `recipe-values.ts`.
+ * mistake. The mistakes themselves are made in `failures.ts`.
  */
-import type { CanvasArgv, CanvasFlag, RawArguments } from '../../contract/records/arguments.js';
+import type { CanvasFlag, CommandLine, RawArguments } from '../../contract/records/arguments.js';
 import type { FilePath } from '../../contract/brands.js';
 import type { CommandName, ParsedCommand } from '../../contract/records/command.js';
 import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
-import { checkCommandFlags } from './accepted-flags.js';
+import { checkAcceptedFlags } from './accepted-flags.js';
 import { assembleCommand } from './assembly.js';
 import type { AcceptedCommand, IdentifiedCommand, WellFormedArguments } from './command-stages.js';
 import { pickCommandWords } from './command-words.js';
@@ -34,7 +30,7 @@ import {
   repeatedScopeFlagFailure,
   unknownCommandFailure,
 } from './failures.js';
-import { readFlagTextAndOrder } from './flags.js';
+import { collectTypedFlags } from './flags.js';
 import { checkOperandCount } from './operand-count.js';
 import { isCommandName } from './table.js';
 
@@ -44,24 +40,21 @@ type ScopeFlag = 'section' | 'object';
 /**
  * Works out which command was typed, and checks it was typed correctly.
  *
- * `argv` is the typed line as Node read it: its words and flags, or `malformed` when Node couldn't
- * read a flag.
- *
  * It takes three steps. If a step finds a mistake, it stops there and returns that mistake.
  * 1. Find the command. In `read my-diagram`, the command is `read`.
- * 2. Check the words and flags fit that command. `read` needs one word after it (the ID of the
- *    collection to read) and doesn't accept `--revision`.
+ * 2. Check the words and flags fit that command. `read` needs one word after it (the collection
+ *    to read) and doesn't use `--out`.
  * 3. Check each value, for example that `--revision` is a number, and fill in what was left out.
  *    If `--workspace` wasn't typed, the command uses `defaultWorkspace`.
  *
  * The mistakes it can find: a flag it can't read, `--section` or `--object` typed twice, an
- * unknown command, too many or too few words, a flag the command doesn't accept, or a bad value.
+ * unknown command, too many or too few words, a flag the command doesn't use, or a bad value.
  */
 export function parseCommand(
-  argv: CanvasArgv,
+  commandLine: CommandLine,
   defaultWorkspace: FilePath,
 ): Result<ParsedCommand> {
-  const identified = identifyCommand(argv);
+  const identified = identifyCommand(commandLine);
   if (!identified.ok) {
     return identified;
   }
@@ -81,8 +74,8 @@ export function parseCommand(
  * Stops at a flag it can't read, at `--section` or `--object` typed twice, or at a first word
  * that isn't a command.
  */
-function identifyCommand(argv: CanvasArgv): Result<IdentifiedCommand> {
-  const wellFormed = requireWellFormedArguments(argv);
+function identifyCommand(commandLine: CommandLine): Result<IdentifiedCommand> {
+  const wellFormed = requireWellFormedArguments(commandLine);
   if (!wellFormed.ok) {
     return wellFormed;
   }
@@ -91,7 +84,7 @@ function identifyCommand(argv: CanvasArgv): Result<IdentifiedCommand> {
   if (!name.ok) {
     return name;
   }
-  const flags = readFlagTextAndOrder(wellFormed.value.flagValues);
+  const flags = collectTypedFlags(wellFormed.value.flagValues);
   return success({ name: name.value, operandWords: words.operandWords, flags });
 }
 
@@ -99,14 +92,14 @@ function identifyCommand(argv: CanvasArgv): Result<IdentifiedCommand> {
  * Step 2: checks the words and flags fit the command.
  *
  * First the number of words after the command (`checkOperandCount`), then that every flag is one
- * the command accepts (`checkCommandFlags`). Stops at the first that doesn't fit.
+ * the command uses (`checkAcceptedFlags`). Stops at the first that doesn't fit.
  */
 function checkWordsAndFlags(identified: IdentifiedCommand): Result<AcceptedCommand> {
-  const commandWithRightCount = checkOperandCount(identified);
-  if (!commandWithRightCount.ok) {
-    return commandWithRightCount;
+  const counted = checkOperandCount(identified);
+  if (!counted.ok) {
+    return counted;
   }
-  return checkCommandFlags(commandWithRightCount.value);
+  return checkAcceptedFlags(counted.value);
 }
 
 /**
@@ -114,14 +107,14 @@ function checkWordsAndFlags(identified: IdentifiedCommand): Result<AcceptedComma
  * typed twice. (Node would quietly keep only the last `--section`, so the agent could read a
  * different part than they meant. Other flags may repeat; the last one wins.)
  */
-function requireWellFormedArguments(argv: CanvasArgv): Result<WellFormedArguments> {
-  if (argv.kind === 'malformed') {
+function requireWellFormedArguments(commandLine: CommandLine): Result<WellFormedArguments> {
+  if (commandLine.kind === 'malformed') {
     return malformedFlagFailure();
   }
-  if (hasRepeatedScopeFlag(argv.arguments)) {
+  if (hasRepeatedScopeFlag(commandLine.arguments)) {
     return repeatedScopeFlagFailure();
   }
-  return success(wellFormedArguments(argv.arguments));
+  return success(wellFormedArguments(commandLine.arguments));
 }
 
 /** Whether `--section` or `--object` was typed more than once. */
@@ -139,10 +132,10 @@ function isScopeFlag(flag: CanvasFlag): flag is ScopeFlag {
   return flag === 'section' || flag === 'object';
 }
 
-/** The command its word names, such as `read`. Refuses a word that isn't a command, or no word. */
-function requireKnownCommand(commandWord: string | undefined): Result<CommandName> {
-  if (!isCommandName(commandWord)) {
+/** The command the first word names. Refuses a word that isn't a command, or no word at all. */
+function requireKnownCommand(firstWord: string | undefined): Result<CommandName> {
+  if (!isCommandName(firstWord)) {
     return unknownCommandFailure();
   }
-  return success(commandWord);
+  return success(firstWord);
 }

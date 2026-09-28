@@ -1,27 +1,12 @@
 /*
  * Why this file exists
  *
- * A collection is one saved diagram. A collection file, such as `my-plan.canvas`, holds a
- * collection's text.
+ * A profile is a set of rules a collection can follow, such as `build-spec@1`. Three commands use
+ * one, and run on this machine: `profile describe`, `profile scaffold` and `profile lint`. For
+ * example, `pnpm canvas profile lint my-plan.canvas --profile build-spec@1` checks that file.
  *
- * A profile is a set of rules a collection can follow. Today there is one, `build-spec@1`: a build
- * plan written as one collection with five sections in a fixed order. Three commands work with
- * profiles, and they run on this machine without the service:
- *
- *   pnpm canvas profile describe build-spec@1
- *   pnpm canvas profile scaffold build-spec@1 --id my-plan --title "My plan"
- *   pnpm canvas profile lint my-plan.canvas --profile build-spec@1
- *
- * `describe` prints the profile's rules. `scaffold` makes the starting text of a new collection
- * that follows the profile. `lint` checks a collection file against the profile.
- *
- * This file builds each of those commands from what was typed. It checks the profile name, the
- * scaffold's `--id` and `--title`, lint's file path, and `--out`, and returns one `ProfileCommand`.
- *
- * It never reads or writes a file. Each check answers with a `Result` (see `contract/errors.ts`).
- * A mistake about one typed value is written by the check that finds it: here for `--id` and
- * `--title`, and in `values.ts` for the rest. A missing `--profile` on `profile lint` is reported
- * earlier, by `accepted-flags.ts`.
+ * This file checks what was typed for each one, and builds its `ProfileCommand`. It never reads or
+ * writes a file.
  */
 import { collectionId } from '../../contract/brands.js';
 import type { CollectionId, FilePath } from '../../contract/brands.js';
@@ -62,9 +47,9 @@ interface LintTarget {
 
 /**
  * Builds `profile describe`, which prints the rules a profile asks a collection to follow.
- * `typedProfileId` is the profile as typed, such as `build-spec@1`.
  *
- * The mistakes it can find: an unknown profile, then an empty `--out` path.
+ * `typedProfileId` is the profile as typed, such as `build-spec@1`.
+ * The mistakes it can find: an unknown profile, or an empty `--out` path.
  */
 export function buildProfileDescribeCommand(
   typedProfileId: string,
@@ -82,12 +67,11 @@ export function buildProfileDescribeCommand(
 }
 
 /**
- * Builds `profile scaffold`, which makes the text of a starting collection that follows a profile.
- * It needs `--id` (the new collection's ID) and `--title`. `typedProfileId` is the profile, as
- * typed.
+ * Builds `profile scaffold`, which makes the starting text of a collection that follows a profile.
  *
- * The mistakes it can find: an unknown profile; then `--id` or `--title` missing or blank, or an
- * `--id` that isn't a valid collection ID; then an empty `--out` path.
+ * `profile scaffold build-spec@1 --id my-plan --title "My plan"`.
+ * The mistakes it can find: an unknown profile, `--id` or `--title` missing or bad, or an empty
+ * `--out` path.
  */
 export function buildProfileScaffoldCommand(
   typedProfileId: string,
@@ -106,11 +90,9 @@ export function buildProfileScaffoldCommand(
 
 /**
  * Builds `profile lint`, which checks that a collection file follows a profile's rules.
- * `typedFilePath` is the file's path as typed; the profile comes from `--profile`, which
- * `accepted-flags.ts` has already made sure was typed.
  *
- * The mistakes it can find: an unknown `--profile`, then an empty file path, then an empty `--out`
- * path.
+ * `typedFilePath` is the file's path as typed. The profile comes from `--profile`.
+ * The mistakes it can find: an unknown `--profile`, an empty file path, or an empty `--out` path.
  */
 export function buildProfileLintCommand(
   typedFilePath: string,

@@ -1,17 +1,12 @@
 /*
  * Why this file exists
  *
- * Every command ends with an answer, as text. The agent either reads it on screen, or asks for it
- * in a file. `pnpm canvas read my-diagram --out my-diagram.canvas` writes the diagram to that file,
- * and prints `Written: my-diagram.canvas` instead.
+ * Every command ends with a text answer. The agent reads it on screen, or asks for it in a file:
+ * `pnpm canvas read my-diagram --out my-diagram.canvas` writes the file and prints
+ * `Written: my-diagram.canvas`.
  *
- * This file is the one place that makes that choice and writes the `--out` file. It writes through
- * the writer it is handed, so it never touches the disk itself.
- *
- * If the write fails, it returns the mistake as a `Result` (see `contract/errors.ts`). The command
- * has already run by then. For a command that changes a collection, the change may already be
- * saved, so the agent should not run it again; it should check with `read ID` or
- * `receipt REQUEST_ID`. A command that only reads, such as `read`, can simply be run again.
+ * This file returns the answer to print, or writes it to the `--out` file. It never touches the
+ * disk itself: it writes through the writer it is handed.
  */
 import type { FilePath } from '../../contract/brands.js';
 import type { LocalFiles } from '../../contract/ports/local-files.js';
@@ -27,15 +22,13 @@ type AnswerDestination =
 export type OutFileWriter = Pick<LocalFiles, 'writeOutput'>;
 
 /**
- * Writes the command's answer to the `--out` file, if one was asked for.
+ * Returns the answer to print, or writes it to the `--out` file and returns `Written: FILE`.
  *
- * `answer` is the text the command made. `outOption` is `{ out: FilePath }` when `--out` was typed,
- * or `{}` when it wasn't. What comes back is the text to show on screen: the answer itself when
- * there is no `--out`, or `Written: FILE` once the file holds the answer.
- *
- * The mistake it can find: the file can't be written (`output-unavailable`).
+ * `outOption` is `{ out: FILE }` when `--out` was typed, or `{}` when it wasn't.
+ * The mistake it can find: the file can't be written (`output-unavailable`). The command has
+ * already run by then, so a change may already be saved.
  */
-export async function deliverAnswer(
+export async function printOrWriteAnswer(
   answer: string,
   outOption: OutOption,
   writer: OutFileWriter,
