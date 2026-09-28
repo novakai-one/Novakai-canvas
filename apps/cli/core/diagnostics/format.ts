@@ -8,15 +8,22 @@
  * This file turns one failure into those lines. It only makes text: the failure stays a typed
  * value for code to branch on, and nothing reads these lines back.
  */
-import type { CliFailure, LocalFailure } from '../../contract/errors.js';
+import type {
+  CliFailure,
+  ForeignFailure,
+  LocalFailure,
+  SourceLocation,
+} from '../../contract/errors.js';
 import type { FailureSource, ServiceFailureRecord } from '../../contract/records/foreign.js';
 
-/** A validation batch: the evidence that is not an operation failure. */
+/** A batch of Language or Model issues: the evidence that is not a service failure. */
 type ValidationSource = Exclude<FailureSource, ServiceFailureRecord>;
-/** One validation diagnostic: a record issue (code, path) or a Language issue (code, span). */
+/** One issue in that batch: a Model issue (code, path) or a Language issue (code, span). */
 type ValidationIssue = ValidationSource['diagnostics'][number];
-/** A Model record issue addressed by its path. */
-type RecordIssue = Extract<ValidationIssue, { readonly path: string }>;
+/** A Model issue, addressed by its path. */
+type ModelIssue = Extract<ValidationIssue, { readonly path: string }>;
+/** A Language issue, addressed by its place in the text. */
+type LanguageIssue = Exclude<ValidationIssue, ModelIssue>;
 
 /**
  * Turns a failure into the lines to print: `code: message`, the lines saying why, then what to do
@@ -25,61 +32,115 @@ type RecordIssue = Extract<ValidationIssue, { readonly path: string }>;
  * A failure the service sent (a `ForeignFailure`) prints the service's own code and words.
  */
 export function formatFailure(error: CliFailure): readonly string[] {
-  switch (error.code) {
-    case 'service-rejected':
-    case 'credential-unavailable':
-      return failureLines(error.foreign, error.foreign.message);
-    default:
-      return failureLines(error, locatedMessage(error));
+  if (isForeignFailure(error)) {
+    return foreignFailureLines(error.foreign);
   }
+  return localFailureLines(error);
 }
 
-/** One failure's lines; the evidence sits between the message and the recovery line. */
+/** Whether the failure is a record the service package wrote, rather than a mistake the CLI found. */
+function isForeignFailure(error: CliFailure): error is ForeignFailure {
+  return 'foreign' in error;
+}
+
+/** Writes a failure record the service package wrote, with the service's own code and message. */
+function foreignFailureLines(foreign: ServiceFailureRecord): readonly string[] {
+  return failureLines(foreign, foreign.message);
+}
+
+/** Writes a mistake the CLI found, naming the font or image declaration first when there is one. */
+function localFailureLines(local: LocalFailure): readonly string[] {
+  const message = locatedMessage(local);
+  return failureLines(local, message);
+}
+
+/** Writes `code: message` first, then the lines saying why, then what to do next. */
 function failureLines(
-  error: LocalFailure | ServiceFailureRecord,
+  failureRecord: LocalFailure | ServiceFailureRecord,
   message: string,
 ): readonly string[] {
-  return [`${error.code}: ${message}`, ...sourceLines(error.source), error.recovery];
+  const headline = `${failureRecord.code}: ${message}`;
+  const reasons = reasonLines(failureRecord.source);
+  return [headline, ...reasons, failureRecord.recovery];
 }
 
-/** The message, after the resource declaration's place when the failure names one. */
-function locatedMessage(error: LocalFailure): string {
-  if (error.location === undefined) return error.message;
-  const { file, line, column, alias } = error.location;
-  return `${file}:${line}:${column} asset @${alias}: ${error.message}`;
+/** Puts the place of the font or image declaration before the message, when the mistake has one. */
+function locatedMessage(local: LocalFailure): string {
+  if (local.location === undefined) {
+    return local.message;
+  }
+  const place = declarationPlace(local.location);
+  return `${place}: ${local.message}`;
 }
 
-/** No evidence prints nothing; validation and operation evidence print differently. */
-function sourceLines(source: FailureSource | undefined): readonly string[] {
-  if (source === undefined) return [];
-  if ('diagnostics' in source) return source.diagnostics.flatMap(diagnosticLines);
-  return operationLines(source);
+/** Writes where a source declares a font or image, such as `walk.canvas:4:1 asset @logo`. */
+function declarationPlace(location: SourceLocation): string {
+  return `${location.file}:${location.line}:${location.column} asset @${location.alias}`;
 }
 
-/** A nested owner failure keeps its order and its cleanup failure. */
-function operationLines(source: ServiceFailureRecord): readonly string[] {
-  return [
-    `${source.code} ${source.path}: ${source.message}`,
-    source.recovery,
-    ...sourceLines(source.source),
-    ...sourceLines(source.cleanup),
-  ];
+/**
+ * Writes the lines saying why: nothing when there is no evidence, one block per Language or Model
+ * issue, or the lines of a service failure record.
+ */
+function reasonLines(source: FailureSource | undefined): readonly string[] {
+  if (source === undefined) {
+    return [];
+  }
+  if (isValidationSource(source)) {
+    return source.diagnostics.flatMap(issueLines);
+  }
+  return serviceFailureLines(source);
 }
 
-/** A record issue prints its path; a Language issue prints its span, expectation and recovery. */
-function diagnosticLines(issue: ValidationIssue): readonly string[] {
-  if ('path' in issue) return [`${issue.code} ${issue.path}: ${issue.message}`];
-  const location = `${issue.span.start.line}:${issue.span.start.column}`;
-  return [
-    `${issue.code} ${location} ${issue.target}: ${issue.message}`,
-    `Expected: ${issue.expected}`,
-    issue.recovery,
-    ...ownerLines(issue.source),
-  ];
+/** Whether the evidence is a batch of Language or Model issues, rather than a service failure. */
+function isValidationSource(source: FailureSource): source is ValidationSource {
+  return 'diagnostics' in source;
 }
 
-/** The Model issue behind a Language issue, when Language kept one. */
-function ownerLines(issue: RecordIssue | undefined): readonly string[] {
-  if (issue === undefined) return [];
-  return [`${issue.code} ${issue.path}: ${issue.message}`];
+/**
+ * Writes a service failure record: its code, path and message, what to do next, then its own
+ * evidence and its cleanup failure, in that order.
+ */
+function serviceFailureLines(serviceFailure: ServiceFailureRecord): readonly string[] {
+  const headline = `${serviceFailure.code} ${serviceFailure.path}: ${serviceFailure.message}`;
+  const reasons = reasonLines(serviceFailure.source);
+  const cleanupReasons = reasonLines(serviceFailure.cleanup);
+  return [headline, serviceFailure.recovery, ...reasons, ...cleanupReasons];
+}
+
+/** Writes one issue: a Model issue by its path, a Language issue by its place in the text. */
+function issueLines(issue: ValidationIssue): readonly string[] {
+  if (isModelIssue(issue)) {
+    return [modelIssueLine(issue)];
+  }
+  return languageIssueLines(issue);
+}
+
+/** Whether the issue is Model's, addressed by a path rather than a place in the text. */
+function isModelIssue(issue: ValidationIssue): issue is ModelIssue {
+  return 'path' in issue;
+}
+
+/** Writes a Model issue as one line: its code, path and message. */
+function modelIssueLine(issue: ModelIssue): string {
+  return `${issue.code} ${issue.path}: ${issue.message}`;
+}
+
+/**
+ * Writes a Language issue: its code, line and column, target and message, then what was
+ * expected, what to do next, and the original Model issue behind it when Language kept one.
+ */
+function languageIssueLines(issue: LanguageIssue): readonly string[] {
+  const start = issue.span.start;
+  const headline = `${issue.code} ${start.line}:${start.column} ${issue.target}: ${issue.message}`;
+  const modelReasons = originalModelIssueLines(issue.source);
+  return [headline, `Expected: ${issue.expected}`, issue.recovery, ...modelReasons];
+}
+
+/** Writes the original Model issue behind a Language issue, or nothing when Language kept none. */
+function originalModelIssueLines(original: ModelIssue | undefined): readonly string[] {
+  if (original === undefined) {
+    return [];
+  }
+  return [modelIssueLine(original)];
 }

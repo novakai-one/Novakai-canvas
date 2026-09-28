@@ -22,6 +22,8 @@ export function checked<T>(
   mistake: FailureInput,
 ): Result<T, LocalFailure> {
   const parsed = parser.safeParse(input);
-  if (!parsed.success) return failure(mistake);
+  if (!parsed.success) {
+    return failure(mistake);
+  }
   return success(parsed.data);
 }

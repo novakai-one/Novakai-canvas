@@ -9,7 +9,11 @@
  * repairs a collection.
  */
 import type { CollectionValidator } from '../../contract/ports/collection-validator.js';
-import type { WorkspaceSnapshot, StoredRecord } from '../../contract/records/foreign.js';
+import type {
+  Collection,
+  WorkspaceSnapshot,
+  StoredRecord,
+} from '../../contract/records/foreign.js';
 
 /** What `list` prints when the workspace holds no live collection. */
 const emptyLibrary = 'No collections yet. Use canvas create diagram.canvas.';
@@ -23,23 +27,38 @@ export function formatCollectionList(
   snapshot: WorkspaceSnapshot,
   validator: CollectionValidator,
 ): string {
-  const lines = snapshot.records.filter(isLiveCollection).map((record) => line(record, validator));
-  if (lines.length === 0) return emptyLibrary;
+  const collectionRecords = snapshot.records.filter(isLiveCollection);
+  if (collectionRecords.length === 0) {
+    return emptyLibrary;
+  }
+  const lines = collectionRecords.map((record) => collectionLine(record, validator));
   return lines.join('\n');
 }
 
-/** A collection record that is not deleted. */
+/** Whether the saved record is a collection that hasn't been deleted. */
 function isLiveCollection(record: StoredRecord): boolean {
   return record.key.kind === 'collection' && !record.deleted;
 }
 
-/** The collection's Model-checked ID, revision, title and section count. */
-function line(
+/** Asks Model to check one saved collection, then writes its line: valid or invalid. */
+function collectionLine(
   record: StoredRecord,
-  reader: CollectionValidator,
+  validator: CollectionValidator,
 ): string {
-  const collection = reader.validate(record.value);
-  if (!collection.ok) return `${record.key.id}\tInvalid collection — inspect service diagnostics`;
-  const { id, revision, title, sections } = collection.value;
-  return `${id}\tr${revision}\t${title}\t${sections.length} sections`;
+  const collection = validator.validate(record.value);
+  if (!collection.ok) {
+    return invalidCollectionLine(record);
+  }
+  return validCollectionLine(collection.value);
+}
+
+/** Writes the line for a collection Model rejects: its saved ID, then `Invalid collection`. */
+function invalidCollectionLine(record: StoredRecord): string {
+  return `${record.key.id}\tInvalid collection — inspect service diagnostics`;
+}
+
+/** Writes the line for a checked collection: its ID, revision, title and section count. */
+function validCollectionLine(collection: Collection): string {
+  const sectionCount = collection.sections.length;
+  return `${collection.id}\tr${collection.revision}\t${collection.title}\t${sectionCount} sections`;
 }
