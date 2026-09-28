@@ -12,7 +12,7 @@ import type { RenderFailureSource } from '../../contract/records/render-failure.
 import type { StagedResource } from '../../contract/records/staged-resource.js';
 import type { AssetDigest, FilePath } from '../../contract/brands.js';
 import { success, type Result } from '../../contract/errors.js';
-import { declaredResource } from '../resources/stage.js';
+import { readDeclaredResource } from '../resources/stage.js';
 
 /** What admitting one declaration uses: the resource reader and the render's asset store. */
 export interface AdmissionDependencies {
@@ -31,7 +31,7 @@ export async function admitResource(
   request: ResourceRequest,
   dependencies: AdmissionDependencies,
 ): Promise<Result<AssetDigest, RenderFailureSource>> {
-  const resource = await declaredResource(file, request, dependencies.resources);
+  const resource = await readDeclaredResource(file, request, dependencies.resources);
   if (!resource.ok) return resource;
   return storedDigest(resource.value, dependencies.assets);
 }

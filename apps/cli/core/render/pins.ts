@@ -10,7 +10,7 @@ import type {
   ResolvedResources,
   ThemePreset,
 } from '../../contract/records/foreign.js';
-import { pinOf } from '../resources/digests.js';
+import { formatPin } from '../resources/digests.js';
 
 /** Theme pins from the admitted catalog, plus `assets`, the collection's own asset records. */
 export function pinResources(
@@ -37,7 +37,7 @@ function themeEntry(preset: ThemePreset): readonly [string, Collection['theme']]
     {
       id: preset.id,
       version: preset.version,
-      digest: pinOf(preset.digest),
+      digest: formatPin(preset.digest),
       roles: preset.payload.roles,
     },
   ];

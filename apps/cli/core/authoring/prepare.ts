@@ -1,14 +1,18 @@
 /*
- * DSL authoring preparation: read the source file and the workspace snapshot once, parse the
- * source once, build its Authoring request, then stage and freeze its declared resources. Uses
- * injected ports only; nothing is retained or sent to Authoring here. Failures are returned as
- * values; the caller fixes the named input and runs the command again.
+ * Why this file exists
+ *
+ * A change is built once, then kept and sent exactly as built. For `replace plan.canvas`, the CLI
+ * reads the file and the workspace, parses the source, and stores any fonts or images it names in
+ * the service. An `apply` after a `preview` sends that same request; nothing is read again.
+ *
+ * This file does those steps, in that order, and gives back the request ready to keep and send.
+ * It never sends the change. Each step gives back a `Result` (see `contract/errors.ts`).
  */
 import { prepareResources } from '../resources/stage.js';
 import type { ResourceDependencies } from '../resources/stage.js';
 import { parseSource } from '../shared/parse-source.js';
-import { changeRequest, collectionRecordId } from './change-request.js';
-import { requestIdFor } from './request-id.js';
+import { buildChangeRequest, checkCollectionRecordId } from './change-request.js';
+import { chooseRequestId } from './request-id.js';
 import type { ChangeCommand, ChangeIntent, ChangeMode } from '../../contract/records/command.js';
 import type { CollectionValidator } from '../../contract/ports/collection-validator.js';
 import type { LocalFiles } from '../../contract/ports/local-files.js';
@@ -22,8 +26,8 @@ import type { CollectionRevision } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 
 /**
- * What `prepare` uses: the source read, the workspace read, the parser, Model's collection check,
- * request IDs and resource staging.
+ * The tools preparing a change uses: the source file read, the workspace read, Language's parser,
+ * Model's collection check, fresh request IDs, and font and image staging.
  */
 export interface PrepareDependencies extends ResourceDependencies {
   readonly files: Pick<LocalFiles, 'readSource'>;
@@ -34,11 +38,12 @@ export interface PrepareDependencies extends ResourceDependencies {
 }
 
 /**
- * Capture source and observed versions once; neither preview nor apply refreshes the resulting
- * Authoring envelope. Fails as the source read, the workspace read, the parse, the request or
- * resource staging does; nothing is retained or sent to Authoring.
+ * Prepares the request for one change command: reads the source file and the workspace, builds
+ * the request, and stages its fonts and images. Gives back the request, not yet kept or sent.
+ * The mistakes it can find: a file or the workspace can't be read, the source doesn't parse
+ * (`invalid-source`), the change doesn't fit the workspace, or a font or image can't be staged.
  */
-export async function prepare(
+export async function prepareChangeRequest(
   command: ChangeCommand,
   dependencies: PrepareDependencies,
 ): Promise<Result<RetainedRequest>> {
@@ -69,7 +74,8 @@ async function prepareCaptured(
 
 /**
  * The change's Authoring request under the given `--request` or a fresh ID, for the collection
- * the source declares. Fails as `collectionRecordId`, `requestIdFor` or `changeRequest` does.
+ * the source declares. Fails as `checkCollectionRecordId`, `chooseRequestId` or
+ * `buildChangeRequest` does.
  */
 function requestOf(
   command: ChangeCommand,
@@ -79,12 +85,12 @@ function requestOf(
   dependencies: PrepareDependencies,
 ): Result<AuthoringRequest> {
   const intent = intentOf(command);
-  const collection = collectionRecordId(intent, declared);
+  const collection = checkCollectionRecordId(intent, declared);
   if (!collection.ok) return collection;
-  const requestId = requestIdFor(command, dependencies.requestIds);
+  const requestId = chooseRequestId(command, dependencies.requestIds);
   if (!requestId.ok) return requestId;
   const draft = { intent, collection: collection.value, source, request: requestId.value };
-  return changeRequest(draft, snapshot, dependencies.collections);
+  return buildChangeRequest(draft, snapshot, dependencies.collections);
 }
 
 /** The preconditions the command asks for: preview by its --mode, the others by their name. */

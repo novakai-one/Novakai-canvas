@@ -1,7 +1,12 @@
 /*
- * The request ID an authoring command is sent under: its `--request` when given, else a fresh ID
- * from the injected source. Pure; randomness stays in the source compose binds. A failed mint is
- * returned unchanged and nothing is sent, so the caller reruns with `--request`.
+ * Why this file exists
+ *
+ * Every change is sent under a request ID, so its receipt can be looked up later. A script can
+ * choose the ID itself, as in `create plan.canvas --request req-1`, so it knows what to ask for.
+ * Otherwise the CLI makes a fresh one.
+ *
+ * This file picks between the two. A fresh ID comes from the tool it is handed, so this file never
+ * uses randomness itself.
  */
 import type { RequestIds } from '../../contract/ports/request-ids.js';
 import type { RequestOption } from '../../contract/records/command.js';
@@ -9,13 +14,14 @@ import type { RequestId } from '../../contract/brands.js';
 import { success, type Result } from '../../contract/errors.js';
 
 /**
- * The command's `--request` when given, so a script can look up its receipt; else a fresh ID.
- * Fails with `cli-unavailable` when the fresh ID does not match Authoring's request ID grammar.
+ * Chooses the ID a change is sent under: the typed `--request`, or else a fresh one.
+ * The mistake it can find: a fresh ID that Authoring wouldn't accept (`cli-unavailable`). Nothing
+ * is sent then; the agent can pass `--request` instead.
  */
-export function requestIdFor(
+export function chooseRequestId(
   command: RequestOption,
-  ids: RequestIds,
+  freshIds: RequestIds,
 ): Result<RequestId> {
   if (command.request !== undefined) return success(command.request);
-  return ids.next();
+  return freshIds.next();
 }

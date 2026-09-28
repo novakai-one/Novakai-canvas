@@ -19,8 +19,8 @@ import type { RenderFault } from '../../contract/records/render-fault.js';
 import type { SourceFile } from '../../contract/records/source-file.js';
 import { assetId, type AssetDigest, type AssetId, type FilePath } from '../../contract/brands.js';
 import { renderFaultFailure, success, type Result } from '../../contract/errors.js';
-import { pinOf } from '../resources/digests.js';
-import { altText, credit } from '../resources/provenance.js';
+import { formatPin } from '../resources/digests.js';
+import { chooseAltText, collectCredit } from '../resources/provenance.js';
 import { checked } from '../shared/checks.js';
 import { combined } from '../shared/results.js';
 import { admitResource, type AdmissionDependencies } from './resource-admission.js';
@@ -93,10 +93,10 @@ function describedAsset(
   if (!id.ok) return id;
   return success({
     id: id.value,
-    digest: pinOf(digest),
+    digest: formatPin(digest),
     mediaType: stored.descriptor.mediaType,
-    alt: altText(request),
-    ...credit(request),
+    alt: chooseAltText(request),
+    ...collectCredit(request),
   });
 }
 

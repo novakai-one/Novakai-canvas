@@ -16,7 +16,7 @@ import type {
 } from '../../contract/records/foreign.js';
 import type { RenderFailureSource } from '../../contract/records/render-failure.js';
 import { renderFaultFailure, success, type Result } from '../../contract/errors.js';
-import { assetOfPin } from '../resources/digests.js';
+import { parseAssetPin } from '../resources/digests.js';
 import { combined, mapped } from '../shared/results.js';
 
 /** What the snapshot reads: the stored asset bytes and the base64 decoder. */
@@ -75,7 +75,7 @@ function assetResource(
   asset: CollectionAsset,
   assets: SnapshotAssets,
 ): Result<Resource, RenderFailureSource> {
-  const digest = assetOfPin(asset.digest);
+  const digest = parseAssetPin(asset.digest);
   if (digest === undefined)
     return renderFaultFailure({ code: 'invalid-asset-pin', asset: asset.id, digest: asset.digest });
   return mapped(assets.readBack(digest), (blob) => ({

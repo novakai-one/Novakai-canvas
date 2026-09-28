@@ -19,7 +19,7 @@ import type { FailureInput, Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 import { checked } from '../shared/checks.js';
 import type { Parser } from '../../contract/schemas.js';
-import { presetOfPin } from '../resources/digests.js';
+import { parsePresetPin } from '../resources/digests.js';
 import type { FlagTextAsTyped } from './flags.js';
 
 /**
@@ -206,7 +206,7 @@ function checkPinIdentity(pinParts: PinParts): Result<PresetIdentity> {
 
 /** The Templates digest a `sha256:` pin names. Fails with `invalid-arguments` (the usage line). */
 function checkPinDigest(digestText: string): Result<PresetDigest> {
-  const digest = presetOfPin(digestText);
+  const digest = parsePresetPin(digestText);
   if (digest === undefined) {
     return failure(instantiateUsage);
   }

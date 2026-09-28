@@ -1,38 +1,46 @@
 /*
- * What a font or image declaration says about its bytes: alt text, source, license and
- * attribution. Pure. Staging turns it into the Assets stage input; render:png copies the alt text
- * and credit into the Model asset record. Nothing can fail here.
+ * Why this file exists
+ *
+ * A font or image declaration can say more than where its file is: alt text, a license, and who
+ * to credit. `asset @logo image source="./logo.png" alt="Company logo" license="CC-BY-4.0"`.
+ * Storing the bytes and render:png both need these, and must read them the same way.
+ *
+ * This file reads them from one declaration. A declaration with no alt text uses its name
+ * instead. Nothing here can fail, and it never reads a file.
  */
 import type { ResourceRequest, StageInput } from '../../contract/records/foreign.js';
 import type { LocalBytes } from '../../contract/records/staged-resource.js';
 
-/** A declaration's license and attribution; a field it does not write is absent. */
+/** A declaration's license and attribution. One the declaration leaves out is left out here. */
 export interface Credit {
   readonly license?: string;
   readonly attribution?: string;
 }
 
-/** The Assets stage input for a declaration's local bytes: alt text, then where the bytes came from. */
-export function stageInput(
-  request: ResourceRequest,
+/**
+ * Builds what Assets needs to store one font or image: its bytes and type, its alt text, and
+ * where it came from (source, license and attribution).
+ */
+export function buildStageInput(
+  declaration: ResourceRequest,
   bytes: LocalBytes,
 ): StageInput {
   return {
     base64: bytes.base64,
     mediaType: bytes.mediaType,
-    alt: altText(request),
-    provenance: { source: request.source, ...credit(request) },
+    alt: chooseAltText(declaration),
+    provenance: { source: declaration.source, ...collectCredit(declaration) },
   };
 }
 
-/** The declaration's alt text; its alias when it writes none. */
-export function altText(request: ResourceRequest): string {
-  return request.alt ?? request.alias;
+/** Chooses a declaration's alt text: its `alt`, or its name (such as `logo`) when it has none. */
+export function chooseAltText(declaration: ResourceRequest): string {
+  return declaration.alt ?? declaration.alias;
 }
 
-/** The declaration's license and attribution, present ones only. */
-export function credit(request: ResourceRequest): Credit {
-  return { ...licensed(request), ...attributed(request) };
+/** Collects a declaration's license and attribution, leaving out any it doesn't give. */
+export function collectCredit(declaration: ResourceRequest): Credit {
+  return { ...licensed(declaration), ...attributed(declaration) };
 }
 
 /** The declaration's license, or nothing when it names none. */

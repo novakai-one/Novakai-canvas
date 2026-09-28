@@ -1,13 +1,18 @@
 /*
- * DSL authoring submission: retain the request, restore its resource bytes, then send it to
- * Authoring preview or apply and turn the answer into text. Uses injected ports only. Authoring
- * owns the commit; an unconfirmed answer names the retained request so `receipt` then `retry`
- * recover it.
+ * Why this file exists
+ *
+ * Sending a change safely takes more than one call. If the answer to `create plan.canvas` is lost,
+ * the agent must be able to look up its receipt and retry the very same request. So the request is
+ * written to the journal first. Its font and image bytes are then stored in the service again, in
+ * case it restarted. Only then is the request sent.
+ *
+ * This file runs those steps, in that order, for every change and every retry. Authoring, not this
+ * file, saves the change. Each step gives back a `Result` (see `contract/errors.ts`).
  */
 import { restoreResources } from '../resources/restore.js';
 import type { RestoreDependencies } from '../resources/restore.js';
 import { formatReceipt } from '../reads/receipt.js';
-import { prepare } from './prepare.js';
+import { prepareChangeRequest } from './prepare.js';
 import type { PrepareDependencies } from './prepare.js';
 import type { ChangeCommand } from '../../contract/records/command.js';
 import type { ServiceAuthoring } from '../../contract/ports/service-authoring.js';
@@ -18,35 +23,36 @@ import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
 import { unsupported } from '../shared/results.js';
 
-/** What `submit` uses: the journal's save, the byte restore and Authoring's preview and apply. */
+/** The tools sending uses: the journal, the font and image restore, and Authoring's two calls. */
 export interface SubmitDependencies extends RestoreDependencies {
   readonly journal: Pick<RequestJournal, 'save'>;
   readonly authoring: ServiceAuthoring;
 }
 
-/** What `authorSource` uses: what `prepare` uses and what `submit` uses. */
-export type AuthorDependencies = PrepareDependencies & SubmitDependencies;
+/** The tools a source change uses: the tools for preparing it and the tools for sending it. */
+export type SourceChangeDependencies = PrepareDependencies & SubmitDependencies;
 
 /**
- * Agent authoring consumes readable source only; JSON envelopes and coordinates are never user
- * input. `preview` sends to preview, the other change commands apply. Fails as `prepare` or
- * `submit` does.
+ * Runs `create`, `replace`, `patch` or `preview` for a source file: prepares the request, then
+ * sends it. `preview` asks what would change; the others save. Gives back the text to print.
+ * The mistakes it can find are those of `prepareChangeRequest` and `submitRequest`.
  */
-export async function authorSource(
+export async function sendSourceChange(
   command: ChangeCommand,
-  dependencies: AuthorDependencies,
+  dependencies: SourceChangeDependencies,
 ): Promise<Result<string>> {
-  const prepared = await prepare(command, dependencies);
+  const prepared = await prepareChangeRequest(command, dependencies);
   if (!prepared.ok) return prepared;
-  return submit(prepared.value, modeOf(command), dependencies);
+  return submitRequest(prepared.value, modeOf(command), dependencies);
 }
 
 /**
- * Retention failure prevents a write because an uncertain result could not be reconciled safely
- * without the request. Fails as the journal save, the resource restore or the send does; a lost
- * answer names `receipt` then `retry` for the retained request.
+ * Keeps `retained` in the journal, stores its font and image bytes again, then sends it to preview
+ * or apply. Gives back the text to print: the preview, or the receipt.
+ * The mistakes it can find: it can't be kept (then it is never sent), its bytes can't be stored,
+ * or the send fails. A lost answer's advice is to run `receipt`, then `retry`.
  */
-export async function submit(
+export async function submitRequest(
   retained: RetainedRequest,
   mode: SubmitMode,
   dependencies: SubmitDependencies,

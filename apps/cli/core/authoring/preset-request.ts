@@ -1,8 +1,13 @@
 /*
- * The Authoring request of one prepared preset (`theme admit`, `recipe admit`). It expects the
- * workspace metadata record at its observed version, so admissions are serialised, and the preset
- * record at its stored version or absent. Pure. Nothing is sent; the service still recomputes the
- * preset and compares every read when it admits it.
+ * Why this file exists
+ *
+ * Saving a theme or recipe for reuse (`theme admit`, `recipe admit`) is a change like any other,
+ * so it goes to Authoring as a request. Templates calls a saved theme or recipe a preset. Two
+ * saves must not overwrite each other, so each request expects the workspace's metadata record at
+ * the version just read: if another save got there first, Authoring refuses this one.
+ *
+ * This file builds that request around the service's prepared preset, passed on unchanged. It
+ * never sends anything; the service checks the preset again when it saves it.
  */
 import type {
   ReadVersion,
@@ -15,13 +20,15 @@ import type { NamedAssetDigest } from '../../contract/records/staged-resource.js
 import type { RecordId, RequestId } from '../../contract/brands.js';
 import type { FailureInput, Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
-import { envelope } from './envelope.js';
+import { buildAuthoringRequest } from './envelope.js';
 
-/** One prepared preset, before its preconditions are read from the snapshot. */
+/** One prepared theme or recipe, before it is checked against the workspace. */
 export interface PresetDraft {
+  /** The service's answer to preparing it: the key it will be saved under, and the whole answer. */
   readonly preparation: PresetPreparation;
   /** The staged fonts and images, bound under the aliases the preset file declares. */
   readonly assets: readonly NamedAssetDigest[];
+  /** The ID the save is sent under. */
   readonly request: RequestId;
 }
 
@@ -32,11 +39,12 @@ const unpreparedPreset: FailureInput = Object.freeze({
 });
 
 /**
- * The preset's Authoring request; its payload is the service's preparation, unchanged. Fails with
- * `invalid-response`: the snapshot has no workspace metadata record, or the request fails
- * Authoring's schema.
+ * Builds the Authoring request that saves one prepared theme or recipe, checked against
+ * `snapshot`, the workspace as read.
+ * The mistakes it can find: the workspace has no metadata record, or the request fails
+ * Authoring's check. Both are `invalid-response`: the service's answer was wrong, not the input.
  */
-export function presetRequest(
+export function buildPresetRequest(
   draft: PresetDraft,
   snapshot: WorkspaceSnapshot,
 ): Result<AuthoringRequest> {
@@ -47,7 +55,7 @@ export function presetRequest(
     { key: metadata.key, version: metadata.version },
     { key: draft.preparation.key, version: presetVersion(snapshot, draft.preparation.key.id) },
   ];
-  return envelope(
+  return buildAuthoringRequest(
     {
       workspace: snapshot.workspace,
       request: draft.request,

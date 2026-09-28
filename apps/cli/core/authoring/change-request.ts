@@ -1,10 +1,13 @@
 /*
- * The Authoring request of one DSL change, with preconditions read from the snapshot the change
- * was prepared from. Pure apart from the injected Model check. The source's collection ID becomes
- * an Authoring record ID once, here; the stored record's storage version and its collection's
- * Model revision are branded once, here. `create` needs the collection absent (a deleted one still
- * counts as present) and also expects the catalog; `replace` and `patch` need the revision the
- * agent read. Nothing is sent; the caller fixes the named input and runs the command again.
+ * Why this file exists
+ *
+ * A change must never overwrite work the agent hasn't seen. `replace plan.canvas --revision 3` may
+ * go ahead only while the collection is still at revision 3. `create` may go ahead only while no
+ * collection has that ID, not even a deleted one.
+ *
+ * This file builds the Authoring request for one change. The request says what it expects to find,
+ * so Authoring refuses it if the workspace has moved on. It never sends anything. Each step gives
+ * back a `Result` (see `contract/errors.ts`), and the mistakes are made here.
  */
 import type { CollectionValidator } from '../../contract/ports/collection-validator.js';
 import type { ChangeIntent } from '../../contract/records/command.js';
@@ -25,15 +28,17 @@ import type { FailureInput, LocalFailure, Result } from '../../contract/errors.j
 import { collectionRevision, recordId, storageVersion } from '../../contract/brands.js';
 import { failure, invalidInputFailure, success } from '../../contract/errors.js';
 import { checked } from '../shared/checks.js';
-import { envelope } from './envelope.js';
+import { buildAuthoringRequest } from './envelope.js';
 
-/** One DSL change, before its preconditions are read from the snapshot. */
+/** One change from a source file, before it is checked against the workspace. */
 export interface ChangeDraft {
+  /** Create, replace or patch, with the revision the agent read for the last two. */
   readonly intent: ChangeIntent;
-  /** The collection the source declares, from {@link collectionRecordId}. */
+  /** The collection the source declares, from {@link checkCollectionRecordId}. */
   readonly collection: RecordId;
-  /** The DSL source; sent unchanged in the payload. */
+  /** The source file's text, sent unchanged. */
   readonly source: string;
+  /** The ID the change is sent under. */
   readonly request: RequestId;
 }
 
@@ -64,15 +69,16 @@ interface CollectionCounters {
 }
 
 /**
- * The collection ID Language parsed, as an Authoring record ID. An ID Authoring cannot store (over
- * 128 characters) names no stored collection: fails with `not-found` for `replace` and `patch`,
- * and `invalid-input` for `create`.
+ * Checks the collection ID a source declares can be stored as an Authoring record ID.
+ * `declaredId` is the ID as Language read it from the source, such as `commerce`.
+ * The mistake it can find: an ID over 128 characters (`invalid-input` for `create`, `not-found`
+ * for `replace` and `patch`, since nothing can be stored under it).
  */
-export function collectionRecordId(
+export function checkCollectionRecordId(
   intent: ChangeIntent,
-  text: string,
+  declaredId: string,
 ): Result<RecordId> {
-  const id = recordId.safeParse(text);
+  const id = recordId.safeParse(declaredId);
   if (!id.success) return unstorableIdFailure(intent);
   return success(id.data);
 }
@@ -84,20 +90,20 @@ function unstorableIdFailure(intent: ChangeIntent): Result<never, LocalFailure> 
 }
 
 /**
- * The change's Authoring request. Fails with `not-found`, `already-exists`, `revision-required`,
- * `revision-conflict`, `invalid-response` (the stored collection fails Model's check, a stored
- * counter is not a whole number, or the snapshot has no catalog) or `invalid-input` (the request
- * fails Authoring's schema).
+ * Builds the Authoring request for one change, checked against `snapshot`, the workspace as read.
+ * The mistakes it can find: no such collection (`not-found`), one already there (`already-exists`),
+ * a missing or old `--revision` (`revision-required`, `revision-conflict`), a broken stored
+ * workspace (`invalid-response`), or a request that fails Authoring's check (`invalid-input`).
  */
-export function changeRequest(
+export function buildChangeRequest(
   draft: ChangeDraft,
   snapshot: WorkspaceSnapshot,
-  reader: CollectionValidator,
+  validator: CollectionValidator,
 ): Result<AuthoringRequest> {
   const record = snapshot.records.find(
     (item) => item.key.kind === 'collection' && item.key.id === draft.collection,
   );
-  const version = expectedVersion(draft.intent, record, reader);
+  const version = expectedVersion(draft.intent, record, validator);
   if (!version.ok) return version;
   return withCatalog(draft, snapshot, version.value);
 }
@@ -209,7 +215,7 @@ function withCatalog(
     return failure({ code: 'invalid-response', message: 'Workspace catalog is missing' });
   const collection: ReadVersion = { key: { kind: 'collection', id: draft.collection }, version };
   const expected = preconditions(draft.intent, collection, catalog);
-  return envelope(
+  return buildAuthoringRequest(
     {
       workspace: snapshot.workspace,
       request: draft.request,

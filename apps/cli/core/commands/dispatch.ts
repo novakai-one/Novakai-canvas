@@ -13,8 +13,8 @@ import type { ServiceResources } from '../../contract/ports/service-resources.js
 import type { Result } from '../../contract/errors.js';
 import { admitPreset } from '../presets/admit.js';
 import type { AdmitDependencies } from '../presets/admit.js';
-import { authorSource } from '../authoring/submit.js';
-import type { AuthorDependencies } from '../authoring/submit.js';
+import { sendSourceChange } from '../authoring/submit.js';
+import type { SourceChangeDependencies } from '../authoring/submit.js';
 import { replayRetainedRequest } from '../authoring/reconcile.js';
 import type { RetryDependencies } from '../authoring/reconcile.js';
 import {
@@ -46,7 +46,7 @@ export interface OutFileDependencies {
  * `--out` writer. `contract/compose/service.ts` makes each one once.
  */
 export type ServiceCommandDependencies = ReadDependencies &
-  AuthorDependencies &
+  SourceChangeDependencies &
   RetryDependencies &
   AdmitDependencies &
   RecipeInstantiateDependencies &
@@ -119,7 +119,7 @@ function answerServiceCommand(
     case 'replace':
     case 'patch':
     case 'preview':
-      return authorSource(command, dependencies);
+      return sendSourceChange(command, dependencies);
     case 'retry':
     case 'apply':
       return replayRetainedRequest(command.request, dependencies);

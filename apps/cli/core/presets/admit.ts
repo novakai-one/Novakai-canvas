@@ -21,18 +21,18 @@ import type { StagedBackup } from '../../contract/records/staged-resource.js';
 import type { ServiceAnswer, PresetPreparation } from '../../contract/records/service-answers.js';
 import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
-import { namedAssetDigests, stageResources } from '../resources/stage.js';
+import { listNamedAssetDigests, stageResources } from '../resources/stage.js';
 import type { StagingDependencies } from '../resources/stage.js';
-import { submit } from '../authoring/submit.js';
+import { submitRequest } from '../authoring/submit.js';
 import type { SubmitDependencies } from '../authoring/submit.js';
-import { presetRequest } from '../authoring/preset-request.js';
-import { requestIdFor } from '../authoring/request-id.js';
+import { buildPresetRequest } from '../authoring/preset-request.js';
+import { chooseRequestId } from '../authoring/request-id.js';
 import { mapped, unsupported } from '../shared/results.js';
 import { recipeSource } from './recipe-admission.js';
 
 /**
  * What admission uses: the preset file read, the parser, the theme reader, staging, Templates
- * preparation, the workspace read, request IDs, and what `submit` uses.
+ * preparation, the workspace read, request IDs, and what `submitRequest` uses.
  */
 export interface AdmitDependencies extends StagingDependencies, SubmitDependencies {
   readonly files: Pick<LocalFiles, 'readSource'>;
@@ -58,7 +58,7 @@ interface PreparedPreset {
 /**
  * All bytes and exact preset content are retained before the sole canonical Authoring apply gate.
  * Fails as the source read, the preset file's grammar, staging, preparation, the workspace read,
- * the fresh request ID, the preset request or `submit` does.
+ * the fresh request ID, the preset request or `submitRequest` does.
  */
 export async function admitPreset(
   command: AdmitCommand,
@@ -115,7 +115,7 @@ async function preparePreset(
   if (!staged.ok) return staged;
   const preparation = await dependencies.resources.prepare(
     parsed.admission,
-    namedAssetDigests(staged.value),
+    listNamedAssetDigests(staged.value),
   );
   if (!preparation.ok) return preparation;
   return success({ staged: staged.value, preparation: preparation.value });
@@ -123,7 +123,8 @@ async function preparePreset(
 
 /**
  * Observe write preconditions after staging; the service still recomputes content and compares all
- * reads during admission. Fails as the workspace read, {@link retainedPreset} or `submit` does.
+ * reads during admission. Fails as the workspace read, {@link retainedPreset} or `submitRequest`
+ * does.
  */
 async function retain(
   command: AdmitCommand,
@@ -134,7 +135,7 @@ async function retain(
   if (!current.ok) return current;
   const retained = retainedPreset(command, prepared, current.value, dependencies.requestIds);
   if (!retained.ok) return retained;
-  return submit(retained.value, 'apply', dependencies);
+  return submitRequest(retained.value, 'apply', dependencies);
 }
 
 /**
@@ -147,14 +148,14 @@ function retainedPreset(
   current: ServiceAnswer<WorkspaceSnapshot>,
   requestIds: RequestIds,
 ): Result<RetainedRequest> {
-  const requestId = requestIdFor(command, requestIds);
+  const requestId = chooseRequestId(command, requestIds);
   if (!requestId.ok) return requestId;
   const draft = {
     preparation: prepared.preparation,
-    assets: namedAssetDigests(prepared.staged),
+    assets: listNamedAssetDigests(prepared.staged),
     request: requestId.value,
   };
-  const request = presetRequest(draft, current.value);
+  const request = buildPresetRequest(draft, current.value);
   if (!request.ok) return request;
   const backups = prepared.staged.map((item) => item.backup);
   return success({ generation: current.generation, request: request.value, backups });

@@ -1,8 +1,12 @@
 /*
- * The one Authoring request envelope the CLI sends: actor `agent:cli`, envelope version 1, the
- * preconditions, a write scope of exactly their keys, the bound assets and the change intent,
- * checked by Authoring's request schema. Pure. A rejected envelope is the failed step the caller
- * names, and nothing is sent.
+ * Why this file exists
+ *
+ * Every request the CLI sends to Authoring has the same outer parts: who sends it (`agent:cli`),
+ * the request format's version, and which records it may write. Only the inside differs:
+ * `create` sends source text, and `theme admit` sends a prepared theme.
+ *
+ * This file adds the outer parts, then runs Authoring's own check on the whole request, so a bad
+ * request is caught before it leaves. It never sends anything.
  */
 import type { ChangeMode } from '../../contract/records/command.js';
 import type { ReadVersion, AuthoringRequest } from '../../contract/records/foreign.js';
@@ -13,26 +17,27 @@ import type { LocalFailure, Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
 import { requestSchema } from '../../contract/schemas.js';
 
-/** The DSL planner's payload: the source, sent unchanged, and how it changes the collection. */
+/** What a source change sends: its text, unchanged, and whether it creates, replaces or patches. */
 export interface SourceChange {
   readonly source: string;
   readonly mode: ChangeMode;
 }
 
 /**
- * The Authoring planner that turns the payload into writes, and the payload it reads: DSL source,
- * or a prepared preset. The pair cannot mismatch. Sent unchanged as the change intent.
+ * What the request asks Authoring to do. A planner is the part of Authoring that turns the payload
+ * into saved records: `dsl` reads source text, and `preset` reads a prepared theme or recipe.
  */
 export type PlannedChange =
   | { readonly planner: 'dsl'; readonly payload: SourceChange }
   | { readonly planner: 'preset'; readonly payload: PresetDocument };
 
-/** What differs between two CLI requests. */
-export interface EnvelopeDraft {
+/** The parts of an Authoring request that differ from one CLI request to the next. */
+export interface AuthoringRequestDraft {
   readonly workspace: WorkspaceId;
   readonly request: RequestId;
-  /** Each record the request expects at a version, or absent; also the write scope. */
+  /** Each record the request expects, at a version or `absent`. It may write only these. */
   readonly expected: readonly ReadVersion[];
+  /** The fonts and images the change uses: each one's name and the digest of its bytes. */
   readonly assets: readonly NamedAssetDigest[];
   readonly change: PlannedChange;
 }
@@ -41,12 +46,12 @@ export interface EnvelopeDraft {
 const actor = Object.freeze({ id: 'agent:cli', kind: 'agent' });
 
 /**
- * The checked Authoring request of `draft`, scoped to exactly its preconditions' keys. Gives back
- * `rejected` when Authoring's request schema refuses it.
+ * Builds the whole Authoring request from `draft`, and checks it with Authoring's own check.
+ * If the check refuses it, gives back `mistake`, the failure the caller chose.
  */
-export function envelope(
-  draft: EnvelopeDraft,
-  rejected: Result<never, LocalFailure>,
+export function buildAuthoringRequest(
+  draft: AuthoringRequestDraft,
+  mistake: Result<never, LocalFailure>,
 ): Result<AuthoringRequest> {
   const request = {
     workspace: draft.workspace,
@@ -59,6 +64,6 @@ export function envelope(
     intent: { kind: 'change', ...draft.change },
   };
   const checkedRequest = requestSchema.safeParse(request);
-  if (!checkedRequest.success) return rejected;
+  if (!checkedRequest.success) return mistake;
   return success(checkedRequest.data);
 }
