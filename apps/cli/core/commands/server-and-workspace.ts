@@ -6,8 +6,8 @@
  * service runs, and `--workspace` names the folder that holds the token and the saved requests.
  *
  * This file checks those two, and fills in the usual ones when they are left out. It refuses any
- * server that isn't on this machine, so the token is never sent anywhere else. It never contacts
- * the service.
+ * server that isn't plain `http://127.0.0.1`, so the token is never sent anywhere else. It never
+ * contacts the service.
  */
 import { filePath, loopbackOrigin } from '../../contract/brands.js';
 import type { FilePath, LoopbackOrigin } from '../../contract/brands.js';
@@ -26,8 +26,8 @@ const currentFolder = '.';
  * Checks where to send the command (`--server`) and which workspace folder to use (`--workspace`).
  *
  * Left out, they are the local service's usual address and `defaultWorkspace`.
- * The mistake it can find: a `--server` not on this machine, such as `http://example.com`, so the
- * agent's access token is never sent anywhere else (`invalid-server`).
+ * The mistake it can find: a `--server` that isn't plain `http://127.0.0.1` with or without a port,
+ * such as `http://example.com` or `http://localhost:5174` (`invalid-server`).
  */
 export function checkServerAndWorkspace(
   flags: Pick<FlagTextAsTyped, 'server' | 'workspace'>,

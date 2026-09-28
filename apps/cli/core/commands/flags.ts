@@ -5,7 +5,7 @@
  * yet, so the CLI keeps that text exactly as typed, and the types here say so.
  *
  * This file collects the text typed after each flag, and the order the flags were typed in. It
- * never checks a value: each value is checked in `values.ts`.
+ * never checks a value: each value is checked later (see `assembly.ts`).
  */
 import type { CanvasFlag } from '../../contract/records/arguments.js';
 

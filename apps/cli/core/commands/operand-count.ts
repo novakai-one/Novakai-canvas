@@ -5,7 +5,7 @@
  * needs one, the collection to read: `pnpm canvas read my-diagram`. So `read` alone is a mistake.
  *
  * This file checks that number, before any flag is checked. It never checks what the word says:
- * each value is checked in `values.ts`.
+ * each value is checked later (see `assembly.ts`).
  */
 import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';

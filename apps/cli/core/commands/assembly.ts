@@ -6,7 +6,7 @@
  *
  * This file checks every value and builds the one `ParsedCommand` the CLI runs, filling in any
  * option left out. It never reads a file or talks to the service. Each value is checked in
- * `values.ts`.
+ * `values.ts`, `recipe-values.ts` or `server-and-workspace.ts`.
  */
 import type {
   ChangeMode,
