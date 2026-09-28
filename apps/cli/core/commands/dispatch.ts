@@ -7,8 +7,9 @@
  * `core/authoring`, `core/presets` and `core/profiles`. (`core/presets` saves themes and recipes;
  * a preset is either one.)
  *
- * This file sends each command to the code that answers it. Then it hands the answer to
- * `delivery.ts`, which keeps it for the screen or writes it to the `--out` file.
+ * This file runs each command. It dispatches the command, which means it passes it to the code
+ * that does its work. Then it hands the answer to `delivery.ts`, which keeps it for the screen or
+ * writes it to the `--out` file.
  *
  * It does no I/O itself. The code it calls uses only the tools it is handed (its dependencies),
  * such as the service connection or the file reader. It never prints and never sets the exit
@@ -39,7 +40,11 @@ import { unsupported } from '../shared/results.js';
 import { deliverAnswer } from './delivery.js';
 import type { OutFileWriter } from './delivery.js';
 
-/** What `recipe instantiate` uses: the one service call that turns a recipe into diagram text. */
+/**
+ * What `recipe instantiate` uses: the one service call that turns a recipe into diagram text.
+ * `resources` is the service's calls for recipes and for the files a diagram uses
+ * (`ServiceResources`); this command uses only `instantiate`.
+ */
 export interface RecipeInstantiateDependencies {
   readonly resources: Pick<ServiceResources, 'instantiate'>;
 }
@@ -50,10 +55,19 @@ export interface OutFileDependencies {
 }
 
 /**
- * Every tool a service command may need, joined from each part's own list: the service
- * connection, the file reader, the `--out` writer, the request journal (a copy of each change the
- * CLI sends, kept in the workspace so `retry` can send it again), Language (which reads DSL text)
- * and more. `contract/compose/service.ts` makes each one once.
+ * Every tool a service command may need, joined from each part's own list.
+ * `contract/compose/service.ts` makes each one once:
+ * - `reads`: the service's read calls (collections, receipts, the DSL vocabulary).
+ * - `authoring`: the service's calls that preview or save a change.
+ * - `resources`: the service's calls for recipes and for the files a diagram uses.
+ * - `files`: reads a file on this machine, such as `plan.canvas`.
+ * - `writer`: writes the `--out` file.
+ * - `journal`: the request journal, a copy of each change the CLI sends, kept in the workspace so
+ *   `retry` can send it again.
+ * - `reader`: reads the files a diagram points to, such as an image.
+ * - `collections`: Model's check that a collection is valid.
+ * - `language`: Language, which reads DSL (the text language diagrams are written in).
+ * - `requestIds`: makes a new request ID for each change.
  */
 export type ServiceCommandDependencies = ReadDependencies &
   AuthorDependencies &
@@ -63,8 +77,8 @@ export type ServiceCommandDependencies = ReadDependencies &
   OutFileDependencies;
 
 /**
- * Every tool a profile command may need: the file reader for `lint`, Language (which reads DSL
- * text), and the `--out` writer.
+ * Every tool a profile command may need: `files` (reads the file `lint` checks), `language`
+ * (Language, which reads DSL text), and `writer` (writes the `--out` file).
  */
 export type ProfileCommandDependencies = ProfileDependencies & OutFileDependencies;
 
@@ -72,8 +86,8 @@ export type ProfileCommandDependencies = ProfileDependencies & OutFileDependenci
  * Runs a command on the local service, and returns the text to show on screen.
  *
  * It takes two steps. If a step finds a mistake, it stops there and returns that mistake.
- * 1. Send the command to the code that answers it. For example, `read` goes to the code that reads
- *    a collection.
+ * 1. Pass the command to the code that does its work. For example, `read` goes to the code that
+ *    reads a collection.
  * 2. Keep the answer to show on screen, or write it to the `--out` file (`delivery.ts`).
  *
  * The mistakes it can find: whatever that code reports (a missing collection, a stale
@@ -113,10 +127,10 @@ export async function runProfileCommand(
 }
 
 /**
- * Sends the command to the code that answers it and returns the answer. Reads → service queries;
- * `create`, `replace`, `patch`, `preview` → Authoring; `retry`, `apply` → replay the retained
- * request; `theme admit`, `recipe admit` → preset admission; `recipe instantiate` → one service
- * call. Fails as that code does.
+ * Passes the command to the code that does its work, and returns the answer. Reads → service
+ * queries; `create`, `replace`, `patch`, `preview` → Authoring; `retry`, `apply` → replay the
+ * retained request; `theme admit`, `recipe admit` → preset admission; `recipe instantiate` → one
+ * service call. Fails as that code does.
  */
 function answerServiceCommand(
   command: ServiceCommand,

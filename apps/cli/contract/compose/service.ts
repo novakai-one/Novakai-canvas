@@ -19,7 +19,7 @@ import { runServiceCommand } from '../api.js';
 import type { ServiceCommandDependencies } from '../api.js';
 import type { Result } from '../errors.js';
 import { failure, rejected, success } from '../errors.js';
-import type { ServiceCommand, ServiceOptions } from '../records/command.js';
+import type { ServiceCommand, ServerAndWorkspace } from '../records/command.js';
 import {
   agentToken,
   requestId,
@@ -35,7 +35,7 @@ import { composeLanguage } from './language.js';
  */
 export async function runService(
   command: ServiceCommand,
-  options: ServiceOptions,
+  options: ServerAndWorkspace,
 ): Promise<Result<string>> {
   const token = await readToken(options.workspace);
   if (!token.ok) return token;
@@ -57,7 +57,7 @@ async function readToken(workspace: FilePath): Promise<Result<AgentToken>> {
 
 /** Every service port, each bound once: three service-call adapters share one transport. */
 function servicePorts(
-  options: ServiceOptions,
+  options: ServerAndWorkspace,
   token: AgentToken,
 ): ServiceCommandDependencies {
   const transport = createTransport(options.server, token);

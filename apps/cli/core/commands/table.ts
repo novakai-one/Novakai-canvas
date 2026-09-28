@@ -2,10 +2,10 @@
  * Why this file exists
  *
  * Several parts of the CLI need the same facts about each command. Parsing needs to know
- * that `read` takes `--section`. `--help` needs the line that shows how to type `read`. If each
+ * that `read` accepts `--section`. `--help` needs the line that shows how to type `read`. If each
  * part kept its own list, the lists would drift apart.
  *
- * This file keeps one row per command, with the flags it takes and its `--help` lines. It also
+ * This file keeps one row per command, with the flags it accepts and its `--help` lines. It also
  * lists the commands typed with no word after them (`help`, `describe`, `list`), and the command
  * groups: `theme`, `recipe` and `profile`, the words that start a two-word command.
  *
@@ -36,9 +36,12 @@ export type OneOperandCommand = Exclude<CommandName, NoOperandCommand>;
 /** How many words a command takes after it: 0 (`list`) or 1 (`read my-diagram`). */
 export type OperandCount = 0 | 1;
 
-/** One command's row: the flags it takes, and its lines in `--help`. */
+/**
+ * One command's row: the flags it accepts, and its lines in `--help`. The table keys each row by
+ * its command's name, so the row itself holds no name.
+ */
 export interface CommandRow {
-  /** Every flag the command takes. Typing any other flag with it is a mistake. */
+  /** Every flag the command accepts. Typing any other flag with it is a mistake. */
   readonly accepted: readonly TextFlag[];
   /** Its lines in `--help`, exactly as printed. `--help` lists the rows in the table's order. */
   readonly usage: readonly string[];
@@ -180,8 +183,8 @@ export function takesNoOperand(name: CommandName): name is NoOperandCommand {
   return Object.hasOwn(noOperandCommands, name);
 }
 
-/** Whether the command takes the flag: yes for `read --section`, no for `list --revision`. */
-export function takesFlag(
+/** Whether the command accepts the flag: yes for `read --section`, no for `list --revision`. */
+export function acceptsFlag(
   name: CommandName,
   flag: TextFlag,
 ): boolean {

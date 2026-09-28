@@ -10,7 +10,7 @@
  *
  * If the write fails, it returns the mistake as a `Result` (see `contract/errors.ts`). The command
  * has already run by then. For a command that changes a collection, the change may already be
- * saved, so the agent doesn't run it again: it fetches the result with `read ID` or
+ * saved, so the agent should not run it again; it should check with `read ID` or
  * `receipt REQUEST_ID`. A command that only reads, such as `read`, can simply be run again.
  */
 import type { FilePath } from '../../contract/brands.js';

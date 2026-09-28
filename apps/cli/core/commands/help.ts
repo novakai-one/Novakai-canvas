@@ -3,8 +3,8 @@
  *
  * An agent that doesn't know the commands types `pnpm canvas --help`. It should get every command
  * and how to type it, such as `canvas read ID [--section ID | --object ID] [--out FILE]`, plus
- * a few notes. One is about receipts. A receipt is the service's record that an edit was saved.
- * No receipt? Don't assume the edit saved; check with `canvas receipt ID`.
+ * a few notes. For example, one note tells the agent not to take a change as saved until a
+ * receipt says so. (A receipt is the service's record that a change was saved.)
  *
  * This file writes that text once, from the command rows in `table.ts`, so the help and the
  * commands can't drift apart.

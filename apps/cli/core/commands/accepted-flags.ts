@@ -1,9 +1,9 @@
 /*
  * Why this file exists
  *
- * Each command takes only some flags. `pnpm canvas list --revision 3` makes no sense, because
+ * Each command accepts only some flags. `pnpm canvas list --revision 3` makes no sense, because
  * `list` doesn't use a revision. If the CLI quietly ignored the flag, the agent would think it had
- * asked for something it didn't get. So a flag the command doesn't take is a mistake:
+ * asked for something it didn't get. So a flag the command doesn't accept is a mistake:
  *
  *   invalid-arguments: --revision is not valid with list
  *
@@ -22,41 +22,48 @@
 import type { LocalFailure, Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
 import type { AcceptedCommand, CommandWithRightOperandCount } from './command-stages.js';
-import { invalidArgumentsFailure, missingLintProfileFailure } from './failures.js';
+import {
+  lintWithoutProfileFlagFailure,
+  misplacedIdOrTitleFailure,
+  misplacedProfileFlagFailure,
+  misplacedScopeFlagFailure,
+  sectionWithObjectFailure,
+  unacceptedFlagFailure,
+} from './failures.js';
 import type { TextFlag } from './flags.js';
-import { commandAsTyped, takesFlag } from './table.js';
+import { acceptsFlag } from './table.js';
 
-/** A rule's verdict: `true` when the command passes it; otherwise the failure naming the flag. */
+/** A rule's verdict: `true` when the command passes it; otherwise the mistake it found. */
 type RuleVerdict = Result<true, LocalFailure>;
 
 /** One flag rule, checked against the command and its flags. */
 type FlagRule = (command: CommandWithRightOperandCount) => RuleVerdict;
 
-/** The flag rules, in the order listed on `checkAcceptedFlags`. */
+/** The flag rules, in the order listed on `checkCommandFlags`. */
 const flagRules: readonly FlagRule[] = Object.freeze([
-  rejectMisplacedProfile,
-  requireLintProfile,
-  rejectMisplacedIdOrTitle,
-  rejectSectionWithObject,
-  rejectMisplacedScopeFlags,
-  rejectUnacceptedFlag,
+  checkProfileFlag,
+  checkLintHasProfile,
+  checkIdAndTitleFlags,
+  checkSectionOrObject,
+  checkScopeFlags,
+  checkEveryFlagAccepted,
 ]);
 
 /**
- * Checks the command got only the flags it takes, and the one it must have.
+ * Checks the command got only flags it accepts, and the one flag it must have.
  *
- * It checks these six things in order, and stops at the first mistake:
+ * It checks these six rules in order, and stops at the first mistake:
  * 1. `--profile` is only for `profile lint`.
  * 2. `profile lint` needs `--profile`.
  * 3. `--id` and `--title` are only for `profile scaffold` and `recipe admit`.
  * 4. `--section` and `--object` aren't typed together.
  * 5. `--section` and `--object` are only for `read`.
- * 6. Every other flag is one the command takes. If not, the first flag it doesn't take is named:
- *    `--revision is not valid with list`.
+ * 6. Every other flag is one the command accepts. If not, the first flag it doesn't accept is
+ *    named: `--revision is not valid with list`.
  *
  * Every mistake it finds is `invalid-arguments`, a missing `--profile` included.
  */
-export function checkAcceptedFlags(command: CommandWithRightOperandCount): Result<AcceptedCommand> {
+export function checkCommandFlags(command: CommandWithRightOperandCount): Result<AcceptedCommand> {
   // `checkNextRule` passes the first failure along unchanged, so later rules are skipped.
   const checked = flagRules.reduce(checkNextRule, success(command));
   if (!checked.ok) {
@@ -87,81 +94,87 @@ function keepFlagText(checked: CommandWithRightOperandCount): AcceptedCommand {
   return { ...checked, flags };
 }
 
-/** Rule 1: --profile only with `profile lint`. */
-function rejectMisplacedProfile(command: CommandWithRightOperandCount): RuleVerdict {
-  return rejectMisplacedFlags(command, ['profile'], '--profile is only valid with profile lint.');
-}
-
-/** Rule 2: `profile lint` needs --profile. Checked before the scope flags. */
-function requireLintProfile(command: CommandWithRightOperandCount): RuleVerdict {
-  const lintWithoutProfile =
-    command.name === 'profile-lint' && command.flags.text.profile === undefined;
-  if (lintWithoutProfile) {
-    return missingLintProfileFailure();
+/** Rule 1: `--profile` only with `profile lint`. */
+function checkProfileFlag(command: CommandWithRightOperandCount): RuleVerdict {
+  if (hasMisplacedFlag(command, ['profile'])) {
+    return misplacedProfileFlagFailure();
   }
   return success(true);
 }
 
-/** Rule 3: --id and --title only with `profile scaffold` and `recipe admit`. */
-function rejectMisplacedIdOrTitle(command: CommandWithRightOperandCount): RuleVerdict {
-  return rejectMisplacedFlags(
-    command,
-    ['id', 'title'],
-    '--id and --title are only valid with profile scaffold or recipe admit.',
-  );
-}
-
-/** Rule 4: --section and --object never together, whichever command is given them. */
-function rejectSectionWithObject(command: CommandWithRightOperandCount): RuleVerdict {
-  const { section, object } = command.flags.text;
-  const bothGiven = section !== undefined && object !== undefined;
-  if (bothGiven) {
-    return invalidArgumentsFailure('--section and --object are mutually exclusive for read.');
+/** Rule 2: `profile lint` needs `--profile`. Checked before the scope flags. */
+function checkLintHasProfile(command: CommandWithRightOperandCount): RuleVerdict {
+  if (isLintWithoutProfile(command)) {
+    return lintWithoutProfileFlagFailure();
   }
   return success(true);
 }
 
-/** Rule 5: --section and --object only with `read`. */
-function rejectMisplacedScopeFlags(command: CommandWithRightOperandCount): RuleVerdict {
-  return rejectMisplacedFlags(
-    command,
-    ['section', 'object'],
-    '--section and --object are only valid with read.',
-  );
+/** Rule 3: `--id` and `--title` only with `profile scaffold` and `recipe admit`. */
+function checkIdAndTitleFlags(command: CommandWithRightOperandCount): RuleVerdict {
+  if (hasMisplacedFlag(command, ['id', 'title'])) {
+    return misplacedIdOrTitleFailure();
+  }
+  return success(true);
 }
 
-/** Rule 6: the first flag the command does not accept fails, in the order the flags were given. */
-function rejectUnacceptedFlag(command: CommandWithRightOperandCount): RuleVerdict {
-  const refusedFlag = command.flags.typedOrder.find((flag) => !takesFlag(command.name, flag));
-  if (refusedFlag !== undefined) {
-    return invalidArgumentsFailure(
-      `--${refusedFlag} is not valid with ${commandAsTyped(command.name)}`,
-    );
+/** Rule 4: `--section` and `--object` never together, whichever command is given them. */
+function checkSectionOrObject(command: CommandWithRightOperandCount): RuleVerdict {
+  if (hasSectionAndObject(command)) {
+    return sectionWithObjectFailure();
+  }
+  return success(true);
+}
+
+/** Rule 5: `--section` and `--object` only with `read`. */
+function checkScopeFlags(command: CommandWithRightOperandCount): RuleVerdict {
+  if (hasMisplacedFlag(command, ['section', 'object'])) {
+    return misplacedScopeFlagFailure();
+  }
+  return success(true);
+}
+
+/** Rule 6: every flag is one the command accepts. Names the first typed one that isn't. */
+function checkEveryFlagAccepted(command: CommandWithRightOperandCount): RuleVerdict {
+  const unacceptedFlag = firstUnacceptedFlag(command);
+  if (unacceptedFlag !== undefined) {
+    return unacceptedFlagFailure(unacceptedFlag, command.name);
   }
   return success(true);
 }
 
 /**
- * Fails with `message` when any of `restrictedFlags` is given to a command that does not accept
- * it. Rules 1, 3 and 5 are rule 6 for their flags, checked earlier with their own message.
+ * Whether any of `flags` was typed with a command that doesn't accept it. Rules 1, 3 and 5 are
+ * rule 6 for their flags, checked earlier so they get their own message.
  */
-function rejectMisplacedFlags(
+function hasMisplacedFlag(
   command: CommandWithRightOperandCount,
-  restrictedFlags: readonly TextFlag[],
-  message: string,
-): RuleVerdict {
-  const misplaced = restrictedFlags.some((flag) => isGivenButRefused(command, flag));
-  if (misplaced) {
-    return invalidArgumentsFailure(message);
-  }
-  return success(true);
+  flags: readonly TextFlag[],
+): boolean {
+  return flags.some((flag) => isTypedButNotAccepted(command, flag));
 }
 
-/** Whether `flag` was given to a command that does not accept it. */
-function isGivenButRefused(
+/** Whether `flag` was typed with a command that doesn't accept it. */
+function isTypedButNotAccepted(
   command: CommandWithRightOperandCount,
   flag: TextFlag,
 ): boolean {
-  const isGiven = command.flags.text[flag] !== undefined;
-  return isGiven && !takesFlag(command.name, flag);
+  const isTyped = command.flags.text[flag] !== undefined;
+  return isTyped && !acceptsFlag(command.name, flag);
+}
+
+/** Whether the command is `profile lint`, typed without `--profile`. */
+function isLintWithoutProfile(command: CommandWithRightOperandCount): boolean {
+  return command.name === 'profile-lint' && command.flags.text.profile === undefined;
+}
+
+/** Whether both `--section` and `--object` were typed. */
+function hasSectionAndObject(command: CommandWithRightOperandCount): boolean {
+  const { section, object } = command.flags.text;
+  return section !== undefined && object !== undefined;
+}
+
+/** The first flag, in the order typed, that the command doesn't accept. Missing if none. */
+function firstUnacceptedFlag(command: CommandWithRightOperandCount): TextFlag | undefined {
+  return command.flags.order.find((flag) => !acceptsFlag(command.name, flag));
 }

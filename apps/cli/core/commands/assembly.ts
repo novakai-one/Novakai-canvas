@@ -6,13 +6,15 @@
  * only text. The rest of the CLI needs checked values: a real revision number, a file path, a
  * service address on this machine.
  *
- * This file turns the accepted command into one `ParsedCommand`, with every value checked and
- * every left-out option filled in. It checks `--section`, `--object`, `--mode` and `--revision`
- * first, the same way for every command. (`--mode` says whether `preview`'s file creates,
- * replaces or patches a collection.) Then it checks the command's own values with the command's
- * `build…Command` function, in `service-commands.ts` or `profile-commands.ts`. Last, for a command
- * sent to the service, it adds where to send it: `--server`, the service's address, and
- * `--workspace`.
+ * This file assembles the command: it checks every value and builds one `ParsedCommand`, with
+ * every left-out option filled in.
+ *
+ *   1. It checks `--section`, `--object`, `--mode` and `--revision`, the same way for every
+ *      command.
+ *   2. It checks the command's own values with the command's `build…Command` function, in
+ *      `service-commands.ts` or `profile-commands.ts`.
+ *   3. For a command sent to the service, it adds `--server` (the service's address, where the
+ *      command is sent) and `--workspace` (the folder that holds the agent's access token).
  *
  * It never reads a file or talks to the service. Each step answers with a `Result` (see
  * `contract/errors.ts`). A mistake about one typed value is written by the check that finds it, in
@@ -36,7 +38,7 @@ import type {
   AcceptedOneOperandCommand,
 } from './command-stages.js';
 import type { FilePath } from '../../contract/brands.js';
-import type { TypedFlagText } from './flags.js';
+import type { FlagTextAsTyped } from './flags.js';
 import {
   buildProfileDescribeCommand,
   buildProfileLintCommand,
@@ -75,8 +77,8 @@ interface ModeAndRevision {
 
 /**
  * The read scope, --mode and --revision. Checked for every command before its operand, so these
- * mistakes are reported first. A command that does not take them was refused them, so it holds
- * the defaults and does not read them.
+ * mistakes are reported first. A command that doesn't accept them was already refused them, so it
+ * holds the defaults and does not read them.
  */
 interface ScopeModeAndRevision extends ModeAndRevision {
   readonly scope: ReadScope;
@@ -99,10 +101,14 @@ const profileCommands: Readonly<Record<ProfileCommandName, ProfileCommandName>> 
  * 3. For a command sent to the service, check `--server` and `--workspace`. If `--workspace`
  *    wasn't typed, the command uses `defaultWorkspace`.
  *
- * The mistakes it can find: a bad `--section` or `--object` ID, an unknown `--mode`, a bad
- * `--revision`, a bad collection ID, request ID or recipe pin (such as `er@1.0.0#sha256:DIGEST`),
- * an unknown profile, a missing or bad `recipe admit` flag or `profile scaffold` `--id`/`--title`,
- * an empty file or `--out` path, or a `--server` not on this machine.
+ * The mistakes it can find:
+ * - a bad `--section` or `--object` ID, an unknown `--mode`, or a bad `--revision`;
+ * - a bad collection ID or request ID;
+ * - a bad recipe pin (the exact recipe, such as `er@1.0.0#sha256:DIGEST`; see `recipe-values.ts`);
+ * - an unknown profile;
+ * - a missing or bad `recipe admit` flag, or `profile scaffold` `--id` or `--title`;
+ * - an empty file path or `--out` path;
+ * - a `--server` not on this machine.
  */
 export function assembleCommand(
   accepted: AcceptedCommand,
@@ -121,7 +127,7 @@ export function assembleCommand(
  */
 function checkScopeModeAndRevision(
   name: CommandName,
-  flags: TypedFlagText,
+  flags: FlagTextAsTyped,
 ): Result<ScopeModeAndRevision> {
   const scope = checkReadScope(flags);
   if (!scope.ok) {
@@ -140,7 +146,7 @@ function checkScopeModeAndRevision(
  */
 function checkModeAndRevision(
   name: CommandName,
-  flags: TypedFlagText,
+  flags: FlagTextAsTyped,
 ): Result<ModeAndRevision> {
   const mode = checkChangeMode(name, flags);
   if (!mode.ok) {
@@ -185,7 +191,7 @@ function buildNoOperandCommand(
     return success({ kind: 'help' });
   }
   const serviceCommand = buildDescribeOrListCommand(name, flags);
-  return addServiceOptions(serviceCommand, flags, defaultWorkspace);
+  return addServerAndWorkspace(serviceCommand, flags, defaultWorkspace);
 }
 
 /**
@@ -203,14 +209,14 @@ function buildOperandCommand(
     return routeLocally(profileCommand);
   }
   const serviceCommand = buildServiceCommand(name, operand, flags, scopeModeAndRevision);
-  return addServiceOptions(serviceCommand, flags, defaultWorkspace);
+  return addServerAndWorkspace(serviceCommand, flags, defaultWorkspace);
 }
 
 /** The profile command its name picks, from its operand and flags. Fails as that builder does. */
 function buildProfileCommand(
   name: ProfileCommandName,
   operand: string,
-  flags: TypedFlagText,
+  flags: FlagTextAsTyped,
 ): Result<ProfileCommand> {
   switch (name) {
     case 'profile-describe':
@@ -236,7 +242,7 @@ function routeLocally(profileCommand: Result<ProfileCommand>): Result<ParsedComm
 function buildServiceCommand(
   name: OperandServiceCommandName,
   operand: string,
-  flags: TypedFlagText,
+  flags: FlagTextAsTyped,
   scopeModeAndRevision: ScopeModeAndRevision,
 ): Result<ServiceCommand> {
   const { scope, mode, revisionOption } = scopeModeAndRevision;
@@ -270,19 +276,20 @@ function buildServiceCommand(
  * The built service command with its --server, then --workspace. Passes its builder's failure on
  * unchanged, then fails with `invalid-server`.
  */
-function addServiceOptions(
+function addServerAndWorkspace(
   serviceCommand: Result<ServiceCommand>,
-  flags: TypedFlagText,
+  flags: FlagTextAsTyped,
   defaultWorkspace: FilePath,
 ): Result<ParsedCommand> {
   if (!serviceCommand.ok) {
     return serviceCommand;
   }
-  const options = checkServerAndWorkspace(flags, defaultWorkspace);
-  if (!options.ok) {
-    return options;
+  const serverAndWorkspace = checkServerAndWorkspace(flags, defaultWorkspace);
+  if (!serverAndWorkspace.ok) {
+    return serverAndWorkspace;
   }
-  return success({ kind: 'service', command: serviceCommand.value, options: options.value });
+  const command = serviceCommand.value;
+  return success({ kind: 'service', command, options: serverAndWorkspace.value });
 }
 
 /** Whether the command runs locally with a build-spec profile. */

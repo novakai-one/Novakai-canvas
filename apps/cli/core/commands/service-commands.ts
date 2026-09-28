@@ -8,19 +8,25 @@
  *
  * This file has one `build…Command` function per kind of service command. Each checks the word
  * typed after the command, then the command's own flags, then `--request` and `--out`. It returns
- * a `ServiceCommand` with only the fields that command uses.
+ * its command's record in `ServiceCommand`: one record per command, told apart by `name`, with
+ * only the fields that command uses.
+ *
+ * Parameters named `typed…`, and `flags`, are text as the agent typed it. `scope`, `mode` and
+ * `revisionOption` are already checked: `assembly.ts` checks them first and passes in the ones a
+ * command uses.
  *
  * Words used below:
+ *   - A collection is one saved diagram.
  *   - A receipt is the service's record that a change was saved.
  *   - `--request ID` sets the ID of the change a command sends, so its receipt can be found later.
  *   - To admit a file is to save it on the service: `theme admit` saves a theme.
+ *   - A pin names one exact recipe: `ID@VERSION#sha256:DIGEST`.
  *   - An `…Option` type holds one flag that may be left out: `RevisionOption` is
  *     `{ revision?: CollectionRevision }`.
  *
- * This file never sends anything; it only builds the command. `assembly.ts` has already checked
- * `--section`, `--object`, `--mode` and `--revision`, and passes in the ones a command uses. Each
- * check answers with a `Result` (see `contract/errors.ts`). A mistake about one typed value is
- * written by the check that finds it, in `values.ts` or `recipe-values.ts`.
+ * This file never sends anything; it only builds the command. Each check answers with a `Result`
+ * (see `contract/errors.ts`). A mistake about one typed value is written by the check that finds
+ * it, in `values.ts` or `recipe-values.ts`.
  */
 import type {
   ChangeMode,
@@ -34,8 +40,8 @@ import type {
 import type { FilePath } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
-import type { TypedFlagText } from './flags.js';
-import { checkRecipeHeader, checkRecipeInstantiate } from './recipe-values.js';
+import type { FlagTextAsTyped } from './flags.js';
+import { checkRecipeHeader, checkRecipeToInstantiate } from './recipe-values.js';
 import {
   checkCollectionId,
   checkFilePath,
@@ -50,17 +56,17 @@ interface RecipeSource {
   readonly recipe: RecipeHeader;
 }
 
-/** --request and --out, which every command that sends a DSL source or preset file takes. */
+/** --request and --out, which every command that sends a DSL source or preset file accepts. */
 type RequestAndOutOptions = RequestOption & OutOption;
 
 /**
- * Builds `describe` or `list`. Neither has a word after it; each takes only `--out`.
+ * Builds `describe` or `list`. Neither has a word after it. The only flag checked here is `--out`.
  *
  * The mistake it can find: an empty `--out` path.
  */
 export function buildDescribeOrListCommand(
   name: 'describe' | 'list',
-  flags: TypedFlagText,
+  flags: FlagTextAsTyped,
 ): Result<ServiceCommand> {
   const outOption = checkOutOption(flags);
   if (!outOption.ok) {
@@ -77,7 +83,7 @@ export function buildDescribeOrListCommand(
  */
 export function buildReadCommand(
   typedCollectionId: string,
-  flags: TypedFlagText,
+  flags: FlagTextAsTyped,
   scope: ReadScope,
 ): Result<ServiceCommand> {
   const collection = checkCollectionId(typedCollectionId);
@@ -92,14 +98,14 @@ export function buildReadCommand(
 }
 
 /**
- * Builds `inspect`, which reports on a collection's diagram: whether it is valid, its warnings,
- * and how many connecting lines cross. `typedCollectionId` is the collection ID as typed.
+ * Builds `inspect`, which reports on a collection: whether it is valid, its warnings, and how
+ * many connecting lines cross. `typedCollectionId` is the collection ID as typed.
  *
  * The mistakes it can find: a collection ID that isn't valid, then an empty `--out` path.
  */
 export function buildInspectCommand(
   typedCollectionId: string,
-  flags: TypedFlagText,
+  flags: FlagTextAsTyped,
 ): Result<ServiceCommand> {
   const collection = checkCollectionId(typedCollectionId);
   if (!collection.ok) {
@@ -125,7 +131,7 @@ export function buildInspectCommand(
 export function buildReceiptRetryOrApplyCommand(
   name: 'receipt' | 'retry' | 'apply',
   typedRequestId: string,
-  flags: TypedFlagText,
+  flags: FlagTextAsTyped,
 ): Result<ServiceCommand> {
   const request = checkRequestId(typedRequestId);
   if (!request.ok) {
@@ -148,7 +154,7 @@ export function buildReceiptRetryOrApplyCommand(
 export function buildCreateOrThemeAdmitCommand(
   name: 'create' | 'theme-admit',
   typedFilePath: string,
-  flags: TypedFlagText,
+  flags: FlagTextAsTyped,
 ): Result<ServiceCommand> {
   const file = checkFilePath(typedFilePath);
   if (!file.ok) {
@@ -172,7 +178,7 @@ export function buildCreateOrThemeAdmitCommand(
 export function buildReplaceOrPatchCommand(
   name: 'replace' | 'patch',
   typedFilePath: string,
-  flags: TypedFlagText,
+  flags: FlagTextAsTyped,
   revisionOption: RevisionOption,
 ): Result<ServiceCommand> {
   const file = checkFilePath(typedFilePath);
@@ -196,7 +202,7 @@ export function buildReplaceOrPatchCommand(
  */
 export function buildPreviewCommand(
   typedFilePath: string,
-  flags: TypedFlagText,
+  flags: FlagTextAsTyped,
   mode: ChangeMode,
   revisionOption: RevisionOption,
 ): Result<ServiceCommand> {
@@ -226,7 +232,7 @@ export function buildPreviewCommand(
  */
 export function buildRecipeAdmitCommand(
   typedFilePath: string,
-  flags: TypedFlagText,
+  flags: FlagTextAsTyped,
 ): Result<ServiceCommand> {
   const source = checkRecipeSource(typedFilePath, flags);
   if (!source.ok) {
@@ -248,9 +254,9 @@ export function buildRecipeAdmitCommand(
  */
 export function buildRecipeInstantiateCommand(
   typedPin: string,
-  flags: TypedFlagText,
+  flags: FlagTextAsTyped,
 ): Result<ServiceCommand> {
-  const expansion = checkRecipeInstantiate(typedPin, flags.namespace);
+  const expansion = checkRecipeToInstantiate(typedPin, flags.namespace);
   if (!expansion.ok) {
     return expansion;
   }
@@ -267,7 +273,7 @@ export function buildRecipeInstantiateCommand(
  */
 function checkRecipeSource(
   fileText: string,
-  flags: TypedFlagText,
+  flags: FlagTextAsTyped,
 ): Result<RecipeSource> {
   const file = checkFilePath(fileText);
   if (!file.ok) {
@@ -281,7 +287,7 @@ function checkRecipeSource(
 }
 
 /** --request, then --out. Fails with `invalid-request`, then `output-unavailable`. */
-function checkRequestAndOutOptions(flags: TypedFlagText): Result<RequestAndOutOptions> {
+function checkRequestAndOutOptions(flags: FlagTextAsTyped): Result<RequestAndOutOptions> {
   const requestOption = checkRequestOption(flags);
   if (!requestOption.ok) {
     return requestOption;

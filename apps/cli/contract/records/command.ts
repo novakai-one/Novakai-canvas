@@ -119,8 +119,8 @@ export type AdmitCommand = Extract<
 export type ChangeIntent =
   { readonly mode: 'create' } | ({ readonly mode: 'replace' | 'patch' } & RevisionOption);
 
-/** Where service commands are sent. */
-export interface ServiceOptions {
+/** Where a service command is sent (`--server`), and the workspace it uses (`--workspace`). */
+export interface ServerAndWorkspace {
   /** `--server`: the service's loopback origin. */
   readonly server: LoopbackOrigin;
   /** `--workspace`: the directory holding the agent credential and the `requests` journal. */
@@ -134,5 +134,5 @@ export type ParsedCommand =
   | {
       readonly kind: 'service';
       readonly command: ServiceCommand;
-      readonly options: ServiceOptions;
+      readonly options: ServerAndWorkspace;
     };

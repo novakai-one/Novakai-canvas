@@ -8,20 +8,20 @@
  *   invalid-arguments: read requires 1 operand(s)
  *
  * This file checks the number of words after the command. Which commands need none is written
- * once, in `table.ts`. The count is checked before any flag. It never checks what the word says;
- * that happens later, in `assembly.ts`.
+ * once, in `table.ts`. This runs before any flag is checked. It never checks what the word says:
+ * `assembly.ts` does that later, using the checks in `values.ts`.
  */
 import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
 import type { CommandWithRightOperandCount, IdentifiedCommand } from './command-stages.js';
 import { operandCountFailure } from './failures.js';
-import type { TypedFlags } from './flags.js';
+import type { FlagTextAndOrder } from './flags.js';
 import { takesNoOperand } from './table.js';
 import type { NoOperandCommand, OneOperandCommand } from './table.js';
 
 /**
- * Checks the command got the number of words it needs after it: none for `help`, `describe` and
- * `list`, and exactly one for every other command.
+ * Checks the command got the number of words it needs after it: none for the no-operand commands
+ * in `table.ts`, and exactly one for every other command.
  *
  * The mistake it can find: too many or too few words (`invalid-arguments`).
  */
@@ -39,7 +39,7 @@ export function checkOperandCount(
 function requireNoOperand(
   name: NoOperandCommand,
   operandWords: readonly string[],
-  flags: TypedFlags,
+  flags: FlagTextAndOrder,
 ): Result<CommandWithRightOperandCount> {
   if (operandWords.length > 0) {
     return operandCountFailure(name, 0);
@@ -54,7 +54,7 @@ function requireNoOperand(
 function requireOneOperand(
   name: OneOperandCommand,
   operandWords: readonly string[],
-  flags: TypedFlags,
+  flags: FlagTextAndOrder,
 ): Result<CommandWithRightOperandCount> {
   const [operand, ...extraWords] = operandWords;
   const hasExactlyOne = operand !== undefined && extraWords.length === 0;

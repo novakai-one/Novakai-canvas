@@ -85,3 +85,10 @@ export interface RawArguments<F extends string> {
 export type ArgvReading<F extends string> =
   | { readonly kind: 'read'; readonly arguments: RawArguments<F> }
   | { readonly kind: 'malformed'; readonly flag: string };
+
+/**
+ * A typed `pnpm canvas` line, after Node has split it into words and flags. It is either `read`,
+ * holding the words and flags, or `malformed`, when a flag couldn't be read (a flag the CLI
+ * doesn't have, or one missing its value).
+ */
+export type CanvasArgv = ArgvReading<CanvasFlag>;

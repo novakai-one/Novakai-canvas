@@ -6,17 +6,19 @@
  *   pnpm canvas recipe admit er.canvas --id er --version 1.0.0 --family er --title "ER diagram"
  *   pnpm canvas recipe instantiate er@1.0.0#sha256:DIGEST --namespace shop --out shop.canvas
  *
- * `recipe admit` saves a diagram file as a reusable recipe. Its four flags make the recipe's
- * header: its ID, version, family and title. The family is the kind of diagram the recipe makes,
- * such as `er` (entity-relationship) or `sop` (standard operating procedure).
+ * `recipe admit` saves a diagram file as a reusable recipe. Its four flags describe the recipe:
+ * its ID, version, family and title. Together they are called the recipe's header. The family is
+ * the kind of diagram the recipe makes, such as `er` (entity-relationship).
  *
- * `recipe instantiate` turns a saved recipe into diagram text the agent can edit. It needs the
- * exact recipe, written as its pin: `ID@VERSION#sha256:DIGEST`, where the digest is a fingerprint
- * of the recipe's content. `--namespace` becomes the new collection's ID.
+ * `recipe instantiate` makes a new diagram from a saved recipe, as text the agent can edit. It
+ * needs the exact recipe, written as its pin: `ID@VERSION#sha256:DIGEST`. The digest is a
+ * fingerprint of the recipe's content.
  *
- * This file checks those values and returns them as checked types. The rules for IDs, versions and
- * families come from the Templates capability, the part of Canvas that stores recipes and themes,
- * so the CLI can't disagree with it. Templates' code calls a recipe or theme a "preset".
+ * `--namespace` is the new diagram's collection ID. The flag uses Templates' word for it:
+ * Templates says the recipe is expanded "into a namespace".
+ *
+ * This file checks those values and returns them as checked types. The rules come from the
+ * Templates capability, which stores recipes, so the CLI can't disagree with it.
  *
  * It never reads the file or asks the service. Each check answers with a `Result` (see
  * `contract/errors.ts`). Every mistake here is `invalid-arguments`, written by the check that
@@ -32,8 +34,13 @@ import { failure, success } from '../../contract/errors.js';
 import { checked } from '../shared/checks.js';
 import type { Parser } from '../shared/checks.js';
 import { presetOfPin } from '../resources/digests.js';
-import { invalidArgumentsFailure } from './failures.js';
-import type { TypedFlagText } from './flags.js';
+import type { FlagTextAsTyped } from './flags.js';
+
+/**
+ * What `recipe instantiate` asks for: the recipe's `pin`, and `namespace`, the new collection's
+ * ID. Templates names this type `ExpansionRequest`: it expands the recipe into diagram text.
+ */
+export type RecipeToInstantiate = ExpansionRequest;
 
 /** A missing or empty header flag, or an unknown --family. */
 const headerRequired = 'recipe admit requires --id --version --family --title';
@@ -62,7 +69,10 @@ interface PinParts {
   readonly digest: string;
 }
 
-/** A preset's checked ID and version. */
+/**
+ * A recipe's checked ID and version. Templates calls a recipe or a theme a "preset", hence the
+ * `Preset…` types.
+ */
 interface PresetIdentity {
   readonly id: PresetId;
   readonly version: Version;
@@ -78,7 +88,7 @@ type RecipePin = ExpansionRequest['pin'];
  * a letter followed by letters, digits, `_` or `-`; a `--version` not written like `1.0.0`; a
  * `--family` that isn't a recipe family.
  */
-export function checkRecipeHeader(flags: TypedFlagText): Result<RecipeHeader> {
+export function checkRecipeHeader(flags: FlagTextAsTyped): Result<RecipeHeader> {
   const headerText = requireHeaderFlags(flags);
   if (!headerText.ok) {
     return headerText;
@@ -88,8 +98,7 @@ export function checkRecipeHeader(flags: TypedFlagText): Result<RecipeHeader> {
 
 /**
  * Checks what `recipe instantiate` asks for: the recipe's pin, and `--namespace`, the new
- * collection's ID. They come back as one `ExpansionRequest`, the Templates name for "turn this
- * recipe into diagram text".
+ * collection's ID.
  *
  * `typedPin` is the pin as typed after the command, such as `er@1.0.0#sha256:DIGEST`.
  * `typedNamespace` is the text after `--namespace`, or `undefined` when it wasn't typed.
@@ -98,10 +107,10 @@ export function checkRecipeHeader(flags: TypedFlagText): Result<RecipeHeader> {
  * valid; `--namespace` missing or not a valid ID. Each one's message is the same usage line:
  * `Use recipe instantiate ID@VERSION#sha256:DIGEST --namespace ID --out FILE`.
  */
-export function checkRecipeInstantiate(
+export function checkRecipeToInstantiate(
   typedPin: string,
   typedNamespace: string | undefined,
-): Result<ExpansionRequest> {
+): Result<RecipeToInstantiate> {
   const pin = checkRecipePin(typedPin);
   if (!pin.ok) {
     return pin;
@@ -114,11 +123,11 @@ export function checkRecipeInstantiate(
 }
 
 /** All four header flags, each given and not empty. Fails with `invalid-arguments` naming all four. */
-function requireHeaderFlags(flags: TypedFlagText): Result<HeaderText> {
+function requireHeaderFlags(flags: FlagTextAsTyped): Result<HeaderText> {
   const { id, version, family, title } = flags;
   const allGiven = isFilled(id) && isFilled(version) && isFilled(family) && isFilled(title);
   if (!allGiven) {
-    return invalidArgumentsFailure(headerRequired);
+    return failure({ code: 'invalid-arguments', message: headerRequired });
   }
   return success({ id, version, family, title });
 }

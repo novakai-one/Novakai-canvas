@@ -1,14 +1,19 @@
 /*
  * Why this file exists
  *
+ * A collection is one saved diagram. A collection file, such as `my-plan.canvas`, holds a
+ * collection's text.
+ *
  * A profile is a set of rules a collection can follow. Today there is one, `build-spec@1`: a build
- * plan written as one collection with five sections in a fixed order (the profile calls each
- * section a document). Three commands work with profiles, and they run on this machine without
- * the service:
+ * plan written as one collection with five sections in a fixed order. Three commands work with
+ * profiles, and they run on this machine without the service:
  *
  *   pnpm canvas profile describe build-spec@1
  *   pnpm canvas profile scaffold build-spec@1 --id my-plan --title "My plan"
  *   pnpm canvas profile lint my-plan.canvas --profile build-spec@1
+ *
+ * `describe` prints the profile's rules. `scaffold` makes the starting text of a new collection
+ * that follows the profile. `lint` checks a collection file against the profile.
  *
  * This file builds each of those commands from what was typed. It checks the profile name, the
  * scaffold's `--id` and `--title`, lint's file path, and `--out`, and returns one `ProfileCommand`.
@@ -25,8 +30,8 @@ import type { ProfileId } from '../../contract/records/profiles.js';
 import type { Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 import { checked } from '../shared/checks.js';
-import { missingLintProfileFailure } from './failures.js';
-import type { TypedFlagText } from './flags.js';
+import { lintWithoutProfileFlagFailure } from './failures.js';
+import type { FlagTextAsTyped } from './flags.js';
 import { checkFilePath, checkOutOption, checkProfileId } from './values.js';
 
 /** A flag `profile scaffold` requires: --id or --title. */
@@ -63,7 +68,7 @@ interface LintTarget {
  */
 export function buildProfileDescribeCommand(
   typedProfileId: string,
-  flags: TypedFlagText,
+  flags: FlagTextAsTyped,
 ): Result<ProfileCommand> {
   const profile = checkProfileId(typedProfileId);
   if (!profile.ok) {
@@ -86,7 +91,7 @@ export function buildProfileDescribeCommand(
  */
 export function buildProfileScaffoldCommand(
   typedProfileId: string,
-  flags: TypedFlagText,
+  flags: FlagTextAsTyped,
 ): Result<ProfileCommand> {
   const scaffoldTarget = checkScaffoldTarget(typedProfileId, flags);
   if (!scaffoldTarget.ok) {
@@ -109,7 +114,7 @@ export function buildProfileScaffoldCommand(
  */
 export function buildProfileLintCommand(
   typedFilePath: string,
-  flags: TypedFlagText,
+  flags: FlagTextAsTyped,
 ): Result<ProfileCommand> {
   const lintTarget = checkLintTarget(typedFilePath, flags.profile);
   if (!lintTarget.ok) {
@@ -125,7 +130,7 @@ export function buildProfileLintCommand(
 /** The profile, then --id and --title. Fails with `unknown-profile`, then `invalid-arguments`. */
 function checkScaffoldTarget(
   profileText: string,
-  flags: TypedFlagText,
+  flags: FlagTextAsTyped,
 ): Result<ScaffoldTarget> {
   const profile = checkProfileId(profileText);
   if (!profile.ok) {
@@ -142,7 +147,7 @@ function checkScaffoldTarget(
  * --id and --title, each given and not blank, then --id as a collection ID. Fails with
  * `invalid-arguments`.
  */
-function checkScaffoldName(flags: TypedFlagText): Result<ScaffoldName> {
+function checkScaffoldName(flags: FlagTextAsTyped): Result<ScaffoldName> {
   const scaffoldText = requireScaffoldText(flags);
   if (!scaffoldText.ok) {
     return scaffoldText;
@@ -155,7 +160,7 @@ function checkScaffoldName(flags: TypedFlagText): Result<ScaffoldName> {
 }
 
 /** --id, then --title, each given and not blank. Fails with `invalid-arguments` naming the flag. */
-function requireScaffoldText(flags: TypedFlagText): Result<ScaffoldText> {
+function requireScaffoldText(flags: FlagTextAsTyped): Result<ScaffoldText> {
   const idText = requireScaffoldFlag(flags.id, 'id');
   if (!idText.ok) {
     return idText;
@@ -208,7 +213,7 @@ function checkLintTarget(
  */
 function checkLintProfile(profileText: string | undefined): Result<ProfileId> {
   if (profileText === undefined) {
-    return missingLintProfileFailure();
+    return lintWithoutProfileFlagFailure();
   }
   return checkProfileId(profileText);
 }
