@@ -3,8 +3,8 @@
  * colours, font aliases) into the exact admission Templates and Design System check. The base
  * becomes an exact preset pin, each font alias the family Assets verified, each hex colour an
  * sRGB record. Any other admission passes through unchanged. Pure over the injected owners; every
- * refusal is a returned Result and only a throw from an owner is caught. Authoring keeps the
- * draft on every failure and owns commit and retry.
+ * refusal is a returned Result. Authoring keeps the draft on every failure and owns commit and
+ * retry.
  */
 import type {
   Assets,
@@ -22,7 +22,7 @@ import {
 } from '../../contract/records/presets/theme-input.js';
 import { admissionFields } from '../../contract/records/presets/preparation.js';
 import { chromeName } from '../../contract/schemas.js';
-import { authoringFailure } from '../../contract/errors.js';
+import { authoringFailure, collect, success } from '../../contract/errors.js';
 import type { FontBinding, ThemeAdmissionOwners } from '../../contract/ports/headless.js';
 import { parseThemePin } from './theme-pin.js';
 
@@ -33,13 +33,14 @@ type FontEntry = readonly [
 ];
 
 /**
- * Prepares one admission. An admission that is not a source-syntax theme is returned unchanged.
- * Fails with `invalid-input` at Templates' path when the base theme cannot be selected
+ * Prepares one admission: selects the exact base through Templates, then binds fonts and rewrites
+ * the raw block (see `withFonts`). An admission that is not a source-syntax theme is returned
+ * unchanged. Fails with `invalid-input` at Templates' path when the base theme cannot be selected
  * (Templates' failure kept as source), `missing-asset` at Assets' path for any failure of Assets
  * to resolve a font digest, such as bytes not stored or a malformed digest (Assets' failure kept
  * as source), `invalid-input` at the font alias when the bytes are not a verified font, and
  * `invalid-input` at `theme` ("Theme preparation failed") for a malformed admission header,
- * chrome name or hex colour, or a throw from Templates or Assets.
+ * chrome name or hex colour.
  */
 export function prepareTheme(
   admission: Json,
@@ -47,26 +48,8 @@ export function prepareTheme(
   bindings: readonly FontBinding[],
   owners: ThemeAdmissionOwners,
 ): AuthoringResult<Json> {
-  try {
-    return prepareSourceTheme(admission, catalog, bindings, owners);
-  } catch {
-    return preparationFailed();
-  }
-}
-
-/**
- * Selects the exact base through Templates, then binds fonts and rewrites the raw block (see
- * `withFonts`). Returns a non-theme admission unchanged. Fails with `invalid-input` at Templates'
- * path when no base matches (Templates' failure kept as source), or as `withFonts` fails.
- */
-function prepareSourceTheme(
-  admission: Json,
-  catalog: Catalog,
-  bindings: readonly FontBinding[],
-  owners: ThemeAdmissionOwners,
-): AuthoringResult<Json> {
   const parsed = themeConfig.safeParse(admission);
-  if (!parsed.success) return { ok: true, value: admission };
+  if (!parsed.success) return success(admission);
   const base = owners.templates.read(catalog, selection(parsed.data.raw.base));
   if (!base.ok)
     return authoringFailure('invalid-input', base.error.path, base.error.message, [], base.error);
@@ -95,7 +78,7 @@ function withFonts(
   bindings: readonly FontBinding[],
   assets: Pick<Assets, 'resolve'>,
 ): AuthoringResult<Json> {
-  const fonts = everyAccepted(bindings.map((item) => font(item, assets)));
+  const fonts = collect(bindings.map((item) => font(item, assets)));
   if (!fonts.ok) return fonts;
   const block = rawBlock(raw, base, fonts.value);
   if (!block.ok) return block;
@@ -107,7 +90,7 @@ function withFonts(
  * caller-supplied name or an OS fallback). Fails with `missing-asset` at Assets' path for any
  * failure of Assets to resolve the digest, such as bytes not stored or a malformed digest (Assets'
  * failure kept as source), and `invalid-input` at the alias when the bytes are not a font with a
- * verified family. A throw from Assets propagates to `prepareTheme`.
+ * verified family.
  */
 function font(
   input: FontBinding,
@@ -156,7 +139,7 @@ function rawBlock(
 ): AuthoringResult<Json> {
   const chrome = chromeField(raw.chrome);
   if (!chrome.ok) return chrome;
-  const overrides = everyAccepted(Object.entries(raw.overrides).map(tokenEntry));
+  const overrides = collect(Object.entries(raw.overrides).map(tokenEntry));
   if (!overrides.ok) return overrides;
   const pin = { kind: base.kind, id: base.id, version: base.version, digest: base.digest };
   return {
@@ -209,14 +192,7 @@ function colorAlpha(hex: string): number {
   return Number.parseInt(hex.slice(7, 9), 16) / 255;
 }
 
-/** Every accepted value in order, or the first failure. */
-function everyAccepted<T>(results: readonly AuthoringResult<T>[]): AuthoringResult<readonly T[]> {
-  const failed = results.find((item) => !item.ok);
-  if (failed) return failed;
-  return { ok: true, value: results.filter((item) => item.ok).map((item) => item.value) };
-}
-
-/** The refusal for a malformed theme or an owner's throw: `invalid-input` at `theme`. */
+/** The refusal for a malformed theme: `invalid-input` at `theme`. */
 function preparationFailed(): AuthoringResult<never> {
   return authoringFailure('invalid-input', 'theme', 'Theme preparation failed');
 }

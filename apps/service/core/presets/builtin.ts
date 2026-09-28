@@ -9,16 +9,16 @@ import type {
   DesignSystem,
   FontSource,
   LoweredIntent,
-  RecipePayload,
   ResolvedResources,
   Templates,
+  ThemePreset,
 } from '../../contract/records/capabilities.js';
 import type {
   BuiltinFonts,
   BuiltinSources,
   BuiltinResources,
 } from '../../contract/records/presets/builtins.js';
-import { failure, success, type Result } from '../../contract/errors.js';
+import { andThen, collect, failure, success, type Result } from '../../contract/errors.js';
 import { EMPTY_RESOURCES } from '../../contract/ports/capabilities.js';
 import { themeBinding, type BindingModel } from './theme-binding.js';
 
@@ -32,15 +32,14 @@ export interface BuiltinPresetOwners {
 /**
  * Prepares the complete installation preset set.
  *
- * Steps:
+ * Steps; the first failure stops the preparation:
  * 1. Name the shipped fonts by role (see `fontRoles`).
- * 2. Admit Paper (light) and Ink (dark) with those fonts.
- * 3. Admit each shipped recipe against those two themes.
+ * 2. Admit Paper (light) and Ink (dark) with those fonts (see `addThemes`).
+ * 3. Admit each shipped recipe against those two themes (see `addRecipes`).
  *
  * Returns the sources, unchanged, with the admitted catalog. Fails with `invalid-input` at
  * `builtins` when a shipped font is missing or an owner rejects a shipped input (the owner's
- * failure kept as source), and with `unavailable` at `builtins` when a provider throws anything
- * else.
+ * failure kept as source).
  */
 export function prepareBuiltinPresets(
   sources: BuiltinSources,
@@ -48,20 +47,10 @@ export function prepareBuiltinPresets(
 ): Result<BuiltinResources> {
   const fonts = fontRoles(sources.fonts);
   if (!fonts.ok) return fonts;
-  const themeSources: ThemeSources = { tokens: sources.tokens, fonts: fonts.value };
-  try {
-    const themes = (['light', 'dark'] as const).reduce<Catalog>(
-      (catalog, scheme) => addTheme(catalog, scheme, themeSources, owners),
-      [],
-    );
-    const presets = sources.recipes.reduce(
-      (catalog, recipe) => addRecipe(catalog, recipe, owners),
-      themes,
-    );
-    return success({ ...sources, presets });
-  } catch (error) {
-    return preparationFailure(error);
-  }
+  const themes = addThemes({ tokens: sources.tokens, fonts: fonts.value }, owners);
+  if (!themes.ok) return themes;
+  const presets = addRecipes(themes.value, sources.recipes, owners);
+  return andThen(presets, (catalog) => success({ ...sources, presets: catalog }));
 }
 
 /** What each bundled theme is built from: the Design System token sources and the fonts by role. */
@@ -92,20 +81,31 @@ type Scheme = 'light' | 'dark';
 const bundledThemes: Readonly<Record<Scheme, { readonly id: string; readonly title: string }>> =
   Object.freeze({ light: { id: 'paper', title: 'Paper' }, dark: { id: 'ink', title: 'Ink' } });
 
+/** Admits Paper, then Ink, into an empty catalog. Fails as `addTheme` fails. */
+function addThemes(
+  sources: ThemeSources,
+  owners: BuiltinPresetOwners,
+): Result<Catalog> {
+  const light = addTheme([], 'light', sources, owners);
+  return andThen(light, (catalog) => addTheme(catalog, 'dark', sources, owners));
+}
+
 /**
  * Admits the scheme's bundled theme (see `bundledThemes`) at version 1.1.0; Templates computes
- * its content hash. Returns the candidate catalog. Throws `PresetFault` when Design System or
- * Templates rejects the input.
+ * its content hash. Returns the candidate catalog. Fails with `invalid-input` at `builtins` when
+ * Design System or Templates rejects the input (its failure kept as source).
  */
 function addTheme(
   catalog: Catalog,
   scheme: Scheme,
   sources: ThemeSources,
   owners: BuiltinPresetOwners,
-): Catalog {
+): Result<Catalog> {
+  const raw = themeInput(sources, scheme, owners);
+  if (!raw.ok) return raw;
   const theme = bundledThemes[scheme];
   const templates = owners.templates(EMPTY_RESOURCES);
-  return accepted(
+  const planned = fromOwner(
     templates.planAdmission(catalog, {
       schemaVersion: 1,
       kind: 'theme',
@@ -113,22 +113,24 @@ function addTheme(
       version: '1.1.0',
       title: theme.title,
       description: 'Bundled diagram theme with pinned fonts.',
-      raw: themeInput(sources, scheme, owners),
+      raw: raw.value,
     }),
-  ).candidate;
+  );
+  return andThen(planned, (plan) => success(plan.candidate));
 }
 
 /**
  * The theme's raw input: the Design System UI pin resolved for this scheme under default system
  * preferences (personal preferences never become diagram dependencies), the three shipped fonts
- * and no overrides. Throws `PresetFault` when Design System rejects the token sources.
+ * and no overrides. Fails with `invalid-input` at `builtins` when Design System rejects the token
+ * sources (its failure kept as source).
  */
 function themeInput(
   sources: ThemeSources,
   scheme: Scheme,
   owners: BuiltinPresetOwners,
-): unknown {
-  const ui = accepted(
+): Result<unknown> {
+  const ui = fromOwner(
     owners.system.resolve({
       scope: 'ui',
       sources: sources.tokens,
@@ -142,11 +144,13 @@ function themeInput(
       environment: { scheme, pointer: 'fine', reducedMotion: false, forcedColors: false },
     }),
   );
-  return {
-    base: { kind: 'ui', pin: ui.provenance.ui },
-    fonts: fontPins(sources.fonts),
-    overrides: {},
-  };
+  return andThen(ui, (resolved) =>
+    success({
+      base: { kind: 'ui', pin: resolved.provenance.ui },
+      fonts: fontPins(sources.fonts),
+      overrides: {},
+    }),
+  );
 }
 
 /** One theme font pin: the family Assets verified and its digest, approved. */
@@ -166,26 +170,39 @@ function fontPin(font: FontSource): FontPin {
   return { family: font.family, digest: font.digest, approved: true };
 }
 
+/** One shipped recipe: its family and DSL source. */
+type ShippedRecipe = BuiltinSources['recipes'][number];
+
+/**
+ * Admits each shipped recipe in order, after the themes. Fails with the first recipe's failure
+ * (see `addRecipe`); later recipes are skipped.
+ */
+function addRecipes(
+  themes: Catalog,
+  recipes: readonly ShippedRecipe[],
+  owners: BuiltinPresetOwners,
+): Result<Catalog> {
+  // `addNext` passes the first failure along unchanged, so later recipes are skipped.
+  const addNext = (catalog: Result<Catalog>, recipe: ShippedRecipe): Result<Catalog> =>
+    andThen(catalog, (current) => addRecipe(current, recipe, owners));
+  return recipes.reduce(addNext, success(themes));
+}
+
 /**
  * Admits one shipped recipe (ID and title are its family) at version 1.0.0, inspected against
- * the exact themes already in the catalog and no assets. Returns the candidate catalog. Throws
- * `PresetFault` when Model or Templates rejects the input.
+ * the exact themes already in the catalog and no assets. Returns the candidate catalog. Fails
+ * with `invalid-input` at `builtins` when Model or Templates rejects the input (its failure kept
+ * as source).
  */
 function addRecipe(
   catalog: Catalog,
-  recipe: { readonly family: RecipePayload['family']; readonly source: string },
+  recipe: ShippedRecipe,
   owners: BuiltinPresetOwners,
-): Catalog {
-  const resources = {
-    themes: Object.fromEntries(
-      catalog
-        .filter((item) => item.kind === 'theme')
-        .map((item) => [item.id, accepted(themeBinding(item, owners.model))]),
-    ),
-    assets: {},
-  };
-  const templates = owners.templates(resources);
-  return accepted(
+): Result<Catalog> {
+  const themes = catalogThemes(catalog, owners);
+  if (!themes.ok) return themes;
+  const templates = owners.templates({ themes: themes.value, assets: {} });
+  const planned = fromOwner(
     templates.planAdmission(catalog, {
       schemaVersion: 1,
       kind: 'recipe',
@@ -196,36 +213,44 @@ function addRecipe(
       source: recipe.source,
       family: recipe.family,
     }),
-  ).candidate;
+  );
+  return andThen(planned, (plan) => success(plan.candidate));
 }
 
 /**
- * The owner's value. Throws `PresetFault` ("The owning capability rejected this input", the
- * owner's failure kept as source) when the owner refused.
+ * Every theme already in the catalog, bound under its ID as Model checks it. Fails with
+ * `invalid-input` at `builtins` when Model rejects a binding (its failure kept as source).
  */
-function accepted<T>(result: Result<T, FailureSource>): T {
-  if (!result.ok) throw new PresetFault('The owning capability rejected this input', result.error);
-  return result.value;
+function catalogThemes(
+  catalog: Catalog,
+  owners: BuiltinPresetOwners,
+): Result<ResolvedResources['themes']> {
+  const themes = catalog.filter((item) => item.kind === 'theme');
+  const bound = collect(themes.map((item) => boundTheme(item, owners)));
+  return andThen(bound, (entries) => success(Object.fromEntries(entries)));
 }
 
-/** A shipped input the owners refused; the owner's failure is kept when there is one. */
-class PresetFault extends Error {
-  /** Private native/input failures have no invented source; checked owner failures retain theirs. */
-  constructor(
-    message: string,
-    readonly source?: FailureSource,
-  ) {
-    super(message);
-  }
+/** One theme under its ID, bound as Model checks it. Fails as `catalogThemes` names. */
+function boundTheme(
+  preset: ThemePreset,
+  owners: BuiltinPresetOwners,
+): Result<readonly [string, ResolvedResources['themes'][string]]> {
+  const binding = fromOwner(themeBinding(preset, owners.model));
+  return andThen(binding, (bound) => success([preset.id, bound] as const));
 }
 
 /**
- * The failure for a throw during preparation: `invalid-input` at `builtins` for a `PresetFault`
- * (its message and source kept), otherwise `unavailable` at `builtins` without the native
- * exception text.
+ * The owner's result as a preparation result. Fails with `invalid-input` at `builtins` ("The
+ * owning capability rejected this input", the owner's failure kept as source) when the owner
+ * refused.
  */
-function preparationFailure(error: unknown): Result<never> {
-  if (error instanceof PresetFault)
-    return failure('invalid-input', 'builtins', error.message, error.source);
-  return failure('unavailable', 'builtins', 'Built-in preparation provider failed');
+function fromOwner<T>(result: Result<T, FailureSource>): Result<T> {
+  if (!result.ok)
+    return failure(
+      'invalid-input',
+      'builtins',
+      'The owning capability rejected this input',
+      result.error,
+    );
+  return result;
 }

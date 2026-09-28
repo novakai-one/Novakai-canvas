@@ -21,6 +21,7 @@ export const restoreInput = z.strictObject({ digest: z.string(), base64: z.strin
 export type RestoreInput = z.infer<typeof restoreInput>;
 /** A recipe instantiation request: the recipe pin (Templates checks it) and the target namespace. */
 export const instantiateInput = z.strictObject({ pin: z.unknown(), namespace: z.string() });
+export type InstantiateInput = z.infer<typeof instantiateInput>;
 /**
  * A preset admission read as named fields, so one field can be replaced: a recipe's source
  * (resource commands) or a theme's raw block (theme admission).
@@ -45,6 +46,7 @@ export const presetCommand = z.strictObject({
     }),
   ),
 });
+export type PresetCommand = z.infer<typeof presetCommand>;
 /** Preparation returns the exact content and observed catalog revision, without a canonical write. */
 export interface PresetPreparation {
   readonly admission: z.infer<ReturnType<typeof z.json>>;

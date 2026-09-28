@@ -65,6 +65,45 @@ export function failure<T>(
   return { ok: false, error: { ...rejected.error, source } };
 }
 
+/**
+ * The next step's result when `result` succeeded. A failure passes through unchanged and `next`
+ * is not called, so a chain of steps stops at its first failure. Works for any capability's
+ * Result of the same shape, including Authoring's.
+ */
+export function andThen<T, U, E>(
+  result: Result<T, E>,
+  next: (value: T) => Result<U, E>,
+): Result<U, E> {
+  if (!result.ok) return result;
+  return next(result.value);
+}
+
+/**
+ * Every value, in order, when every result succeeded; otherwise the first failure in order,
+ * unchanged. The results are already computed, so each one was attempted.
+ */
+export function collect<T, E>(results: readonly Result<T, E>[]): Result<readonly T[], E> {
+  const failed = results.find(isFailure);
+  if (failed) return failed;
+  return success(results.filter(isSuccess).map((item) => item.value));
+}
+
+/** A failed result. */
+type Failure<E> = Extract<Result<never, E>, { readonly ok: false }>;
+
+/** A successful result. */
+type Success<T> = Extract<Result<T, never>, { readonly ok: true }>;
+
+/** Whether this result failed. */
+function isFailure<T, E>(result: Result<T, E>): result is Failure<E> {
+  return !result.ok;
+}
+
+/** Whether this result succeeded. */
+function isSuccess<T, E>(result: Result<T, E>): result is Success<T> {
+  return result.ok;
+}
+
 /** The recovery text every service failure carries: keep the draft, fix the cause, reconcile. */
 const RETAIN_AND_RECONCILE =
   'Retain the draft and request ID. Restore the named dependency or correct input; reconcile the receipt before retrying.';

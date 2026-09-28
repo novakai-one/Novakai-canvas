@@ -10,6 +10,7 @@ import type {
   Collection,
   Feasibility,
   FeasibilityReport,
+  Json,
   RecordKey,
   Snapshot,
 } from '../../contract/records/capabilities.js';
@@ -18,7 +19,7 @@ import type { WorkspaceReader } from '../../contract/ports/workspace.js';
 import type { DiagramProducer, RenderJobs } from '../../contract/ports/rendering.js';
 import type { RenderDocument } from '../../contract/records/rendering/job.js';
 import { json } from '../../contract/schemas.js';
-import { authoringFailure } from '../../contract/errors.js';
+import { andThen, authoringFailure, success } from '../../contract/errors.js';
 
 /** What feasibility reads the candidate with, builds each job with and renders it with. */
 export interface FeasibilityOwners {
@@ -32,7 +33,8 @@ export interface FeasibilityOwners {
 /**
  * Binds feasibility to the real producer. `check` fails with `constraint-conflict` at the
  * producer's path when a changed collection cannot be rendered (producer failure kept as
- * source). Reader and job failures pass through unchanged. No partial preview is returned.
+ * source), and `corrupt-record` at `feasibility` when a rendered document is not JSON. Reader and
+ * job failures pass through unchanged. No partial preview is returned.
  */
 export function createFeasibility(owners: FeasibilityOwners): Feasibility {
   return { check: (candidate, changed, preview) => check(candidate, changed, preview, owners) };
@@ -40,8 +42,8 @@ export function createFeasibility(owners: FeasibilityOwners): Feasibility {
 
 /**
  * Renders each changed collection of the candidate in turn, then reports (see `report`). Other
- * changed records are not rendered. Fails with the first render failure (see `render`). Reader
- * failures pass through unchanged.
+ * changed records are not rendered. Fails with the first render failure (see `render`), or as
+ * `report` fails. Reader failures pass through unchanged.
  */
 async function check(
   candidate: Snapshot,
@@ -60,7 +62,7 @@ async function check(
     Promise.resolve<AuthoringResult<readonly RenderDocument[]>>({ ok: true, value: [] }),
   );
   if (!documents.ok) return documents;
-  return { ok: true, value: report(documents.value, preview) };
+  return report(documents.value, preview);
 }
 
 /**
@@ -107,23 +109,43 @@ async function render(
 
 /**
  * The report: every routing warning, each collection's layout adjustments as the diff, and the
- * rendered documents as the preview only when `preview` is true. Returns no failure code: it
- * throws when a document is not JSON, and Authoring turns that throw into a failure.
+ * rendered documents as the preview only when `preview` is true. Fails with `corrupt-record` at
+ * `feasibility` when the adjustments or the documents are not JSON.
  */
 function report(
   documents: readonly RenderDocument[],
   preview: boolean,
-): FeasibilityReport {
-  return {
-    warnings: warnings(documents),
-    diff: json.parse(
-      documents.map((item) => ({
-        collection: item.collection.id,
-        adjustments: item.scene.adjustments,
-      })),
-    ),
-    preview: preview ? json.parse(JSON.parse(JSON.stringify(documents))) : null,
-  };
+): AuthoringResult<FeasibilityReport> {
+  const diff = json.safeParse(
+    documents.map((item) => ({
+      collection: item.collection.id,
+      adjustments: item.scene.adjustments,
+    })),
+  );
+  if (!diff.success) return notJson();
+  const shown = previewDocuments(documents, preview);
+  return andThen(shown, (previewed) =>
+    success({ warnings: warnings(documents), diff: diff.data, preview: previewed }),
+  );
+}
+
+/**
+ * The rendered documents as plain JSON when `preview` is true, otherwise `null`. Fails with
+ * `corrupt-record` at `feasibility` when they are not JSON.
+ */
+function previewDocuments(
+  documents: readonly RenderDocument[],
+  preview: boolean,
+): AuthoringResult<Json | null> {
+  if (!preview) return success(null);
+  const copied = json.safeParse(JSON.parse(JSON.stringify(documents)));
+  if (!copied.success) return notJson();
+  return success(copied.data);
+}
+
+/** The refusal for rendered output that is not JSON: `corrupt-record` at `feasibility`. */
+function notJson(): AuthoringResult<never> {
+  return authoringFailure('corrupt-record', 'feasibility', 'Rendered documents are not JSON');
 }
 
 /** Each routing warning as a `constraint-conflict` warning at its collection ID, naming the wires to adjust. Never fails. */

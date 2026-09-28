@@ -1,10 +1,11 @@
 /*
  * The theme bindings one request may use: every stored theme version under its exact pin, each
  * theme id under its latest version, and a retained DSL request's own exact pins over those. Pure
- * over Templates and Model; a refusal throws ResourceFault (select.ts turns it into
- * `missing-asset`), and Authoring owns recovery.
+ * over Templates and Model; every refusal is `missing-asset` at `resources` (refusal.ts), and
+ * Authoring owns recovery.
  */
 import type {
+  AuthoringResult,
   Catalog,
   LoweredIntent,
   Preset,
@@ -13,10 +14,11 @@ import type {
   ThemePreset,
 } from '../../../contract/records/capabilities.js';
 import { pinnedDigest } from '../../../contract/brands.js';
+import { andThen, collect, success } from '../../../contract/errors.js';
 import { themeBinding, type BindingModel, type ThemeBinding } from '../../presets/theme-binding.js';
 import { formatThemePin, type ThemePinText } from '../../presets/theme-pin.js';
 import type { Intent } from './intent.js';
-import { ResourceFault, accepted } from './refusal.js';
+import { fromOwner, resourceRefused } from './refusal.js';
 
 /** The owners theme binding reads: Templates picks the latest version, Model checks each binding. */
 export interface ThemeOwners {
@@ -28,41 +30,70 @@ export interface ThemeOwners {
 export type Themes = ResolvedResources['themes'];
 
 /**
- * Every theme version under its exact pin, then each theme id under its latest version. Throws
- * ResourceFault with the Templates or Model failure in `source` when either refuses.
+ * Every theme version under its exact pin, then each theme id under its latest version. Fails with
+ * `missing-asset` at `resources` when Templates or Model refuses (its failure kept in `source`), or
+ * when Templates selects a preset that is not a theme.
  */
 export function availableThemes(
   catalog: Catalog,
   owners: ThemeOwners,
-): Themes {
+): AuthoringResult<Themes> {
   const records = themePresets(catalog);
-  const exact = records.map(
-    (item) => [presetPin(item), accepted(themeBinding(item, owners.model))] as const,
-  );
-  const aliases = [...new Set(records.map((item) => item.id))].map(
-    (id) => [id, latestBinding(catalog, id, owners)] as const,
-  );
-  return Object.fromEntries([...exact, ...aliases]);
+  const exact = collect(records.map((item) => exactEntry(item, owners)));
+  if (!exact.ok) return exact;
+  const ids = [...new Set(records.map((item) => item.id))];
+  const aliases = collect(ids.map((id) => aliasEntry(catalog, id, owners)));
+  return andThen(aliases, (latest) => success(Object.fromEntries([...exact.value, ...latest])));
 }
 
 /**
  * A retained DSL request keeps its exact theme pins; a newer latest version never replaces those
- * bytes. Throws ResourceFault for a retained pin that is no longer in the catalog.
+ * bytes. Fails with `missing-asset` at `resources` for a retained pin that is no longer in the
+ * catalog.
  */
 export function pinnedThemes(
   intent: Intent,
   available: Themes,
-): Themes {
-  if (intent.planner !== 'dsl') return available;
-  const pins = Object.entries(intent.command.themePins ?? {}).map(
-    ([alias, exact]) => [alias, exactTheme(available, exact)] as const,
+): AuthoringResult<Themes> {
+  if (intent.planner !== 'dsl') return success(available);
+  const pins = collect(
+    Object.entries(intent.command.themePins ?? {}).map(([alias, exact]) =>
+      retainedEntry(available, alias, exact),
+    ),
   );
-  return { ...available, ...Object.fromEntries(pins) };
+  return andThen(pins, (retained) => success({ ...available, ...Object.fromEntries(retained) }));
 }
 
 /** The catalog's theme presets, in catalog order. */
 export function themePresets(catalog: Catalog): readonly ThemePreset[] {
   return catalog.filter((item) => item.kind === 'theme');
+}
+
+/** One theme binding under its alias or exact pin text. */
+type ThemeEntry = readonly [string, ThemeBinding];
+
+/**
+ * A stored theme version under its exact pin. Fails with `missing-asset` at `resources` when Model
+ * refuses the binding.
+ */
+function exactEntry(
+  preset: ThemePreset,
+  owners: ThemeOwners,
+): AuthoringResult<ThemeEntry> {
+  const binding = fromOwner(themeBinding(preset, owners.model));
+  return andThen(binding, (bound) => success([presetPin(preset), bound] as const));
+}
+
+/**
+ * A theme id under its latest version's binding. Fails as `latestBinding` fails.
+ */
+function aliasEntry(
+  catalog: Catalog,
+  id: string,
+  owners: ThemeOwners,
+): AuthoringResult<ThemeEntry> {
+  const binding = latestBinding(catalog, id, owners);
+  return andThen(binding, (bound) => success([id, bound] as const));
 }
 
 /** A stored theme version's exact pin text, its digest in Model's pinned form. Never fails. */
@@ -75,31 +106,39 @@ function presetPin(preset: ThemePreset): ThemePinText {
 }
 
 /**
- * The binding for a theme id's latest version; Templates decides which version is latest. Throws
- * ResourceFault with the Templates or Model failure in `source`, or when Templates returns a preset
- * that is not a theme.
+ * The binding for a theme id's latest version; Templates decides which version is latest. Fails
+ * with `missing-asset` at `resources` when Templates or Model refuses (its failure kept in
+ * `source`), or when Templates returns a preset that is not a theme.
  */
 function latestBinding(
   catalog: Catalog,
   id: string,
   owners: ThemeOwners,
-): ThemeBinding {
-  const latest = selectedTheme(accepted(owners.templates.read(catalog, { kind: 'theme', id })));
-  return accepted(themeBinding(latest, owners.model));
+): AuthoringResult<ThemeBinding> {
+  const read = fromOwner(owners.templates.read(catalog, { kind: 'theme', id }));
+  const latest = andThen(read, selectedTheme);
+  return andThen(latest, (preset) => fromOwner(themeBinding(preset, owners.model)));
 }
 
-/** The preset Templates selected, which must be a theme. Throws ResourceFault when it is not. */
-function selectedTheme(preset: Preset): ThemePreset {
-  if (preset.kind !== 'theme') throw new ResourceFault('Selected preset is not a theme');
-  return preset;
+/**
+ * The preset Templates selected, which must be a theme. Fails with `missing-asset` at
+ * `resources` ("Selected preset is not a theme") when it is not.
+ */
+function selectedTheme(preset: Preset): AuthoringResult<ThemePreset> {
+  if (preset.kind !== 'theme') return resourceRefused('Selected preset is not a theme');
+  return success(preset);
 }
 
-/** The theme a retained pin names, which must still be in the current catalog. */
-function exactTheme(
+/**
+ * A retained pin under its alias; the pin must still be in the current catalog. Fails with
+ * `missing-asset` at `resources` ("Retained theme pin unavailable: <pin>") when it is not.
+ */
+function retainedEntry(
   available: Themes,
+  alias: string,
   exact: string,
-): ThemeBinding {
+): AuthoringResult<ThemeEntry> {
   const pin = available[exact];
-  if (!pin) throw new ResourceFault(`Retained theme pin unavailable: ${exact}`);
-  return pin;
+  if (!pin) return resourceRefused(`Retained theme pin unavailable: ${exact}`);
+  return success([alias, pin] as const);
 }

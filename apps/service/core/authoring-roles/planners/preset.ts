@@ -13,6 +13,7 @@ import type {
 } from '../../../contract/records/capabilities.js';
 import { presetCommand } from '../../../contract/records/presets/preparation.js';
 import type {
+  PresetCommand,
   PresetPreparation,
   ResourceDiagnostic,
   ResourceErrorCode,
@@ -64,7 +65,7 @@ function reprepare(
   request: Request,
   snapshot: Snapshot,
   owner: Pick<ResourceCommands, 'preparePreset'>,
-  command: ReturnType<typeof presetCommand.parse>,
+  command: PresetCommand,
 ): AuthoringResult<Proposal> {
   const prepared = owner.preparePreset(
     { admission: command.admission, assets: request.assets },
@@ -113,18 +114,15 @@ const AUTHORING_CODE: Readonly<Record<ResourceErrorCode, AuthoringErrorCode>> = 
 /**
  * Answers a proposal with no writes when the preset is already stored, otherwise the insertion
  * (see `insertion`). Fails with `revision-conflict` at `preset` when the prepared pin, key or
- * resources differ from the command's, and `invalid-input` at `preset.proposal` when the proposal
- * exceeds Authoring's limits.
+ * resources differ from the command's (see `sameContent`), and `invalid-input` at
+ * `preset.proposal` when the proposal exceeds Authoring's limits.
  */
 function compared(
-  command: ReturnType<typeof presetCommand.parse>,
+  command: PresetCommand,
   prepared: PresetPreparation,
   snapshot: Snapshot,
 ): AuthoringResult<Proposal> {
-  const same =
-    JSON.stringify([command.pin, command.key, command.resources]) ===
-    JSON.stringify([prepared.pin, prepared.key, prepared.resources]);
-  if (!same)
+  if (!sameContent(command, prepared))
     return authoringFailure('revision-conflict', 'preset', 'Prepared preset content changed');
   if (liveRecord(snapshot, 'preset', prepared.key.id))
     return presetProposal({
@@ -134,6 +132,51 @@ function compared(
       warnings: [],
     });
   return insertion(prepared, snapshot);
+}
+
+/** The fields of a preset pin the comparison reads. */
+interface PinFields {
+  readonly kind: string;
+  readonly id: string;
+  readonly version: string;
+  readonly digest: string;
+}
+
+/**
+ * Whether the repeated preparation has exactly the command's pin, record key and retained digests,
+ * the digests in the same order. Never fails.
+ */
+function sameContent(
+  command: PresetCommand,
+  prepared: PresetPreparation,
+): boolean {
+  return (
+    samePin(command.pin, prepared.pin) &&
+    command.key.kind === prepared.key.kind &&
+    command.key.id === prepared.key.id &&
+    sameDigests(command.resources, prepared.resources)
+  );
+}
+
+/** Whether two pins have the same kind, ID, version and digest. */
+function samePin(
+  left: PinFields,
+  right: PinFields,
+): boolean {
+  return (
+    left.kind === right.kind &&
+    left.id === right.id &&
+    left.version === right.version &&
+    left.digest === right.digest
+  );
+}
+
+/** Whether two digest lists hold the same digests in the same order. */
+function sameDigests(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  return left.length === right.length && left.every((digest, index) => digest === right[index]);
 }
 
 /**

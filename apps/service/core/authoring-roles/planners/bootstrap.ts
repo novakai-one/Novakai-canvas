@@ -12,18 +12,17 @@ import type {
 } from '../../../contract/records/capabilities.js';
 import type { Installation } from '../../../contract/records/workspace/startup.js';
 import { initializeCommand } from '../../../contract/records/planning/commands.js';
-import { plannerId, proposalSchema, requestSchema } from '../../../contract/schemas.js';
-import { authoringFailure } from '../../../contract/errors.js';
+import { plannerId, requestSchema } from '../../../contract/schemas.js';
+import { andThen, authoringFailure, success } from '../../../contract/errors.js';
 import { MAIN_CATALOG_ID, METADATA_RECORD_ID, presetRecordId } from '../../workspace/records.js';
 import { presetResources } from '../../presets/resources.js';
-import { changePayload } from './change-payload.js';
+import { changePayload, checkedProposal } from './change-payload.js';
 
 /**
  * Binds the private `bootstrap` planner to trusted installation data; HTTP never exposes it.
  * `plan` answers the installation proposal, or `invalid-input` at `bootstrap` when the request
- * is not a change or its payload is not the initialize command. Building the proposal throws
- * only when the trusted installation breaks Authoring's proposal limits; Authoring's planner
- * boundary turns that into a failure.
+ * is not a change or its payload is not the initialize command, and `invalid-input` at
+ * `bootstrap.proposal` when the trusted installation breaks Authoring's proposal limits.
  */
 export function createInstallationPlanner(installation: Installation): IntentPlanner {
   return { id: plannerId.parse('bootstrap'), plan: async (request) => plan(request, installation) };
@@ -32,11 +31,22 @@ export function createInstallationPlanner(installation: Installation): IntentPla
 /**
  * The deterministic installation request: it expects every installation record to be absent,
  * so it never replaces or upserts an existing workspace. Fails with `invalid-input` at
- * `bootstrap` when Authoring's request schema rejects it. The same proposal throw as `plan` is
- * caught by compose startup, which answers `unavailable` and keeps the workspace files.
+ * `bootstrap.proposal` when the installation breaks Authoring's proposal limits, and
+ * `invalid-input` at `bootstrap` when Authoring's request schema rejects the request.
  */
 export function installationRequest(installation: Installation): AuthoringResult<Request> {
-  const writes = proposal(installation).writes;
+  return andThen(proposal(installation), (planned) => requestFor(installation, planned));
+}
+
+/**
+ * The installation request for the proposal's writes. Fails with `invalid-input` at `bootstrap`
+ * when Authoring's request schema rejects it.
+ */
+function requestFor(
+  installation: Installation,
+  planned: Proposal,
+): AuthoringResult<Request> {
+  const writes = planned.writes;
   const result = requestSchema.safeParse({
     workspace: installation.workspace,
     request: 'initialize-workspace',
@@ -53,13 +63,13 @@ export function installationRequest(installation: Installation): AuthoringResult
       'bootstrap',
       'Installation request could not be constructed',
     );
-  return { ok: true, value: result.data };
+  return success(result.data);
 }
 
 /**
- * The `bootstrap` planner: answers the installation proposal (see `proposal`, which can throw).
- * Fails with `invalid-input` at `bootstrap` when the request is not a change or its payload is
- * not the initialize command.
+ * The `bootstrap` planner: answers the installation proposal (see `proposal`). Fails with
+ * `invalid-input` at `bootstrap` when the request is not a change or its payload is not the
+ * initialize command.
  */
 function plan(
   request: Request,
@@ -69,40 +79,44 @@ function plan(
   if (!input.ok) return input;
   if (!initializeCommand.safeParse(input.value).success)
     return authoringFailure('invalid-input', 'bootstrap', 'Invalid initialization command');
-  return { ok: true, value: proposal(installation) };
+  return proposal(installation);
 }
 
 /**
  * The installation proposal: workspace metadata, an empty `main` catalog and one write per
- * shipped preset, with no reads. Returns no failure code: it throws a schema error when the
+ * shipped preset, with no reads. Fails with `invalid-input` at `bootstrap.proposal` when the
  * installation exceeds Authoring's proposal limits.
  */
-function proposal(installation: Installation): Proposal {
-  return proposalSchema.parse({
-    reads: [],
-    diff: { initialized: installation.workspace },
-    warnings: [],
-    writes: [
-      {
-        kind: 'put',
-        key: { kind: 'workspace', id: METADATA_RECORD_ID },
-        value: {
-          schemaVersion: 1,
-          id: installation.workspace,
-          title: installation.title,
-          createdAt: installation.createdAt,
+function proposal(installation: Installation): AuthoringResult<Proposal> {
+  return checkedProposal(
+    {
+      reads: [],
+      diff: { initialized: installation.workspace },
+      warnings: [],
+      writes: [
+        {
+          kind: 'put',
+          key: { kind: 'workspace', id: METADATA_RECORD_ID },
+          value: {
+            schemaVersion: 1,
+            id: installation.workspace,
+            title: installation.title,
+            createdAt: installation.createdAt,
+          },
+          resources: [],
         },
-        resources: [],
-      },
-      {
-        kind: 'put',
-        key: { kind: 'catalog', id: MAIN_CATALOG_ID },
-        value: { schemaVersion: 1, id: MAIN_CATALOG_ID, revision: 0, folders: [], entries: [] },
-        resources: [],
-      },
-      ...installation.presets.map(presetWrite),
-    ],
-  });
+        {
+          kind: 'put',
+          key: { kind: 'catalog', id: MAIN_CATALOG_ID },
+          value: { schemaVersion: 1, id: MAIN_CATALOG_ID, revision: 0, folders: [], entries: [] },
+          resources: [],
+        },
+        ...installation.presets.map(presetWrite),
+      ],
+    },
+    'bootstrap.proposal',
+    'Installation exceeds proposal limits',
+  );
 }
 
 /**

@@ -4,42 +4,68 @@
  * refusal can still be answered. A refused body is the caller's to correct or resend.
  */
 import { httpBodyLimit } from '../../contract/records/transport/http.js';
-import { failure, success, type Result } from '../../contract/errors.js';
+import { andThen, failure, success, type Result } from '../../contract/errors.js';
 
 /**
- * The chunks as UTF-8 text. Fails with `invalid-input` at `body` when a chunk is not bytes, the
- * total passes `httpBodyLimit` (reading stops there), the stream fails (an interrupted upload) or
- * the bytes are not valid UTF-8.
+ * The chunks as UTF-8 text. Fails with `invalid-input` at `body` ("Request body was interrupted or
+ * not valid UTF-8") when a chunk is not bytes, the total passes `httpBodyLimit` (reading stops
+ * there), the stream fails (an interrupted upload) or the bytes are not valid UTF-8. The last two
+ * are Node throws, caught here.
  */
 export async function requestBody(chunks: AsyncIterable<unknown>): Promise<Result<string>> {
   try {
-    const bytes = Buffer.concat(await boundedChunks(chunks));
-    return success(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+    const bytes = await boundedBytes(chunks);
+    return andThen(bytes, decodedText);
   } catch {
-    return failure('invalid-input', 'body', 'Request body was interrupted or not valid UTF-8');
+    return bodyRefused();
   }
 }
 
-/** A chunk that is not bytes, or one that passes the limit; `requestBody` turns it into its failure. */
-class BodyRejected extends Error {}
-
-/** Every chunk, throwing `BodyRejected` before the total passes the limit. */
-async function boundedChunks(chunks: AsyncIterable<unknown>): Promise<readonly Buffer[]> {
+/**
+ * Every chunk, joined, while each one is bytes and the total stays within the cap (see
+ * `fitsLimit`). A chunk that does not fit stops reading at once (see `settledBytes`).
+ */
+async function boundedBytes(chunks: AsyncIterable<unknown>): Promise<Result<Buffer>> {
+  const iterator = chunks[Symbol.asyncIterator]();
   const accepted: Buffer[] = [];
   let size = 0;
-  for await (const input of chunks) {
-    const chunk = acceptedChunk(input, size);
-    size += chunk.byteLength;
-    accepted.push(chunk);
+  let next = await iterator.next();
+  while (!next.done && fitsLimit(next.value, size)) {
+    accepted.push(next.value);
+    size += next.value.byteLength;
+    next = await iterator.next();
   }
-  return accepted;
+  return settledBytes(iterator, next, accepted);
 }
 
-/** The chunk as bytes; throws `BodyRejected` when it is not bytes or `size` plus it passes the cap. */
-function acceptedChunk(
+/** Whether the chunk is bytes and `size` plus it stays within `httpBodyLimit`. */
+function fitsLimit(
   input: unknown,
   size: number,
-): Buffer {
-  if (!Buffer.isBuffer(input) || size + input.byteLength > httpBodyLimit) throw new BodyRejected();
-  return input;
+): input is Buffer {
+  return Buffer.isBuffer(input) && size + input.byteLength <= httpBodyLimit;
+}
+
+/**
+ * The joined bytes when the stream ended. Otherwise a chunk did not fit: the iterator is closed,
+ * as leaving a `for await` loop does, and the body is refused (`invalid-input` at `body`).
+ */
+async function settledBytes(
+  iterator: AsyncIterator<unknown>,
+  last: IteratorResult<unknown>,
+  accepted: readonly Buffer[],
+): Promise<Result<Buffer>> {
+  if (last.done) return success(Buffer.concat(accepted));
+  await iterator.return?.();
+  return bodyRefused();
+}
+
+/** The bytes as strict UTF-8 text; throws (caught by `requestBody`) when they are not valid UTF-8. */
+function decodedText(bytes: Buffer): Result<string> {
+  return success(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+}
+
+/** The one body refusal: `invalid-input` at `body`. */
+function bodyRefused(): Result<never> {
+  return failure('invalid-input', 'body', 'Request body was interrupted or not valid UTF-8');
 }

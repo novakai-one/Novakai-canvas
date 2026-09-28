@@ -22,6 +22,7 @@ import type { DslCommand } from '../../../contract/records/planning/commands.js'
 import { dslCommand } from '../../../contract/records/planning/commands.js';
 import { plannerId } from '../../../contract/schemas.js';
 import { authoringFailure } from '../../../contract/errors.js';
+import { samePins } from '../../resources/selection/pins.js';
 import { changePayload, ownerRejected } from './change-payload.js';
 
 /** What the `dsl` planner uses; compose passes Language from ServiceCapabilities. */
@@ -86,8 +87,9 @@ function lowerSource(
 
 /**
  * Parses the source, then lowers it (see `compileCollection`). Fails with `revision-conflict` at
- * `pins` when the selected pins differ from the admitted pins, and `invalid-input` at `source`
- * when Language cannot parse the source (Language's failure kept as source).
+ * `pins` when the selected pins differ from the admitted pins in any value (see `samePins`), and
+ * `invalid-input` at `source` when Language cannot parse the source (Language's failure kept as
+ * source).
  */
 function compile(
   command: DslCommand,
@@ -96,7 +98,7 @@ function compile(
   selected: ResourceSelection,
   owners: DslPlannerOwners,
 ): AuthoringResult<Proposal> {
-  if (JSON.stringify(pins) !== JSON.stringify(selected.pins))
+  if (!samePins(pins, selected.pins))
     return authoringFailure(
       'revision-conflict',
       'pins',

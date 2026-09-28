@@ -1,9 +1,10 @@
 /*
  * What a selection holds and reads: the bytes kept until commit and the preset records it depends
- * on. Pure; a malformed digest throws zod's error (select.ts turns it into `invalid-input`).
- * Authoring owns the lease, commit and recovery.
+ * on. Pure; a malformed digest is `invalid-input` at `resources` (refusal.ts). Authoring owns the
+ * lease, commit and recovery.
  */
 import type {
+  AuthoringResult,
   Catalog,
   Request,
   ResolvedResources,
@@ -11,27 +12,28 @@ import type {
 } from '../../../contract/records/capabilities.js';
 import { bareDigest, type AuthoringDigest } from '../../../contract/brands.js';
 import type { ResourceSelection } from '../../../contract/records/planning/selection.js';
-import { authoringDigest } from '../../../contract/schemas.js';
-import { sortedDigests } from './digests.js';
+import { andThen, collect, success } from '../../../contract/errors.js';
+import { checkedDigest, sortedDigests } from './digests.js';
 import { themePresets } from './themes.js';
 
 /**
  * Bytes held until commit: records, uploads and theme fonts sorted, then newly bound bytes in
- * binding order. Throws zod's error when a digest is malformed.
+ * binding order. Fails with `invalid-input` at `resources` when a digest is malformed.
  */
 export function coverage(
   request: Request,
   snapshot: Snapshot,
   catalog: Catalog,
   bound: ResolvedResources['assets'],
-): readonly AuthoringDigest[] {
+): AuthoringResult<readonly AuthoringDigest[]> {
   const held = sortedDigests([
     ...snapshot.records.flatMap((item) => item.resources),
     ...request.assets.map((item) => item.digest),
     ...themePresets(catalog).flatMap((item) => item.payload.fonts),
   ]);
-  const bytes = Object.values(bound).map((item) => authoringDigest.parse(bareDigest(item.digest)));
-  return [...new Set([...held, ...bytes])];
+  if (!held.ok) return held;
+  const bytes = collect(Object.values(bound).map((item) => checkedDigest(bareDigest(item.digest))));
+  return andThen(bytes, (added) => success([...new Set([...held.value, ...added])]));
 }
 
 /** Every preset record, deleted ones included, is a read dependency of the selection. Cannot fail. */

@@ -4,7 +4,6 @@
  * injected context. Every failure is Templates' `invalid-input` at `preset` (codec-refusal.ts):
  * the caller keeps the source, corrects it and prepares again; Authoring owns commit.
  */
-import { presetDigest } from '../../contract/schemas.js';
 import type {
   DesignSystem,
   PortableTheme,
@@ -15,9 +14,9 @@ import type {
 } from '../../contract/records/capabilities.js';
 import type { PresetCodecs } from '../../contract/records/presets/codecs.js';
 import { themeInput, type ThemeInput } from '../../contract/records/presets/theme-input.js';
-import { success } from '../../contract/errors.js';
-import { guarded, rejected } from './codec-refusal.js';
-import { brandedThemePin } from './branded-pin.js';
+import { andThen, collect, success } from '../../contract/errors.js';
+import { rejected } from './codec-refusal.js';
+import { brandedDigest, brandedThemePin } from './branded-pin.js';
 
 /** What the theme codec reads: Design System to resolve a theme, and the token sources. */
 export interface ThemeCodecContext {
@@ -27,12 +26,10 @@ export interface ThemeCodecContext {
 }
 
 /**
- * Binds the theme codec to one context. `resolve` never throws: a throw inside it becomes
- * `invalid-input` at `preset` ("Preset provider returned invalid identity or token data"). Other
- * failures are listed on `theme`.
+ * Binds the theme codec to one context. `resolve` fails as listed on `theme` and never throws.
  */
 export function createThemeCodec(context: ThemeCodecContext): PresetCodecs['theme'] {
-  return { resolve: (raw, available) => guarded(() => theme(raw, available, context)) };
+  return { resolve: (raw, available) => theme(raw, available, context) };
 }
 
 /**
@@ -53,8 +50,8 @@ function theme(
 /**
  * Resolves complete tokens through Design System over the exact base; a malformed selector
  * returns no partial theme. Fails with `invalid-input` at `preset` when the exact base is not
- * available, or with Design System's message when it rejects the theme (its failure kept as
- * source). Throws when an identity is not a Templates brand.
+ * available, with Design System's message when it rejects the theme (its failure kept as
+ * source), or as `checkedThemePayload` fails.
  */
 function resolvedTheme(
   input: ThemeInput,
@@ -106,33 +103,48 @@ function baseFonts(
     .map((value) => ({ family: value.family, digest: value.digest, approved: true }));
 }
 
+/** One token under its ID. */
+type TokenEntry = readonly [string, ThemePayload['tokens'][string]];
+
 /**
  * The theme payload with Templates brands on font digests, the sorted unique font set and the
- * base pin; token values are unchanged. Never fails; throws when an identity does not match its
- * Templates schema.
+ * base pin; token values are unchanged. Fails with `invalid-input` at `preset` ("Preset provider
+ * returned invalid identity or token data") when an identity does not match its Templates schema.
  */
 function checkedThemePayload(resolved: PortableTheme): TemplatesResult<ThemePayload> {
-  return success({
-    ...resolved,
-    tokens: Object.fromEntries(
-      Object.entries(resolved.tokens).map(([id, entry]) => [id, token(entry)]),
-    ),
-    fonts: [...new Set(resolved.fonts.map((font) => presetDigest.parse(font)))].toSorted(),
-    base: basePin(resolved.base),
-  });
+  const tokens = collect(Object.entries(resolved.tokens).map(tokenEntry));
+  if (!tokens.ok) return tokens;
+  const fonts = collect(resolved.fonts.map(brandedDigest));
+  if (!fonts.ok) return fonts;
+  return andThen(basePin(resolved.base), (base) =>
+    success({
+      ...resolved,
+      tokens: Object.fromEntries(tokens.value),
+      fonts: [...new Set(fonts.value)].toSorted(),
+      base,
+    }),
+  );
 }
 
-/** A font token with its digest branded; other tokens unchanged. Throws on a malformed digest. */
-function token(entry: PortableToken): ThemePayload['tokens'][string] {
-  if (entry.type !== 'font') return entry;
-  return { ...entry, digest: presetDigest.parse(entry.digest) };
+/** One token under its ID, its digest branded when it is a font (see `token`). */
+function tokenEntry([id, entry]: readonly [string, PortableToken]): TemplatesResult<TokenEntry> {
+  return andThen(token(entry), (branded) => success([id, branded] as const));
 }
 
 /**
- * The exact base pin with Templates brands, or `null` for no base. Throws on a malformed
- * identity.
+ * A font token with its digest branded; other tokens unchanged. Fails with `invalid-input` at
+ * `preset` on a malformed digest.
  */
-function basePin(base: PortableTheme['base']): ThemePayload['base'] {
-  if (base === null) return null;
+function token(entry: PortableToken): TemplatesResult<ThemePayload['tokens'][string]> {
+  if (entry.type !== 'font') return success(entry);
+  return andThen(brandedDigest(entry.digest), (digest) => success({ ...entry, digest }));
+}
+
+/**
+ * The exact base pin with Templates brands, or `null` for no base. Fails with `invalid-input` at
+ * `preset` on a malformed identity.
+ */
+function basePin(base: PortableTheme['base']): TemplatesResult<ThemePayload['base']> {
+  if (base === null) return success(null);
   return brandedThemePin(base);
 }

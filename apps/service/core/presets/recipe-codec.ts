@@ -5,7 +5,6 @@
  * is Templates' `invalid-input` at `preset` (codec-refusal.ts): the caller keeps the source,
  * corrects it and prepares again; Authoring owns commit.
  */
-import { presetDigest } from '../../contract/schemas.js';
 import { bareDigest } from '../../contract/brands.js';
 import type {
   Language,
@@ -16,9 +15,9 @@ import type {
   TemplatesResult,
 } from '../../contract/records/capabilities.js';
 import type { PresetCodecs } from '../../contract/records/presets/codecs.js';
-import { success } from '../../contract/errors.js';
-import { guarded, rejected } from './codec-refusal.js';
-import { brandedThemePin } from './branded-pin.js';
+import { andThen, collect, success } from '../../contract/errors.js';
+import { rejected } from './codec-refusal.js';
+import { brandedDigest, brandedThemePin } from './branded-pin.js';
 
 /** What the recipe codec reads: Language to lower, print and expand, and the bound resources. */
 export interface RecipeCodecContext {
@@ -28,15 +27,14 @@ export interface RecipeCodecContext {
 }
 
 /**
- * Binds the recipe codec to one context. `inspect` never throws: a throw inside it becomes
- * `invalid-input` at `preset` ("Preset provider returned invalid identity or token data").
- * `inspect` and `expand` fail with `invalid-input` at `preset` when Language rejects the source
- * (Language's failure kept as source). A throw inside `expand` becomes Templates'
- * `provider-failed` at `$` (Templates runs every call inside `protect`).
+ * Binds the recipe codec to one context. `inspect` and `expand` fail with `invalid-input` at
+ * `preset` when Language rejects the source (Language's failure kept as source); `inspect` also
+ * fails with `invalid-input` at `preset` ("Preset provider returned invalid identity or token
+ * data") when a pinned identity is not a Templates brand. Neither throws.
  */
 export function createRecipeCodec(context: RecipeCodecContext): PresetCodecs['recipe'] {
   return {
-    inspect: (source, family) => guarded(() => inspected(source, family, context)),
+    inspect: (source, family) => inspected(source, family, context),
     expand: (source, namespace) =>
       translated(context.language.expand({ source, namespace, resources: context.resources })),
   };
@@ -45,8 +43,8 @@ export function createRecipeCodec(context: RecipeCodecContext): PresetCodecs['re
 /**
  * The recipe payload for one source: lowered in create mode, then printed canonically; the
  * dependency pins come from the lowered collection. Fails with `invalid-input` at `preset` when
- * Language rejects the source or its printing (Language's failure kept as source). Throws when a
- * pinned identity is not a Templates brand.
+ * Language rejects the source or its printing (Language's failure kept as source), or as
+ * `recipePayload` fails.
  */
 function inspected(
   source: string,
@@ -81,22 +79,24 @@ function translated<T>(result: LanguageResult<T>): TemplatesResult<T> {
 /**
  * The recipe payload from a lowered collection (language version 1): its asset digests and its
  * one theme pin, each with the `sha256:` prefix removed and Templates' brand minted. Templates
- * later checks dependency closure. Never fails; throws when a pinned identity does not match its
- * Templates schema.
+ * later checks dependency closure. Fails with `invalid-input` at `preset` ("Preset provider
+ * returned invalid identity or token data") when a pinned identity does not match its Templates
+ * schema.
  */
 function recipePayload(
   intent: LoweredIntent,
   source: string,
   family: RecipePayload['family'],
 ): TemplatesResult<RecipePayload> {
-  const theme = intent.collection.theme;
-  return success({
-    languageVersion: 1,
-    source,
-    family,
-    assets: intent.collection.assets.map((item) => presetDigest.parse(bareDigest(item.digest))),
-    themes: [
-      brandedThemePin({ id: theme.id, version: theme.version, digest: bareDigest(theme.digest) }),
-    ],
+  const collection = intent.collection;
+  const assets = collect(collection.assets.map((item) => brandedDigest(bareDigest(item.digest))));
+  if (!assets.ok) return assets;
+  const theme = brandedThemePin({
+    id: collection.theme.id,
+    version: collection.theme.version,
+    digest: bareDigest(collection.theme.digest),
   });
+  return andThen(theme, (pin) =>
+    success({ languageVersion: 1, source, family, assets: assets.value, themes: [pin] }),
+  );
 }
