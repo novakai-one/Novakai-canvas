@@ -19,4 +19,4 @@ Collection profiles: `describeProfile`, `scaffoldProfile` and `lintProfile` take
 
 Examples: [prototype](../../resources/examples/language/prototype.canvas), [ER](../../resources/examples/language/er.canvas), [modules](../../resources/examples/language/modules.canvas), [sequence](../../resources/examples/language/sequence.canvas), [state/story/grid](../../resources/examples/language/state.canvas), [targeted patch](../../resources/examples/language/change.patch).
 
-Verification: public-contract suites using real Model validation/planning/staging. CLI resource admission and browser rendering are wired in `apps/`.
+Verification: public-contract suites using real Model validation/planning/staging. The collection profiles (`describeProfile`, `scaffoldProfile`, `lintProfile`) have no contract suite yet. CLI resource admission and browser rendering are wired in `apps/`.

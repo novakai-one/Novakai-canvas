@@ -1,41 +1,57 @@
 /*
- * The service's Assets and Templates steps a command runs before its Authoring request: stage
- * bytes, back them up, freeze aliases, restore backups, prepare a preset, expand a recipe.
- * Declaration only; adapters/service-http/resources.ts implements it over the HTTP transport.
- * Nothing here commits: staged bytes left by a failed command are collectable Assets orphans.
+ * Why this file exists
+ *
+ * Some changes need work done before Authoring sees them. A source that names `./assets/logo.png`
+ * needs the logo's bytes stored in the service first, and the change must then point at those
+ * stored bytes by digest. Saving a theme or recipe for reuse needs similar preparation.
+ *
+ * This file names those steps. None of them saves a change: bytes stored by a command that then
+ * fails are simply left unused. `adapters/service-http/resources.ts` makes the calls.
  */
 import type { AssetDigest } from '../brands.js';
 import type { Result } from '../errors.js';
-import type { Admission, ExpansionRequest, Request, StageInput } from '../records/foreign.js';
+import type {
+  Admission,
+  ExpansionRequest,
+  AuthoringRequest,
+  StageInput,
+} from '../records/foreign.js';
 import type { ByteBackup } from '../records/retained-request.js';
-import type { AssetBinding } from '../records/staged-resource.js';
+import type { NamedAssetDigest } from '../records/staged-resource.js';
 import type { PresetPreparation } from '../records/service-answers.js';
 
 /**
- * One resource call; nothing is retried. Every method fails with `connection-uncertain`,
- * `invalid-response` (the answer is not a service envelope, or does not match the checked shape)
- * or `service-rejected` (the service's own failure record, kept whole).
+ * The font, image, theme and recipe steps the service runs for the CLI. Each fails with
+ * `connection-uncertain`, `invalid-response` (the answer isn't the expected shape) or
+ * `service-rejected` (the service said no). None is retried.
  */
 export interface ServiceResources {
-  /** Stages local bytes with Assets; the digest of the normalised bytes. */
+  /** Stores a file's bytes in the service ("stages" them), and gives back their digest. */
   stage(input: StageInput): Promise<Result<AssetDigest>>;
-  /** The exact normalised bytes Assets holds for `digest`, kept for replay. */
+  /** Reads back the exact bytes the service holds for `digest`, so a retry can put them back. */
   blob(digest: AssetDigest): Promise<Result<ByteBackup>>;
   /**
-   * `request` with `assets` frozen into it by the service. An answer that fails Authoring's
-   * request schema is `invalid-input`.
+   * Has the service write the stored bytes' digests into `request` ("freeze" them), and gives back
+   * the new request. An answer that fails Authoring's request check is `invalid-input`.
    */
   freeze(
-    request: Request,
-    assets: readonly AssetBinding[],
-  ): Promise<Result<Request>>;
-  /** Restages one byte backup, so a replayed request finds its bytes. */
+    request: AuthoringRequest,
+    assets: readonly NamedAssetDigest[],
+  ): Promise<Result<AuthoringRequest>>;
+  /** Stores a kept copy of bytes again, so a retried request finds them. */
   restore(backup: ByteBackup): Promise<Result<void>>;
-  /** Templates' preparation of one preset admission over its staged assets. */
+  /**
+   * Asks the service to work out exactly what saving `admission` (a theme or recipe, with its
+   * stored fonts and images) will store, without saving it. Gives back the key it will be saved
+   * under, and the whole answer for the save request.
+   */
   prepare(
     admission: Admission,
-    assets: readonly AssetBinding[],
+    assets: readonly NamedAssetDigest[],
   ): Promise<Result<PresetPreparation>>;
-  /** A pinned recipe expanded under a namespace, as editable DSL. Nothing is written. */
+  /**
+   * Copies a saved recipe out as source text to edit, as a new collection whose ID is
+   * `--namespace`. Saves nothing.
+   */
   instantiate(expansion: ExpansionRequest): Promise<Result<string>>;
 }

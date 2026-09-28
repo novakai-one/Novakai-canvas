@@ -1,43 +1,68 @@
 /*
- * Local text files named on the command line: the UTF-8 source a command reads and the --out file
- * it writes. Both paths are checked (non-empty) before the command runs. Filesystem I/O; each
- * failure is returned as a value.
- * `readSource` fails before anything is sent: fix the path and run the command again.
- * `writeOutput` fails after the command already ran, so a write may have changed the workspace:
- * fix the path, then fetch the result with `read ID` or `receipt REQUEST` (the --request value, or
- * the file name in the workspace `requests` folder). Do not re-run a write command.
+ * Why this file exists
+ *
+ * `create my-diagram.canvas --out result.txt` reads the source from disk, then writes the answer
+ * to `result.txt` instead of printing it. Core decides when each happens, but can't touch the disk.
+ *
+ * This file does that reading and writing with Node. A source must be UTF-8 text of at most
+ * 16 MiB. It never touches the workspace folder. Mistakes come back as values, never thrown.
  */
 import { readFile, writeFile } from 'node:fs/promises';
 import type { LocalFiles } from '../../contract/ports/local-files.js';
 import type { LocalFailure, Result } from '../../contract/errors.js';
-import { failure, success, unreadableSource, unwritableOutput } from '../../contract/errors.js';
+import {
+  failure,
+  success,
+  unreadableSourceFailure,
+  unwritableOutputFailure,
+} from '../../contract/errors.js';
 import type { FilePath } from '../../contract/brands.js';
 
 /** The largest source file a command reads. */
 const sourceByteLimit = 16 * 1024 * 1024;
 
-/** Source reads and --out writes; neither needs the workspace directory. */
+/** Gives core its source file reader and `--out` file writer. Neither uses the workspace folder. */
 export function createLocalFiles(): LocalFiles {
   return { readSource, writeOutput };
 }
-/**
- * The file's text, decoded as strict UTF-8, before any service request. Fails with
- * `source-too-large` (over 16 MiB) or `source-unavailable` (cannot be opened, or is not UTF-8).
- */
+
+/** Reads the source file as UTF-8 text, refusing one over 16 MiB or one that isn't UTF-8. */
 async function readSource(file: FilePath): Promise<Result<string, LocalFailure>> {
+  const bytes = await readSourceBytes(file);
+  if (!bytes.ok) {
+    return bytes;
+  }
+  if (bytes.value.byteLength > sourceByteLimit) {
+    return sourceTooLargeFailure();
+  }
+  return decodeStrictUtf8(file, bytes.value);
+}
+
+/** Reads the source file's bytes. */
+async function readSourceBytes(file: FilePath): Promise<Result<Buffer, LocalFailure>> {
   try {
     const bytes = await readFile(file);
-    if (bytes.byteLength > sourceByteLimit)
-      return failure({ code: 'source-too-large', message: 'DSL source exceeds 16 MiB' });
-    return success(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+    return success(bytes);
   } catch {
-    return failure(unreadableSource(file));
+    return unreadableSourceFailure(file);
   }
 }
-/**
- * Writes `text` to the explicit --out destination after the command ran. Never changes service
- * data. Fails with `output-unavailable`.
- */
+
+/** Decodes the source file's bytes as UTF-8, refusing any byte that isn't valid UTF-8. */
+function decodeStrictUtf8(
+  file: FilePath,
+  bytes: Buffer,
+): Result<string, LocalFailure> {
+  try {
+    const strictDecoder = new TextDecoder('utf-8', { fatal: true });
+    const text = strictDecoder.decode(bytes);
+    return success(text);
+  } catch {
+    return unreadableSourceFailure(file);
+  }
+}
+
+/** Writes the answer's text to the `--out` file, after the command ran. */
 async function writeOutput(
   path: FilePath,
   text: string,
@@ -46,6 +71,11 @@ async function writeOutput(
     await writeFile(path, text, 'utf8');
     return success(undefined);
   } catch {
-    return failure(unwritableOutput(path));
+    return unwritableOutputFailure(path);
   }
+}
+
+/** Makes the mistake for a source file over 16 MiB (`source-too-large`). */
+function sourceTooLargeFailure(): Result<never, LocalFailure> {
+  return failure({ code: 'source-too-large', message: 'DSL source exceeds 16 MiB' });
 }

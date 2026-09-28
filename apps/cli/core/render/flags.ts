@@ -1,15 +1,21 @@
 /*
- * render:png's flags in words: which flags a render cannot run without, the placeholder each value
- * is written as, the section formats, and the usage line built from them. Pure; built once. The
- * usage line follows every argument failure, so the caller sees what to type instead.
+ * Why this file exists
+ *
+ * When a render:png flag is typed wrong, the agent needs to see what to type instead. So every
+ * flag mistake ends with one usage line:
+ *
+ *   Use render:png --collection ID|FILE.canvas --out DIR [--format svg|png] [--theme ID] …
+ *
+ * This file writes that line, and says which flags are required and which formats exist. It holds
+ * words only; `request.ts` checks what was typed.
  */
 import type { RenderFlag } from '../../contract/records/arguments.js';
 import type { RenderFormat } from '../../contract/records/render.js';
 
-/** A flag render:png cannot run without. */
+/** A flag render:png can't run without: `collection` or `out`, named without the `--`. */
 export type RequiredFlag = 'collection' | 'out';
 
-/** A flag render:png runs without. */
+/** A flag render:png can run without: `format`, `theme`, `theme-file` or `labels`. */
 export type OptionalFlag = Exclude<RenderFlag, RequiredFlag>;
 
 /** The words written after a flag in the usage line; the `--labels` switch has none. */
@@ -21,7 +27,7 @@ const renderFormats: Readonly<Record<RenderFormat, RenderFormat>> = Object.freez
   png: 'png',
 });
 
-/** The section formats, in order. */
+/** The image formats render:png can write, `svg` then `png`, in the order mistakes name them. */
 export const formatNames: readonly string[] = Object.freeze(Object.keys(renderFormats));
 
 /** Each required flag's placeholder, in usage order. */
@@ -38,28 +44,29 @@ const optionalFlags: Readonly<Record<OptionalFlag, Placeholder>> = Object.freeze
   labels: Object.freeze([]),
 });
 
-/** What to type instead, after any argument failure: required flags, then optional ones in `[ ]`. */
+/** The usage line every flag mistake ends with: required flags, then optional ones in `[ ]`. */
 export const renderUsage = `Use render:png ${[
   ...Object.entries(requiredFlags).map(written),
   ...Object.entries(optionalFlags).map(written).map(bracketed),
 ].join(' ')}.`;
 
-/** A flag as typed: `--` then its name. */
-export function flagName(flag: string): string {
-  return `--${flag}`;
+/** Writes a flag's name the way it is typed: `format` becomes `--format`. */
+export function flagAsTyped(name: string): string {
+  return `--${name}`;
 }
 
-/** Whether `text` names a section format. */
+/** Whether `text`, as typed after `--format`, is a format render:png can write. */
 export function isRenderFormat(text: string): text is RenderFormat {
   return Object.hasOwn(renderFormats, text);
 }
 
-/** One flag and its placeholder, as the usage line writes them. */
+/** Writes one flag and its placeholder as the usage line shows them: `--out DIR`. */
 function written([flag, placeholder]: readonly [string, Placeholder]): string {
-  return [flagName(flag), ...placeholder].join(' ');
+  const words = [flagAsTyped(flag), ...placeholder];
+  return words.join(' ');
 }
 
-/** An optional flag in the usage line. */
-function bracketed(words: string): string {
-  return `[${words}]`;
+/** Puts an optional flag in brackets, as the usage line shows it: `[--theme ID]`. */
+function bracketed(flagWords: string): string {
+  return `[${flagWords}]`;
 }

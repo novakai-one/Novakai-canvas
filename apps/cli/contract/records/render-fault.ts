@@ -1,60 +1,59 @@
 /*
- * render:png's own faults: what the render finds wrong itself, and the `provider-failed` fault a
- * native throw becomes (a filesystem, temp-directory or wasm step, or an owner that threw
- * unexpectedly), with the native evidence kept. Data only; `faulted` and `nativeFault` in
- * errors.ts build the failed Results. The caller corrects the named input or resource and runs
- * render:png again.
+ * Why this file exists
+ *
+ * Some render problems are found by render:png itself, not by the parts it calls. Asking for
+ * `--theme nope` finds no such theme, so the render stops with a `missing-theme` fault.
+ *
+ * This file lists those faults, and `provider-failed`. A provider is code that reaches outside the
+ * CLI: reading files, the temp folder, and the layout and PNG engines (loaded as WebAssembly). When
+ * one throws, it becomes `provider-failed`, with Node's details kept. It declares types only.
  */
 import type { ThemeChoice } from './render.js';
-import type { AssetId, CollectionName, FilePath } from '../brands.js';
+import type { AssetId, RecipeOrCollectionId, FilePath } from '../brands.js';
 
-/**
- * A render failure the CLI found itself. Consumers branch on the code, never the message.
- * - `missing-theme`: the theme override has no admitted pin.
- * - `collection-selection`: a collection name matched no recipe and not exactly one shipped
- *   collection; `matches` counts the shipped matches.
- * - `collection-required`: a theme override was asked for a source that is not a collection.
- * - `collection-title-required`: a theme override was asked for a collection without a title.
- * - `invalid-asset-pin`: a collection asset's digest is not Model's `sha256:` pin. Model
- *   validation refuses such a collection first, so no unchecked digest reaches Assets.
- * - `duplicate-asset`: the source declares one asset ID twice; the pins it is lowered against hold
- *   one record per ID.
- * - `provider-failed`: a filesystem, temp-directory or wasm step threw, or an owner threw
- *   unexpectedly; the native evidence is kept.
- */
+/** A render problem render:png found itself, named by its `code`. */
 export type RenderFault =
   | {
+      /** `--theme` or the `--theme-file`'s theme isn't one the render knows. */
       readonly code: 'missing-theme';
       readonly theme: ThemeChoice;
     }
   | {
+      /** The name matched no recipe, and no shipped collection or more than one (`matches`). */
       readonly code: 'collection-selection';
-      readonly id: CollectionName;
+      readonly id: RecipeOrCollectionId;
       readonly matches: number;
     }
+  /** A theme was asked for, but the source is a patch (`patch 1`), not a whole collection. */
   | { readonly code: 'collection-required' }
+  /** A theme was asked for, but the collection has no title to write the theme after. */
   | { readonly code: 'collection-title-required' }
   | {
+      /** A font or image's pin (its `sha256:` digest in the collection) isn't well formed. */
       readonly code: 'invalid-asset-pin';
       readonly asset: AssetId;
       /** The digest text as the collection gives it. */
       readonly digest: string;
     }
   | {
+      /** The source declares one font or image ID twice. */
       readonly code: 'duplicate-asset';
       readonly asset: AssetId;
     }
   | ProviderFault;
 
-/** The one fault a native filesystem, temp-directory or wasm step fails with. */
+/**
+ * A provider threw: reading a file, the temp folder, or a WebAssembly engine. Also used when a
+ * part throws when it shouldn't. Node's details are kept.
+ */
 export interface ProviderFault {
   readonly code: 'provider-failed';
-  /** The native error's message. Human context only. */
+  /** The error's message, for people to read. */
   readonly message: string;
   readonly detail: NativeDetail;
 }
 
-/** A native error's failing path, raw OS code (e.g. `ENOENT`) and syscall (e.g. `open`), when given. */
+/** Node's details of a thrown error, when given: the path, OS code (`ENOENT`) and call (`open`). */
 export interface NativeDetail {
   readonly path?: FilePath;
   readonly systemCode?: string;

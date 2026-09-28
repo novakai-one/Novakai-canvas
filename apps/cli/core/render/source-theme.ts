@@ -1,74 +1,98 @@
 /*
- * The render-only theme override: a copy of the collection source whose `theme` field names the
- * chosen theme, written on the spans Language parsed. Pure apart from the injected parser; the
- * source file is never written and nothing trusts its name. Pins are checked when the copy is
- * lowered. The caller picks another source or theme and runs render:png again.
+ * Why this file exists
+ *
+ * `--theme atlas` draws a collection with the `atlas` theme instead of its own. To do that, the
+ * CLI changes a copy of the source text: `collection @shop "Shop" theme=onyx` becomes
+ * `collection @shop "Shop" theme="atlas"`. A collection with no theme gets one after its title.
+ *
+ * This file makes that changed copy, at the places Language found when it parsed the text. It
+ * never writes the file. Whether the theme exists is checked later, in `collection.ts`.
  */
 import type { RenderSources } from '../../contract/ports/render-sources.js';
 import type { ParsedSource, Span } from '../../contract/records/foreign.js';
 import type { ThemeChoice } from '../../contract/records/render.js';
-import type { RenderEvidence } from '../../contract/records/render-failure.js';
+import type { RenderFailureSource } from '../../contract/records/render-failure.js';
 import type { RenderFault } from '../../contract/records/render-fault.js';
 import type { SourceFile } from '../../contract/records/source-file.js';
 import type { Result } from '../../contract/errors.js';
-import { faulted, success } from '../../contract/errors.js';
-import { mapped } from '../shared/results.js';
+import { renderFaultFailure, success } from '../../contract/errors.js';
 
 /**
- * A copy of `source` whose collection names `theme`: the existing theme field is replaced, or one
- * is written after the title. Fails with Language's diagnostics, `collection-required` when the
- * source is not a whole collection, or `collection-title-required` when it has no title to write
- * the theme after.
+ * Gives back a copy of `source` whose collection uses `theme`: its theme is replaced, or written
+ * after its title. `parse` is Language's parser.
+ * Mistakes: Language can't parse the text, the text is a patch rather than a whole collection
+ * (`collection-required`), or the collection has no title (`collection-title-required`).
  */
-export function withTheme(
+export function setSourceTheme(
   source: SourceFile,
   theme: ThemeChoice,
   parse: RenderSources['parse'],
-): Result<SourceFile, RenderEvidence> {
+): Result<SourceFile, RenderFailureSource> {
   const parsed = parse(source.source);
-  if (!parsed.ok) return parsed;
-  return mapped(themedText(source.source, parsed.value, theme), (text) => ({
-    ...source,
-    source: text,
-  }));
+  if (!parsed.ok) {
+    return parsed;
+  }
+  const themedText = writeTheme(source.source, parsed.value, theme);
+  if (!themedText.ok) {
+    return themedText;
+  }
+  return success({ ...source, source: themedText.value });
 }
 
 /**
- * The source text with its theme set. Fails with `collection-required` or
- * `collection-title-required`.
+ * Writes the theme into the collection's text: in place of its theme, or after its title when it
+ * has none. A patch isn't a whole collection, so it can't take a theme.
  */
-function themedText(
-  source: string,
+function writeTheme(
+  text: string,
   parsed: ParsedSource,
   theme: ThemeChoice,
 ): Result<string, RenderFault> {
-  if (parsed.kind !== 'canvas') return faulted({ code: 'collection-required' });
-  const field = parsed.declaration.fields.theme;
-  if (field === undefined) return inserted(source, theme, parsed.declaration.fields.title?.span);
-  return success(replaced(source, field.span, theme));
+  if (parsed.kind !== 'canvas') {
+    return collectionRequiredFailure();
+  }
+  const fields = parsed.declaration.fields;
+  if (fields.theme === undefined) {
+    return insertTheme(text, theme, fields.title?.span);
+  }
+  const replaced = replaceTheme(text, fields.theme.span, theme);
+  return success(replaced);
 }
 
-/** The theme field's value replaced by the quoted theme. */
-function replaced(
-  source: string,
-  span: Span,
+/** Puts the quoted theme in place of the theme field's value. */
+function replaceTheme(
+  text: string,
+  valueSpan: Span,
   theme: ThemeChoice,
 ): string {
-  return source.slice(0, span.start.offset) + JSON.stringify(theme) + source.slice(span.end.offset);
+  const before = text.slice(0, valueSpan.start.offset);
+  const after = text.slice(valueSpan.end.offset);
+  const quotedTheme = JSON.stringify(theme);
+  return before + quotedTheme + after;
 }
 
-/**
- * ` theme="…"` written right after the parsed title. Fails with `collection-title-required` when
- * the collection has no title.
- */
-function inserted(
-  source: string,
+/** Writes ` theme="…"` right after the collection's title. With no title, it can't. */
+function insertTheme(
+  text: string,
   theme: ThemeChoice,
-  title: Span | undefined,
+  titleSpan: Span | undefined,
 ): Result<string, RenderFault> {
-  if (title === undefined) return faulted({ code: 'collection-title-required' });
-  const offset = title.end.offset;
-  return success(
-    source.slice(0, offset) + ' theme=' + JSON.stringify(theme) + source.slice(offset),
-  );
+  if (titleSpan === undefined) {
+    return collectionTitleRequiredFailure();
+  }
+  const before = text.slice(0, titleSpan.end.offset);
+  const after = text.slice(titleSpan.end.offset);
+  const quotedTheme = JSON.stringify(theme);
+  const inserted = before + ' theme=' + quotedTheme + after;
+  return success(inserted);
+}
+
+/** Makes the mistake for a theme asked for on a patch, not a whole collection. */
+function collectionRequiredFailure(): Result<never, RenderFault> {
+  return renderFaultFailure({ code: 'collection-required' });
+}
+
+/** Makes the mistake for a theme asked for on a collection with no title. */
+function collectionTitleRequiredFailure(): Result<never, RenderFault> {
+  return renderFaultFailure({ code: 'collection-title-required' });
 }

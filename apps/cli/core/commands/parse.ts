@@ -1,172 +1,141 @@
 /*
- * `pnpm canvas` argv → ParsedCommand, checked in the base CLI's order: Node accepted the flags; no
- * read scope flag is repeated; `--help` or a known command word (a family word joins the next
- * word); the command's operand count; only flags the command table says the command reads. Then
- * `operands.ts` checks each value. Pure. Every failure comes before anything is read or sent: the
- * caller corrects the named argument and runs the command again.
+ * Why this file exists
+ *
+ * An agent uses the CLI by typing a line like this:
+ *
+ *   pnpm canvas read my-diagram --section intro
+ *
+ * Before the CLI can do anything, it has to work out what that line asks for: which command it is,
+ * what it acts on, and which options came with it. This file does that. It turns the typed line
+ * into one `ParsedCommand` the rest of the CLI can run. If something was typed wrong, it says what,
+ * so the agent can fix it and try again.
+ *
+ * It only looks at the words. It never opens a file or talks to the server.
+ *
+ * How to read the steps below: every step answers with a `Result` (see `contract/errors.ts`).
+ * `ok: true` means the step worked and `value` holds what it made. `ok: false` means it found a
+ * mistake. The mistakes themselves are made in `failures.ts`.
  */
-import type { ArgvReading, CanvasFlag, RawArguments } from '../../contract/records/arguments.js';
+import type { CanvasFlag, CommandLine, RawArguments } from '../../contract/records/arguments.js';
+import type { FilePath } from '../../contract/brands.js';
 import type { CommandName, ParsedCommand } from '../../contract/records/command.js';
-import type { LocalFailure, Result } from '../../contract/errors.js';
-import { failure, success } from '../../contract/errors.js';
-import { flagText } from './flags.js';
-import type { CommandDefaults, CommandFlags, CommandWords, TextFlag } from './flags.js';
-import { assembleCommand } from './operands.js';
-import { lintProfileRequired } from './profile-operands.js';
-import { commandRow, isAccepted, isCommandName, isFamilyWord, spokenName } from './table.js';
+import type { Result } from '../../contract/errors.js';
+import { success } from '../../contract/errors.js';
+import { checkAcceptedFlags } from './accepted-flags.js';
+import { assembleCommand } from './assembly.js';
+import type { AcceptedCommand, IdentifiedCommand, WellFormedArguments } from './command-stages.js';
+import { pickCommandWords } from './command-words.js';
+import {
+  malformedFlagFailure,
+  repeatedScopeFlagFailure,
+  unknownCommandFailure,
+} from './failures.js';
+import { collectTypedFlags } from './flags.js';
+import { checkOperandCount } from './operand-count.js';
+import { isCommandName } from './table.js';
 
-/** A placement rule: the message when the command may not take a flag it was given. */
-type PlacementRule = (name: CommandName, flags: CommandFlags) => string | undefined;
-
-/** What to type instead, after a flag Node refused. */
-const commonUsage =
-  'Use canvas describe | list | read ID | create FILE | patch FILE --revision N | preview FILE.';
-
-/**
- * The placement rules; the first broken rule is reported. Five flags keep the base CLI's order and
- * wording; any other flag a command does not read is checked last.
- */
-const placementRules: readonly PlacementRule[] = Object.freeze([
-  onlyWhereTaken(['profile'], '--profile is only valid with profile lint.'),
-  lintNeedsProfile,
-  onlyWhereTaken(
-    ['id', 'title'],
-    '--id and --title are only valid with profile scaffold or recipe admit.',
-  ),
-  scopeFlagsExclusive,
-  onlyWhereTaken(['section', 'object'], '--section and --object are only valid with read.'),
-  unreadFlag,
-]);
+/** The two flags that pick part of a collection to read. Each may be typed only once. */
+type ScopeFlag = 'section' | 'object';
 
 /**
- * The command `reading` names, with its checked fields. Fails with `invalid-arguments` (a flag
- * Node refused, a repeated --section or --object, a wrong operand count or a misplaced flag),
- * `invalid-command` (no such command), or a value failure from `assembleCommand`.
+ * Works out which command was typed, and checks it was typed correctly.
+ *
+ * It takes three steps. If a step finds a mistake, it stops there and returns that mistake.
+ * 1. Find the command. In `read my-diagram`, the command is `read`.
+ * 2. Check the words and flags fit that command. `read` needs one word after it (the collection
+ *    to read) and doesn't use `--out`.
+ * 3. Check each value, for example that `--revision` is a number, and fill in what was left out.
+ *    If `--workspace` wasn't typed, the command uses `defaultWorkspace`.
+ *
+ * The mistakes it can find: a flag it can't read, `--section` or `--object` typed twice, an
+ * unknown command, too many or too few words, a flag the command doesn't use, or a bad value.
  */
 export function parseCommand(
-  reading: ArgvReading<CanvasFlag>,
-  defaults: CommandDefaults,
+  commandLine: CommandLine,
+  defaultWorkspace: FilePath,
 ): Result<ParsedCommand> {
-  if (reading.kind === 'malformed') return malformedFlags();
-  const words = commandWords(reading.arguments);
-  if (!words.ok) return words;
-  return assembleCommand(words.value, defaults);
+  const identified = identifyCommand(commandLine);
+  if (!identified.ok) {
+    return identified;
+  }
+  const accepted = checkWordsAndFlags(identified.value);
+  if (!accepted.ok) {
+    return accepted;
+  }
+  return assembleCommand(accepted.value, defaultWorkspace);
 }
 
 /**
- * A repeated read scope flag first (Node would keep only the last value), then the command word.
- * Fails with `invalid-arguments` or `invalid-command`.
+ * Step 1: finds which command was typed.
+ *
+ * `--help` anywhere means the `help` command. Otherwise the first word is the command, and
+ * `theme`, `recipe` and `profile` join the word after them: `recipe admit` is one command.
+ *
+ * Stops at a flag it can't read, at `--section` or `--object` typed twice, or at a first word
+ * that isn't a command.
  */
-function commandWords(raw: RawArguments<CanvasFlag>): Result<CommandWords> {
-  if (raw.repeated.some(isScopeFlag))
-    return invalidArguments('Each read scope flag may be provided only once.');
-  const [word = '', ...operands] = spokenWords(raw);
-  if (!isCommandName(word))
-    return failure({
-      code: 'invalid-command',
-      message: 'Choose a supported canvas or profile command',
-    });
-  return placed(word, operands, flagText(raw.values));
-}
-
-/** `--help` stands for the `help` command and drops every word; a family word joins the next word. */
-function spokenWords(raw: RawArguments<CanvasFlag>): readonly string[] {
-  if (raw.values.get('help') === true) return ['help'];
-  const [first = '', second = '', ...rest] = raw.positionals;
-  if (!isFamilyWord(first)) return raw.positionals;
-  return [`${first}-${second}`, ...rest];
+function identifyCommand(commandLine: CommandLine): Result<IdentifiedCommand> {
+  const wellFormed = requireWellFormedArguments(commandLine);
+  if (!wellFormed.ok) {
+    return wellFormed;
+  }
+  const words = pickCommandWords(wellFormed.value);
+  const name = requireKnownCommand(words.commandWord);
+  if (!name.ok) {
+    return name;
+  }
+  const flags = collectTypedFlags(wellFormed.value.flagValues);
+  return success({ name: name.value, operandWords: words.operandWords, flags });
 }
 
 /**
- * Exactly the table's operand count, then every placement rule. Neither an operand nor a flag is
- * silently ignored. Fails with `invalid-arguments`.
+ * Step 2: checks the words and flags fit the command.
+ *
+ * First the number of words after the command (`checkOperandCount`), then that every flag is one
+ * the command uses (`checkAcceptedFlags`). Stops at the first that doesn't fit.
  */
-function placed(
-  name: CommandName,
-  operands: readonly string[],
-  flags: CommandFlags,
-): Result<CommandWords> {
-  const count = commandRow(name).operands;
-  if (operands.length !== count) return invalidArguments(`${name} requires ${count} operand(s)`);
-  const misplaced = placementRules.map((rule) => rule(name, flags)).find(isMessage);
-  if (misplaced !== undefined) return invalidArguments(misplaced);
-  return success({ name, operand: firstOperand(operands), flags });
-}
-
-/** The one operand, or `''` for a command that takes none. */
-function firstOperand(operands: readonly string[]): string {
-  return operands[0] ?? '';
-}
-
-/** A rule: any flag of `group` given to a command whose row does not read it fails with `message`. */
-function onlyWhereTaken(
-  group: readonly TextFlag[],
-  message: string,
-): PlacementRule {
-  return (name, flags) =>
-    group.some((flag) => isMisplaced(name, flag, flags)) ? message : undefined;
-}
-
-/** Whether `flag` is given to a command that does not read it. */
-function isMisplaced(
-  name: CommandName,
-  flag: TextFlag,
-  flags: CommandFlags,
-): boolean {
-  return flags[flag] !== undefined && !isAccepted(name, flag);
+function checkWordsAndFlags(identified: IdentifiedCommand): Result<AcceptedCommand> {
+  const counted = checkOperandCount(identified);
+  if (!counted.ok) {
+    return counted;
+  }
+  return checkAcceptedFlags(counted.value);
 }
 
 /**
- * The last rule: the first flag, in the order given, that the command does not read, as
- * `--X is not valid with <command>`.
+ * The words and flags, once every flag could be read and neither `--section` nor `--object` was
+ * typed twice. (Node would quietly keep only the last `--section`, so the agent could read a
+ * different part than they meant. Other flags may repeat; the last one wins.)
  */
-function unreadFlag(
-  name: CommandName,
-  flags: CommandFlags,
-): string | undefined {
-  const unread = Object.keys(flags).find((flag) => !isAccepted(name, flag));
-  if (unread === undefined) return undefined;
-  return `--${unread} is not valid with ${spokenName(name)}`;
+function requireWellFormedArguments(commandLine: CommandLine): Result<WellFormedArguments> {
+  if (commandLine.kind === 'malformed') {
+    return malformedFlagFailure();
+  }
+  if (hasRepeatedScopeFlag(commandLine.arguments)) {
+    return repeatedScopeFlagFailure();
+  }
+  return success(wellFormedArguments(commandLine.arguments));
 }
 
-/** `profile lint` needs --profile. Checked before the read scope flags, as the base CLI does. */
-function lintNeedsProfile(
-  name: CommandName,
-  flags: CommandFlags,
-): string | undefined {
-  if (name !== 'profile-lint' || flags.profile !== undefined) return undefined;
-  return lintProfileRequired;
+/** Whether `--section` or `--object` was typed more than once. */
+function hasRepeatedScopeFlag(rawArguments: RawArguments<CanvasFlag>): boolean {
+  return rawArguments.repeated.some(isScopeFlag);
 }
 
-/** At most one of --section and --object, whichever command is given them. */
-function scopeFlagsExclusive(
-  _name: CommandName,
-  flags: CommandFlags,
-): string | undefined {
-  if (flags.section === undefined || flags.object === undefined) return undefined;
-  return '--section and --object are mutually exclusive for read.';
+/** The words and flag values, without the list of repeated flags (only step 1 needed it). */
+function wellFormedArguments(rawArguments: RawArguments<CanvasFlag>): WellFormedArguments {
+  return { words: rawArguments.positionals, flagValues: rawArguments.values };
 }
 
-/** Whether the flag is --section or --object. */
-function isScopeFlag(flag: CanvasFlag): boolean {
+/** Whether the flag is `--section` or `--object`. */
+function isScopeFlag(flag: CanvasFlag): flag is ScopeFlag {
   return flag === 'section' || flag === 'object';
 }
 
-/** Whether a placement rule returned a message. */
-function isMessage(text: string | undefined): text is string {
-  return text !== undefined;
-}
-
-/** Node refused the argv: an unknown flag, a text flag with no value, or a value on a switch. */
-function malformedFlags(): Result<never, LocalFailure> {
-  return failure({
-    code: 'invalid-arguments',
-    message: 'Unknown or malformed CLI flag',
-    recovery: commonUsage,
-  });
-}
-
-/** A malformed or misplaced argument; nothing was read or sent. */
-function invalidArguments(message: string): Result<never, LocalFailure> {
-  return failure({ code: 'invalid-arguments', message });
+/** The command the first word names. Refuses a word that isn't a command, or no word at all. */
+function requireKnownCommand(firstWord: string | undefined): Result<CommandName> {
+  if (!isCommandName(firstWord)) {
+    return unknownCommandFailure();
+  }
+  return success(firstWord);
 }

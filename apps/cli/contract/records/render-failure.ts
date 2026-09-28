@@ -1,22 +1,30 @@
 /*
- * render:png's failure record: the evidence a failure can carry and the `render-failed` record
- * printed as JSON. Data only; the render's own faults are in render-fault.ts. The caller corrects
- * the named input or resource and runs render:png again.
+ * Why this file exists
+ *
+ * When render:png can't finish, it still prints one JSON record, so a script can read what went
+ * wrong. `--collection commerce` matches two shipped collections, so it prints `render-failed`
+ * with a `collection-selection` fault as the record's `source`.
+ *
+ * This file names that record and what its `source` may hold. It declares types only. The
+ * render's own faults are listed in `render-fault.ts`.
  */
 import type { CliFailure } from '../errors.js';
 import type { FailureSource } from './foreign.js';
 import type { RenderFault } from './render-fault.js';
 
 /**
- * What a failed render carries: the CLI's own fault, a CLI failure (resource reads), or Language,
- * Model, Assets, Templates (its theme grammar too), service or Export evidence kept whole.
+ * Why a render failed: one of render:png's own faults, a CLI mistake (such as a font it couldn't
+ * read), or another part's own failure, kept whole.
  */
-export type RenderEvidence = RenderFault | CliFailure | FailureSource;
+export type RenderFailureSource = RenderFault | CliFailure | FailureSource;
 
-/** The failure render:png prints. Stored collections are never changed by a render. */
+/** The failure render:png prints as JSON. A render never changes a saved collection. */
 export interface RenderFailure {
   readonly code: 'render-failed';
+  /** For people to read, such as "Headless render rejected". */
   readonly message: string;
+  /** What to do next. */
   readonly recovery: string;
-  readonly source: RenderEvidence;
+  /** Why it failed, kept whole. */
+  readonly source: RenderFailureSource;
 }

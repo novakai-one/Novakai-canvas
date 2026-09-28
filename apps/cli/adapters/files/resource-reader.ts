@@ -1,9 +1,13 @@
 /*
- * Confined, bounded reads of the fonts and images a source declares: the path stays inside the
- * source file's directory, the extension matches the declared kind, and at most 16 MiB is read.
- * Filesystem I/O; core decides pinned digests before calling it and adds the declaration's
- * `location` to a failure. Each failure is a value; the caller fixes that declaration or file and
- * runs the command again.
+ * Why this file exists
+ *
+ * A source can name a font or image next to it: `asset @logo image source="./assets/logo.png"`.
+ * Reading that file must not let a source reach anything else on the machine, such as
+ * `../../secrets` or a link that points outside its folder.
+ *
+ * This file reads such a file only from inside the source's folder, only when its extension fits
+ * what was declared (a font or an image), and at most 16 MiB. It never checks the bytes
+ * themselves; Assets does that later. Mistakes come back as values, never thrown.
  */
 import { open, realpath } from 'node:fs/promises';
 import type { FileHandle } from 'node:fs/promises';
@@ -19,11 +23,11 @@ import type { FilePath } from '../../contract/brands.js';
 const byteLimit = 16 * 1024 * 1024;
 
 /** A file extension the reader accepts, lowercase. */
-type Extension =
+type KnownExtension =
   '.png' | '.jpg' | '.jpeg' | '.webp' | '.svg' | '.ttf' | '.otf' | '.woff' | '.woff2';
 
 /** The media type each supported file extension declares; Assets checks the bytes later. */
-const media: Readonly<Record<Extension, SupportedMedia>> = Object.freeze({
+const extensionMedia: Readonly<Record<KnownExtension, SupportedMedia>> = Object.freeze({
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
@@ -35,167 +39,258 @@ const media: Readonly<Record<Extension, SupportedMedia>> = Object.freeze({
   '.woff2': 'font/woff2',
 });
 
-/** Files remain local preparation inputs; retry uses retained normalized bytes and never calls this reader. */
-export function createResourceReader(): ResourceReader {
-  return { read };
+/** The real paths, with every link followed, of the source file's folder and of the resource. */
+interface RealPaths {
+  readonly sourceFolder: string;
+  readonly resourcePath: string;
+}
+
+/** How far a read has got: the bytes read so far, and whether the last read found the end. */
+interface ReadProgress {
+  readonly byteCount: number;
+  readonly ended: boolean;
 }
 
 /**
- * The declared file's bytes. Fails with `absolute-path`, `path-escape`, `source-unavailable`,
- * `unsupported-media`, `resource-mismatch` or `resource-too-large`.
+ * Gives core its careful font and image file reader. A retry never uses it: it sends the bytes
+ * kept in the request journal instead.
  */
-async function read(
+export function createResourceReader(): ResourceReader {
+  return { read: readResource };
+}
+
+/** Reads a declared font or image, once its real path is known to stay in the source's folder. */
+async function readResource(
   file: FilePath,
   request: ResourceRequest,
 ): Promise<Result<LocalBytes, LocalFailure>> {
-  const path = await confined(file, request.source);
-  if (!path.ok) return path;
-  return readConfined(request, path.value);
+  const resourcePath = await confinePath(file, request.source);
+  if (!resourcePath.ok) {
+    return resourcePath;
+  }
+  return readConfinedResource(resourcePath.value, request);
 }
 
-/** A resolved location proceeds through typed media and bounded-byte admission. */
-async function readConfined(
+/** Checks the file's extension fits the declaration, then reads its bytes as base64 text. */
+async function readConfinedResource(
+  resourcePath: string,
   request: ResourceRequest,
-  path: string,
 ): Promise<Result<LocalBytes, LocalFailure>> {
-  const type = mediaType(path, request);
-  if (!type.ok) return type;
-  const content = await bytes(path);
-  if (!content.ok) return content;
-  return success({ base64: content.value.toString('base64'), mediaType: type.value });
+  const mediaType = checkMediaType(resourcePath, request.kind);
+  if (!mediaType.ok) {
+    return mediaType;
+  }
+  const bytes = await readResourceBytes(resourcePath);
+  if (!bytes.ok) {
+    return bytes;
+  }
+  const base64 = bytes.value.toString('base64');
+  return success({ base64, mediaType: mediaType.value });
 }
 
-/** A path is admitted only beneath the real source directory; absolute and symlink escapes are explicit outcomes. */
-async function confined(
+/** Finds the resource's real path and checks it stays inside the source file's folder. */
+async function confinePath(
   file: FilePath,
   source: string,
 ): Promise<Result<string, LocalFailure>> {
-  if (isAbsolute(source))
-    return failure({ code: 'absolute-path', message: 'Absolute resource paths are forbidden' });
+  if (isAbsolute(source)) {
+    return absolutePathFailure();
+  }
+  const realPaths = await findRealPaths(file, source);
+  if (!realPaths.ok) {
+    return realPaths;
+  }
+  return checkInsideSourceFolder(realPaths.value);
+}
+
+/** Finds the real paths of the source file's folder and of the resource, following every link. */
+async function findRealPaths(
+  file: FilePath,
+  source: string,
+): Promise<Result<RealPaths, LocalFailure>> {
   try {
-    const root = await realpath(dirname(file));
-    const path = await realpath(resolve(root, source));
-    return inside(root, path);
+    const sourceFolder = await realpath(dirname(file));
+    const resourcePath = await realpath(resolve(sourceFolder, source));
+    return success({ sourceFolder, resourcePath });
   } catch {
-    return failure({ code: 'source-unavailable', message: 'Resource path is unavailable' });
+    return sourceUnavailableFailure('Resource path is unavailable');
   }
 }
 
-/** Prefixes such as `..media` are ordinary child names; only an exact parent segment escapes. */
-function inside(
-  root: string,
-  path: string,
-): Result<string, LocalFailure> {
-  const remainder = relative(root, path);
-  if (remainder === '..' || remainder.startsWith(`..${sep}`) || isAbsolute(remainder))
-    return failure({ code: 'path-escape', message: 'Resource escapes its source directory' });
-  return success(path);
+/** Checks the resource sits inside the source file's folder, and gives its real path. */
+function checkInsideSourceFolder(realPaths: RealPaths): Result<string, LocalFailure> {
+  if (leavesSourceFolder(realPaths)) {
+    return pathEscapeFailure();
+  }
+  return success(realPaths.resourcePath);
 }
 
-/** Declared kind and extension must agree; Assets subsequently checks actual MIME and safe normalized content. */
-function mediaType(
-  path: string,
-  request: ResourceRequest,
+/** Whether the resource lies outside the folder. A child named `..media` is still inside. */
+function leavesSourceFolder(realPaths: RealPaths): boolean {
+  const pathFromFolder = relative(realPaths.sourceFolder, realPaths.resourcePath);
+  const climbsOut = pathFromFolder === '..' || pathFromFolder.startsWith(`..${sep}`);
+  const onAnotherDrive = isAbsolute(pathFromFolder);
+  return climbsOut || onAnotherDrive;
+}
+
+/** Works out the media type the file's extension names, and checks it fits the declared kind. */
+function checkMediaType(
+  resourcePath: string,
+  kind: ResourceRequest['kind'],
 ): Result<SupportedMedia, LocalFailure> {
-  const extension = extname(path).toLowerCase();
-  if (!isExtension(extension))
-    return failure({ code: 'unsupported-media', message: 'Resource extension is unsupported' });
-  const type = media[extension];
-  if (!type.startsWith(expectedMedia(request.kind)))
-    return failure({
-      code: 'resource-mismatch',
-      message: 'Resource kind and media type do not match',
-    });
-  return success(type);
+  const extension = extname(resourcePath).toLowerCase();
+  if (!isKnownExtension(extension)) {
+    return unsupportedMediaFailure();
+  }
+  const mediaType = extensionMedia[extension];
+  const expectedPrefix = expectedMediaPrefix(kind);
+  if (!mediaType.startsWith(expectedPrefix)) {
+    return resourceMismatchFailure();
+  }
+  return success(mediaType);
 }
 
 /** Whether `text` is a key of the media table itself, never of its prototype. */
-function isExtension(text: string): text is Extension {
-  return Object.hasOwn(media, text);
+function isKnownExtension(text: string): text is KnownExtension {
+  return Object.hasOwn(extensionMedia, text);
 }
 
-/** Font declarations select font media; other resource declarations select images. */
-function expectedMedia(kind: ResourceRequest['kind']): string {
+/** Gives the media type a declaration expects: `font/` for a font, `image/` for anything else. */
+function expectedMediaPrefix(kind: ResourceRequest['kind']): string {
   return kind === 'font' ? 'font/' : 'image/';
 }
 
-/** Read and cleanup preserve the first read failure; cleanup is reported when reading succeeds. */
-async function bytes(path: string): Promise<Result<Buffer, LocalFailure>> {
-  const opened = await openFile(path);
-  if (!opened.ok) return opened;
-  return readOpen(opened.value);
+/** Opens the file, reads at most 16 MiB of it, and closes it again. */
+async function readResourceBytes(resourcePath: string): Promise<Result<Buffer, LocalFailure>> {
+  const openedFile = await openResource(resourcePath);
+  if (!openedFile.ok) {
+    return openedFile;
+  }
+  return readThenClose(openedFile.value);
 }
 
-/** Open errors remain typed separately from size and media-policy failures. */
-async function openFile(path: string): Promise<Result<FileHandle, LocalFailure>> {
+/** Opens the file for reading. */
+async function openResource(resourcePath: string): Promise<Result<FileHandle, LocalFailure>> {
   try {
-    return success(await open(path, 'r'));
+    const openedFile = await open(resourcePath, 'r');
+    return success(openedFile);
   } catch {
-    return failure({ code: 'source-unavailable', message: 'Resource could not be opened' });
+    return sourceUnavailableFailure('Resource could not be opened');
   }
 }
 
-/** An opened handle is always closed; the first read failure wins over a simultaneous cleanup failure. */
-async function readOpen(handle: FileHandle): Promise<Result<Buffer, LocalFailure>> {
-  const content = await readBounded(handle);
-  const closed = await closeFile(handle);
-  if (!content.ok) return content;
-  if (!closed.ok) return closed;
-  return content;
+/** Reads the open file, then always closes it. A read mistake is reported before a close one. */
+async function readThenClose(openedFile: FileHandle): Promise<Result<Buffer, LocalFailure>> {
+  const bytes = await readWithinLimit(openedFile);
+  const closed = await closeResource(openedFile);
+  if (!bytes.ok) {
+    return bytes;
+  }
+  if (!closed.ok) {
+    return closed;
+  }
+  return bytes;
 }
 
-/** Read through one fixed limit-plus-one buffer until EOF or the first over-limit byte. */
-async function readBounded(handle: FileHandle): Promise<Result<Buffer, LocalFailure>> {
+/** Reads the file into a buffer one byte over the limit, and refuses a file that fills it. */
+async function readWithinLimit(openedFile: FileHandle): Promise<Result<Buffer, LocalFailure>> {
   const buffer = Buffer.alloc(byteLimit + 1);
-  const filled = await fill(handle, buffer);
-  if (!filled.ok) return filled;
-  if (filled.value > byteLimit)
-    return failure({ code: 'resource-too-large', message: 'Resource exceeds 16 MiB' });
-  return success(buffer.subarray(0, filled.value));
+  const byteCount = await fillBuffer(openedFile, buffer);
+  if (!byteCount.ok) {
+    return byteCount;
+  }
+  if (byteCount.value > byteLimit) {
+    return resourceTooLargeFailure();
+  }
+  const bytes = buffer.subarray(0, byteCount.value);
+  return success(bytes);
 }
 
-/** Native read failures become explicit outcomes without changing the fixed allocation bound. */
-async function fill(
-  handle: FileHandle,
+/** Reads the file into the buffer until it ends or the buffer is full, and gives the byte count. */
+async function fillBuffer(
+  openedFile: FileHandle,
   buffer: Buffer,
 ): Promise<Result<number, LocalFailure>> {
-  let progress = { offset: 0, eof: false };
   try {
-    while (!complete(progress, buffer.length))
-      progress = await nextChunk(handle, buffer, progress.offset);
+    const byteCount = await readUntilEndOrFull(openedFile, buffer);
+    return success(byteCount);
   } catch {
-    return failure({ code: 'source-unavailable', message: 'Resource bytes could not be read' });
+    return sourceUnavailableFailure('Resource bytes could not be read');
   }
-  return success(progress.offset);
 }
 
-/** One native read advances from the prior offset; zero bytes is the only EOF signal. */
-async function nextChunk(
-  handle: FileHandle,
+/** Reads chunk after chunk into the buffer, and gives how many bytes it holds. May throw. */
+async function readUntilEndOrFull(
+  openedFile: FileHandle,
   buffer: Buffer,
-  offset: number,
-): Promise<{ readonly offset: number; readonly eof: boolean }> {
-  const result = await handle.read(buffer, offset, buffer.length - offset, offset);
-  return { offset: offset + result.bytesRead, eof: result.bytesRead === 0 };
+): Promise<number> {
+  let progress: ReadProgress = { byteCount: 0, ended: false };
+  while (shouldReadMore(progress, buffer.length)) {
+    progress = await readNextChunk(openedFile, buffer, progress.byteCount);
+  }
+  return progress.byteCount;
 }
 
-/** Capacity means the explicit over-limit byte was observed; EOF means the complete file was observed. */
-function complete(
-  progress: { readonly offset: number; readonly eof: boolean },
+/** Whether to read again: the last read didn't find the end, and the buffer still has room. */
+function shouldReadMore(
+  progress: ReadProgress,
   capacity: number,
 ): boolean {
-  return progress.eof || progress.offset === capacity;
+  return !progress.ended && progress.byteCount < capacity;
 }
 
-/** Closing is a typed cleanup outcome so a successful read cannot conceal handle uncertainty. */
-async function closeFile(handle: FileHandle): Promise<Result<void, LocalFailure>> {
+/** Reads the next chunk into the buffer at `offset`. A read that gives no bytes found the end. */
+async function readNextChunk(
+  openedFile: FileHandle,
+  buffer: Buffer,
+  offset: number,
+): Promise<ReadProgress> {
+  const room = buffer.length - offset;
+  const chunk = await openedFile.read(buffer, offset, room, offset);
+  const byteCount = offset + chunk.bytesRead;
+  const ended = chunk.bytesRead === 0;
+  return { byteCount, ended };
+}
+
+/** Closes the file, reporting a close that fails, so a good read can't hide it. */
+async function closeResource(openedFile: FileHandle): Promise<Result<void, LocalFailure>> {
   try {
-    await handle.close();
+    await openedFile.close();
     return success(undefined);
   } catch {
-    return failure({
-      code: 'source-unavailable',
-      message: 'Resource handle could not be closed safely',
-    });
+    return sourceUnavailableFailure('Resource handle could not be closed safely');
   }
+}
+
+/** Makes the mistake for a resource path that starts at the root of the disk (`absolute-path`). */
+function absolutePathFailure(): Result<never, LocalFailure> {
+  return failure({ code: 'absolute-path', message: 'Absolute resource paths are forbidden' });
+}
+
+/** Makes the mistake for a resource that can't be found, opened, read or closed. */
+function sourceUnavailableFailure(message: string): Result<never, LocalFailure> {
+  return failure({ code: 'source-unavailable', message });
+}
+
+/** Makes the mistake for a resource outside the source file's folder (`path-escape`). */
+function pathEscapeFailure(): Result<never, LocalFailure> {
+  return failure({ code: 'path-escape', message: 'Resource escapes its source directory' });
+}
+
+/** Makes the mistake for an extension that isn't a known font or image (`unsupported-media`). */
+function unsupportedMediaFailure(): Result<never, LocalFailure> {
+  return failure({ code: 'unsupported-media', message: 'Resource extension is unsupported' });
+}
+
+/** Makes the mistake for a font declared with an image file, or the reverse. */
+function resourceMismatchFailure(): Result<never, LocalFailure> {
+  return failure({
+    code: 'resource-mismatch',
+    message: 'Resource kind and media type do not match',
+  });
+}
+
+/** Makes the mistake for a resource file over 16 MiB (`resource-too-large`). */
+function resourceTooLargeFailure(): Result<never, LocalFailure> {
+  return failure({ code: 'resource-too-large', message: 'Resource exceeds 16 MiB' });
 }

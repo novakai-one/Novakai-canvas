@@ -2,7 +2,7 @@
  * Appendix sections read from their IDs: `@flow-51` is a flow appendix numbered 51. Pure. Owns the
  * `Appendix` type. Its own file because two rule files read it: sections/appendix-sequence.ts
  * (numbering, mode, order) and appendices.ts (content). The ID shape comes from the descriptor's
- * appendix rule, the same place its `idPattern` text is built from.
+ * appendix rule, the same place the appendix ID prose is built from.
  */
 import type { SectionId } from '../../../contract/brands.js';
 import type { Mode } from '../../../contract/ports/model.js';

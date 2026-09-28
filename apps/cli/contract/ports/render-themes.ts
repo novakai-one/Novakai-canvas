@@ -1,31 +1,36 @@
 /*
- * The render environment's theme rules: the installation's shipped presets, and admitting one
- * `.theme` file's theme over its staged fonts. Declaration only; adapters/render/themes.ts
- * implements it. Admission grows a catalog value; nothing stored is changed. Every failure is the
- * owner's evidence, returned as a value.
+ * Why this file exists
+ *
+ * A render can draw with a theme that isn't shipped: `--theme-file my.theme`. That theme has to be
+ * checked and added to the themes the render knows (the catalog), with its fonts, before it can be
+ * used. Adding it ("admitting" it) changes only this render's catalog, never the saved workspace.
+ *
+ * This file names the shipped catalog and that one step. `adapters/render/themes.ts` asks the
+ * service and Templates.
  */
-import type { RenderEvidence } from '../records/render-failure.js';
+import type { RenderFailureSource } from '../records/render-failure.js';
 import type { Catalog, FontRole, ThemeAdmission } from '../records/foreign.js';
 import type { AssetDigest } from '../brands.js';
 import type { Result } from '../errors.js';
 
-/** A theme font as the theme admission binds it: its role and the Assets digest of its bytes. */
-export interface FontBinding {
+/** One of a theme's fonts: its role and the digest of its stored bytes. */
+export interface ThemeFont {
+  /** The font's role, such as `body` or `mono`. Templates and the service call it `alias`. */
   readonly alias: FontRole;
   readonly digest: AssetDigest;
 }
 
-/** The installation's catalog and theme admission for one render. */
+/** The themes and recipes a render knows, and how it adds one more theme. */
 export interface RenderThemes {
-  /** The installation's shipped presets, before any `.theme` file is admitted. */
+  /** The shipped themes and recipes, before any `--theme-file` is added. */
   readonly catalog: Catalog;
   /**
-   * `catalog` with `theme` admitted over its staged `fonts`. Fails with the service's theme
-   * preparation or Templates' admission failure.
+   * Adds `theme`, with its stored `fonts`, to `catalog`, and gives back the bigger catalog. Fails
+   * when the service or Templates refuses the theme.
    */
   admit(
     catalog: Catalog,
     theme: ThemeAdmission,
-    fonts: readonly FontBinding[],
-  ): Result<Catalog, RenderEvidence>;
+    fonts: readonly ThemeFont[],
+  ): Result<Catalog, RenderFailureSource>;
 }

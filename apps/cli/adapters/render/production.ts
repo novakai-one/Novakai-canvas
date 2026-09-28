@@ -1,9 +1,13 @@
 /*
- * The output port's `produce` and `inspect`: the service's drawing of one collection for the
- * headless render, and the service's inspection report of that drawing. A render job over the
- * collection, the admitted catalog and an empty headless library, run by the service's diagram
- * producer. Reads only the layout engine's wasm file; nothing stored is changed. Failures are
- * values; core/render/render.ts owns recovery.
+ * Why this file exists
+ *
+ * Before a section can be drawn, its collection must be laid out: where each box and wire goes.
+ * The service does that for the web app, and a render reuses the same code with no server. It
+ * needs a render job: the collection, the themes and recipes the render knows, and an empty
+ * library, since a render has no saved workspace.
+ *
+ * This file makes that job and has the service lay it out. It reads and writes no files itself;
+ * the service's tools load the layout engine's WebAssembly file. Mistakes come back as values.
  */
 import {
   validateLibrarySnapshot,
@@ -12,67 +16,75 @@ import {
 } from '@novakai/canvas-library';
 import type { RenderingJob } from '@novakai/canvas-service';
 import type { RenderOutput } from '../../contract/ports/render-output.js';
-import type { RenderEvidence } from '../../contract/records/render-failure.js';
+import type { RenderFailureSource } from '../../contract/records/render-failure.js';
 import type {
   Catalog,
   Collection,
-  HeadlessBindings,
+  HeadlessTools,
   RenderDocument,
 } from '../../contract/records/foreign.js';
 import type { Result } from '../../contract/errors.js';
 
-/**
- * The service's render job factory, bound to one render's capability values, its producer and its
- * inspection of a produced document.
- */
-export interface Production {
-  readonly jobs: ReturnType<HeadlessBindings['createRenderJobs']>;
-  readonly produceDiagram: HeadlessBindings['produceDiagram'];
+/** The service's layout code, already loaded with the render's assets, themes and layout engine. */
+export interface ServiceLayoutTools {
+  /** The service's render jobs; `renderJobs.create` makes the job for one collection. */
+  readonly renderJobs: ReturnType<HeadlessTools['createRenderJobs']>;
+  /** Lays a render job out as a document. */
+  readonly produceDiagram: HeadlessTools['produceDiagram'];
+  /** The service's report on a laid-out document, such as how many wires cross. */
   readonly inspectDocument: RenderOutput['inspect'];
 }
 
+/** A render lays out from scratch: there is no earlier layout to keep the boxes steady against. */
+const noPreviousScene = null;
+
+/** The ID every headless render job gets. */
+const headlessJobId = 'headless';
+
 /**
- * The output port's drawing and inspection over `production`. Builds nothing and cannot fail;
- * `produce` fails as {@link producedDiagram}, `inspect` cannot fail.
+ * Gives the render its `layOut` and `inspect` steps, using the service's `tools`. `layOut` fails
+ * if the empty library or the job can't be made, or as the service's layout does.
  */
-export function createProduction(
-  production: Production,
-): Pick<RenderOutput, 'produce' | 'inspect'> {
+export function createServiceLayout(
+  tools: ServiceLayoutTools,
+): Pick<RenderOutput, 'layOut' | 'inspect'> {
   return {
-    produce: (collection, catalog) => producedDiagram(production, collection, catalog),
-    inspect: production.inspectDocument,
+    layOut: (collection, catalog) => layOutCollection(tools, collection, catalog),
+    inspect: tools.inspectDocument,
   };
 }
 
-/**
- * The service's document of `collection`, drawn over `catalog`. Fails with Library's check of
- * the headless library, the render job's failure or the producer's. Nothing cancels a headless
- * render.
- */
-async function producedDiagram(
-  production: Production,
+/** Makes the render job for the collection, then has the service lay it out as a document. */
+async function layOutCollection(
+  tools: ServiceLayoutTools,
   collection: Collection,
   catalog: Catalog,
-): Promise<Result<RenderDocument, RenderEvidence>> {
-  const job = renderJob(production.jobs, collection, catalog);
-  if (!job.ok) return job;
-  return production.produceDiagram(job.value, new AbortController().signal);
+): Promise<Result<RenderDocument, RenderFailureSource>> {
+  const job = makeRenderJob(tools.renderJobs, collection, catalog);
+  if (!job.ok) {
+    return job;
+  }
+  // Nothing cancels a headless render, so the signal is never aborted.
+  const neverCancelled = new AbortController().signal;
+  return tools.produceDiagram(job.value, neverCancelled);
 }
 
-/** The job over one collection, the catalog and the headless library. Fails as either does. */
-function renderJob(
-  jobs: Production['jobs'],
+/** Makes the job over the one collection, the render's catalog and an empty library. */
+function makeRenderJob(
+  renderJobs: ServiceLayoutTools['renderJobs'],
   collection: Collection,
   catalog: Catalog,
-): Result<RenderingJob, RenderEvidence> {
-  const library = headlessLibrary();
-  if (!library.ok) return library;
+): Result<RenderingJob, RenderFailureSource> {
+  const library = makeEmptyLibrary();
+  if (!library.ok) {
+    return library;
+  }
   const view = { collections: [collection], presets: catalog, library: library.value };
-  return jobs.create(collection, view, 'headless');
+  return renderJobs.create(collection, view, noPreviousScene, headlessJobId);
 }
 
-/** The empty library snapshot headless renders run against. Fails with Library's diagnostics. */
-function headlessLibrary(): LibraryResult<LibrarySnapshot> {
+/** Makes the empty library a headless render runs against, checked by Library. */
+function makeEmptyLibrary(): LibraryResult<LibrarySnapshot> {
   return validateLibrarySnapshot({
     organisation: { schemaVersion: 1, id: 'headless', revision: 0, folders: [], entries: [] },
     collections: [],

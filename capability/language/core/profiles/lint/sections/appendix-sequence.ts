@@ -5,7 +5,7 @@
  * returned.
  */
 import type { ProfileFinding } from '../../../../contract/records/profiles.js';
-import { buildSpecSlots } from '../../build-spec/descriptor.js';
+import { appendixIdForms, buildSpecAppendix, buildSpecSlots } from '../../build-spec/descriptor.js';
 import { collectAppendices, type Appendix } from '../appendix-ids.js';
 import {
   order,
@@ -34,7 +34,7 @@ export function lintAppendixShape(indexed: DeclarationIndex): readonly ProfileFi
   ];
 }
 
-/** At least one appendix section is required. */
+/** At least one appendix section is required; the message lists the rule's appendix ID forms. */
 function appendixPresenceFinding(
   count: number,
   declaration: Declaration,
@@ -44,7 +44,7 @@ function appendixPresenceFinding(
     findingAt(declaration, {
       code: 'missing-appendix',
       path: 'appendices',
-      message: 'At least one @flow-5N, @sequence-5N or @state-5N appendix is required.',
+      message: `At least one ${appendixIdForms(buildSpecAppendix)} appendix is required.`,
     }),
   ];
 }

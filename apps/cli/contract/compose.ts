@@ -1,82 +1,101 @@
 /*
- * Composition root: reads the arguments, then runs the parsed command's family on real
- * infrastructure wired in `compose/`: service commands in `service.ts`, profile commands in
- * `profiles.ts`, the headless render in `render.ts` (imported only when a render runs). Not pure:
- * reads the argv. Failures are returned as values; `cli/canvas.ts` and `cli/render.ts` print them
- * and set the exit code. Recovery after a sent request is `receipt` then `retry`; a render changes
- * nothing.
+ * Why this file exists
+ *
+ * Both programs start with nothing but the typed words. `pnpm canvas list` has to be read,
+ * checked, and then run with real parts: files on disk and a connection to the service.
+ * `pnpm render:png` is read and checked the same way, then run with files and the PNG engine.
+ *
+ * This file does that for both: it reads the words, lets core check them, and runs the command
+ * with the real parts that `compose/` builds. Every mistake comes back as a value, never thrown;
+ * `cli/canvas.ts` and `cli/render.ts` print it.
  */
 import { readArguments } from '../adapters/argv/node-args.js';
-import { parseCommand, parseRenderChoice, renderCollection, usage } from './api.js';
+import { helpText, parseCommand, parseRenderChoice, renderCollection } from './api.js';
 import { canvasFlags, renderFlags } from './records/arguments.js';
 import type { ParsedCommand } from './records/command.js';
 import type { RenderChoice, RenderReport, RenderRequest } from './records/render.js';
 import type { RenderFailure } from './records/render-failure.js';
-import { filePath } from './brands.js';
-import {
-  failure,
-  success,
-  type CliFailure,
-  type FailureInput,
-  type LocalFailure,
-  type Result,
-} from './errors.js';
+import { filePath, type FilePath } from './brands.js';
+import { failure, success, type CliFailure, type LocalFailure, type Result } from './errors.js';
 import { runProfile } from './compose/profiles.js';
 import { runService } from './compose/service.js';
 
 /**
- * `pnpm canvas`: reads and parses the argv, then runs the command on real infrastructure. Fails as
- * the command does, or with `cli-unavailable` when reading, parsing or running the command throws
- * (the one boundary catch). Never rejects.
+ * Runs one `pnpm canvas` command, from the typed words to the text to print.
+ *
+ * `defaultWorkspace` is the folder used when `--workspace` isn't typed, as plain text. Fails as
+ * the command does, or with `cli-unavailable` if `defaultWorkspace` is empty text or a step
+ * throws. The throw is caught here and never passed on.
  */
-export async function runCli(
-  args: readonly string[],
+export async function runCanvas(
+  argv: readonly string[],
   defaultWorkspace: string,
 ): Promise<Result<string>> {
   try {
-    return await parsedRun(args, defaultWorkspace);
+    return await parseAndRunCommand(argv, defaultWorkspace);
   } catch {
-    return failure({
-      code: 'cli-unavailable',
-      message: 'CLI could not complete',
-      recovery: 'Retain the request ID and inspect its receipt before retrying.',
-    });
+    return cliUnavailableFailure();
   }
 }
 
 /**
- * `pnpm render:png`: Node reads the argv with every `--` dropped (pnpm forwards it), core's render
- * grammar checks it, then one read-only render runs below the repo `root`. Fails with
- * `invalid-arguments` before anything is read or made, `render-unavailable` when the render cannot
- * start, or `render-failed` as core's render reports it. Never rejects.
+ * Runs one `pnpm render:png` render, from the typed words to the report to print.
+ *
+ * `repoRoot` is the repo folder the shipped files are in, as plain text. Fails with
+ * `invalid-arguments` before anything is read, `render-unavailable` if the render can't start (or
+ * `repoRoot` is empty text), or `render-failed`. Never throws or changes a saved collection.
  */
 export async function runRender(
-  args: readonly string[],
-  root: string,
+  argv: readonly string[],
+  repoRoot: string,
 ): Promise<Result<RenderReport, RenderFailure | CliFailure>> {
-  const choice = parseRenderChoice(readArguments(args.filter(isNotSeparator), renderFlags));
-  if (!choice.ok) return choice;
-  return renderBelow(choice.value, root);
-}
-
-/** Node reads the argv; core's grammar checks every word and value; then the command runs. */
-function parsedRun(
-  args: readonly string[],
-  defaultWorkspace: string,
-): Promise<Result<string>> {
-  const parsed = parseCommand(readArguments(args, canvasFlags), { workspace: defaultWorkspace });
-  if (!parsed.ok) return Promise.resolve(parsed);
-  return dispatch(parsed.value);
+  const words = withoutSeparators(argv);
+  const renderLine = readArguments(words, renderFlags);
+  const choice = parseRenderChoice(renderLine);
+  if (!choice.ok) {
+    return choice;
+  }
+  return renderInRepo(choice.value, repoRoot);
 }
 
 /**
- * Help needs no infrastructure; profile commands bind local ports; service commands bind their
- * real runtime. Fails as the family's run does.
+ * Checks the default workspace folder, then the typed words, then runs the command they name.
+ * Fails with `cli-unavailable` for an empty default workspace, with the mistake `parseCommand`
+ * finds, or as the command does.
  */
-function dispatch(parsed: ParsedCommand): Promise<Result<string>> {
+async function parseAndRunCommand(
+  argv: readonly string[],
+  defaultWorkspace: string,
+): Promise<Result<string>> {
+  const workspace = checkDefaultWorkspace(defaultWorkspace);
+  if (!workspace.ok) {
+    return workspace;
+  }
+  const commandLine = readArguments(argv, canvasFlags);
+  const parsed = parseCommand(commandLine, workspace.value);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return runParsedCommand(parsed.value);
+}
+
+/** Checks the default workspace folder is a path. Fails with `cli-unavailable` when it is empty. */
+function checkDefaultWorkspace(defaultWorkspace: string): Result<FilePath> {
+  const workspace = filePath.safeParse(defaultWorkspace);
+  if (!workspace.success) {
+    return cliUnavailableFailure();
+  }
+  return success(workspace.data);
+}
+
+/**
+ * Gives back the help text, or runs the profile or service command with its real parts. Fails as
+ * that command does.
+ */
+async function runParsedCommand(parsed: ParsedCommand): Promise<Result<string>> {
   switch (parsed.kind) {
     case 'help':
-      return Promise.resolve(success(usage));
+      return success(helpText);
     case 'profile':
       return runProfile(parsed.command);
     case 'service':
@@ -84,39 +103,68 @@ function dispatch(parsed: ParsedCommand): Promise<Result<string>> {
   }
 }
 
-/** Why a render could not start. */
-const renderUnavailable: FailureInput = Object.freeze({
-  code: 'render-unavailable',
-  message: 'Headless rendering could not initialize',
-  recovery: 'Restore local resources and retry.',
-});
-
-/** The render below the repo `root`. Fails with `render-unavailable` when `root` is empty. */
-function renderBelow(
+/** Draws the chosen collection, with the shipped files found below `repoRoot`. */
+async function renderInRepo(
   choice: RenderChoice,
-  root: string,
+  repoRoot: string,
 ): Promise<Result<RenderReport, RenderFailure | LocalFailure>> {
-  const repo = filePath.safeParse(root);
-  if (!repo.success) return Promise.resolve(failure(renderUnavailable));
-  return boundRender({ ...choice, root: repo.data });
+  const root = checkRepoRoot(repoRoot);
+  if (!root.ok) {
+    return root;
+  }
+  const request: RenderRequest = { ...choice, root: root.value };
+  return renderWithRealParts(request);
+}
+
+/** Checks the repo folder is a path. Fails with `render-unavailable` when it is empty. */
+function checkRepoRoot(repoRoot: string): Result<FilePath, LocalFailure> {
+  const root = filePath.safeParse(repoRoot);
+  if (!root.success) {
+    return renderUnavailableFailure();
+  }
+  return success(root.data);
 }
 
 /**
- * Binds the render's ports, then runs core's render. The one boundary catch: a render module or
- * the service's render adapters that cannot be imported → `render-unavailable`.
+ * Builds the render's real parts, then draws. Any throw on the way, such as drawing code that
+ * can't be loaded, becomes `render-unavailable`.
  */
-async function boundRender(
+async function renderWithRealParts(
   request: RenderRequest,
 ): Promise<Result<RenderReport, RenderFailure | LocalFailure>> {
   try {
-    const wiring = await import('./compose/render.js');
-    return await renderCollection(request, await wiring.renderPorts(request));
+    const renderModule = await import('./compose/render.js');
+    const ports = await renderModule.createRenderPorts(request);
+    return await renderCollection(request, ports);
   } catch {
-    return failure(renderUnavailable);
+    return renderUnavailableFailure();
   }
 }
 
-/** Whether the argv word is anything but pnpm's `--` separator. */
-function isNotSeparator(arg: string): boolean {
-  return arg !== '--';
+/** Gives the typed words without pnpm's `--` separator. */
+function withoutSeparators(argv: readonly string[]): readonly string[] {
+  return argv.filter(isNotPnpmSeparator);
+}
+
+/** Whether the typed word is anything but pnpm's `--` separator. */
+function isNotPnpmSeparator(word: string): boolean {
+  return word !== '--';
+}
+
+/** Makes the failure for a command that couldn't finish, or had no workspace (`cli-unavailable`). */
+function cliUnavailableFailure(): Result<never, LocalFailure> {
+  return failure({
+    code: 'cli-unavailable',
+    message: 'CLI could not complete',
+    recovery: 'Retain the request ID and inspect its receipt before retrying.',
+  });
+}
+
+/** Makes the failure for a render that couldn't start (`render-unavailable`). */
+function renderUnavailableFailure(): Result<never, LocalFailure> {
+  return failure({
+    code: 'render-unavailable',
+    message: 'Headless rendering could not initialize',
+    recovery: 'Restore local resources and retry.',
+  });
 }

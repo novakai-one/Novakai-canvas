@@ -1,194 +1,210 @@
 /*
- * The `pnpm canvas` command table: one frozen row per command with its operand count, the flags
- * it reads and its `--help` lines. Pure data plus lookups. The grammar (`parse.ts`) and the help
- * text (`help.ts`) read it, so a command's words, operands, flags and usage live in one place.
+ * Why this file exists
+ *
+ * Several parts of the CLI need the same facts about each command. Parsing needs to know that
+ * `read` accepts `--section`. `--help` needs the line that shows how to type `read`.
+ *
+ * This file keeps one row per command, so those facts are written once and can't drift apart. It
+ * holds data and simple lookups only, and nothing can change a row while the CLI runs.
  */
 import type { CommandName } from '../../contract/records/command.js';
 import type { TextFlag } from './flags.js';
 
-/** A word that joins the next word into one command name: `recipe admit` → `recipe-admit`. */
-export type FamilyWord = 'theme' | 'recipe' | 'profile';
+/**
+ * A word that starts a two-word command. `recipe` starts `recipe admit` and `recipe instantiate`,
+ * which the CLI names `recipe-admit` and `recipe-instantiate`.
+ */
+export type CommandGroup = 'theme' | 'recipe' | 'profile';
 
-/** One command's grammar and help. */
+/** A command typed with no word after it: `help`, `describe` or `list`. */
+export type NoOperandCommand = 'help' | 'describe' | 'list';
+
+/**
+ * A command typed with one word after it: a collection ID (`read my-diagram`), a file, a request
+ * ID, a profile, or a recipe pin (the exact recipe, such as `er@1.0.0#sha256:DIGEST`).
+ */
+export type OneOperandCommand = Exclude<CommandName, NoOperandCommand>;
+
+/** How many words a command takes after it: 0 (`list`) or 1 (`read my-diagram`). */
+export type OperandCount = 0 | 1;
+
+/**
+ * One command's row: the flags it accepts, and its lines in `--help`. The table keys each row by
+ * its command's name, so the row itself holds no name.
+ */
 export interface CommandRow {
-  /** Operands after the command words. */
-  readonly operands: 0 | 1;
-  /** Every flag this command takes; giving it any other flag is `invalid-arguments`. */
+  /** Every flag the command accepts. Typing any other flag with it is a mistake. */
   readonly accepted: readonly TextFlag[];
-  /** Its lines in `canvas --help`, verbatim and in order; the table's order is the help order. */
+  /** Its lines in `--help`, exactly as printed. `--help` lists the rows in the table's order. */
   readonly usage: readonly string[];
 }
 
-/** Where a service command is sent: --server and --workspace. */
-const sent: readonly TextFlag[] = Object.freeze(['server', 'workspace']);
+/** The flags every service command accepts: where to send it, `--server` and `--workspace`. */
+const serverFlags: readonly TextFlag[] = Object.freeze(['server', 'workspace']);
 
-/** A service command whose text answer --out may write. */
-const answered: readonly TextFlag[] = Object.freeze(['out', ...sent]);
-
-/** A service command that retains its request under --request. */
-const retained: readonly TextFlag[] = Object.freeze(['request', ...answered]);
+/** The flags of a service command whose answer `--out` can write to a file. */
+const answerFlags: readonly TextFlag[] = Object.freeze(['out', ...serverFlags]);
 
 /**
- * `--help` added to a real command line still prints usage, as in the base CLI: help takes and
- * ignores every flag but the five placed ones (--profile, --id, --title, --section, --object).
+ * The flags of a service command that sends a change: `--request` names it, so `receipt`, `retry`
+ * or `apply` can find it later.
  */
-const besideHelp: readonly TextFlag[] = Object.freeze([
+const requestFlags: readonly TextFlag[] = Object.freeze(['request', ...answerFlags]);
+
+/**
+ * `--help` added to a real command line still prints usage: `help` accepts and ignores every flag
+ * but five (--profile, --id, --title, --section, --object).
+ */
+const flagsHelpIgnores: readonly TextFlag[] = Object.freeze([
   'revision',
   'mode',
   'namespace',
   'version',
   'family',
-  ...retained,
+  ...requestFlags,
 ]);
 
 /** Every command, in `--help` order: a missing, extra or misspelt name is a type error. */
 const commandTable: Readonly<Record<CommandName, CommandRow>> = Object.freeze({
-  help: row({ operands: 0, accepted: besideHelp, usage: [] }),
-  describe: row({
-    operands: 0,
-    accepted: answered,
+  help: freezeRow({ accepted: flagsHelpIgnores, usage: [] }),
+  describe: freezeRow({
+    accepted: answerFlags,
     usage: ['canvas describe                         Read the DSL vocabulary'],
   }),
-  list: row({
-    operands: 0,
-    accepted: answered,
+  list: freezeRow({
+    accepted: answerFlags,
     usage: ['canvas list                             List collection IDs and revisions'],
   }),
-  read: row({
-    operands: 1,
-    accepted: ['section', 'object', ...answered],
+  read: freezeRow({
+    accepted: ['section', 'object', ...answerFlags],
     usage: [
       'canvas read ID [--section ID | --object ID] [--out FILE]',
       '                                        Read full or read-only partial context',
     ],
   }),
-  inspect: row({
-    operands: 1,
-    accepted: answered,
+  inspect: freezeRow({
+    accepted: answerFlags,
     usage: [
       'canvas inspect ID                        Scene quality report: validity, warnings, crossing/relaxed counts',
     ],
   }),
-  create: row({
-    operands: 1,
-    accepted: retained,
+  create: freezeRow({
+    accepted: requestFlags,
     usage: ['canvas create FILE                      Create a collection from DSL'],
   }),
-  replace: row({
-    operands: 1,
-    accepted: ['revision', ...retained],
+  replace: freezeRow({
+    accepted: ['revision', ...requestFlags],
     usage: ['canvas replace FILE --revision N        Replace semantics at the revision you read'],
   }),
-  patch: row({
-    operands: 1,
-    accepted: ['revision', ...retained],
+  patch: freezeRow({
+    accepted: ['revision', ...requestFlags],
     usage: ['canvas patch FILE --revision N          Apply an ordered DSL patch'],
   }),
-  preview: row({
-    operands: 1,
-    accepted: ['mode', 'revision', ...retained],
+  preview: freezeRow({
+    accepted: ['mode', 'revision', ...requestFlags],
     usage: [
       'canvas preview FILE [--mode MODE]        Preview; use --revision N for existing collections',
     ],
   }),
-  'theme-admit': row({
-    operands: 1,
-    accepted: retained,
+  'theme-admit': freezeRow({
+    accepted: requestFlags,
     usage: ['canvas theme admit FILE                 Admit a semantic theme config'],
   }),
-  'recipe-admit': row({
-    operands: 1,
-    accepted: ['id', 'version', 'family', 'title', ...retained],
+  'recipe-admit': freezeRow({
+    accepted: ['id', 'version', 'family', 'title', ...requestFlags],
     usage: ['canvas recipe admit FILE                Requires --id --version --family --title'],
   }),
-  'recipe-instantiate': row({
-    operands: 1,
-    accepted: ['namespace', ...answered],
+  'recipe-instantiate': freezeRow({
+    accepted: ['namespace', ...answerFlags],
     usage: [
       'canvas recipe instantiate PIN           Requires --namespace ID; --out FILE emits editable DSL',
     ],
   }),
-  apply: row({
-    operands: 1,
-    accepted: answered,
+  apply: freezeRow({
+    accepted: answerFlags,
     usage: ['canvas apply REQUEST_ID                 Apply a retained preview'],
   }),
-  receipt: row({
-    operands: 1,
-    accepted: answered,
+  receipt: freezeRow({
+    accepted: answerFlags,
     usage: ['canvas receipt REQUEST_ID               Check a committed receipt'],
   }),
-  retry: row({
-    operands: 1,
-    accepted: answered,
+  retry: freezeRow({
+    accepted: answerFlags,
     usage: [
       'canvas retry REQUEST_ID                 Reconcile, then retry the identical retained request',
     ],
   }),
-  'profile-describe': row({
-    operands: 1,
+  'profile-describe': freezeRow({
     accepted: ['out'],
     usage: ['canvas profile describe build-spec@1    Show the build-spec conventions'],
   }),
-  'profile-scaffold': row({
-    operands: 1,
+  'profile-scaffold': freezeRow({
     accepted: ['id', 'title', 'out'],
     usage: ['canvas profile scaffold build-spec@1 --id ID --title "Title" [--out FILE]'],
   }),
-  'profile-lint': row({
-    operands: 1,
+  'profile-lint': freezeRow({
     accepted: ['profile', 'out'],
     usage: ['canvas profile lint FILE --profile build-spec@1'],
   }),
 } satisfies Record<CommandName, CommandRow>);
 
-/** Every family word, keyed by itself. */
-const familyWords: Readonly<Record<FamilyWord, FamilyWord>> = Object.freeze({
+/** Every command that takes no operand, keyed by itself. */
+const noOperandCommands: Readonly<Record<NoOperandCommand, NoOperandCommand>> = Object.freeze({
+  help: 'help',
+  describe: 'describe',
+  list: 'list',
+} satisfies Record<NoOperandCommand, NoOperandCommand>);
+
+/** Every word that starts a two-word command, keyed by itself. */
+const commandGroups: Readonly<Record<CommandGroup, CommandGroup>> = Object.freeze({
   theme: 'theme',
   recipe: 'recipe',
   profile: 'profile',
-} satisfies Record<FamilyWord, FamilyWord>);
+} satisfies Record<CommandGroup, CommandGroup>);
 
-/** Whether `word` names a command; inherited object keys such as `constructor` do not. */
-export function isCommandName(word: string): word is CommandName {
-  return Object.hasOwn(commandTable, word);
+/** Whether the word names a command, such as `read` or `recipe-admit`. A missing word doesn't. */
+export function isCommandName(word: string | undefined): word is CommandName {
+  // `hasOwn`, so `constructor`, which every JavaScript object has, isn't taken for a command.
+  return word !== undefined && Object.hasOwn(commandTable, word);
 }
 
-/** Whether `word` joins the next word into one command name. */
-export function isFamilyWord(word: string): word is FamilyWord {
-  return Object.hasOwn(familyWords, word);
+/** Whether the word starts a two-word command: `theme`, `recipe` or `profile`. */
+export function isCommandGroup(word: string | undefined): word is CommandGroup {
+  return word !== undefined && Object.hasOwn(commandGroups, word);
 }
 
-/** The command's row. */
-export function commandRow(name: CommandName): CommandRow {
-  return commandTable[name];
+/** Whether the command is typed with no word after it. Every other command takes exactly one. */
+export function takesNoOperand(name: CommandName): name is NoOperandCommand {
+  return Object.hasOwn(noOperandCommands, name);
 }
 
-/** Whether the command takes `flag`; any text, so a caller may ask about a flag as given. */
-export function isAccepted(
+/** Whether the command accepts the flag: yes for `read --section`, no for `list --revision`. */
+export function acceptsFlag(
   name: CommandName,
-  flag: string,
+  flag: TextFlag,
 ): boolean {
-  return commandTable[name].accepted.some((taken) => taken === flag);
+  return commandTable[name].accepted.includes(flag);
 }
 
-/** The command as typed: a family command's two words, such as `recipe admit`. */
-export function spokenName(name: CommandName): string {
-  const [first = '', ...rest] = name.split('-');
-  if (!isFamilyWord(first)) return name;
-  return `${first} ${rest.join('-')}`;
+/** The command the way an agent types it: `recipe-admit` is typed `recipe admit`. */
+export function commandAsTyped(name: CommandName): string {
+  const [group, ...memberWords] = name.split('-');
+  if (!isCommandGroup(group)) {
+    return name;
+  }
+  const member = memberWords.join('-');
+  return `${group} ${member}`;
 }
 
-/** Every row, in `--help` order. */
+/** Every command's row, in the order `--help` lists them. */
 export function commandRows(): readonly CommandRow[] {
   return Object.values(commandTable);
 }
 
-/** `spec` frozen with its flags and usage lines, so no reader can change a row. */
-function row(spec: CommandRow): CommandRow {
+/** Freezes a row and its two lists, so nothing can change them while the CLI runs. */
+function freezeRow(row: CommandRow): CommandRow {
   return Object.freeze({
-    operands: spec.operands,
-    accepted: Object.freeze([...spec.accepted]),
-    usage: Object.freeze([...spec.usage]),
+    accepted: Object.freeze([...row.accepted]),
+    usage: Object.freeze([...row.usage]),
   });
 }

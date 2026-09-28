@@ -1,107 +1,132 @@
 /*
- * DSL authoring submission: retain the request, restore its resource bytes, then send it to
- * Authoring preview or apply and turn the answer into text. Uses injected ports only. Authoring
- * owns the commit; an unconfirmed answer names the retained request so `receipt` then `retry`
- * recover it.
+ * Why this file exists
+ *
+ * Sending a change safely takes more than one call. If the answer to `create plan.canvas` is lost,
+ * the agent must be able to look up its receipt and retry the very same request. So the request is
+ * written to the journal first. Its font and image bytes are then stored in the service again, in
+ * case it restarted. Only then is the request sent.
+ *
+ * This file runs those steps, in that order, for every change and every retry. Authoring, not this
+ * file, saves the change. Each step gives back a `Result` (see `contract/errors.ts`).
  */
 import { restoreResources } from '../resources/restore.js';
 import type { RestoreDependencies } from '../resources/restore.js';
-import { appliedReceipt } from '../reads/receipt.js';
-import { prepare } from './prepare.js';
+import { formatReceipt } from '../reads/receipt.js';
+import { prepareChangeRequest } from './prepare.js';
 import type { PrepareDependencies } from './prepare.js';
 import type { ChangeCommand } from '../../contract/records/command.js';
 import type { ServiceAuthoring } from '../../contract/ports/service-authoring.js';
 import type { RequestJournal } from '../../contract/ports/request-journal.js';
 import type { RetainedRequest } from '../../contract/records/retained-request.js';
-import type { SubmitMode } from '../../contract/records/service-answers.js';
+import type { ChangePreview, SubmitMode } from '../../contract/records/service-answers.js';
+import type { RequestId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
 import { unsupported } from '../shared/results.js';
 
-/** What `submit` uses: the journal's save, the byte restore and Authoring's preview and apply. */
+/** The tools sending uses: the journal, the font and image restore, and Authoring's two calls. */
 export interface SubmitDependencies extends RestoreDependencies {
   readonly journal: Pick<RequestJournal, 'save'>;
   readonly authoring: ServiceAuthoring;
 }
 
-/** What `author` uses: what `prepare` uses and what `submit` uses. */
-export type AuthorDependencies = PrepareDependencies & SubmitDependencies;
+/** The tools a source change uses: the tools for preparing it and the tools for sending it. */
+export type SourceChangeDependencies = PrepareDependencies & SubmitDependencies;
 
 /**
- * Agent authoring consumes readable source only; JSON envelopes and coordinates are never user
- * input. `preview` sends to preview, the other change commands apply. Fails as `prepare` or
- * `submit` does.
+ * Runs `create`, `replace`, `patch` or `preview` for a source file: prepares the request, then
+ * sends it. `preview` asks what would change; the others save. Gives back the text to print.
+ * The mistakes it can find are those of `prepareChangeRequest` and `submitRequest`.
  */
-export async function author(
+export async function sendSourceChange(
   command: ChangeCommand,
-  dependencies: AuthorDependencies,
+  dependencies: SourceChangeDependencies,
 ): Promise<Result<string>> {
-  const prepared = await prepare(command, dependencies);
-  if (!prepared.ok) return prepared;
-  return submit(prepared.value, modeOf(command), dependencies);
+  const prepared = await prepareChangeRequest(command, dependencies);
+  if (!prepared.ok) {
+    return prepared;
+  }
+  const mode = chooseSubmitMode(command);
+  return submitRequest(prepared.value, mode, dependencies);
 }
 
 /**
- * Retention failure prevents a write because an uncertain result could not be reconciled safely
- * without the request. Fails as the journal save, the resource restore or the send does; a lost
- * answer names `receipt` then `retry` for the retained request.
+ * Writes `prepared` to the journal, stores its font and image bytes again, then sends it to
+ * preview or apply. Gives back the text to print: the preview, or the receipt.
+ * The mistakes it can find: it can't be written (then it is never sent), its bytes can't be
+ * stored, or the send fails. If the answer is lost, the failure tells the agent to run `receipt`,
+ * then `retry`.
  */
-export async function submit(
-  retained: RetainedRequest,
+export async function submitRequest(
+  prepared: RetainedRequest,
   mode: SubmitMode,
   dependencies: SubmitDependencies,
 ): Promise<Result<string>> {
-  const saved = await dependencies.journal.save(retained);
-  if (!saved.ok) return saved;
-  const restored = await restoreResources(retained.backups, dependencies);
-  if (!restored.ok) return restored;
-  return send(retained, mode, dependencies.authoring);
+  const saved = await dependencies.journal.save(prepared);
+  if (!saved.ok) {
+    return saved;
+  }
+  const restored = await restoreResources(prepared.backups, dependencies);
+  if (!restored.ok) {
+    return restored;
+  }
+  return sendToAuthoring(prepared, mode, dependencies.authoring);
 }
 
-/** `preview` previews; `create`, `replace` and `patch` apply. */
-function modeOf(command: ChangeCommand): SubmitMode {
-  if (command.name === 'preview') return 'preview';
+/** Chooses how the change is sent: `preview` previews; `create`, `replace` and `patch` apply. */
+function chooseSubmitMode(command: ChangeCommand): SubmitMode {
+  if (command.name === 'preview') {
+    return 'preview';
+  }
   return 'apply';
 }
 
-/** The retained request to the mode's Authoring call; only the canonical envelope is sent. */
-function send(
+/** Sends the kept request to Authoring's preview or apply call, as `mode` says. */
+function sendToAuthoring(
   retained: RetainedRequest,
   mode: SubmitMode,
   authoring: ServiceAuthoring,
 ): Promise<Result<string>> {
   switch (mode) {
     case 'preview':
-      return previewed(retained, authoring);
+      return previewChange(retained, authoring);
     case 'apply':
-      return applied(retained, authoring);
+      return applyChange(retained, authoring);
     default:
       return Promise.resolve(unsupported(mode));
   }
 }
 
-/** Reviewable owner output and the stable command that applies it. Fails as the preview does. */
-async function previewed(
+/** Asks Authoring what the change would do, and gives back that preview as text to print. */
+async function previewChange(
   retained: RetainedRequest,
   authoring: ServiceAuthoring,
 ): Promise<Result<string>> {
-  const id = retained.request.request;
-  const answer = await authoring.preview(retained);
-  if (!answer.ok) return answer;
-  return success(
-    `Preview request ${id}\n${JSON.stringify(answer.value, null, 2)}\nApply with: canvas apply ${id}`,
-  );
+  const preview = await authoring.preview(retained);
+  if (!preview.ok) {
+    return preview;
+  }
+  const previewText = formatPreview(preview.value, retained.request.request);
+  return success(previewText);
 }
 
-/**
- * The committed receipt of this request. Fails as the apply does, or with `invalid-response`
- * when the answer carries no receipt or one for another request.
- */
-async function applied(
+/** Writes the preview as JSON, between the request's ID and the command that applies it. */
+function formatPreview(
+  preview: ChangePreview,
+  request: RequestId,
+): string {
+  const previewJson = JSON.stringify(preview, null, 2);
+  return `Preview request ${request}\n${previewJson}\nApply with: canvas apply ${request}`;
+}
+
+/** Asks Authoring to save the change, and gives back its receipt once it is for this request. */
+async function applyChange(
   retained: RetainedRequest,
   authoring: ServiceAuthoring,
 ): Promise<Result<string>> {
-  const lookup = await authoring.apply(retained);
-  if (!lookup.ok) return lookup;
-  return appliedReceipt(lookup.value, retained.request.request);
+  const receipt = await authoring.apply(retained);
+  if (!receipt.ok) {
+    return receipt;
+  }
+  return formatReceipt(receipt.value, retained.request.request);
 }

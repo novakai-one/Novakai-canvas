@@ -1,119 +1,128 @@
 /*
- * The service's Assets and Templates steps over the HTTP transport: one `/api/v1/resources/ACTION`
- * route per method, each answer checked at this seam. Network I/O through the injected transport;
- * each failure is returned as a value. Nothing here commits: staged bytes left by a failed
- * command are collectable Assets orphans, and the caller runs the command again.
+ * Why this file exists
+ *
+ * A source that names `./assets/logo.png` needs the logo's bytes stored in the service before the
+ * change is sent. Then `freeze` has the service write each stored file's digest (a fingerprint of
+ * its bytes) into the request, so the change points at exactly those bytes. Each step, and
+ * preparing a theme or recipe to save, is a call to `POST /api/v1/resources/<step>`.
+ *
+ * This file makes those calls and checks each answer. None saves a change: bytes stored by a
+ * command that then fails are simply left unused, and the command can be run again.
  */
 import type { HttpTransport, ResourceAction } from '../../contract/ports/http-transport.js';
 import type { ServiceResources } from '../../contract/ports/service-resources.js';
-import type { Request } from '../../contract/records/foreign.js';
+import type { AuthoringRequest } from '../../contract/records/foreign.js';
 import type { ByteBackup } from '../../contract/records/retained-request.js';
-import { byteBackup } from '../../contract/records/retained-request.js';
+import { byteBackupSchema } from '../../contract/records/retained-request.js';
 import type { PresetPreparation } from '../../contract/records/service-answers.js';
 import {
-  blobAnswer,
-  preparedAnswer,
-  presetDocument,
-  stagedAnswer,
+  blobAnswerSchema,
+  preparedAnswerSchema,
+  presetDocumentSchema,
+  stagedAnswerSchema,
 } from '../../contract/records/service-answers.js';
 import { requestSchema } from '../../contract/schemas.js';
 import type { AssetDigest } from '../../contract/brands.js';
 import type { LocalFailure, Result } from '../../contract/errors.js';
-import { failure, malformedRequest, success } from '../../contract/errors.js';
+import { failure, invalidInputFailure, success } from '../../contract/errors.js';
 
 /** The transport's POST; this adapter never sends a GET. */
 type TransportPost = Pick<HttpTransport, 'post'>;
 
-/** Checks one answer's value. */
-type Check<T> = (value: unknown) => Result<T>;
+/** Checks what one resource step answered, and gives what the CLI needs from it. */
+type AnswerCheck<T> = (answered: unknown) => Result<T>;
 
 /**
- * Binds the resource routes to `transport`. Every method fails as the transport does, or with
- * `invalid-response` when the answer does not match its schema (`invalid-input` for `freeze`).
+ * Gives core its font, image, theme and recipe calls, made over `transport`. Each fails as the
+ * transport does, or with `invalid-response` when the answer isn't the expected shape. The one
+ * exception: when the request `freeze` gives back fails Authoring's check, it is `invalid-input`.
  */
 export function createServiceResources(transport: TransportPost): ServiceResources {
   return {
-    stage: (input) => call(transport, 'stage', input, stagedDigest),
-    blob: (digest) => call(transport, 'blob', digest, blobBackup),
-    freeze: (request, assets) => call(transport, 'freeze', { ...request, assets }, frozenRequest),
-    restore: (backup) => call(transport, 'restore', backup, restored),
-    prepare: (admission, assets) => call(transport, 'prepare', { admission, assets }, preparation),
-    instantiate: (expansion) => call(transport, 'instantiate', expansion, expandedSource),
+    stage: (input) => postResourceStep(transport, 'stage', input, checkStagedDigest),
+    blob: (digest) => postResourceStep(transport, 'blob', digest, checkByteBackup),
+    freeze: (request, assets) =>
+      postResourceStep(transport, 'freeze', { ...request, assets }, checkFrozenRequest),
+    restore: (backup) => postResourceStep(transport, 'restore', backup, acceptAnyAnswer),
+    prepare: (admission, assets) =>
+      postResourceStep(transport, 'prepare', { admission, assets }, checkPresetPreparation),
+    instantiate: (expansion) =>
+      postResourceStep(transport, 'instantiate', expansion, checkExpandedSource),
   };
 }
 
-/**
- * Posts `body` to one resource route and checks the answer's value. Fails as the transport or
- * `check` does.
- */
-async function call<T>(
+/** Posts `body` to one resource step's route, then checks what it answered with `check`. */
+async function postResourceStep<T>(
   transport: TransportPost,
   action: ResourceAction,
   body: unknown,
-  check: Check<T>,
+  check: AnswerCheck<T>,
 ): Promise<Result<T>> {
   const answer = await transport.post(`/api/v1/resources/${action}`, body);
-  if (!answer.ok) return answer;
+  if (!answer.ok) {
+    return answer;
+  }
   return check(answer.value.value);
 }
 
-/** The digest of the bytes Assets admitted. Fails with `invalid-response`. */
-function stagedDigest(value: unknown): Result<AssetDigest> {
-  const parsed = stagedAnswer.safeParse(value);
-  if (!parsed.success) return invalidResponse('Invalid Assets admission');
-  return success(parsed.data.descriptor.digest);
+/** Checks the stage answer, and gives the digest Assets stored the bytes under. */
+function checkStagedDigest(answered: unknown): Result<AssetDigest> {
+  const staged = stagedAnswerSchema.safeParse(answered);
+  if (!staged.success) {
+    return invalidResponseFailure('Invalid Assets admission');
+  }
+  return success(staged.data.descriptor.digest);
 }
 
-/**
- * The normalised bytes and their digest, as the journal keeps them. Fails with `invalid-response`
- * (bad answer, or bad digest).
- */
-function blobBackup(value: unknown): Result<ByteBackup> {
-  const parsed = blobAnswer.safeParse(value);
-  if (!parsed.success) return invalidResponse('Invalid normalized Assets bytes');
-  const checked = byteBackup.safeParse({
-    digest: parsed.data.descriptor.digest,
-    base64: parsed.data.base64,
+/** Checks the blob answer, and gives the stored bytes and digest as the journal keeps them. */
+function checkByteBackup(answered: unknown): Result<ByteBackup> {
+  const blob = blobAnswerSchema.safeParse(answered);
+  if (!blob.success) {
+    return invalidResponseFailure('Invalid normalized Assets bytes');
+  }
+  const backup = byteBackupSchema.safeParse({
+    digest: blob.data.descriptor.digest,
+    base64: blob.data.base64,
   });
-  if (!checked.success) return invalidResponse('Invalid normalized Assets digest');
-  return success(checked.data);
+  if (!backup.success) {
+    return invalidResponseFailure('Invalid normalized Assets digest');
+  }
+  return success(backup.data);
 }
 
-/** The frozen request, checked by Authoring's request schema. Fails with `invalid-input`. */
-function frozenRequest(value: unknown): Result<Request> {
-  const checked = requestSchema.safeParse(value);
-  if (!checked.success) return failure(malformedRequest);
-  return success(checked.data);
+/** Checks the frozen request with Authoring's own request check. */
+function checkFrozenRequest(answered: unknown): Result<AuthoringRequest> {
+  const frozen = requestSchema.safeParse(answered);
+  if (!frozen.success) {
+    return invalidInputFailure();
+  }
+  return success(frozen.data);
 }
 
-/** A restore answers nothing the CLI reads. Never fails. */
-function restored(): Result<void> {
+/** Accepts any restore answer: the CLI reads nothing from it. */
+function acceptAnyAnswer(): Result<void> {
   return success(undefined);
 }
 
-/**
- * The preset key; the whole answer, checked as JSON, is kept unchanged as the change payload.
- * Fails with `invalid-response`.
- */
-function preparation(value: unknown): Result<PresetPreparation> {
-  const parsed = preparedAnswer.safeParse(value);
-  const document = presetDocument.safeParse(value);
-  if (!parsed.success || !document.success)
-    return invalidResponse('Service returned invalid preset preparation');
-  return success({ key: parsed.data.key, document: document.data });
+/** Checks the prepare answer, and gives the preset key, with the whole answer as its document. */
+function checkPresetPreparation(answered: unknown): Result<PresetPreparation> {
+  const prepared = preparedAnswerSchema.safeParse(answered);
+  const presetDocument = presetDocumentSchema.safeParse(answered);
+  if (!prepared.success || !presetDocument.success) {
+    return invalidResponseFailure('Service returned invalid preset preparation');
+  }
+  return success({ key: prepared.data.key, document: presetDocument.data });
 }
 
-/**
- * Recipe expansion is editable DSL text, never structured authoring input. Fails with
- * `invalid-response`.
- */
-function expandedSource(value: unknown): Result<string> {
-  if (typeof value !== 'string')
-    return invalidResponse('Recipe expansion did not return editable DSL');
-  return success(value);
+/** Checks the recipe expansion is DSL text the agent can edit. */
+function checkExpandedSource(answered: unknown): Result<string> {
+  if (typeof answered !== 'string') {
+    return invalidResponseFailure('Recipe expansion did not return editable DSL');
+  }
+  return success(answered);
 }
 
-/** An answer that does not match its schema: always `invalid-response`. */
-function invalidResponse(message: string): Result<never, LocalFailure> {
+/** Makes the mistake for an answer that isn't the expected shape (`invalid-response`). */
+function invalidResponseFailure(message: string): Result<never, LocalFailure> {
   return failure({ code: 'invalid-response', message });
 }

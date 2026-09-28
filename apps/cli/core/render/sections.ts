@@ -1,94 +1,127 @@
 /*
- * Every section of a rendered document exported to its file. The PNG raster engine starts first
- * when the format needs it, then the output directory is made, then all sections are exported and
- * written at once. Pure apart from the injected exporter and files; section files are the only
- * writes. The first failure in scene order wins; the caller fixes the output path and reruns.
+ * Why this file exists
+ *
+ * A collection with sections `intro` and `data` becomes two image files in the `--out` folder:
+ * `intro.png` and `data.png`. Before any is written, the PNG engine has to start (for PNG only)
+ * and the folder has to exist.
+ *
+ * This file checks each section ID, starts the PNG engine if needed, makes the folder, then has
+ * Export draw each section and writes its file. Each step gives back a `Result` (see
+ * `contract/errors.ts`). Section files are the only thing it writes.
  */
 import type { RasterEngine, SectionFiles } from '../../contract/ports/render-files.js';
 import type { SectionExporter } from '../../contract/ports/render-output.js';
 import type { RenderDocument } from '../../contract/records/foreign.js';
 import type { RenderFormat } from '../../contract/records/render.js';
-import type { RenderEvidence } from '../../contract/records/render-failure.js';
+import type { RenderFailureSource } from '../../contract/records/render-failure.js';
 import { sectionId, type FilePath, type SectionId } from '../../contract/brands.js';
-import { failure, success, type Result } from '../../contract/errors.js';
+import { failure, success, type LocalFailure, type Result } from '../../contract/errors.js';
 import { combined } from '../shared/results.js';
 
-/** The file ports a section export uses: the raster engine and the section files. */
+/** What writing sections needs: the PNG engine (`raster`) and the section file writer. */
 interface SectionPorts {
   readonly raster: RasterEngine;
   readonly sectionFiles: SectionFiles;
 }
 
+/** One section of the laid-out drawing, with its ID as plain text. */
+type SceneSection = RenderDocument['scene']['sections'][number];
+
 /**
- * The written files, in scene order. Fails with `invalid-response` when the service's document
- * names a section Model would not, `provider-failed` or Export's raster failure, or the first
- * section whose export or write fails.
+ * Writes each section of `document` to its own file in `format` (`svg` or `png`), and gives back
+ * the files' paths in the order the sections are drawn.
+ * Mistakes: a section ID that isn't valid (a broken service answer), the PNG engine or the folder
+ * failing, or Export or the write failing for a section.
  */
 export async function exportSections(
   format: RenderFormat,
   ports: SectionPorts,
   exporter: SectionExporter,
   document: RenderDocument,
-): Promise<Result<readonly FilePath[], RenderEvidence>> {
-  const sections = combined(document.scene.sections.map((section) => checkedSection(section.id)));
-  if (!sections.ok) return sections;
-  const ready = await prepared(format, ports);
-  if (!ready.ok) return ready;
-  return written(ports.sectionFiles, exporter, sections.value);
+): Promise<Result<readonly FilePath[], RenderFailureSource>> {
+  const sections = checkSectionIds(document);
+  if (!sections.ok) {
+    return sections;
+  }
+  const ready = await prepareOutput(format, ports);
+  if (!ready.ok) {
+    return ready;
+  }
+  return writeSections(ports.sectionFiles, exporter, sections.value);
+}
+
+/** Checks the ID of every section the document draws, in drawing order. */
+function checkSectionIds(document: RenderDocument): Result<readonly SectionId[]> {
+  const checkedIds = document.scene.sections.map(checkSectionId);
+  return combined(checkedIds);
 }
 
 /**
- * One scene section's ID as Model's SectionId. Layout keeps it as plain text; it comes from the
- * Model-checked collection, so this fails (`invalid-response`) only on a broken service answer.
+ * Checks one drawn section's ID as Model's `SectionId`. Layout keeps it as plain text, but it comes
+ * from the collection Model checked, so only a broken service answer fails here.
  */
-function checkedSection(id: string): Result<SectionId> {
-  const checked = sectionId.safeParse(id);
-  if (!checked.success)
-    return failure({
-      code: 'invalid-response',
-      message: `Rendered section is not a section ID: ${id}`,
-    });
-  return success(checked.data);
+function checkSectionId(section: SceneSection): Result<SectionId> {
+  const id = sectionId.safeParse(section.id);
+  if (!id.success) {
+    return invalidSectionIdFailure(section.id);
+  }
+  return success(id.data);
 }
 
-/** The raster engine when the format is PNG, then the output directory. Fails as either does. */
-async function prepared(
+/** Starts the PNG engine when the format is PNG, then makes the `--out` folder. */
+async function prepareOutput(
   format: RenderFormat,
   ports: SectionPorts,
-): Promise<Result<void, RenderEvidence>> {
-  const raster = await rasterFor(format, ports.raster);
-  if (!raster.ok) return raster;
-  return ports.sectionFiles.prepare();
+): Promise<Result<void, RenderFailureSource>> {
+  const engine = await startEngineFor(format, ports.raster);
+  if (!engine.ok) {
+    return engine;
+  }
+  return ports.sectionFiles.makeOutFolder();
 }
 
-/** PNG starts the raster engine; SVG needs nothing. */
-function rasterFor(
+/** Starts the PNG engine for PNG. SVG needs no engine. */
+async function startEngineFor(
   format: RenderFormat,
   raster: RasterEngine,
-): Promise<Result<void, RenderEvidence>> {
-  if (format !== 'png') return Promise.resolve(success(undefined));
-  return raster.prepare();
+): Promise<Result<void, RenderFailureSource>> {
+  if (format === 'png') {
+    return raster.prepare();
+  }
+  return success(undefined);
 }
 
-/** Every section exported and written; the first failure in scene order wins. */
-async function written(
+/**
+ * Has Export draw every section and writes each to its file, all at once. Gives back the files'
+ * paths, or the first failure in drawing order.
+ */
+async function writeSections(
   files: SectionFiles,
   exporter: SectionExporter,
   sections: readonly SectionId[],
-): Promise<Result<readonly FilePath[], RenderEvidence>> {
-  const results = await Promise.all(
-    sections.map((section) => writtenSection(files, exporter, section)),
-  );
-  return combined(results);
+): Promise<Result<readonly FilePath[], RenderFailureSource>> {
+  const writing = sections.map((section) => writeSection(files, exporter, section));
+  const written = await Promise.all(writing);
+  return combined(written);
 }
 
-/** One section's bytes written to its file. Fails with Export's or the write's failure. */
-async function writtenSection(
+/** Has Export draw one section, then writes its bytes to the section's file. */
+async function writeSection(
   files: SectionFiles,
   exporter: SectionExporter,
   section: SectionId,
-): Promise<Result<FilePath, RenderEvidence>> {
+): Promise<Result<FilePath, RenderFailureSource>> {
   const bytes = await exporter.export(section);
-  if (!bytes.ok) return bytes;
+  if (!bytes.ok) {
+    return bytes;
+  }
   return files.write(section, bytes.value);
+}
+
+/** Makes the mistake for a drawn section whose ID isn't a section ID (`invalid-response`). */
+function invalidSectionIdFailure(id: string): Result<never, LocalFailure> {
+  return failure({
+    code: 'invalid-response',
+    message: `Rendered section is not a section ID: ${id}`,
+  });
 }

@@ -1,41 +1,48 @@
 /*
- * The retained request: what the request journal keeps so `receipt` then `retry` can recover a
- * write. Declarations and the journal file schema; pure. Core builds and sends it; the journal
- * adapter writes it and decodes it with `journalFile`.
+ * Why this file exists
+ *
+ * A change can be sent and its answer lost, for example when the connection drops. The agent then
+ * runs `canvas receipt ID` to see whether it was saved, and `canvas retry ID` to send the very
+ * same request again. That only works if the CLI wrote the request down before sending it.
+ *
+ * This file names what the CLI writes to its request journal (a folder in the workspace) for each
+ * request: the request, and copies of any font or image bytes it needs. It also checks a journal
+ * file when it is read back. It never touches a file itself; `adapters/files/` does.
  */
 import { z } from 'zod';
-import { assetDigest, type Generation } from '../brands.js';
+import { assetDigest, type ServiceGeneration } from '../brands.js';
 import { requestSchema } from '../schemas.js';
-import type { Request } from './foreign.js';
+import type { AuthoringRequest } from './foreign.js';
 
-/** Checks one byte backup, as the journal stores it and as Assets' blob answer is reduced to. */
-export const byteBackup = z.strictObject({ digest: assetDigest, base64: z.string() });
-
-/** The exact normalized bytes Assets holds for one digest. Local replay data, never a workspace record. */
-export type ByteBackup = Readonly<z.infer<typeof byteBackup>>;
+/** Checks one copy of a font or image in the journal: its digest, and its bytes as base64 text. */
+export const byteBackupSchema = z.strictObject({ digest: assetDigest, base64: z.string() });
 
 /**
- * A request as the journal returns it: the Authoring request and its byte backups (`[]` when
- * none). The generation it was first sent under is not returned: a replay is always sent under
- * the service's current generation.
+ * A copy of the exact bytes Assets holds for one font or image, so a retry can put them back. It
+ * is written only to the request journal, never saved as a record.
  */
+export type ByteBackup = Readonly<z.infer<typeof byteBackupSchema>>;
+
+/** A journal entry as read back: the Authoring request and its byte copies (`[]` when none). */
 export interface JournalRecord {
-  readonly request: Request;
+  readonly request: AuthoringRequest;
   readonly backups: readonly ByteBackup[];
 }
 
-/** A request ready to retain and send: a journal record and the service generation it goes under. */
+/**
+ * A request ready to write to the journal and send: the entry, plus the service generation (the
+ * label of one service start; see `brands.ts`) it is sent under.
+ */
 export interface RetainedRequest extends JournalRecord {
-  readonly generation: Generation;
+  readonly generation: ServiceGeneration;
 }
 
 /**
- * Checks one journal file. A file written before backups were always retained has no `backups`
- * key; it reads as `[]`. The generation is checked only to be text: a journal read does not
- * return it (see {@link JournalRecord}).
+ * Checks one journal file; an old file with no `backups` reads as `[]`. The generation it was first
+ * sent under is only checked to be text, since a retry always uses the current one.
  */
-export const journalFile = z.strictObject({
+export const journalFileSchema = z.strictObject({
   generation: z.string(),
   request: requestSchema,
-  backups: z.array(byteBackup).readonly().default([]),
+  backups: z.array(byteBackupSchema).readonly().default([]),
 });

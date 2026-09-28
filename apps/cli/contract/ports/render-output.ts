@@ -1,11 +1,14 @@
 /*
- * The render environment's output: the service draws one collection into a document and inspects
- * it, and Export turns each section of its snapshot into file bytes. Declarations only;
- * adapters/render/production.ts and exporter.ts implement it. Writes nothing;
- * core/render/sections.ts writes the bytes through the section files port. Every failure is the
- * owner's evidence, returned as a value.
+ * Why this file exists
+ *
+ * Drawing a collection takes two parts. The service lays the collection out as a document: where
+ * each box and wire goes. Then Export turns each section of that document into SVG or PNG bytes,
+ * so a collection with two sections becomes two images.
+ *
+ * This file names what a render asks of those two parts. It writes no file;
+ * `core/render/sections.ts` does. Each part's failure comes back whole.
  */
-import type { RenderEvidence } from '../records/render-failure.js';
+import type { RenderFailureSource } from '../records/render-failure.js';
 import type {
   Catalog,
   Collection,
@@ -18,34 +21,39 @@ import type {
 import type { SectionId } from '../brands.js';
 import type { Result } from '../errors.js';
 
-/** What Export draws one render's sections from. */
+/** What Export needs to draw a render's sections. */
 export interface ExportInput {
+  /** The service's laid-out drawing. */
   readonly document: RenderDocument;
+  /** The collection at the revision being drawn, with the fonts and images it uses. */
   readonly snapshot: ExportSnapshot;
-  /** The pins Export's documents port lowers DSL against. */
-  readonly pins: ResolvedResources;
-  /** The inspector that admits only resources the snapshot retained. */
+  /** The fonts, images and themes the source's names stand for. */
+  readonly resolvedResources: ResolvedResources;
+  /** Hands Export the bytes of the fonts and images in `snapshot`, and no others. */
   readonly resources: Resources;
 }
 
-/** Export bound to one snapshot, format and label mode. */
+/** Export, set up for one render's drawing, format and label choice. */
 export interface SectionExporter {
-  /** One section's file bytes. Fails with Export's or Presentation's diagnostic. */
-  export(section: SectionId): Promise<Result<Uint8Array, RenderEvidence>>;
+  /**
+   * Makes one section's image bytes. Fails with Export's finding, or Presentation's (the part
+   * that draws each box and wire).
+   */
+  export(section: SectionId): Promise<Result<Uint8Array, RenderFailureSource>>;
 }
 
-/** The service's drawing and its inspection, and Export, for one render. */
+/** What a render asks of the service and of Export. */
 export interface RenderOutput {
   /**
-   * The service's rendered document of `collection` over `catalog`. Fails with Library's, the
-   * render job's or the producer's failure.
+   * Lays out `collection` as a document, using the themes and recipes in `catalog`. Fails with the
+   * service's own failure.
    */
-  produce(
+  layOut(
     collection: Collection,
     catalog: Catalog,
-  ): Promise<Result<RenderDocument, RenderEvidence>>;
-  /** The service's inspection report of a document it produced. Cannot fail. */
+  ): Promise<Result<RenderDocument, RenderFailureSource>>;
+  /** The service's report on a document it laid out, such as how many wires cross. Never fails. */
   inspect(document: RenderDocument): InspectionReport;
-  /** Export over one snapshot. Fails with Presentation's font failure. */
-  exporter(input: ExportInput): Promise<Result<SectionExporter, RenderEvidence>>;
+  /** Sets up Export to draw one render's sections. Fails if Presentation can't load a font. */
+  prepareExporter(input: ExportInput): Promise<Result<SectionExporter, RenderFailureSource>>;
 }

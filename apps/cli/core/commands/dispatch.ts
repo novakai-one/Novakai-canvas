@@ -1,117 +1,137 @@
 /*
- * Command routing: run the one flow each service or profile command names, then return its text or
- * write the text to the --out file. The one --out writer. Uses injected ports only. Failures are
- * returned as values; `cli/canvas.ts` prints them and sets the exit code.
+ * Why this file exists
+ *
+ * A parsed command still has to be run. `pnpm canvas read my-diagram` asks the service for that
+ * collection. `pnpm canvas profile lint plan.canvas` checks the file on this machine.
+ *
+ * This file passes each command to the code that does its work, and returns the answer. It never
+ * prints, and never touches the disk or the network itself: it only uses the tools it is handed.
  */
 import type { ProfileCommand, ServiceCommand } from '../../contract/records/command.js';
-import type { LocalFiles } from '../../contract/ports/local-files.js';
+import type { ExpansionRequest } from '../../contract/records/foreign.js';
 import type { ServiceResources } from '../../contract/ports/service-resources.js';
-import type { FilePath } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
-import { success } from '../../contract/errors.js';
 import { admitPreset } from '../presets/admit.js';
 import type { AdmitDependencies } from '../presets/admit.js';
-import { author } from '../authoring/submit.js';
-import type { AuthorDependencies } from '../authoring/submit.js';
-import { retry } from '../authoring/reconcile.js';
+import { sendSourceChange } from '../authoring/submit.js';
+import type { SourceChangeDependencies } from '../authoring/submit.js';
+import { replayRetainedRequest } from '../authoring/reconcile.js';
 import type { RetryDependencies } from '../authoring/reconcile.js';
-import { describe, inspect, list, read, receipt } from '../reads/queries.js';
+import {
+  describeLanguage,
+  inspectCollection,
+  listCollections,
+  readCollection,
+  readReceipt,
+} from '../reads/queries.js';
 import type { ReadDependencies } from '../reads/queries.js';
-import { answerProfile } from '../profiles/commands.js';
+import { answerProfileCommand } from '../profiles/commands.js';
 import type { ProfileDependencies } from '../profiles/commands.js';
 import { unsupported } from '../shared/results.js';
+import { printOrWriteAnswer } from './delivery.js';
+import type { OutFileWriter } from './delivery.js';
 
-/** What the --out write uses. */
-interface OutputDependencies {
-  readonly files: Pick<LocalFiles, 'writeOutput'>;
-}
-
-/** What service routing itself uses: recipe expansion and the --out write. */
-interface RouteDependencies extends OutputDependencies {
+/** What `recipe instantiate` uses: the one service call that turns a recipe into diagram text. */
+export interface RecipeInstantiateDependencies {
   readonly resources: Pick<ServiceResources, 'instantiate'>;
 }
 
+/** What every command uses to write its answer to the `--out` file. */
+export interface OutFileDependencies {
+  readonly writer: OutFileWriter;
+}
+
 /**
- * Every port a service command may use: each flow's own slice, joined. Compose binds each member
- * once.
+ * Every tool a service command may need, such as the service's calls, the file reader and the
+ * `--out` writer. `contract/compose/service.ts` makes each one once.
  */
-export type ServicePorts = ReadDependencies &
-  AuthorDependencies &
+export type ServiceCommandDependencies = ReadDependencies &
+  SourceChangeDependencies &
   RetryDependencies &
   AdmitDependencies &
-  RouteDependencies;
-
-/** Every port a profile command may use: the lint file, Language and the --out write. */
-export type ProfilePorts = ProfileDependencies & OutputDependencies;
+  RecipeInstantiateDependencies &
+  OutFileDependencies;
 
 /**
- * Runs one service command and returns its text, or `Written: FILE` after writing --out. Fails as
- * the command's flow does, or with `output-unavailable` after the command ran.
+ * Every tool a profile command may need: `files` (reads the file `lint` checks), `language`
+ * (Language, which reads DSL text), `profiles` (Language's profiles and their rules), and `writer`
+ * (writes the `--out` file).
  */
-export async function executeService(
+export type ProfileCommandDependencies = ProfileDependencies & OutFileDependencies;
+
+/**
+ * Runs a command on the local service, and returns the text to show on screen.
+ *
+ * `read my-diagram` asks the service for that collection. With `--out`, the answer goes to a file.
+ * The mistakes it can find: whatever the service reports, such as a missing collection or a stale
+ * `--revision`, or an `--out` file that can't be written.
+ */
+export async function runServiceCommand(
   command: ServiceCommand,
-  dependencies: ServicePorts,
+  dependencies: ServiceCommandDependencies,
 ): Promise<Result<string>> {
-  const outcome = await run(command, dependencies);
-  if (!outcome.ok) return outcome;
-  return output(command.out, outcome.value, dependencies);
+  const answer = await answerServiceCommand(command, dependencies);
+  if (!answer.ok) {
+    return answer;
+  }
+  return printOrWriteAnswer(answer.value, command, dependencies.writer);
 }
 
 /**
- * Runs one profile command and returns its text, or `Written: FILE` after writing --out. Fails as
- * the command does, or with `output-unavailable` after the command ran.
+ * Runs a profile command on this machine, and returns the text to show on screen.
+ *
+ * The mistakes it can find: a lint file that can't be read or doesn't parse, a file that breaks
+ * the profile's rules, or an `--out` file that can't be written.
  */
-export async function executeProfile(
+export async function runProfileCommand(
   command: ProfileCommand,
-  dependencies: ProfilePorts,
+  dependencies: ProfileCommandDependencies,
 ): Promise<Result<string>> {
-  const outcome = await answerProfile(command, dependencies);
-  if (!outcome.ok) return outcome;
-  return output(command.out, outcome.value, dependencies);
+  const answer = await answerProfileCommand(command, dependencies);
+  if (!answer.ok) {
+    return answer;
+  }
+  return printOrWriteAnswer(answer.value, command, dependencies.writer);
 }
 
-/** The one flow each command names; retry and apply replay the retained request after a receipt lookup. */
-function run(
+/** Passes the command to the code that does its work, and returns that code's answer. */
+function answerServiceCommand(
   command: ServiceCommand,
-  dependencies: ServicePorts,
+  dependencies: ServiceCommandDependencies,
 ): Promise<Result<string>> {
   switch (command.name) {
     case 'describe':
-      return describe(dependencies);
+      return describeLanguage(dependencies);
     case 'list':
-      return list(dependencies);
+      return listCollections(dependencies);
     case 'read':
-      return read(command.collection, command.scope, dependencies);
+      return readCollection(command.collection, command.scope, dependencies);
     case 'inspect':
-      return inspect(command.collection, dependencies);
+      return inspectCollection(command.collection, dependencies);
     case 'receipt':
-      return receipt(command.request, dependencies);
+      return readReceipt(command.request, dependencies);
     case 'create':
     case 'replace':
     case 'patch':
     case 'preview':
-      return author(command, dependencies);
+      return sendSourceChange(command, dependencies);
     case 'retry':
     case 'apply':
-      return retry(command.request, dependencies);
+      return replayRetainedRequest(command.request, dependencies);
     case 'theme-admit':
     case 'recipe-admit':
       return admitPreset(command, dependencies);
     case 'recipe-instantiate':
-      return dependencies.resources.instantiate(command.expansion);
+      return instantiateRecipe(command.expansion, dependencies);
     default:
       return Promise.resolve(unsupported(command));
   }
 }
 
-/** Text is only written at the explicit --out path; stdout remains the default. */
-async function output(
-  path: FilePath | undefined,
-  text: string,
-  dependencies: OutputDependencies,
+/** Asks the service to turn the pinned recipe into diagram text, under the new namespace. */
+function instantiateRecipe(
+  expansion: ExpansionRequest,
+  dependencies: RecipeInstantiateDependencies,
 ): Promise<Result<string>> {
-  if (path === undefined) return success(text);
-  const saved = await dependencies.files.writeOutput(path, text);
-  if (!saved.ok) return saved;
-  return success(`Written: ${path}`);
+  return dependencies.resources.instantiate(expansion);
 }

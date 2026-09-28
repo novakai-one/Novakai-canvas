@@ -1,29 +1,43 @@
 /*
- * Authoring preview and apply over the HTTP transport: the mutation envelope, one route per mode,
- * and the apply answer's receipt check. Network I/O through the injected transport; each failure
- * is returned as a value. Authoring owns the commit. The request was retained before it was sent,
- * so an unconfirmed answer names it: `canvas receipt ID`, then `canvas retry ID`.
+ * Why this file exists
+ *
+ * `canvas create my-diagram.canvas` ends by sending the change to Authoring, inside the service,
+ * as `POST /api/v1/authoring/apply`. If that answer is lost, the agent must not send a new
+ * request: it checks `canvas receipt ID`, then runs `canvas retry ID` only if nothing was saved.
+ *
+ * This file sends a kept request to preview or apply, and checks the answer. When an answer is
+ * lost or can't be read, the mistake tells the agent to run `canvas receipt ID` before any retry.
+ * It never retries, and never saves anything itself; Authoring does. Mistakes come back as values.
  */
 import type { HttpTransport, WriteRoute } from '../../contract/ports/http-transport.js';
 import type { ServiceAuthoring } from '../../contract/ports/service-authoring.js';
+import type { AuthoringRequest, Receipt } from '../../contract/records/foreign.js';
 import type { RetainedRequest } from '../../contract/records/retained-request.js';
 import type {
   ChangePreview,
-  Observed,
   ReceiptLookup,
+  ServiceAnswer,
   SubmitMode,
 } from '../../contract/records/service-answers.js';
 import {
-  appliedAnswer,
-  changePreview,
-  receiptAnswer,
+  appliedAnswerSchema,
+  changePreviewSchema,
+  receiptAnswerSchema,
 } from '../../contract/records/service-answers.js';
-import type { RequestId } from '../../contract/brands.js';
-import type { CliFailure, Result } from '../../contract/errors.js';
-import { failure, success, unconfirmedApply } from '../../contract/errors.js';
+import type { RequestId, ServiceGeneration } from '../../contract/brands.js';
+import type { CliFailure, LocalFailure, Result } from '../../contract/errors.js';
+import { failure, success, unconfirmedApplyFailure } from '../../contract/errors.js';
 
 /** The transport's POST; this adapter never sends a GET. */
 type TransportPost = Pick<HttpTransport, 'post'>;
+
+/** What Authoring is sent: the kept request, its generation, and whether it is only a preview. */
+interface AuthoringEnvelope {
+  readonly version: 1;
+  readonly generation: ServiceGeneration;
+  readonly request: AuthoringRequest;
+  readonly preview: boolean;
+}
 
 /** The Authoring route of each mode. */
 const routes: Readonly<Record<SubmitMode, WriteRoute>> = Object.freeze({
@@ -32,100 +46,139 @@ const routes: Readonly<Record<SubmitMode, WriteRoute>> = Object.freeze({
 });
 
 /**
- * Binds preview and apply to `transport`. Both fail with `service-rejected`, or with
- * `connection-uncertain` / `invalid-response` whose recovery names the request's receipt.
+ * Gives core its preview and apply calls, made over `transport`. Both can fail with
+ * `service-rejected`. A lost or unreadable answer (`connection-uncertain`, `invalid-response`)
+ * tells the agent to check the request's receipt first.
  */
 export function createServiceAuthoring(transport: TransportPost): ServiceAuthoring {
   return {
-    preview: (retained) => preview(transport, retained),
-    apply: (retained) => apply(transport, retained),
+    preview: (retained) => sendPreview(transport, retained),
+    apply: (retained) => sendApply(transport, retained),
   };
 }
 
-/**
- * Authoring's preview answer, checked only to be JSON: printed as it came. Fails as {@link send}
- * does, or with `invalid-response` when the answer is not JSON; its recovery names the request's
- * receipt, as {@link unconfirmed} does.
- */
-async function preview(
+/** Sends the kept request to Authoring's preview route, and checks the answer is a preview. */
+async function sendPreview(
   transport: TransportPost,
   retained: RetainedRequest,
 ): Promise<Result<ChangePreview>> {
-  const answer = await send(transport, retained, 'preview');
-  if (!answer.ok) return answer;
-  const checked = changePreview.safeParse(answer.value.value);
-  if (!checked.success)
-    return failure({
-      code: 'invalid-response',
-      message: 'Service returned an invalid preview',
-      recovery: receiptFirst(retained.request.request),
-    });
-  return success(checked.data);
+  const answer = await sendToAuthoring(transport, retained, 'preview');
+  if (!answer.ok) {
+    return answer;
+  }
+  return checkPreview(answer.value, retained.request.request);
 }
 
-/**
- * Whether the apply answer carries a committed receipt. Fails as {@link send} or
- * {@link appliedReceipt} does.
- */
-async function apply(
+/** Sends the kept request to Authoring's apply route, and checks the answer holds its receipt. */
+async function sendApply(
   transport: TransportPost,
   retained: RetainedRequest,
-): Promise<Result<ReceiptLookup>> {
-  const answer = await send(transport, retained, 'apply');
-  if (!answer.ok) return answer;
-  return appliedReceipt(answer.value.value, retained.request.request);
+): Promise<Result<Receipt>> {
+  const answer = await sendToAuthoring(transport, retained, 'apply');
+  if (!answer.ok) {
+    return answer;
+  }
+  return checkAppliedReceipt(answer.value, retained.request.request);
 }
 
 /**
- * Sends the retained request in Authoring's mutation envelope; never its byte backups. Fails as the
- * transport does, with the recovery {@link unconfirmed} sets.
+ * Posts the kept request to Authoring, leaving out its byte copies. A lost or unreadable answer
+ * gets advice to check the receipt first; a service rejection is passed on as it came.
  */
-async function send(
+async function sendToAuthoring(
   transport: TransportPost,
   retained: RetainedRequest,
   mode: SubmitMode,
-): Promise<Result<Observed<unknown>>> {
-  const answer = await transport.post(routes[mode], {
-    version: 1,
-    generation: retained.generation,
-    request: retained.request,
-    preview: mode === 'preview',
-  });
-  if (!answer.ok) return unconfirmed(answer.error, retained.request.request);
+): Promise<Result<ServiceAnswer<unknown>>> {
+  const envelope = authoringEnvelope(retained, mode);
+  const answer = await transport.post(routes[mode], envelope);
+  if (!answer.ok && isUnconfirmedAnswer(answer.error)) {
+    return unconfirmedAnswerFailure(answer.error, retained.request.request);
+  }
   return answer;
 }
 
-/**
- * A lost or unreadable answer (`connection-uncertain`, `invalid-response`) names the retained
- * request instead of suggesting a new request ID. A service rejection is returned whole.
- */
-function unconfirmed(
-  error: CliFailure,
-  id: RequestId,
-): Result<never> {
-  if (error.code === 'connection-uncertain' || error.code === 'invalid-response')
-    return { ok: false, error: { ...error, recovery: receiptFirst(id) } };
-  return { ok: false, error };
+/** Wraps the kept request in the envelope Authoring reads. */
+function authoringEnvelope(
+  retained: RetainedRequest,
+  mode: SubmitMode,
+): AuthoringEnvelope {
+  const isPreview = mode === 'preview';
+  return {
+    version: 1,
+    generation: retained.generation,
+    request: retained.request,
+    preview: isPreview,
+  };
 }
 
-/** The recovery of an unconfirmed answer: check `id`'s receipt; retry only when there is none. */
-function receiptFirst(id: RequestId): string {
-  return `Run canvas receipt ${id}, then canvas retry ${id} only if no receipt exists.`;
-}
-
-/**
- * The apply answer's receipt half, checked by Authoring's receipt schema. An answer without one,
- * or with a malformed one, does not confirm the commit: `invalid-response`, check the receipt.
- */
-function appliedReceipt(
-  value: unknown,
+/** Checks the preview answer is JSON. It is printed as it came. */
+function checkPreview(
+  answer: ServiceAnswer<unknown>,
   request: RequestId,
-): Result<ReceiptLookup> {
-  const answer = appliedAnswer.safeParse(value);
-  if (!answer.success)
-    return failure(unconfirmedApply(request, 'Service returned an invalid apply confirmation'));
-  const receipt = receiptAnswer.safeParse(answer.data.receipt);
-  if (!receipt.success)
-    return failure(unconfirmedApply(request, 'Service returned an invalid receipt'));
-  return success(receipt.data);
+): Result<ChangePreview> {
+  const preview = changePreviewSchema.safeParse(answer.value);
+  if (!preview.success) {
+    return invalidPreviewFailure(request);
+  }
+  return success(preview.data);
+}
+
+/** Checks the apply answer holds a receipt, as Authoring's receipt check reads it. */
+function checkAppliedReceipt(
+  answer: ServiceAnswer<unknown>,
+  request: RequestId,
+): Result<Receipt> {
+  const applied = appliedAnswerSchema.safeParse(answer.value);
+  if (!applied.success) {
+    return unconfirmedApplyFailure(request, 'Service returned an invalid apply confirmation');
+  }
+  const lookup = receiptAnswerSchema.safeParse(applied.data.receipt);
+  if (!lookup.success) {
+    return unconfirmedApplyFailure(request, 'Service returned an invalid receipt');
+  }
+  return requireCommittedReceipt(lookup.data, request);
+}
+
+/** Gives the receipt when the answer holds one. No receipt (`none`) confirms nothing. */
+function requireCommittedReceipt(
+  lookup: ReceiptLookup,
+  request: RequestId,
+): Result<Receipt> {
+  if (lookup.kind === 'none') {
+    return unconfirmedApplyFailure(request, 'Apply returned no committed receipt');
+  }
+  return success(lookup.receipt);
+}
+
+/** Whether the answer was lost or couldn't be read, so the change may or may not be saved. */
+function isUnconfirmedAnswer(transportFailure: CliFailure): transportFailure is LocalFailure {
+  return (
+    transportFailure.code === 'connection-uncertain' || transportFailure.code === 'invalid-response'
+  );
+}
+
+/** Gives the advice for an answer that didn't arrive: check the receipt, retry only if none. */
+function receiptFirstAdvice(request: RequestId): string {
+  return `Run canvas receipt ${request}, then canvas retry ${request} only if no receipt exists.`;
+}
+
+/**
+ * Makes the mistake for a lost or unreadable answer: the transport's mistake, with advice to check
+ * the request's receipt, never to send a new request.
+ */
+function unconfirmedAnswerFailure(
+  transportFailure: LocalFailure,
+  request: RequestId,
+): Result<never, LocalFailure> {
+  return failure({ ...transportFailure, recovery: receiptFirstAdvice(request) });
+}
+
+/** Makes the mistake for a preview answer that isn't JSON (`invalid-response`). */
+function invalidPreviewFailure(request: RequestId): Result<never, LocalFailure> {
+  return failure({
+    code: 'invalid-response',
+    message: 'Service returned an invalid preview',
+    recovery: receiptFirstAdvice(request),
+  });
 }

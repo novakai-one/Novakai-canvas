@@ -1,47 +1,54 @@
 /*
- * What the local service answers, once the HTTP transport has checked its envelope, and the
- * schemas the service-call adapters check each answer with. Pure declarations; the receipt schema
- * turns Authoring's `null` into the `none` lookup. A service rejection never arrives here: the
- * transport returns it as `service-rejected`; an answer a schema rejects becomes
- * `invalid-response` in the adapter that asked.
+ * Why this file exists
+ *
+ * The service answers over HTTP, and an answer is only text until it is checked. `read` expects
+ * one collection's source, its revision and anything placed by hand. An answer missing its
+ * revision must not reach the agent as if it were fine.
+ *
+ * This file names each answer the CLI uses, and the check for each one. An answer that fails its
+ * check becomes `invalid-response`. A refusal from the service never arrives here; it is already
+ * `service-rejected`. Nothing here sends a request.
  */
 import { z } from 'zod';
 import {
   assetDigest,
   collectionId,
   collectionRevision,
-  manualAddress,
   objectId,
   recordId,
   sectionId,
   type CollectionId,
   type CollectionRevision,
-  type Generation,
-  type ManualAddress,
+  type ServiceGeneration,
   type RecordId,
 } from '../brands.js';
 import { receiptSchema } from '../schemas.js';
 import type { ReadScope } from './command.js';
 import type { Receipt } from './foreign.js';
 
-/** A successful answer's value and the service generation that sent it. */
-export interface Observed<T> {
-  readonly generation: Generation;
+/**
+ * An answer that worked: what the service sent, and the generation of the service that sent it
+ * (the label of one service start; see `brands.ts`).
+ */
+export interface ServiceAnswer<T> {
+  readonly generation: ServiceGeneration;
   readonly value: T;
 }
 
-/** Where a retained Authoring request goes: `preview` shows the change, `apply` commits it. */
+/** What to do with a kept Authoring request: `preview` shows the change, `apply` saves it. */
 export type SubmitMode = 'preview' | 'apply';
 
-/** A node placement or wire route a person set by hand; `replace` keeps it. */
+/** An object placed or a wire routed by hand. `replace` leaves it where it is. */
 export interface ManualTarget {
-  readonly target: ManualAddress;
+  /** Its address, such as `@section/@object`, as the service prints it. Passed on unchanged. */
+  readonly target: string;
   readonly kind: 'placement' | 'route';
+  /** Whether a person locked it, so automatic layout never moves it. */
   readonly locked: boolean;
 }
 
-/** `read`'s answer: the DSL source of one collection at one revision, and its manual geometry. */
-export interface Readout {
+/** `read`'s answer: one collection's source at one revision, and what was placed by hand. */
+export interface ReadAnswer {
   readonly source: string;
   readonly collection: CollectionId;
   readonly revision: CollectionRevision;
@@ -50,59 +57,61 @@ export interface Readout {
 }
 
 /**
- * What a receipt lookup or an apply answer says about one request: `committed` with Authoring's
- * receipt, or `none` when no commit is recorded for it.
+ * Whether a request was saved: `committed`, with Authoring's receipt, or `none` when the service
+ * holds no receipt for it.
  */
 export type ReceiptLookup =
   { readonly kind: 'committed'; readonly receipt: Receipt } | { readonly kind: 'none' };
 
 /**
- * What `/resources/prepare` answered: the Authoring record key the preset is stored under
- * (`preset:<digest>`), and the whole answer, which becomes the preset change payload unchanged.
+ * The answer to preparing a theme or recipe (a "preset", in Templates' word). Preparing works out
+ * exactly what saving it will store, without saving anything.
  */
 export interface PresetPreparation {
+  /** The key it will be saved under (`preset:<digest>`). */
   readonly key: { readonly kind: 'preset'; readonly id: RecordId };
+  /** The whole answer, key included, sent back unchanged in the save request. */
   readonly document: PresetDocument;
 }
 
 /**
- * The DSL vocabulary `/language` answered, printed as JSON by `describe`. The CLI reads nothing
- * inside it, so it checks only that it is JSON; Language owns its shape.
+ * Checks the DSL vocabulary that `describe` prints. The CLI reads nothing inside it, so it only
+ * checks that it is JSON; Language owns its shape.
  */
-export const languageDescription = z.json().brand<'LanguageDescription'>();
+export const languageDescriptionSchema = z.json().brand<'LanguageDescription'>();
 
 /**
- * Authoring's preview of a change, printed as JSON by `preview`. The CLI reads nothing inside it,
- * so it checks only that it is JSON; Authoring owns its shape.
+ * Checks Authoring's preview of a change, which `preview` prints. The CLI reads nothing inside it,
+ * so it only checks that it is JSON; Authoring owns its shape.
  */
-export const changePreview = z.json().brand<'ChangePreview'>();
+export const changePreviewSchema = z.json().brand<'ChangePreview'>();
 
 /**
- * The whole `/resources/prepare` answer, sent unchanged as the preset planner's payload. Checked
- * as JSON; {@link preparedAnswer} checks the key the CLI reads from it.
+ * Checks the whole answer to preparing a theme or recipe, which goes back unchanged in the save
+ * request. Only checked to be JSON; {@link preparedAnswerSchema} checks the key the CLI reads.
  */
-export const presetDocument = z.json().brand<'PresetDocument'>();
+export const presetDocumentSchema = z.json().brand<'PresetDocument'>();
 
-/** A vocabulary that passed {@link languageDescription}. */
-export type LanguageDescription = z.infer<typeof languageDescription>;
+/** The DSL vocabulary, checked by {@link languageDescriptionSchema}: any JSON. */
+export type LanguageDescription = z.infer<typeof languageDescriptionSchema>;
 
-/** A preview that passed {@link changePreview}. */
-export type ChangePreview = z.infer<typeof changePreview>;
+/** Authoring's preview of a change, checked by {@link changePreviewSchema}: any JSON. */
+export type ChangePreview = z.infer<typeof changePreviewSchema>;
 
-/** A preparation answer that passed {@link presetDocument}. */
-export type PresetDocument = z.infer<typeof presetDocument>;
+/** The whole preparation answer, checked by {@link presetDocumentSchema}: any JSON. */
+export type PresetDocument = z.infer<typeof presetDocumentSchema>;
 
 /** Checks one manual target. */
-const manualTarget = z
+const manualTargetSchema = z
   .strictObject({
-    target: manualAddress,
+    target: z.string(),
     kind: z.enum(['placement', 'route']),
     locked: z.boolean(),
   })
   .readonly();
 
 /** Checks a read scope; an answer without one read the whole collection. */
-const readScope = z
+const readScopeSchema = z
   .discriminatedUnion('kind', [
     z.object({ kind: z.literal('all') }),
     z.object({ kind: z.literal('section'), id: sectionId }),
@@ -110,38 +119,54 @@ const readScope = z
   ])
   .default({ kind: 'all' });
 
-/** Checks `/api/v1/source`'s answer. An answer without `manual` has no manual geometry. */
-export const readoutAnswer = z.object({
+/** Checks `read`'s answer (`/api/v1/source`). With no `manual` list, nothing was placed by hand. */
+export const readAnswerSchema = z.object({
   source: z.string(),
   collection: collectionId,
   revision: collectionRevision,
-  scope: readScope,
-  manual: z.array(manualTarget).readonly().default([]),
-}) satisfies z.ZodType<Readout>;
+  scope: readScopeSchema,
+  manual: z.array(manualTargetSchema).readonly().default([]),
+}) satisfies z.ZodType<ReadAnswer>;
 
-/** Checks `/authoring/apply`'s answer; the receipt is checked on its own, the snapshot half is the browser's. */
-export const appliedAnswer = z.looseObject({ receipt: z.unknown() });
+/**
+ * Checks that an apply answer (`/authoring/apply`) has a `receipt` field. The receipt itself is
+ * checked next, by {@link receiptAnswerSchema}.
+ */
+export const appliedAnswerSchema = z.looseObject({ receipt: z.unknown() });
 
-/** Checks a receipt answer: Authoring's receipt when committed, `null` when none is recorded. */
-export const receiptAnswer = receiptSchema.nullable().transform(receiptLookup);
+/**
+ * Checks a receipt answer: Authoring's receipt when the request was saved, `null` when not. Gives
+ * back a `ReceiptLookup`.
+ */
+export const receiptAnswerSchema = receiptSchema.nullable().transform(receiptLookup);
 
-/** Checks `/resources/stage`'s answer: the Assets descriptor of the staged bytes. */
-export const stagedAnswer = z.looseObject({ descriptor: z.looseObject({ digest: assetDigest }) });
+/** Checks the answer to storing a font or image (`/resources/stage`): the digest of its bytes. */
+export const stagedAnswerSchema = z.looseObject({
+  descriptor: z.looseObject({ digest: assetDigest }),
+});
 
-/** Checks `/resources/blob`'s answer before its digest is checked (see `byteBackup`). */
-export const blobAnswer = z.looseObject({
+/**
+ * Checks the answer to reading stored bytes back (`/resources/blob`). Its digest is checked
+ * later, by `byteBackupSchema`.
+ */
+export const blobAnswerSchema = z.looseObject({
   descriptor: z.looseObject({ digest: z.string() }),
   base64: z.string(),
 });
 
-/** Checks `/resources/prepare`'s answer: the preset's record key and the reads Templates made. */
-export const preparedAnswer = z.looseObject({
+/**
+ * Checks the answer to preparing a theme or recipe (`/resources/prepare`): the key it will be
+ * saved under.
+ */
+export const preparedAnswerSchema = z.looseObject({
   key: z.strictObject({ kind: z.literal('preset'), id: recordId }),
   reads: z.array(z.unknown()),
 });
 
-/** Authoring's receipt, or `null`, as a lookup: `committed` with the receipt, or `none`. */
+/** Turns Authoring's receipt, or `null` when there is none, into a `ReceiptLookup`. */
 function receiptLookup(receipt: Receipt | null): ReceiptLookup {
-  if (receipt === null) return { kind: 'none' };
+  if (receipt === null) {
+    return { kind: 'none' };
+  }
   return { kind: 'committed', receipt };
 }

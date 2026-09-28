@@ -1,16 +1,17 @@
 /*
- * `pnpm render:png` wiring: builds the ports of one read-only render and injects them. The
- * service's headless bindings, the resource reader and the render's input files, raster engine and
- * section files are built once; `open` makes the render's temporary asset store, prepares the
- * installation in it, builds Language, the Design System and Templates over it, and joins the
- * environment's sources, assets, themes and output ports from the adapters in adapters/render/.
- * Not pure: the adapters touch the filesystem. Failures are values, and a failed `open` closes the
- * store it made; a render changes nothing stored, so the caller fixes the input and runs it again.
+ * Why this file exists
+ *
+ * render:png's core decides what to draw, but it can't touch a file or import the parts that
+ * draw. Something must build those parts for real: the file readers, the PNG engine, a throwaway
+ * font and image store, Language, the Design System, Templates and the service's layout.
+ *
+ * This file builds them for one render and hands them over as one bundle of parts, `RenderPorts`.
+ * The parts that share the throwaway store are opened fresh for each render (`RenderPorts.open`);
+ * if that fails part way, the store is closed again. A render never changes a saved collection.
  */
 import { join } from 'node:path';
 import {
   createHeadlessBindings,
-  hostPath,
   prepareInstallation,
   validReport,
   type BuiltinResources,
@@ -21,57 +22,61 @@ import { composeTemplates, type Templates } from '@novakai/canvas-templates';
 import { createResourceReader } from '../../adapters/files/resource-reader.js';
 import { createRenderAssets } from '../../adapters/render/assets.js';
 import { createExporter, type ExportChoices } from '../../adapters/render/exporter.js';
-import { createProduction, type Production } from '../../adapters/render/production.js';
-import { createRaster } from '../../adapters/render/raster.js';
+import { createServiceLayout, type ServiceLayoutTools } from '../../adapters/render/production.js';
+import { createRasterEngine } from '../../adapters/render/raster.js';
 import { createInputFiles, createSectionFiles } from '../../adapters/render/render-files.js';
-import { createRenderSources, exportDocuments } from '../../adapters/render/sources.js';
-import { openTempAssets } from '../../adapters/render/temp-assets.js';
+import { createExportDocuments, createRenderSources } from '../../adapters/render/sources.js';
+import { openTempAssetStore } from '../../adapters/render/temp-assets.js';
 import { createRenderThemes } from '../../adapters/render/themes.js';
 import type { RenderEnvironment, RenderPorts } from '../ports/render.js';
 import type { TempAssetStore } from '../ports/render-assets.js';
 import type { RenderOutput } from '../ports/render-output.js';
 import type { RenderRequest } from '../records/render.js';
-import type { RenderEvidence } from '../records/render-failure.js';
-import type { HeadlessBindings, Language } from '../records/foreign.js';
-import { faulted, nativeFault, success, type Result } from '../errors.js';
-import { composeLanguage } from './language.js';
-import { composeThemeGrammar } from './theme-grammar.js';
+import type { RenderFailureSource } from '../records/render-failure.js';
+import type { HeadlessTools, Language } from '../records/foreign.js';
+import { providerFailure, success, type Failure, type Result } from '../errors.js';
+import { createLanguageWithModel } from './language.js';
+import { createThemeReader } from './theme-reader.js';
 
 /**
- * The ports of one render. Rejects when the service's render adapters cannot be imported; the
- * composition root reports that as `render-unavailable`.
+ * Builds the bundle of parts one render needs. Rejects (throws) if the service's drawing code
+ * can't be loaded; `compose.ts` turns that into `render-unavailable`.
  */
-export async function renderPorts(request: RenderRequest): Promise<RenderPorts> {
+export async function createRenderPorts(request: RenderRequest): Promise<RenderPorts> {
   const service = await createHeadlessBindings();
   return {
     open: () => openEnvironment(request, service),
     inputFiles: createInputFiles(request.root),
-    raster: createRaster(request.root),
+    raster: createRasterEngine(request.root),
     sectionFiles: createSectionFiles(request),
     resources: createResourceReader(),
-    themeGrammar: composeThemeGrammar(),
+    themeReader: createThemeReader(),
   };
 }
 
 /**
- * The render's temporary asset store and the environment over it. Fails with `provider-failed`
- * or Assets' failure when the store cannot be made. After that, fails as {@link environmentIn}
- * does, or with `provider-failed` when one of its steps throws; the store is then closed and the
- * first failure wins.
+ * Opens the render's throwaway font and image store, then prepares everything the render draws
+ * with over it. Fails with `provider-failed` or Assets' failure when the store can't be opened.
+ * After that it fails as {@link prepareEnvironment} does, or with `provider-failed` when a step
+ * throws; the store is then closed and that first failure is the one given back.
  */
 async function openEnvironment(
   request: RenderRequest,
-  service: HeadlessBindings,
-): Promise<Result<RenderEnvironment, RenderEvidence>> {
-  const store = await openTempAssets();
-  if (!store.ok) return store;
-  const environment = await environmentIn(request, service, store.value).catch(thrown);
-  if (!environment.ok) return closedAfter(store.value, environment.error);
+  service: HeadlessTools,
+): Promise<Result<RenderEnvironment, RenderFailureSource>> {
+  const store = await openTempAssetStore();
+  if (!store.ok) {
+    return store;
+  }
+  const environment = await prepareEnvironmentOrFault(request, service, store.value);
+  if (!environment.ok) {
+    return closeStoreAfterFailure(store.value, environment);
+  }
   return environment;
 }
 
-/** The capability values of one render, over its temporary asset store. */
-interface Environment {
+/** Language, the Design System, Templates and the shipped files one render draws with. */
+interface RenderCapabilities {
   readonly assets: TempAssetStore['assets'];
   readonly installation: BuiltinResources;
   readonly system: Pick<DesignSystem, 'resolve' | 'resolveTheme' | 'projectDiagram'>;
@@ -79,122 +84,139 @@ interface Environment {
   readonly templates: Pick<Templates<LoweredIntent>, 'read' | 'planAdmission'>;
 }
 
-/** What the environment port is joined from besides the capability values. */
-interface PortOwners {
-  readonly service: HeadlessBindings;
+/** One render's request, the service's drawing tools, and the render's throwaway store. */
+interface RenderSetup {
+  readonly service: HeadlessTools;
   readonly request: RenderRequest;
   readonly store: TempAssetStore;
 }
 
-/**
- * The installation prepared in `store` and the environment port over it. Fails with the service's
- * installation failure.
- */
-async function environmentIn(
+/** Prepares the render's environment, turning a throw into `provider-failed` with its details. */
+async function prepareEnvironmentOrFault(
   request: RenderRequest,
-  service: HeadlessBindings,
+  service: HeadlessTools,
   store: TempAssetStore,
-): Promise<Result<RenderEnvironment, RenderEvidence>> {
+): Promise<Result<RenderEnvironment, RenderFailureSource>> {
+  try {
+    return await prepareEnvironment(request, service, store);
+  } catch (thrown) {
+    return providerFailure(thrown);
+  }
+}
+
+/**
+ * Prepares the shipped resources and design tokens with the store, then joins the render's parts
+ * over them. Fails with the service's failure when the shipped resources can't be prepared.
+ */
+async function prepareEnvironment(
+  request: RenderRequest,
+  service: HeadlessTools,
+  store: TempAssetStore,
+): Promise<Result<RenderEnvironment, RenderFailureSource>> {
   const installation = await prepareInstallation(
-    hostPath.parse(join(request.root, 'resources')),
-    hostPath.parse(join(request.root, 'capability/design-system')),
+    join(request.root, 'resources'),
+    join(request.root, 'capability/design-system'),
     store.assets,
   );
-  if (!installation.ok) return installation;
-  const environment = capabilities(service, store.assets, installation.value);
-  return success(environmentPort(environment, { service, request, store }));
+  if (!installation.ok) {
+    return installation;
+  }
+  const capabilities = composeCapabilities(service, store.assets, installation.value);
+  const environment = createEnvironmentPort(capabilities, { service, request, store });
+  return success(environment);
 }
 
-/** A step that threw instead of returning its failure, as `provider-failed` with its evidence. */
-function thrown(error: unknown): Result<never, RenderEvidence> {
-  return faulted(nativeFault(error));
-}
-
-/** `error` as the outcome once `store` is closed; a failed close is not reported over it. */
-async function closedAfter(
+/**
+ * Closes the store after a failed step, then gives that failure back unchanged. A failed close
+ * isn't reported over it.
+ */
+async function closeStoreAfterFailure(
   store: TempAssetStore,
-  error: RenderEvidence,
-): Promise<Result<never, RenderEvidence>> {
+  failed: Failure<RenderFailureSource>,
+): Promise<Failure<RenderFailureSource>> {
   await store.close();
-  return { ok: false, error };
+  return failed;
 }
 
-/** Language, the Design System and Templates over the installation's tokens. Cannot fail. */
-function capabilities(
-  service: HeadlessBindings,
+/** Makes Language, the Design System and Templates over the shipped design tokens. Never fails. */
+function composeCapabilities(
+  service: HeadlessTools,
   assets: TempAssetStore['assets'],
   installation: BuiltinResources,
-): Environment {
+): RenderCapabilities {
   const system = composeDesignSystem();
-  const language = composeLanguage();
+  const language = createLanguageWithModel();
   const codecs = service.createPresetCodecs({
     system,
     language,
     sources: installation.tokens,
     resources: { themes: {}, assets: {} },
   });
-  return { assets, installation, system, language, templates: composeTemplates(codecs) };
+  const templates = composeTemplates(codecs);
+  return { assets, installation, system, language, templates };
 }
 
 /**
- * The environment port over `environment`, joined from the render adapters: sources, assets,
- * themes and output. Closing it closes the store. Cannot fail.
+ * Joins the render adapters (sources, assets, themes and output) into the environment the render
+ * uses. Closing it closes the store. Never fails.
  */
-function environmentPort(
-  environment: Environment,
-  owners: PortOwners,
+function createEnvironmentPort(
+  capabilities: RenderCapabilities,
+  setup: RenderSetup,
 ): RenderEnvironment {
   return {
-    sources: createRenderSources(environment.language),
-    assets: createRenderAssets(environment.assets),
+    sources: createRenderSources(capabilities.language),
+    assets: createRenderAssets(capabilities.assets),
     themes: createRenderThemes({
-      presets: environment.installation.presets,
-      assets: environment.assets,
-      templates: environment.templates,
-      prepareTheme: owners.service.prepareTheme,
+      presets: capabilities.installation.presets,
+      assets: capabilities.assets,
+      templates: capabilities.templates,
+      prepareTheme: setup.service.prepareTheme,
     }),
-    output: renderOutput(environment, owners),
-    close: () => owners.store.close(),
+    output: createRenderOutput(capabilities, setup),
+    close: () => setup.store.close(),
   };
 }
 
-/** The output port: the service's drawing and Export, each from its own adapter. */
-function renderOutput(
-  environment: Environment,
-  owners: PortOwners,
+/** Joins the service's drawing and Export's image writing into the render's output. */
+function createRenderOutput(
+  capabilities: RenderCapabilities,
+  setup: RenderSetup,
 ): RenderOutput {
-  return {
-    ...createProduction(serviceProduction(environment, owners)),
-    ...createExporter(exportChoices(environment, owners.request)),
-  };
+  const layoutTools = createLayoutTools(capabilities, setup);
+  const exportChoices = createExportChoices(capabilities, setup.request);
+  return { ...createServiceLayout(layoutTools), ...createExporter(exportChoices) };
 }
 
 /**
- * The service's render jobs over `environment`, with the layout engine's wasm below the repo root,
- * and the service's inspection report of a rendered document.
+ * Gives the service's render jobs, with the layout engine's wasm file below the repo folder, and
+ * the service's check of a drawn document.
  */
-function serviceProduction(
-  environment: Environment,
-  owners: PortOwners,
-): Production {
-  const jobs = owners.service.createRenderJobs({
-    ...environment,
-    sources: environment.installation.tokens,
-    wasmResource: hostPath.parse(
-      join(owners.request.root, 'resources/vendor/layout/libavoid.wasm'),
-    ),
+function createLayoutTools(
+  capabilities: RenderCapabilities,
+  setup: RenderSetup,
+): ServiceLayoutTools {
+  const wasmResource = join(setup.request.root, 'resources/vendor/layout/libavoid.wasm');
+  const renderJobs = setup.service.createRenderJobs({
+    ...capabilities,
+    sources: capabilities.installation.tokens,
+    wasmResource,
   });
-  return { jobs, produceDiagram: owners.service.produceDiagram, inspectDocument: validReport };
+  return {
+    renderJobs,
+    produceDiagram: setup.service.produceDiagram,
+    inspectDocument: validReport,
+  };
 }
 
-/** The request's format and label mode, and Export's documents port over Language. */
-function exportChoices(
-  environment: Environment,
+/** Gives the typed image format and label choice, and how Export reads each section's source. */
+function createExportChoices(
+  capabilities: RenderCapabilities,
   request: RenderRequest,
 ): ExportChoices {
   return {
     format: request.format,
     labels: request.labels,
-    documentsFor: (pins) => exportDocuments(environment.language, pins),
+    documentsFor: (pins) => createExportDocuments(capabilities.language, pins),
   };
 }

@@ -1,110 +1,143 @@
 /*
- * DSL authoring preparation: read the source file and the workspace snapshot once, parse the
- * source once, build its Authoring request, then stage and freeze its declared resources. Uses
- * injected ports only; nothing is retained or sent to Authoring here. Failures are returned as
- * values; the caller fixes the named input and runs the command again.
+ * Why this file exists
+ *
+ * A change is built once, then kept and sent exactly as built. For `replace plan.canvas`, the CLI
+ * reads the file and the workspace, parses the source, and stores any fonts or images it names in
+ * the service. An `apply` after a `preview` sends that same request; nothing is read again.
+ *
+ * This file does those steps, in that order, and gives back the request ready to keep and send.
+ * It never sends the change. Each step gives back a `Result` (see `contract/errors.ts`).
  */
 import { prepareResources } from '../resources/stage.js';
 import type { ResourceDependencies } from '../resources/stage.js';
 import { parseSource } from '../shared/parse-source.js';
-import { changeRequest, collectionRecordId } from './change-request.js';
-import { requestIdFor } from './request-id.js';
+import { buildChangeRequest, checkCollectionRecordId } from './change-request.js';
+import type { ChangeDraft } from './change-request.js';
+import { chooseRequestId } from './request-id.js';
 import type { ChangeCommand, ChangeIntent, ChangeMode } from '../../contract/records/command.js';
-import type { CollectionReader } from '../../contract/ports/collection-reader.js';
+import type { CollectionValidator } from '../../contract/ports/collection-validator.js';
 import type { LocalFiles } from '../../contract/ports/local-files.js';
 import type { RequestIds } from '../../contract/ports/request-ids.js';
 import type { ServiceReads } from '../../contract/ports/service-reads.js';
-import type { SourceLanguage } from '../../contract/ports/source-language.js';
-import type { Request, Snapshot } from '../../contract/records/foreign.js';
-import type { Observed } from '../../contract/records/service-answers.js';
+import type { SourceParser } from '../../contract/ports/source-parser.js';
+import type { AuthoringRequest, WorkspaceSnapshot } from '../../contract/records/foreign.js';
+import type { ServiceAnswer } from '../../contract/records/service-answers.js';
 import type { RetainedRequest } from '../../contract/records/retained-request.js';
 import type { CollectionRevision } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 
 /**
- * What `prepare` uses: the source read, the workspace read, the parser, Model's collection check,
- * request IDs and resource staging.
+ * The tools preparing a change uses: the source file read, the workspace read, Language's parser,
+ * Model's collection check, fresh request IDs, and font and image staging.
  */
 export interface PrepareDependencies extends ResourceDependencies {
   readonly files: Pick<LocalFiles, 'readSource'>;
   readonly reads: Pick<ServiceReads, 'workspace'>;
-  readonly language: SourceLanguage;
-  readonly collections: CollectionReader;
+  readonly language: SourceParser;
+  readonly collections: CollectionValidator;
   readonly requestIds: RequestIds;
 }
 
 /**
- * Capture source and observed versions once; neither preview nor apply refreshes the resulting
- * Authoring envelope. Fails as the source read, the workspace read, the parse, the request or
- * resource staging does; nothing is retained or sent to Authoring.
+ * Builds the request for one change command, and stages the fonts and images its source names.
+ * Gives back the request with copies of those bytes, in the form the journal keeps
+ * (`RetainedRequest`). Nothing is kept or sent yet.
+ * The mistakes it can find: the file or workspace can't be read, the source doesn't parse
+ * (`invalid-source`), the change doesn't fit the workspace, or a font or image can't be staged.
  */
-export async function prepare(
+export async function prepareChangeRequest(
   command: ChangeCommand,
   dependencies: PrepareDependencies,
 ): Promise<Result<RetainedRequest>> {
   const source = await dependencies.files.readSource(command.file);
-  if (!source.ok) return source;
-  const current = await dependencies.reads.workspace();
-  if (!current.ok) return current;
-  return prepareCaptured(command, source.value, current.value, dependencies);
+  if (!source.ok) {
+    return source;
+  }
+  const workspace = await dependencies.reads.workspace();
+  if (!workspace.ok) {
+    return workspace;
+  }
+  return buildAndStageRequest(command, source.value, workspace.value, dependencies);
 }
 
 /**
- * The request, then its resources. Resource preparation finishes before retention or submission.
- * Fails with `invalid-source`, as {@link requestOf} does, or as resource staging does.
+ * Builds the request from the source text and the workspace as read, then stages the fonts and
+ * images the source names.
  */
-async function prepareCaptured(
+async function buildAndStageRequest(
   command: ChangeCommand,
   source: string,
-  current: Observed<Snapshot>,
+  workspace: ServiceAnswer<WorkspaceSnapshot>,
   dependencies: PrepareDependencies,
 ): Promise<Result<RetainedRequest>> {
   const parsed = parseSource(dependencies.language, source);
-  if (!parsed.ok) return parsed;
-  const request = requestOf(command, source, parsed.value.collection, current.value, dependencies);
-  if (!request.ok) return request;
-  const retained = { generation: current.generation, request: request.value, backups: [] };
+  if (!parsed.ok) {
+    return parsed;
+  }
+  const declaredId = parsed.value.collection;
+  const request = buildCommandRequest(command, source, declaredId, workspace.value, dependencies);
+  if (!request.ok) {
+    return request;
+  }
+  const retained: RetainedRequest = {
+    generation: workspace.generation,
+    request: request.value,
+    backups: [],
+  };
   return prepareResources(command.file, parsed.value.resources, retained, dependencies);
 }
 
 /**
- * The change's Authoring request under the given `--request` or a fresh ID, for the collection
- * the source declares. Fails as `collectionRecordId`, `requestIdFor` or `changeRequest` does.
+ * Builds the command's Authoring request for the collection the source declares, sent under the
+ * typed `--request` or a fresh ID.
  */
-function requestOf(
+function buildCommandRequest(
   command: ChangeCommand,
   source: string,
-  declared: string,
-  snapshot: Snapshot,
+  declaredId: string,
+  snapshot: WorkspaceSnapshot,
   dependencies: PrepareDependencies,
-): Result<Request> {
-  const intent = intentOf(command);
-  const collection = collectionRecordId(intent, declared);
-  if (!collection.ok) return collection;
-  const requestId = requestIdFor(command, dependencies.requestIds);
-  if (!requestId.ok) return requestId;
-  const draft = { intent, collection: collection.value, source, request: requestId.value };
-  return changeRequest(draft, snapshot, dependencies.collections);
+): Result<AuthoringRequest> {
+  const intent = chooseIntent(command);
+  const collection = checkCollectionRecordId(intent, declaredId);
+  if (!collection.ok) {
+    return collection;
+  }
+  const requestId = chooseRequestId(command, dependencies.requestIds);
+  if (!requestId.ok) {
+    return requestId;
+  }
+  const draft: ChangeDraft = {
+    intent,
+    collection: collection.value,
+    source,
+    request: requestId.value,
+  };
+  return buildChangeRequest(draft, snapshot, dependencies.collections);
 }
 
-/** The preconditions the command asks for: preview by its --mode, the others by their name. */
-function intentOf(command: ChangeCommand): ChangeIntent {
+/** Works out what Authoring must check first: `preview` by its `--mode`, the others by name. */
+function chooseIntent(command: ChangeCommand): ChangeIntent {
   switch (command.name) {
     case 'create':
       return { mode: 'create' };
     case 'preview':
-      return intent(command.mode, command.revision);
+      return intentForMode(command.mode, command.revision);
     default:
-      return intent(command.name, command.revision);
+      return intentForMode(command.name, command.revision);
   }
 }
 
-/** `create` needs no revision; `replace` and `patch` keep the one the agent read, when given. */
-function intent(
+/** Builds the intent for a mode: `replace` and `patch` keep the revision if one was given. */
+function intentForMode(
   mode: ChangeMode,
   revision: CollectionRevision | undefined,
 ): ChangeIntent {
-  if (mode === 'create') return { mode };
-  if (revision === undefined) return { mode };
+  if (mode === 'create') {
+    return { mode };
+  }
+  if (revision === undefined) {
+    return { mode };
+  }
   return { mode, revision };
 }

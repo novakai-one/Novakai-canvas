@@ -1,8 +1,12 @@
 /*
- * The file I/O of one render, as three ports: finding and reading input files, starting the PNG
- * raster engine, and writing section files. Declarations only; adapters/render/render-files.ts
- * implements the input and section files, adapters/render/raster.ts the raster engine. Only the
- * output directory is written. Every failure is returned as a value.
+ * Why this file exists
+ *
+ * A render reads files and writes files. `--collection states --out out/` looks through the
+ * shipped collections for `states`, then writes one image per section into `out/`. PNG output
+ * also needs its image engine started first.
+ *
+ * This file names those three jobs: the input files, the PNG engine, and the section files. Only
+ * the `--out` folder is ever written. `adapters/render/` does the work.
  */
 import type { ProviderFault } from '../records/render-fault.js';
 import type { SourceFile } from '../records/source-file.js';
@@ -11,34 +15,40 @@ import type { FilePath, SectionId } from '../brands.js';
 import type { Result } from '../errors.js';
 
 /**
- * The render's input files, bound to its repo root. Every method fails with `provider-failed`
- * (the OS path, code and syscall).
+ * The files a render reads, found below the repo folder. Each fails with `provider-failed`, with
+ * Node's details of what went wrong.
  */
 export interface InputFiles {
-  /** The `.theme` files directly under `resources/`, sorted by name. */
+  /** Lists the shipped `.theme` files, directly under `resources/`, sorted by name. */
   shippedThemes(): Promise<Result<readonly FilePath[], ProviderFault>>;
-  /** Every `.canvas` file anywhere under `resources/`, sorted by path, with its text. */
+  /** Reads every shipped `.canvas` file, anywhere under `resources/`, sorted by path. */
   shippedCollections(): Promise<Result<readonly SourceFile[], ProviderFault>>;
-  /** One file's UTF-8 text; a relative path resolves against the working directory. */
+  /** Reads one file's text. A relative path is taken from the folder the command runs in. */
   read(path: FilePath): Promise<Result<SourceFile, ProviderFault>>;
-  /** Where the shipped source of a recipe family lives. Reads nothing. */
+  /**
+   * Gives the path of a recipe family's shipped source, such as `er`'s. Reads nothing. Fails only
+   * if the joined path were empty, which can't happen.
+   */
   recipeFile(family: RecipeFamily): Result<FilePath, ProviderFault>;
 }
 
-/** The PNG raster engine, loaded from the repo root. */
+/** The engine that turns a drawing into PNG bytes, loaded from the repo folder. */
 export interface RasterEngine {
-  /** Start the engine. Fails with `provider-failed`, or Export's own diagnostic. */
+  /**
+   * Prepares the engine: loads its WebAssembly file and starts it. Fails with `provider-failed`, or
+   * with Export's own finding.
+   */
   prepare(): Promise<Result<void, ProviderFault | ExportDiagnostic>>;
 }
 
 /**
- * The render's section files, bound to its output directory and format. Every method fails with
- * `provider-failed` (the OS path, code and syscall).
+ * The image files a render writes, one per section, into the `--out` folder. Each fails with
+ * `provider-failed`, with Node's details of what went wrong.
  */
 export interface SectionFiles {
-  /** Create the output directory, parents included. */
-  prepare(): Promise<Result<void, ProviderFault>>;
-  /** Write one section's bytes to its file in the output directory; returns the path. */
+  /** Makes the `--out` folder, and any folders above it that are missing. */
+  makeOutFolder(): Promise<Result<void, ProviderFault>>;
+  /** Writes one section's image bytes to its file, and gives back the file's path. */
   write(
     section: SectionId,
     bytes: Uint8Array,

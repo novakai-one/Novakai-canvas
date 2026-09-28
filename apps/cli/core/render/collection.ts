@@ -1,86 +1,112 @@
 /*
- * The collection one render draws: the chosen source with the chosen theme written in, its fonts
- * and images admitted as asset records, lowered against the admitted catalog's pins and checked by
- * Model, with the chosen theme's pin in place of the collection's own. A fresh copy: no stored
- * collection or source file changes. Pure apart from the injected ports. The caller names another
- * collection or theme and runs render:png again.
+ * Why this file exists
+ *
+ * `--collection states --theme atlas` asks to draw the `states` collection with the `atlas`
+ * theme in place of its own. The source text can't be drawn as it is. It needs the theme written
+ * in and its fonts and images stored, then Language and Model turn it into a checked collection.
+ *
+ * This file does those steps, in that order, on a fresh copy of the text. Each step gives back a
+ * `Result` (see `contract/errors.ts`). It never changes a saved collection or a source file.
  */
 import type { RenderSources } from '../../contract/ports/render-sources.js';
 import type { Collection, ResolvedResources } from '../../contract/records/foreign.js';
 import type { CollectionSelector, ThemeChoice } from '../../contract/records/render.js';
-import type { RenderEvidence } from '../../contract/records/render-failure.js';
+import type { RenderFailureSource } from '../../contract/records/render-failure.js';
+import type { RenderFault } from '../../contract/records/render-fault.js';
 import type { SourceFile } from '../../contract/records/source-file.js';
 import type { Result } from '../../contract/errors.js';
-import { faulted, success } from '../../contract/errors.js';
-import { collectionSource, type SourceDependencies } from './collection-source.js';
+import { renderFaultFailure, success } from '../../contract/errors.js';
+import { findCollectionSource, type SourceDependencies } from './collection-source.js';
 import { pinResources } from './pins.js';
-import { sourceAssets, type AssetDependencies } from './source-assets.js';
-import { withTheme } from './source-theme.js';
+import { admitSourceAssets, type AssetDependencies } from './source-assets.js';
+import { setSourceTheme } from './source-theme.js';
 import type { AdmittedThemes } from './themes.js';
 
-/** What drawing a collection uses: source reads, the parse, asset admission, lowering and Model. */
+/**
+ * What loading a collection needs: file reads, the render's temporary store, and `sources`
+ * (Language's parser, Language turning text into a collection, and Model's check).
+ */
 export interface CollectionDependencies extends SourceDependencies, AssetDependencies {
   readonly sources: RenderSources;
 }
 
 /**
- * The checked collection `selector` names, drawn with `themes`' choice when there is one. Fails as
- * choosing the source, overriding its theme, admitting its fonts and images, Language's lowering
- * or Model's check does, with `duplicate-asset` when the source declares one asset ID twice, or
- * with `missing-theme` when the choice has no admitted pin.
+ * Loads the collection `selector` names as a checked collection. When a theme was asked for,
+ * `themes.choice` is first written in as its theme. It draws nothing; drawing comes later.
+ * Mistakes: the source can't be found or read, the theme can't be written in or isn't known
+ * (`missing-theme`), a font or image can't be stored, or Language or Model find a problem.
  */
-export async function chosenCollection(
+export async function loadCollection(
   selector: CollectionSelector,
   themes: AdmittedThemes,
   dependencies: CollectionDependencies,
-): Promise<Result<Collection, RenderEvidence>> {
-  const original = await collectionSource(selector, themes.catalog, dependencies);
-  if (!original.ok) return original;
-  const source = themedSource(original.value, themes.choice, dependencies.sources.parse);
-  if (!source.ok) return source;
-  return lowered(source.value, themes, dependencies);
+): Promise<Result<Collection, RenderFailureSource>> {
+  const original = await findCollectionSource(selector, themes.catalog, dependencies);
+  if (!original.ok) {
+    return original;
+  }
+  const themed = applyThemeChoice(original.value, themes.choice, dependencies.sources.parse);
+  if (!themed.ok) {
+    return themed;
+  }
+  return makeCollection(themed.value, themes, dependencies);
 }
 
-/** The source as it is without a choice; otherwise a copy naming the chosen theme. */
-function themedSource(
+/** Writes the chosen theme into a copy of the source. With no choice, the source stays as it is. */
+function applyThemeChoice(
   source: SourceFile,
   choice: ThemeChoice | undefined,
   parse: RenderSources['parse'],
-): Result<SourceFile, RenderEvidence> {
-  if (choice === undefined) return success(source);
-  return withTheme(source, choice, parse);
+): Result<SourceFile, RenderFailureSource> {
+  if (choice === undefined) {
+    return success(source);
+  }
+  return setSourceTheme(source, choice, parse);
 }
 
 /**
- * The source's asset records, then the source lowered against the catalog's theme pins and those
- * records (Language has Model check the collection, records included), then checked with the
- * chosen pin. Fails as each step does.
+ * Stores the source's fonts and images, has Language turn the text into a collection, then checks
+ * it with the chosen theme.
  */
-async function lowered(
+async function makeCollection(
   source: SourceFile,
   themes: AdmittedThemes,
   dependencies: CollectionDependencies,
-): Promise<Result<Collection, RenderEvidence>> {
-  const assets = await sourceAssets(source, dependencies);
-  if (!assets.ok) return assets;
+): Promise<Result<Collection, RenderFailureSource>> {
+  const assets = await admitSourceAssets(source, dependencies);
+  if (!assets.ok) {
+    return assets;
+  }
   const pins = pinResources(themes.catalog, assets.value);
   const collection = dependencies.sources.lower(source.source, pins);
-  if (!collection.ok) return collection;
-  return withChoice(collection.value, pins, themes.choice, dependencies.sources);
+  if (!collection.ok) {
+    return collection;
+  }
+  return checkWithChosenTheme(collection.value, pins, themes.choice, dependencies.sources);
 }
 
 /**
- * Model's check of the lowered collection, with the chosen theme's pin in place of its own when
- * there is a choice. Fails with `missing-theme` or Model's diagnostics.
+ * Has Model check the collection. When a theme was asked for, the chosen theme's pin takes the
+ * place of the collection's own first.
  */
-function withChoice(
+function checkWithChosenTheme(
   collection: Collection,
   pins: ResolvedResources,
   choice: ThemeChoice | undefined,
   sources: Pick<RenderSources, 'validate'>,
-): Result<Collection, RenderEvidence> {
-  if (choice === undefined) return sources.validate(collection);
-  const pin = pins.themes[choice];
-  if (pin === undefined) return faulted({ code: 'missing-theme', theme: choice });
-  return sources.validate({ ...collection, theme: pin });
+): Result<Collection, RenderFailureSource> {
+  if (choice === undefined) {
+    return sources.validate(collection);
+  }
+  const chosenPin = pins.themes[choice];
+  if (chosenPin === undefined) {
+    return missingThemeFailure(choice);
+  }
+  const withChosenTheme = { ...collection, theme: chosenPin };
+  return sources.validate(withChosenTheme);
+}
+
+/** Makes the mistake for a theme the render doesn't know (`missing-theme`). */
+function missingThemeFailure(theme: ThemeChoice): Result<never, RenderFault> {
+  return renderFaultFailure({ code: 'missing-theme', theme });
 }
