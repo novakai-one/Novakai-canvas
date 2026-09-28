@@ -4,7 +4,7 @@
  * returned unchanged and nothing is sent, so the caller reruns with `--request`.
  */
 import type { RequestIds } from '../../contract/ports/request-ids.js';
-import type { Retains } from '../../contract/records/command.js';
+import type { RequestOption } from '../../contract/records/command.js';
 import type { RequestId } from '../../contract/brands.js';
 import { success, type Result } from '../../contract/errors.js';
 
@@ -13,7 +13,7 @@ import { success, type Result } from '../../contract/errors.js';
  * Fails with `cli-unavailable` when the fresh ID does not match Authoring's request ID grammar.
  */
 export function requestIdFor(
-  command: Retains,
+  command: RequestOption,
   ids: RequestIds,
 ): Result<RequestId> {
   if (command.request !== undefined) return success(command.request);
