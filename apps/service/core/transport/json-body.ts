@@ -6,7 +6,7 @@
  */
 import type { HeaderValue } from '../../contract/records/transport/http.js';
 import { failure, success, type Result } from '../../contract/errors.js';
-import { readHeader } from './request-head.js';
+import { headerText } from './request-head.js';
 
 /**
  * Which route family reads the body: `mutation` for the Authoring routes, `resource` for the
@@ -48,9 +48,8 @@ export function jsonBody(
 
 /** Whether the header, sent once, has the media type `application/json`. */
 function isJson(contentType: HeaderValue): boolean {
-  const text = readHeader(contentType);
-  if (text === undefined) return false;
-  return mediaType(text) === 'application/json';
+  if (contentType.kind === 'repeated') return false;
+  return mediaType(headerText(contentType)) === 'application/json';
 }
 
 /** The media type without its parameters: `application/json; charset=utf-8` → `application/json`. */

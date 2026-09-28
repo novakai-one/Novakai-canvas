@@ -6,7 +6,7 @@ import type { Scope } from '../../contract/records/capabilities.js';
 import type { ApiQuery } from '../../contract/records/transport/protocol.js';
 import { objectId, sectionId } from '../../contract/schemas.js';
 import { failure, success, type Result } from '../../contract/errors.js';
-import { readAllValues } from './request-kind.js';
+import { readAllValues } from './api-query.js';
 
 /**
  * The print scope from the query. Fails with `invalid-input` at `scope` when both `section` and

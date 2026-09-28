@@ -11,7 +11,7 @@ import type { WorkspaceSession } from '../../contract/types.js';
 import { failure, success, type Result } from '../../contract/errors.js';
 import { liveRecord } from '../workspace/records.js';
 import { sourceScope } from './source-scope.js';
-import { readLastValue } from './request-kind.js';
+import { readLastValue } from './api-query.js';
 import { answerJson, type RouteHandler } from './route-answer.js';
 
 /** A Language route, as `METHOD path`. */

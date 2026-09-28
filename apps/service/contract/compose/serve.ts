@@ -10,12 +10,13 @@ import type { HttpAdmission, HttpSecurity, TransportPolicy } from '../ports/tran
 import type { Result } from '../errors.js';
 import { failure } from '../errors.js';
 import { createAdmission } from '../../core/transport/admission.js';
+import { apiQuery } from '../../core/transport/api-query.js';
 import { createBrowserAccess } from '../../core/transport/browser-access.js';
 import { readCommand } from '../../core/transport/command.js';
 import { eventFrames } from '../../core/transport/events.js';
 import { requestBody } from '../../core/transport/request-body.js';
 import { requestHead } from '../../core/transport/request-head.js';
-import { apiQuery, requestKind } from '../../core/transport/request-kind.js';
+import { requestKind } from '../../core/transport/request-kind.js';
 import { createHttpRouter } from '../../core/transport/routes.js';
 import { createSourceReadout } from '../../core/transport/source-readout.js';
 import { httpStatus, transportResponse } from '../../core/transport/status.js';

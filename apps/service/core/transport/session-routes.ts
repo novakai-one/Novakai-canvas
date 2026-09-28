@@ -14,7 +14,7 @@ import { collectionId } from '../../contract/schemas.js';
 import { missingCollection } from '../rendering/collection.js';
 import { historyVersionsOnly } from '../session/history-versions.js';
 import { jsonBody } from './json-body.js';
-import { readLastValue } from './request-kind.js';
+import { readLastValue } from './api-query.js';
 import { answerFile, answerOutcome, answerJson, type RouteHandler } from './route-answer.js';
 
 /** A session route, as `METHOD path`. */

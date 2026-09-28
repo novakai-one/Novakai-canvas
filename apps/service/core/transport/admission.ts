@@ -16,7 +16,7 @@ import type { Request } from '../../contract/records/capabilities.js';
 import type { PlannerId } from '../../contract/brands.js';
 import { plannerId, requestSchema } from '../../contract/schemas.js';
 import { failure, success, type Result } from '../../contract/errors.js';
-import { headerMatches, readHeader } from './request-head.js';
+import { headerMatches, headerText } from './request-head.js';
 
 /**
  * The public semantic planners each caller may address. Installation stays internal, and the agent
@@ -152,9 +152,8 @@ function readSessionCookie(
   header: HeaderValue,
   host: string,
 ): string {
-  const text = readHeader(header);
-  if (text === undefined) return '';
-  return findSessionCookie(text, host);
+  if (header.kind === 'repeated') return '';
+  return findSessionCookie(headerText(header), host);
 }
 
 /**
@@ -197,9 +196,8 @@ function isAgentBearer(
   header: HeaderValue,
   security: HttpSecurity,
 ): boolean {
-  const text = readHeader(header);
-  if (text === undefined) return false;
-  return security.equal(text, `Bearer ${security.agentToken}`);
+  if (header.kind === 'repeated') return false;
+  return security.equal(headerText(header), `Bearer ${security.agentToken}`);
 }
 
 /**

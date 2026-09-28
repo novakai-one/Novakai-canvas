@@ -1,7 +1,7 @@
 /*
  * The request head the ingress policy reads (the method and eight headers, still untrusted) and
- * how a check reads one header. Pure. An absent header reads as empty text; a repeated one reads
- * as no text at all, so no check accepts it and the caller corrects and resends the request.
+ * how a check reads one header. Pure. An absent header reads as empty text; a repeated one has no
+ * text, so every check refuses it before reading and the caller corrects and resends the request.
  */
 import type {
   HeaderLists,
@@ -36,29 +36,25 @@ export function requestHead(
   };
 }
 
-/**
- * The header's text: empty when absent, its value when sent once, `undefined` when repeated.
- * Cannot fail.
- */
-export function readHeader(header: HeaderValue): string | undefined {
-  switch (header.kind) {
-    case 'absent':
-      return '';
-    case 'single':
-      return header.value;
-    case 'repeated':
-      return undefined;
-    default:
-      return unsupported(header);
-  }
-}
+/** A header sent at most once, so its text is unambiguous. */
+export type UnambiguousHeader = Exclude<HeaderValue, { readonly kind: 'repeated' }>;
 
 /** Whether the header reads as `text`. Absent reads as empty text; repeated never matches. */
 export function headerMatches(
   header: HeaderValue,
   text: string,
 ): boolean {
-  return readHeader(header) === text;
+  if (header.kind === 'repeated') return false;
+  return headerText(header) === text;
+}
+
+/**
+ * The text of a header sent at most once: empty when absent, its value when sent once. A caller
+ * refuses a `repeated` header before asking. Cannot fail.
+ */
+export function headerText(header: UnambiguousHeader): string {
+  if (header.kind === 'absent') return '';
+  return header.value;
 }
 
 /** `absent` when there is no value, `single` for one, `repeated` for several. */
@@ -67,10 +63,4 @@ function headerValue(values: readonly string[] | undefined): HeaderValue {
   if (only === undefined) return ABSENT;
   if (others.length > 0) return REPEATED;
   return { kind: 'single', value: only };
-}
-
-/** Unreachable: `HeaderValue` has three kinds. Reads as no text, which no check accepts. */
-function unsupported(header: never): undefined {
-  void header;
-  return undefined;
 }
