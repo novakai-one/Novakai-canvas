@@ -33,9 +33,8 @@ export function findLiveRecord(
   kind: RecordKind,
   id: string,
 ): StoredRecord | undefined {
-  return snapshot.records.find(
-    (item) => !item.deleted && item.key.kind === kind && item.key.id === id,
-  );
+  const liveRecords = listLiveRecords(snapshot, kind);
+  return liveRecords.find((record) => record.key.id === id);
 }
 
 /** Lists every live record of this kind, in snapshot order. Never fails. */
@@ -43,7 +42,7 @@ export function listLiveRecords(
   snapshot: Snapshot,
   kind: RecordKind,
 ): readonly StoredRecord[] {
-  return snapshot.records.filter((item) => !item.deleted && item.key.kind === kind);
+  return snapshot.records.filter((record) => isLiveOfKind(record, kind));
 }
 
 /** Makes the ID a preset is saved under (kind `preset`): `preset:<digest>`. Never fails. */
@@ -57,4 +56,14 @@ export function presetRecordId(digest: PresetDigest): `preset:${string}` {
  */
 export function assetRecordId(digest: AssetDigest): `asset:${string}` {
   return `asset:${digest}`;
+}
+
+/** Whether the record still exists (isn't marked `deleted`) and has this kind. */
+function isLiveOfKind(
+  record: StoredRecord,
+  kind: RecordKind,
+): boolean {
+  const isLive = !record.deleted;
+  const hasKind = record.key.kind === kind;
+  return isLive && hasKind;
 }

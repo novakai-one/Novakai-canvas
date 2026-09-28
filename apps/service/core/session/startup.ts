@@ -10,9 +10,11 @@
  * `Result` (contract/errors.ts) and the first mistake stops start-up. It never deletes anything.
  */
 import type {
+  AuthoringDiagnostic,
   AuthoringResult,
   CandidateValidator,
   HistoryStatus,
+  RecordKey,
   Request,
   Snapshot,
 } from '../../contract/records/capability-types.js';
@@ -43,73 +45,126 @@ export interface StartupDependencies {
  * part's own diagnostic is kept as `source`.
  */
 export async function startWorkspace(dependencies: StartupDependencies): Promise<Result<void>> {
-  const snapshot = await dependencies.session.read();
-  if (!snapshot.ok) return started(snapshot);
-  const prepared = await prepare(workspaceState(snapshot.value), snapshot.value, dependencies);
-  if (!prepared.ok) return prepared;
-  return started(await dependencies.startHistory());
+  const snapshot = await readStoredWorkspace(dependencies);
+  if (!snapshot.ok) {
+    return snapshot;
+  }
+  const kind = findStartupKind(snapshot.value);
+  const prepared = await prepareWorkspace(kind, snapshot.value, dependencies);
+  if (!prepared.ok) {
+    return prepared;
+  }
+  return startUndoHistory(dependencies);
 }
 
-/** The installation apply's options: none, so Authoring checks no candidate hash. */
+/** The seed save's apply options: none, so Authoring checks no candidate hash. */
 const NO_APPLY_OPTIONS = Object.freeze({});
 
-/** `existing` when the snapshot holds a live workspace record, otherwise `new`. Never fails. */
-function workspaceState(snapshot: Snapshot): StartupKind {
-  if (listLiveRecords(snapshot, 'workspace').length > 0) return 'existing';
+/** Start-up changes no records, so the check of a used workspace is told none changed. */
+const NO_CHANGED_RECORDS: readonly RecordKey[] = Object.freeze([]);
+
+/** Reads the workspace as it is stored now. */
+async function readStoredWorkspace(dependencies: StartupDependencies): Promise<Result<Snapshot>> {
+  const snapshot = await dependencies.session.read();
+  if (!snapshot.ok) {
+    return refusedStepFailure(snapshot.error);
+  }
+  return success(snapshot.value);
+}
+
+/** Says whether the workspace was used before (`existing`) or is `new`. */
+function findStartupKind(snapshot: Snapshot): StartupKind {
+  if (hasWorkspaceRecord(snapshot)) {
+    return 'existing';
+  }
   return 'new';
 }
 
-/** Validates an existing workspace or initializes a new one. Fails as `startWorkspace` names. */
-function prepare(
-  state: StartupKind,
+/** Whether the snapshot holds a live `workspace` record, which only a used workspace has. */
+function hasWorkspaceRecord(snapshot: Snapshot): boolean {
+  const workspaceRecords = listLiveRecords(snapshot, 'workspace');
+  return workspaceRecords.length > 0;
+}
+
+/** Checks an existing workspace as stored, or saves the seed into a new one. */
+async function prepareWorkspace(
+  kind: StartupKind,
   snapshot: Snapshot,
   dependencies: StartupDependencies,
 ): Promise<Result<void>> {
-  switch (state) {
+  switch (kind) {
     case 'existing':
-      return validateExisting(snapshot, dependencies);
+      return checkExistingWorkspace(snapshot, dependencies);
     case 'new':
-      return initializeNew(dependencies);
+      return seedNewWorkspace(dependencies);
     default:
-      return unsupported(state);
+      return unknownStartupKindFailure(kind);
   }
 }
 
-/**
- * Validates the stored workspace as it is; nothing is written. Fails with `unavailable` at the
- * validator's path.
- */
-async function validateExisting(
+/** Runs Authoring's check of a whole workspace on the stored workspace; nothing is written. */
+async function checkExistingWorkspace(
   snapshot: Snapshot,
   dependencies: StartupDependencies,
 ): Promise<Result<void>> {
-  return started(await dependencies.candidateCheck.validate(snapshot, snapshot, []));
-}
-
-/**
- * Applies the installation request once. Fails with `invalid-input` at its path when it could not
- * be built, and `unavailable` at Authoring's path when Authoring refuses it.
- */
-async function initializeNew(dependencies: StartupDependencies): Promise<Result<void>> {
-  const request = dependencies.seedRequest;
-  if (!request.ok) {
-    return failure('invalid-input', request.error.path, request.error.message, request.error);
-  }
-  return started(
-    await dependencies.session.apply(request.value, dependencies.signal, NO_APPLY_OPTIONS),
+  const checked = await dependencies.candidateCheck.validate(
+    snapshot,
+    snapshot,
+    NO_CHANGED_RECORDS,
   );
-}
-
-/** An owner's answer as startup's: a refusal is `unavailable`, with the owner's diagnostic kept. */
-function started(result: AuthoringResult<unknown>): Result<void> {
-  if (!result.ok) {
-    return failure('unavailable', result.error.path, result.error.message, result.error);
+  if (!checked.ok) {
+    return refusedStepFailure(checked.error);
   }
   return success(undefined);
 }
 
-/** Unreachable: `StartupKind` has two members. Answers `unavailable` at `startup`. */
-async function unsupported(state: never): Promise<Result<void>> {
-  void state;
+/** Saves a new workspace's first records as one ordinary Authoring apply. */
+async function seedNewWorkspace(dependencies: StartupDependencies): Promise<Result<void>> {
+  const seedRequest = dependencies.seedRequest;
+  if (!seedRequest.ok) {
+    return unmadeSeedFailure(seedRequest.error);
+  }
+  const saved = await dependencies.session.apply(
+    seedRequest.value,
+    dependencies.signal,
+    NO_APPLY_OPTIONS,
+  );
+  if (!saved.ok) {
+    return refusedStepFailure(saved.error);
+  }
+  return success(undefined);
+}
+
+/** Starts undo history, or checks the history the workspace already has. */
+async function startUndoHistory(dependencies: StartupDependencies): Promise<Result<void>> {
+  const history = await dependencies.startHistory();
+  if (!history.ok) {
+    return refusedStepFailure(history.error);
+  }
+  return success(undefined);
+}
+
+/**
+ * Makes the mistake for a start-up step that was refused (`unavailable`), keeping the refusal as
+ * `source`.
+ */
+function refusedStepFailure(refusal: AuthoringDiagnostic): Result<never> {
+  return failure('unavailable', refusal.path, refusal.message, refusal);
+}
+
+/**
+ * Makes the mistake for a seed request that couldn't be made (`invalid-input`), keeping the reason
+ * as `source`.
+ */
+function unmadeSeedFailure(reason: AuthoringDiagnostic): Result<never> {
+  return failure('invalid-input', reason.path, reason.message, reason);
+}
+
+/**
+ * Makes the mistake for a start-up kind this file doesn't know; it can't happen while `StartupKind`
+ * has two members.
+ */
+function unknownStartupKindFailure(kind: never): Result<never> {
+  void kind;
   return failure('unavailable', 'startup', 'Unsupported workspace state');
 }

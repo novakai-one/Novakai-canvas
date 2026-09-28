@@ -15,7 +15,7 @@ import type {
   Request,
 } from '../../contract/records/capability-types.js';
 import type { AppliedCommit } from '../../contract/records/workspace/session.js';
-import { authoringFailure } from '../../contract/errors.js';
+import { authoringFailure, success } from '../../contract/errors.js';
 import type { WorkspaceId } from '../../contract/brands.js';
 import { stripHistoryContents } from './history-versions.js';
 
@@ -31,18 +31,23 @@ export async function commitThenRead(
   change: Request,
   options: unknown,
 ): Promise<AuthoringResult<AppliedCommit>> {
-  const committed = await authoring.apply(change, options);
-  if (!committed.ok) return committed;
-  const committedWorkspace = await authoring.read(workspace);
-  if (!committedWorkspace.ok) return carriedSnapshotUnread();
-  return {
-    ok: true,
-    value: { receipt: committed.value, snapshot: stripHistoryContents(committedWorkspace.value) },
-  };
+  const receipt = await authoring.apply(change, options);
+  if (!receipt.ok) {
+    return receipt;
+  }
+  const savedWorkspace = await authoring.read(workspace);
+  if (!savedWorkspace.ok) {
+    return readBackFailure();
+  }
+  const snapshot = stripHistoryContents(savedWorkspace.value);
+  return success({ receipt: receipt.value, snapshot });
 }
 
-/** A committed edit is never a refusal: a failed snapshot read leaves the receipt durable and the fate uncertain, so the client reconciles the receipt instead of dropping the write. */
-function carriedSnapshotUnread(): AuthoringResult<never> {
+/**
+ * Makes the mistake for a saved change whose new workspace could not be read
+ * (`storage-unavailable` at `snapshot`); the change stays saved, and its receipt can be looked up.
+ */
+function readBackFailure(): AuthoringResult<never> {
   return authoringFailure(
     'storage-unavailable',
     'snapshot',

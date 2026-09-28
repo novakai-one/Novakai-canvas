@@ -34,6 +34,7 @@ type LifetimePhase =
 /** The phase once `close` has been called. */
 type ClosingPhase = Extract<LifetimePhase, { readonly kind: 'closing' }>;
 
+/** The phase a new session starts in. */
 const OPEN: LifetimePhase = Object.freeze({ kind: 'open' });
 
 /**
@@ -43,53 +44,71 @@ const OPEN: LifetimePhase = Object.freeze({ kind: 'open' });
 export function createSessionLifetime(
   closeWorkspace: () => Promise<Result<void>>,
 ): SessionLifetime {
-  const active = new Set<Promise<unknown>>();
-  let phase = OPEN;
+  const runningCalls = new Set<Promise<unknown>>();
+  let phase: LifetimePhase = OPEN;
   return {
     async run<T>(operation: () => Promise<T>, closedAnswer: () => T): Promise<T> {
-      if (phase.kind === 'closing') return closedAnswer();
-      return track(active, operation);
+      if (phase.kind === 'closing') {
+        return closedAnswer();
+      }
+      return trackRunningCall(runningCalls, operation);
     },
     close(): Promise<Result<void>> {
-      const closing = closingPhase(phase, () => shutdown([...active], closeWorkspace));
+      const startShutdown = () => shutdown([...runningCalls], closeWorkspace);
+      const closing = enterClosingPhase(phase, startShutdown);
       phase = closing;
       return closing.closed;
     },
   };
 }
 
-/** Runs one admitted operation, holding it in `active` until it settles. Rethrows what it throws. */
-async function track<T>(
-  active: Set<Promise<unknown>>,
+/** Runs one call and holds it in `runningCalls` until it settles; a throw is passed on. */
+async function trackRunningCall<T>(
+  runningCalls: Set<Promise<unknown>>,
   operation: () => Promise<T>,
 ): Promise<T> {
-  const pending = Promise.resolve().then(operation);
-  active.add(pending);
+  const call = Promise.resolve().then(operation);
+  runningCalls.add(call);
   try {
-    return await pending;
+    return await call;
   } finally {
-    active.delete(pending);
+    runningCalls.delete(call);
   }
 }
 
-/** The current closing phase, or a new one whose shutdown `start` begins now. Never fails. */
-function closingPhase(
+/** Starts shutdown on the first `close`, and hands later calls the same closing phase. */
+function enterClosingPhase(
   phase: LifetimePhase,
-  start: () => Promise<Result<void>>,
+  startShutdown: () => Promise<Result<void>>,
 ): ClosingPhase {
-  if (phase.kind === 'closing') return phase;
-  return { kind: 'closing', closed: start() };
+  if (phase.kind === 'closing') {
+    return phase;
+  }
+  const closed = startShutdown();
+  return { kind: 'closing', closed };
 }
 
-/** Waits for every admitted operation to settle, then closes the owners; a thrown close is `unavailable` (path `shutdown`). */
+/** Waits for every running call to settle, then closes the workspace. */
 async function shutdown(
-  active: readonly Promise<unknown>[],
-  close: () => Promise<Result<void>>,
+  runningCalls: readonly Promise<unknown>[],
+  closeWorkspace: () => Promise<Result<void>>,
 ): Promise<Result<void>> {
-  await Promise.allSettled(active);
+  await Promise.allSettled(runningCalls);
+  return tryCloseWorkspace(closeWorkspace);
+}
+
+/** Closes the workspace, and turns a thrown close into the `unavailable` mistake. */
+async function tryCloseWorkspace(
+  closeWorkspace: () => Promise<Result<void>>,
+): Promise<Result<void>> {
   try {
-    return await close();
+    return await closeWorkspace();
   } catch {
-    return failure('unavailable', 'shutdown', 'Workspace owners could not close cleanly');
+    return closeThrewFailure();
   }
+}
+
+/** Makes the mistake for a workspace close that threw (`unavailable` at `shutdown`). */
+function closeThrewFailure(): Result<never> {
+  return failure('unavailable', 'shutdown', 'Workspace owners could not close cleanly');
 }

@@ -11,13 +11,20 @@
  * never opens files or checks who is calling.
  */
 import type { WorkspaceSession } from '../../contract/types.js';
-import type { Authoring, AuthoringResult } from '../../contract/records/capability-types.js';
+import type {
+  Authoring,
+  AuthoringResult,
+  HistoryStatus,
+  Receipt,
+  Request,
+  Snapshot,
+} from '../../contract/records/capability-types.js';
 import type { PreparedBuiltins } from '../../contract/records/presets/builtins.js';
 import type { ResourceCommands, WorkspaceReader } from '../../contract/ports/workspace.js';
 import type { CollectionRenderer } from '../../contract/ports/rendering.js';
 import type { ChangeChannel } from '../../contract/ports/notifications.js';
 import type { Exporter } from '../../contract/ports/export.js';
-import type { PrepareMode } from '../../contract/records/workspace/session.js';
+import type { AppliedCommit, PrepareMode } from '../../contract/records/workspace/session.js';
 import type { WorkspaceId } from '../../contract/brands.js';
 import { authoringFailure, failure, type Result } from '../../contract/errors.js';
 import { renderCollection } from '../rendering/collection.js';
@@ -55,48 +62,27 @@ export interface SessionDependencies {
  * and `render`, `inspect` and `exportFile` give `unavailable`. Otherwise failures pass through.
  */
 export function createWorkspaceSession(dependencies: SessionDependencies): WorkspaceSession {
-  const lifetime = dependencies.lifetime;
+  const authoringCalls = buildAuthoringCalls(dependencies);
+  const renderAndExportCalls = buildRenderAndExportCalls(dependencies);
   return {
     workspace: dependencies.workspace,
     builtins: dependencies.builtins,
     resources: dependencies.resources,
-    history: () =>
-      lifetime.run(
-        () => dependencies.authoring(dependencies.readSignal).history(dependencies.workspace),
-        closedAuthoring,
-      ),
-    read: () =>
-      lifetime.run(
-        () => dependencies.authoring(dependencies.readSignal).read(dependencies.workspace),
-        closedAuthoring,
-      ),
-    prepare: (request, signal, mode) =>
-      lifetime.run(
-        () => dependencies.authoring(signal).prepare(request, PREVIEW_FLAG[mode]),
-        closedAuthoring,
-      ),
-    apply: (request, signal, options) =>
-      lifetime.run(
-        () =>
-          commitThenRead(dependencies.authoring(signal), dependencies.workspace, request, options),
-        closedAuthoring,
-      ),
-    receipt: (request) =>
-      lifetime.run(
-        () =>
-          dependencies.authoring(dependencies.readSignal).receipt(dependencies.workspace, request),
-        closedAuthoring,
-      ),
-    render: (id, signal) =>
-      lifetime.run(() => renderCollection(id, signal, dependencies), closedSession),
-    inspect: (id, signal) =>
-      lifetime.run(() => inspectCollection(id, signal, dependencies), closedSession),
-    exportFile: (input, signal) =>
-      lifetime.run(() => dependencies.exportFile(input, signal), closedExport),
+    ...authoringCalls,
+    ...renderAndExportCalls,
     subscribe: (listener) => dependencies.changes.subscribe(listener),
-    close: () => lifetime.close(),
+    close: () => dependencies.lifetime.close(),
   };
 }
+
+/** The session calls Authoring answers, with Authoring's own `Result` and codes. */
+type AuthoringCalls = Pick<WorkspaceSession, 'history' | 'read' | 'prepare' | 'apply' | 'receipt'>;
+
+/** The session calls the service answers itself, with its own `Result` and codes. */
+type RenderAndExportCalls = Pick<WorkspaceSession, 'render' | 'inspect' | 'exportFile'>;
+
+/** What Authoring's `prepare` answers: the preparation, or the receipt of an earlier save. */
+type PrepareAnswer = ReturnType<Authoring['prepare']>;
 
 /** Authoring's `preview` flag for each prepare mode. */
 const PREVIEW_FLAG: Readonly<Record<PrepareMode, boolean>> = Object.freeze({
@@ -107,18 +93,96 @@ const PREVIEW_FLAG: Readonly<Record<PrepareMode, boolean>> = Object.freeze({
 /** The message every closed-session answer carries. */
 const CLOSED_MESSAGE = 'Workspace is closing or closed';
 
-/** The Authoring answer while the session is closing or closed: `storage-unavailable` at `session`. */
-function closedAuthoring(): AuthoringResult<never> {
+/** Builds the calls Authoring answers, each run only while the session is open. */
+function buildAuthoringCalls(dependencies: SessionDependencies): AuthoringCalls {
+  const lifetime = dependencies.lifetime;
+  return {
+    history: () => lifetime.run(() => readHistory(dependencies), closedAuthoringFailure),
+    read: () => lifetime.run(() => readWorkspace(dependencies), closedAuthoringFailure),
+    prepare: (request, signal, mode) =>
+      lifetime.run(
+        () => prepareChange(dependencies, request, signal, mode),
+        closedAuthoringFailure,
+      ),
+    apply: (request, signal, options) =>
+      lifetime.run(
+        () => applyChange(dependencies, request, signal, options),
+        closedAuthoringFailure,
+      ),
+    receipt: (requestId) =>
+      lifetime.run(() => findReceipt(dependencies, requestId), closedAuthoringFailure),
+  };
+}
+
+/** Builds render, inspect and export, each run only while the session is open. */
+function buildRenderAndExportCalls(dependencies: SessionDependencies): RenderAndExportCalls {
+  const lifetime = dependencies.lifetime;
+  return {
+    render: (collection, signal) =>
+      lifetime.run(() => renderCollection(collection, signal, dependencies), closedRenderFailure),
+    inspect: (collection, signal) =>
+      lifetime.run(() => inspectCollection(collection, signal, dependencies), closedRenderFailure),
+    exportFile: (input, signal) =>
+      lifetime.run(() => dependencies.exportFile(input, signal), closedExportFailure),
+  };
+}
+
+/** Reads the workspace's undo and redo status through Authoring. */
+function readHistory(dependencies: SessionDependencies): Promise<AuthoringResult<HistoryStatus>> {
+  const authoring = dependencies.authoring(dependencies.readSignal);
+  return authoring.history(dependencies.workspace);
+}
+
+/** Reads the whole workspace through Authoring. */
+function readWorkspace(dependencies: SessionDependencies): Promise<AuthoringResult<Snapshot>> {
+  const authoring = dependencies.authoring(dependencies.readSignal);
+  return authoring.read(dependencies.workspace);
+}
+
+/** Checks a change through Authoring without saving it, with preview images when `mode` asks. */
+function prepareChange(
+  dependencies: SessionDependencies,
+  request: Request,
+  signal: AbortSignal,
+  mode: PrepareMode,
+): PrepareAnswer {
+  const authoring = dependencies.authoring(signal);
+  const preview = PREVIEW_FLAG[mode];
+  return authoring.prepare(request, preview);
+}
+
+/** Saves a change through Authoring, then reads the workspace back (see `commitThenRead`). */
+function applyChange(
+  dependencies: SessionDependencies,
+  request: Request,
+  signal: AbortSignal,
+  options: unknown,
+): Promise<AuthoringResult<AppliedCommit>> {
+  const authoring = dependencies.authoring(signal);
+  return commitThenRead(authoring, dependencies.workspace, request, options);
+}
+
+/** Finds the receipt of a request saved earlier, through Authoring. */
+function findReceipt(
+  dependencies: SessionDependencies,
+  requestId: string | undefined,
+): Promise<AuthoringResult<Receipt | null>> {
+  const authoring = dependencies.authoring(dependencies.readSignal);
+  return authoring.receipt(dependencies.workspace, requestId);
+}
+
+/** Makes the closed-session mistake for Authoring's calls: `storage-unavailable` at `session`. */
+function closedAuthoringFailure(): AuthoringResult<never> {
   return authoringFailure('storage-unavailable', 'session', CLOSED_MESSAGE);
 }
 
-/** The render and inspect answer while the session is closing or closed: `unavailable` at `session`. */
-function closedSession(): Result<never> {
+/** Makes the closed-session mistake for render and inspect: `unavailable` at `session`. */
+function closedRenderFailure(): Result<never> {
   return failure('unavailable', 'session', CLOSED_MESSAGE);
 }
 
-/** The export answer while the session is closing or closed: `unavailable`, reconnect and retry. */
-function closedExport(): Result<never> {
+/** Makes the closed-session mistake for export: `unavailable`, advising to reconnect and retry. */
+function closedExportFailure(): Result<never> {
   return {
     ok: false,
     error: {
