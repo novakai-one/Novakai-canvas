@@ -32,6 +32,11 @@ export function malformedFlagFailure(): Result<never, LocalFailure> {
   });
 }
 
+/** The `invalid-arguments` failure for `--section` or `--object` typed more than once. */
+export function repeatedScopeFlagFailure(): Result<never, LocalFailure> {
+  return invalidArgumentsFailure('Each read scope flag may be provided only once.');
+}
+
 /** The `invalid-command` failure for a first word that names no command, or no word at all. */
 export function unknownCommandFailure(): Result<never, LocalFailure> {
   return failure({

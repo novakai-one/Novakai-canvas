@@ -26,8 +26,8 @@ import { assembleCommand } from './assembly.js';
 import type { AcceptedCommand, IdentifiedCommand, WellFormedArguments } from './command-stages.js';
 import { chooseCommandWords } from './command-words.js';
 import {
-  invalidArgumentsFailure,
   malformedFlagFailure,
+  repeatedScopeFlagFailure,
   unknownCommandFailure,
 } from './failures.js';
 import { readGivenFlags } from './flags.js';
@@ -104,27 +104,27 @@ function checkWordsAndFlags(identified: IdentifiedCommand): Result<AcceptedComma
 
 /**
  * The words and flags, once every flag could be read and neither `--section` nor `--object` was
- * typed twice.
+ * typed twice. (Node would quietly keep only the last `--section`, so the agent could read a
+ * different part than they meant. Other flags may repeat; the last one wins.)
  */
 function requireWellFormedArguments(commandLine: CommandLine): Result<WellFormedArguments> {
   if (commandLine.kind === 'malformed') {
     return malformedFlagFailure();
   }
-  return rejectRepeatedScopeFlags(commandLine.arguments);
+  if (hasRepeatedScopeFlag(commandLine.arguments)) {
+    return repeatedScopeFlagFailure();
+  }
+  return success(wellFormedArguments(commandLine.arguments));
 }
 
-/**
- * Refuses `--section` or `--object` typed twice. Node would silently keep only the last one, so
- * the agent might read a different part than they meant. Other flags may repeat; the last wins.
- */
-function rejectRepeatedScopeFlags(
-  rawArguments: RawArguments<CanvasFlag>,
-): Result<WellFormedArguments> {
-  const scopeFlagRepeated = rawArguments.repeated.some(isScopeFlag);
-  if (scopeFlagRepeated) {
-    return invalidArgumentsFailure('Each read scope flag may be provided only once.');
-  }
-  return success({ positionals: rawArguments.positionals, values: rawArguments.values });
+/** Whether `--section` or `--object` was typed more than once. */
+function hasRepeatedScopeFlag(rawArguments: RawArguments<CanvasFlag>): boolean {
+  return rawArguments.repeated.some(isScopeFlag);
+}
+
+/** The words and flag values, without the list of repeated flags (only step 1 needed it). */
+function wellFormedArguments(rawArguments: RawArguments<CanvasFlag>): WellFormedArguments {
+  return { positionals: rawArguments.positionals, values: rawArguments.values };
 }
 
 /** Whether the flag is `--section` or `--object`. */
