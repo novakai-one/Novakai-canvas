@@ -1,0 +1,334 @@
+canvas 1
+collection @wsm-runner "Web state machines · 1 · Runner and root machine" theme=paper {
+
+  node @root concept "apps/web/" size=small {}
+  node @d-adapters concept "adapters/" size=small {}
+  node @d-runner concept "runner/" size=small {}
+  node @d-effects concept "effects/" size=small {}
+  node @d-sessions concept "sessions/" size=small {}
+  node @d-contract concept "contract/" size=small {}
+  node @d-compose concept "compose/" size=small {}
+  node @d-ports concept "ports/" size=small {}
+  node @d-records concept "records/" size=small {}
+  node @d-recwf concept "workflow/" size=small {}
+  node @d-core concept "core/" size=small {}
+  node @d-ws concept "workspace/" size=small {}
+  node @d-lifecycle concept "lifecycle/" size=small {}
+  node @d-link concept "link/" size=small {}
+  node @d-catalogue concept "catalogue/" size=small {}
+  node @d-journal concept "journal/" size=small {}
+  node @d-history concept "history/" size=small {}
+  node @d-source concept "source/" size=small {}
+  node @d-notices concept "notices/" size=small {}
+  node @d-diagram concept "diagram/" size=small {}
+
+  node @runner module "runner.ts [NEW]" { signature @sig "createRunner" parameters=["parts: RunnerParts<W, V>"] returns="Runner<V>" }
+  node @waiters module "waiters.ts [NEW]" { signature @sig "createWaiters" parameters=[] returns="Waiters" }
+  node @bridge module "bridge.ts [NEW · temporary, M2 to M34]" {
+    signature @sig "createBridgeExecutor" parameters=["legacy: LegacySession"] returns="Executor<BridgeEffect, never>"
+    signature @view "sessionBridge" parameters=["runner: Runner<ProjectedView>", "active: () => ActiveDiagram | null"] returns="SessionBridge"
+  }
+  node @p-bridge interface "bridge.ts [NEW · temporary, M1 to M34]" {
+    member @dispatch "dispatch · view · active · subscribe" type="SessionBridge: what the old session may ask of the runner"
+    member @legacy "settled · canvasEffect" type="LegacySession: what executors may ask of the old session"
+  }
+  node @session module "workspace-session.ts [DELETE · 1,746 lines]" {}
+  node @compose module "compose.ts [CHANGE]" { signature @sig "startWeb" parameters=["element: HTMLElement"] returns="Promise<Result<Mounted>>" }
+  node @c-workspace module "workspace.ts [NEW]" { signature @sig "composeWorkspace" parameters=["parts: WorkspaceParts"] returns="WorkspaceController" }
+  node @c-executors module "executors.ts [NEW]" { signature @sig "composeExecutors" parameters=["handles: ExecutorHandles"] returns="Execute" }
+  node @p-deps interface "workflow-deps.ts [NEW]" {}
+  node @p-exec interface "executors.ts [NEW]" {}
+  node @rw-machine interface "machine.ts [NEW]" {}
+  node @rw-events interface "events.ts [NEW]" {}
+  node @rw-effects interface "effects.ts [NEW]" {}
+  node @w-step module "step.ts [NEW]" { signature @sig "unchanged" parameters=["state: S"] returns="Step<S, never, never>" }
+  node @w-state module "state.ts [NEW]" {}
+  node @w-machine module "machine.ts [NEW]" { signature @sig "createWorkspaceMachine" parameters=["deps: WorkflowDeps"] returns="WorkflowMachine<Workspace>" }
+
+  node @u-lifecycle module "lifecycle.ts [NEW · collection 4]" { signature @sig "updateLifecycle" parameters=["state: Lifecycle", "event: LifecycleEvent"] returns="Step<Lifecycle, LifecycleOut, LifecycleEffect>" }
+  node @u-link module "link.ts [NEW · collection 4]" { signature @sig "updateLink" parameters=["state: Link", "event: LinkEvent", "context: LinkContext"] returns="Step<Link, LinkOut, LinkEffect>" }
+  node @u-catalogue module "catalogue.ts [NEW · collection 4]" { signature @sig "updateCatalogue" parameters=["state: Catalogue", "event: CatalogueEvent"] returns="Step<Catalogue, CatalogueOut, CatalogueEffect>" }
+  node @u-journal module "journal.ts [NEW · collection 3]" { signature @sig "updateJournal" parameters=["state: Journal", "event: JournalEvent", "context: GateContext"] returns="Step<Journal, JournalOut, JournalEffect>" }
+  node @u-history module "history.ts [NEW · collection 3]" { signature @sig "updateHistory" parameters=["state: History", "event: HistoryEvent", "context: HistoryContext", "deps: WorkflowDeps"] returns="Step<History, HistoryOut, HistoryEffect>" }
+  node @u-source module "source.ts [NEW · collection 4]" { signature @sig "updateSource" parameters=["state: SourceEditor", "event: SourceEvent", "context: SourceContext", "deps: WorkflowDeps"] returns="Step<SourceEditor, SourceOut, SourceEffect>" }
+  node @u-notices module "notices.ts [NEW · collection 3]" { signature @sig "updateNotices" parameters=["state: Notices", "event: NoticesEvent"] returns="Step<Notices, never, never>" }
+  node @u-diagram module "session.ts [NEW · collection 5]" { signature @sig "updateDiagram" parameters=["state: DiagramSession", "event: DiagramEvent", "context: DiagramContext", "deps: WorkflowDeps"] returns="Step<DiagramSession, DiagramOut, DiagramEffect>" }
+
+  node @x-service module "service.ts [NEW · collection 4]" { signature @sig "createServiceExecutor" parameters=["client: ServiceClient", "decoders: WorkspaceDecoders"] returns="Executor<ServiceEffect, ServiceAnswer>" }
+  node @x-apply module "apply.ts [NEW · collection 3]" { signature @sig "createApplyExecutor" parameters=["client: ServiceClient", "decode: ReceiptDecoder"] returns="Executor<ApplyEffect, apply-answered>" }
+  node @x-storage module "storage.ts [NEW · collection 3]" { signature @sig "createStorageExecutor" parameters=["retention: DraftRetention", "readers: SubmissionReaders"] returns="Executor<StorageEffect, StorageAnswer>" }
+  node @x-scene module "scene.ts [NEW · collection 5]" { signature @sig "createSceneExecutor" parameters=["canvas: CanvasHandles", "intake: CanvasIntake"] returns="Executor<SceneEffect, SceneAnswer>" }
+  node @x-browser module "browser.ts [NEW · collection 4]" { signature @sig "createBrowserExecutor" parameters=["browser: BrowserHandles", "navigation: WorkspaceNavigation", "ids: IdSource"] returns="Executor<BrowserEffect, BrowserAnswer>" }
+  node @x-stores module "stores.ts [NEW · collection 4]" { signature @sig "createStoresExecutor" parameters=["stores: StoreHandles"] returns="Executor<StoreEffect, never>" }
+
+  wire @t1 @root -> @d-adapters "contains" kind=parent
+  wire @t2 @d-adapters -> @d-runner "contains" kind=parent
+  wire @t3 @d-adapters -> @d-effects "contains" kind=parent
+  wire @t3b @d-adapters -> @d-sessions "contains" kind=parent
+  wire @t4 @root -> @d-contract "contains" kind=parent
+  wire @t5 @root -> @d-core "contains" kind=parent
+  wire @t5b @d-core -> @d-ws "contains" kind=parent
+  wire @t6 @d-contract -> @d-compose "contains" kind=parent
+  wire @t7 @d-contract -> @d-ports "contains" kind=parent
+  wire @t8 @d-contract -> @d-records "contains" kind=parent
+  wire @t8b @d-records -> @d-recwf "contains" kind=parent
+  wire @t9 @d-runner -> @runner "contains" kind=parent
+  wire @t10 @d-runner -> @waiters "contains" kind=parent
+  wire @t11 @d-runner -> @bridge "contains" kind=parent
+  wire @t12 @d-sessions -> @session "contains" kind=parent
+  wire @t13 @d-contract -> @compose "contains" kind=parent
+  wire @t14 @d-compose -> @c-workspace "contains" kind=parent
+  wire @t15 @d-compose -> @c-executors "contains" kind=parent
+  wire @t16 @d-ports -> @p-deps "contains" kind=parent
+  wire @t17 @d-ports -> @p-exec "contains" kind=parent
+  wire @t17b @d-ports -> @p-bridge "contains" kind=parent
+  wire @t18 @d-recwf -> @rw-machine "contains" kind=parent
+  wire @t19 @d-recwf -> @rw-events "contains" kind=parent
+  wire @t20 @d-recwf -> @rw-effects "contains" kind=parent
+  wire @t21 @d-ws -> @w-step "contains" kind=parent
+  wire @t22 @d-ws -> @w-state "contains" kind=parent
+  wire @t23 @d-ws -> @w-machine "contains" kind=parent
+  wire @t24 @d-lifecycle -> @u-lifecycle "contains" kind=parent
+  wire @t24b @d-ws -> @d-lifecycle "contains" kind=parent
+  wire @t25 @d-link -> @u-link "contains" kind=parent
+  wire @t25b @d-ws -> @d-link "contains" kind=parent
+  wire @t26 @d-catalogue -> @u-catalogue "contains" kind=parent
+  wire @t26b @d-ws -> @d-catalogue "contains" kind=parent
+  wire @t27 @d-journal -> @u-journal "contains" kind=parent
+  wire @t27b @d-ws -> @d-journal "contains" kind=parent
+  wire @t28 @d-history -> @u-history "contains" kind=parent
+  wire @t28b @d-ws -> @d-history "contains" kind=parent
+  wire @t29 @d-source -> @u-source "contains" kind=parent
+  wire @t29b @d-ws -> @d-source "contains" kind=parent
+  wire @t30 @d-notices -> @u-notices "contains" kind=parent
+  wire @t30b @d-ws -> @d-notices "contains" kind=parent
+  wire @t31 @d-diagram -> @u-diagram "contains" kind=parent
+  wire @t31b @d-ws -> @d-diagram "contains" kind=parent
+  wire @t32 @d-effects -> @x-service "contains" kind=parent
+  wire @t33 @d-effects -> @x-apply "contains" kind=parent
+  wire @t34 @d-effects -> @x-storage "contains" kind=parent
+  wire @t35 @d-effects -> @x-scene "contains" kind=parent
+  wire @t36 @d-effects -> @x-browser "contains" kind=parent
+  wire @t37 @d-effects -> @x-stores "contains" kind=parent
+
+  section @repo "1 · Target repo tree — runner and root machine ([collection N] = specified there)" mode=tree direction=down gap=compact order=2 {
+    show @root @d-adapters @d-runner @d-effects @d-sessions @d-contract @d-compose @d-ports @d-records @d-recwf @d-core @d-ws @d-lifecycle @d-link @d-catalogue @d-journal @d-history @d-source @d-notices @d-diagram detail=label size=small
+    show @runner @waiters @bridge @session @compose @c-workspace @c-executors @p-deps @p-exec @p-bridge @rw-machine @rw-events @rw-effects @w-step @w-state @w-machine detail=label size=small
+    show @u-lifecycle @u-link @u-catalogue @u-journal @u-history @u-source @u-notices @u-diagram @x-service @x-apply @x-storage @x-scene @x-browser @x-stores detail=label size=small
+    connect @t1 @t2 @t3 @t3b @t4 @t5 @t5b @t6 @t7 @t8 @t8b @t9 @t10 @t11 @t12 @t13 @t14 @t15 @t16 @t17 @t17b @t18 @t19 @t20 @t21 @t22 @t23 @t24 @t24b @t25 @t25b @t26 @t26b @t27 @t27b @t28 @t28b @t29 @t29b @t30 @t30b @t31 @t31b @t32 @t33 @t34 @t35 @t36 @t37 source-side=bottom target-side=left
+    root @root
+  }
+
+  node @e-workspace entity "Workspace" {
+    field @lifecycle "lifecycle" type="Lifecycle"
+    field @link "link" type="Link"
+    field @catalogue "catalogue" type="Catalogue"
+    field @journal "journal" type="Journal"
+    field @history "history" type="History"
+    field @source "source" type="SourceEditor"
+    field @notices "notices" type="Notices"
+    field @diagram "diagram" type="DiagramSession"
+    text @i1 "invariant W1: slice(x) changes only inside update_x (x in the 8 fields above); contexts.ts gives read-only copies"
+    text @i2 "invariant W2: lifecycle.phase = 'disposed' => transition(s, e) = { state: s, effects: [], events: [] } for every e"
+  }
+  node @e-rootstep entity "RootStep<Workspace>" {
+    field @state "state" type="Workspace"
+    field @effects "effects" type="readonly Effect[]"
+    field @events "events" type="readonly WorkspaceEvent[]"
+    text @i1 "invariant R2: runner applies step.state, then queues step.events (FIFO), then runs step.effects in order"
+    text @i2 "invariant: each lift maps an out to a fixed finite list of events; each after-rule is idempotent and queues only the dismissed reactions of entries it removes; entries are finite, so every drain ends"
+  }
+  node @e-step entity "Step<S, O, E> (one child machine)" {
+    field @state "state" type="S"
+    field @effects "effects" type="readonly E[] (E = that machine's own effect subset)"
+    field @out "out" type="readonly O[]"
+    text @i1 "invariant: out is read only by that machine's lift file; no child reads another child's Step"
+    text @i2 "invariant J3 (type part): only JournalEffect contains ApplyEffect, so no other machine can return post-apply"
+  }
+  node @e-effect entity "Effect" {
+    field @family "family" type="'service' | 'apply' | 'storage' | 'scene' | 'browser' | 'stores' | 'callers' | 'bridge' (temporary)"
+    field @kind "kind" type="EffectKind (closed union, 31 kinds)"
+    text @i1 "invariant EF1: every family has exactly one executor, chosen only in compose/executors.ts"
+    text @i2 "invariant EF2: an executor does one piece of I/O and answers only with its own answer events (Executor<E, A>); it never calls transition"
+  }
+  node @e-event entity "WorkspaceEvent" {
+    field @to "to" type="MachineName (11 names: the 8 slices + gesture, connection, forms)"
+    field @kind "kind" type="EventKind (closed per machine)"
+    text @i1 "invariant: route(e) is one exhaustive switch on e.to; a new machine does not compile until it is routed"
+  }
+  node @e-cell entity "RunnerCell (closure in runner.ts)" {
+    field @state "state" type="W"
+    field @queue "queue" type="readonly WorkspaceEvent[]"
+    field @drain "drain" type="'idle' | 'draining'"
+    field @life "life" type="'open' | 'closed'"
+    field @view "published" type="V (cached per state reference)"
+    text @i1 "invariant R1: drain = 'draining' => dispatch(e) only appends e to queue (no re-entry)"
+    text @i2 "invariant R6: life = 'closed' => dispatch(e) is dropped and listeners = {}"
+    text @i3 "invariant R2/R8: listeners are notified once the queue is empty; published = project(last notified state)"
+  }
+
+  wire @er1 @e-cell.@state -> @e-workspace "holds" kind=association from=1 to=1
+  wire @er2 @e-rootstep.@state -> @e-workspace "next state" kind=association from=1 to=1
+  wire @er3 @e-rootstep.@effects -> @e-effect "runs" kind=association from=1 to=0..many
+  wire @er4 @e-rootstep.@events -> @e-event "queues" kind=association from=1 to=0..many
+  wire @er5 @e-cell.@queue -> @e-event "waiting" kind=association from=1 to=0..many
+  wire @er6 @e-step.@effects -> @e-effect "passes up" kind=association from=1 to=0..many
+
+  section @entities "2 · Entities and invariants — root state, steps, runner" mode=er direction=right order=3 {
+    show @e-workspace @e-rootstep @e-step @e-effect @e-event @e-cell
+    connect @er1 @er2 @er3 @er4 @er5 @er6
+  }
+
+  wire @m1 @compose -> @c-workspace.@sig "composeWorkspace(): WorkspaceController" kind=imports
+  wire @m2 @c-workspace -> @w-machine.@sig "createWorkspaceMachine(): WorkflowMachine<Workspace>" kind=imports
+  wire @m3 @c-workspace -> @runner.@sig "createRunner(): Runner<V>" kind=imports
+  wire @m4 @c-workspace -> @c-executors.@sig "composeExecutors(): Execute" kind=imports
+  wire @m5 @c-workspace -> @waiters.@sig "createWaiters(): Waiters" kind=imports
+  wire @m6 @c-workspace -> @bridge.@view "sessionBridge(): SessionBridge (M2 to M34 only)" kind=imports
+  wire @m7 @c-executors -> @x-service.@sig "createServiceExecutor(): Executor<ServiceEffect>" kind=imports
+  wire @m8 @c-executors -> @x-apply.@sig "createApplyExecutor(): Executor<ApplyEffect, apply-answered>" kind=imports
+  wire @m9 @c-executors -> @x-storage.@sig "createStorageExecutor(): Executor<StorageEffect>" kind=imports
+  wire @m10 @c-executors -> @x-scene.@sig "createSceneExecutor(): Executor<SceneEffect>" kind=imports
+  wire @m11 @c-executors -> @x-browser.@sig "createBrowserExecutor(): Executor<BrowserEffect>" kind=imports
+  wire @m12 @c-executors -> @x-stores.@sig "createStoresExecutor(): Executor<StoreEffect>" kind=imports
+  wire @m13 @w-machine -> @u-lifecycle.@sig "updateLifecycle(): Step<Lifecycle, LifecycleOut, LifecycleEffect>" kind=imports
+  wire @m14 @w-machine -> @u-link.@sig "updateLink(): Step<Link, LinkOut, LinkEffect>" kind=imports
+  wire @m15 @w-machine -> @u-catalogue.@sig "updateCatalogue(): Step<Catalogue, CatalogueOut, CatalogueEffect>" kind=imports
+  wire @m16 @w-machine -> @u-journal.@sig "updateJournal(): Step<Journal, JournalOut, JournalEffect>" kind=imports
+  wire @m17 @w-machine -> @u-history.@sig "updateHistory(): Step<History, HistoryOut, HistoryEffect>" kind=imports
+  wire @m18 @w-machine -> @u-source.@sig "updateSource(): Step<SourceEditor, SourceOut, SourceEffect>" kind=imports
+  wire @m19 @w-machine -> @u-notices.@sig "updateNotices(): Step<Notices, never, never>" kind=imports
+  wire @m20 @w-machine -> @u-diagram.@sig "updateDiagram(): Step<DiagramSession, DiagramOut, DiagramEffect>" kind=imports
+  wire @m21 @w-machine -> @w-step.@sig "unchanged(): Step<S, never, never>" kind=imports
+
+  section @modules "3.1 · Module imports — composition and runner" mode=modules layout=layered direction=right order=4 {
+    group @g-contract "contract/" {
+      show @compose
+      group @g-compose "compose/" {
+        show @c-workspace @c-executors
+      }
+    }
+    group @g-adapters "adapters/" {
+      group @g-runner "runner/" layout=grid columns=1 {
+        show @runner @waiters @bridge
+      }
+    }
+    group @g-core "core/workspace/" {
+      show @w-machine
+    }
+    connect @m1 @m2 @m3 @m4 @m5 @m6
+  }
+
+  section @modules-effects "3.2 · Module imports — one executor per effect family (apply is its own family)" mode=modules layout=layered direction=right order=5 {
+    group @g-contract3 "contract/" {
+      group @g-compose3 "compose/" {
+        show @c-executors
+      }
+    }
+    group @g-adapters3 "adapters/" {
+      group @g-effects "effects/" layout=grid columns=1 {
+        show @x-service @x-apply @x-storage @x-scene @x-browser @x-stores
+      }
+    }
+    connect @m7 @m8 @m9 @m10 @m11 @m12
+  }
+
+  section @modules-root "3.3 · Module imports — the root transition calls each child machine" mode=modules layout=layered direction=right order=6 {
+    group @g-ws "core/workspace/" {
+      show @w-machine @w-step
+      group @g-lifecycle "lifecycle/" {
+        show @u-lifecycle
+      }
+      group @g-link "link/" {
+        show @u-link
+      }
+      group @g-catalogue "catalogue/" {
+        show @u-catalogue
+      }
+      group @g-journal "journal/" {
+        show @u-journal
+      }
+      group @g-history "history/" {
+        show @u-history
+      }
+      group @g-source "source/" {
+        show @u-source
+      }
+      group @g-notices "notices/" {
+        show @u-notices
+      }
+      group @g-diagram "diagram/" {
+        show @u-diagram
+      }
+    }
+    connect @m13 @m14 @m15 @m16 @m17 @m18 @m19 @m20 @m21
+  }
+
+  node @summary concept "4 · Modules summary — collection 1" size=large {
+    table @summary-t columns=["Module", "Current Line Count", "Lines Added", "Lines Removed", "Net", "Expected final line count (estimate)", "What the module does"] {
+      row @sm-1 cells=["adapters/runner/runner.ts", "0", "+140", "0", "+140", "140", "NEW · Queue and drain: transition, commit, queue events, run effects; notify once the queue is empty. Drops everything after dispose."]
+      row @sm-2 cells=["adapters/runner/waiters.ts", "0", "+50", "0", "+50", "50", "NEW · Holds the promise an editor store's apply awaits; answer-caller resolves it on a receipt, refusal, uncertain answer or block."]
+      row @sm-3 cells=["adapters/runner/bridge.ts", "0", "+120", "-120", "0", "0", "NEW, temporary · Bridge executor (legacy-settled) and the view-copy helper. Budget 120 lines. Added in M2, deleted in M34 (plan §8.5)."]
+      row @sm-16 cells=["contract/ports/bridge.ts", "0", "+40", "-40", "0", "0", "NEW, temporary · SessionBridge and LegacySession ports; compose joins runner and session. Added in M1, deleted in M34."]
+      row @sm-4 cells=["adapters/sessions/workspace-session.ts", "1746", "0", "-1746", "-1746", "0", "DELETE · Today: every workflow in one closure. Dissolved into the machines; deleted in M17."]
+      row @sm-5 cells=["contract/compose.ts", "271", "+10", "-81", "-71", "200", "CHANGE · Composition root. controller() moves to compose/workspace.ts (P3)."]
+      row @sm-6 cells=["contract/compose/workspace.ts", "0", "+140", "0", "+140", "140", "NEW · Builds deps, machine, runner, executors and facade. The web's one crypto.randomUUID call."]
+      row @sm-7 cells=["contract/compose/executors.ts", "0", "+120", "0", "+120", "120", "NEW · Sends each effect family to its one executor; passes shared handles in."]
+      row @sm-8 cells=["contract/ports/workflow-deps.ts", "0", "+70", "0", "+70", "70", "NEW · WorkflowDeps: pure helpers the transitions call (request builders, route preview, print, connection policy)."]
+      row @sm-9 cells=["contract/ports/executors.ts", "0", "+60", "0", "+60", "60", "NEW · Dispatch and the handles executors share."]
+      row @sm-10 cells=["contract/records/workflow/machine.ts", "0", "+40", "0", "+40", "40", "NEW · RootStep and WorkflowMachine: what the runner drives. State stays opaque."]
+      row @sm-11 cells=["contract/records/workflow/events.ts", "0", "+80", "0", "+80", "80", "NEW · WorkspaceEvent union addressed by 'to'; EventKey; commandKeys (to:kind)."]
+      row @sm-12 cells=["contract/records/workflow/effects.ts", "0", "+150", "0", "+150", "150", "NEW · Effect: closed union in eight families (bridge is temporary); Executor<E, A>; Execute."]
+      row @sm-13 cells=["core/workspace/step.ts", "0", "+30", "0", "+30", "30", "NEW · Step<S, O, E>, unchanged() and unsupported(): the shape every child update returns."]
+      row @sm-14 cells=["core/workspace/state.ts", "0", "+60", "0", "+60", "60", "NEW · Workspace: the 8 machine slices; initialWorkspace."]
+      row @sm-15 cells=["core/workspace/machine.ts", "0", "+110", "0", "+110", "110", "NEW · Root transition: one switch on event.to, lift, then finalize. Ignores everything after dispose."]
+      row @sm-total cells=["TOTAL · 16 files", "2017", "+1220", "-1987", "-767", "1250", "Estimates, not gates. Paths are under apps/web/ unless they start with capability/, apps/service/ or name the repo root."]
+    }
+  }
+  section @s-summary "4 · Modules summary — runner and root machine" mode=grid columns=1 order=7 {
+    show @summary
+  }
+
+  node @crud note "5 · Capability ownership — who creates, reads, updates, deletes" size=large {
+    table @crud-t columns=["Object", "Create", "Read", "Update", "Delete"] {
+      row @e-workspace-row cells=["Workspace", "core/workspace/state.ts — initialWorkspace", "core/workspace/contexts.ts — *Context(state); view/project.ts — projectWorkspace(state)", "core/workspace/machine.ts — transition(); each slice only by its update_x", "never; runner.dispose() drops the cell"]
+      row @e-rootstep-row cells=["RootStep<Workspace>", "core/workspace/machine.ts — transition()", "adapters/runner/runner.ts — drain()", "core/workspace/finalize.ts — finalize() (F1–F6)", "adapters/runner/runner.ts — after the step is applied"]
+      row @e-step-row cells=["Step<S, O, E>", "each child update_x (8 machines + 3 children)", "core/workspace/lift/*.ts — lift_x(state, step)", "never", "lift_x, after lifting"]
+      row @e-effect-row cells=["Effect", "child machines, finalize.ts (flags), lift/*.ts", "contract/compose/executors.ts — composeExecutors() routes by family", "never", "adapters/runner/runner.ts — after execute(effect)"]
+      row @e-event-row cells=["WorkspaceEvent", "adapters/facade/*.ts, executors, lift/*.ts", "core/workspace/machine.ts — route()", "never", "adapters/runner/runner.ts — dequeued"]
+      row @e-cell-row cells=["RunnerCell", "adapters/runner/runner.ts — createRunner()", "runner.getSnapshot(), runner.subscribe()", "adapters/runner/runner.ts — drain() only", "runner.dispose() — life = 'closed'"]
+    }
+  }
+  section @ownership "5 · Capability ownership — root objects" mode=grid columns=1 order=8 {
+    show @crud
+  }
+
+  node @q-you participant "You (React)" {}
+  node @q-facade participant "facade/forms.ts" {}
+  node @q-io participant "Service · Canvas · storage" {}
+
+  section @sequence-51 "7 · Runner loop — event -> transition -> commit -> publish -> effects -> result events" mode=sequence direction=down gap=compact order=9 {
+    show @q-you @q-facade @runner @w-machine @c-executors @q-io detail=label size=small
+    event @q1 @q-you -> @q-facade "click Add object" kind=call
+    event @q2 @q-facade -> @runner "dispatch(forms submitted{object, request}) — IDs minted here, never in core" kind=call
+    fragment @q-loop loop "Drain: one event at a time until the queue is empty" {
+      event @q3 @runner -> @w-machine "transition(state, event): RootStep<Workspace>" kind=call
+      event @q4 @w-machine -> @runner "RootStep — routed by event.to, lifted, finalized (F1–F6); pure" kind=return
+      event @q5 @runner -> @q-you "commit state; queue step.events; notify only when the queue is empty (R2)" kind=async
+      event @q6 @runner -> @c-executors "queue step.events (FIFO); then execute(effect, dispatch) for each effect in order" kind=call
+      event @q7 @c-executors -> @q-io "one piece of I/O — write-journal (before-send)" kind=call
+    }
+    event @q8 @q-io -> @c-executors "storage answered" kind=return
+    event @q9 @c-executors -> @runner "dispatch(journal written ok) — only queues; a new drain starts" kind=async
+    event @q10 @runner -> @c-executors "execute(post-apply) — only after the write succeeded (J3)" kind=call
+    event @q11 @c-executors -> @q-io "POST /api/v1/authoring/apply" kind=call
+    fragment @q-after alt "The answer arrives" {
+      branch @q-live "Runner open" {
+        event @q12 @c-executors -> @runner "dispatch(journal apply-answered) -> owner, then snapshot (O1–O4)" kind=async
+      }
+      branch @q-dead "After dispose" {
+        event @q13 @c-executors -> @runner "dispatch(…) dropped (R6); the stored journal returns as uncertain on the next load" kind=async
+      }
+    }
+  }
+}

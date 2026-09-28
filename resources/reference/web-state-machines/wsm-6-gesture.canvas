@@ -1,0 +1,310 @@
+canvas 1
+collection @wsm-gesture "Web state machines · 6 · Moving things on the Canvas (decision 1)" theme=paper {
+
+  node @root concept "novakai-canvas/" size=small {}
+  node @d-web concept "apps/web/" size=small {}
+  node @d-gesture concept "core/workspace/gesture/" size=small {}
+  node @d-review concept "core/workspace/movement-review/" size=small {}
+  node @d-editing concept "core/editing/" size=small {}
+  node @d-expand concept "core/editing/expand/" size=small {}
+  node @d-rearrange concept "core/editing/rearrange/" size=small {}
+  node @d-contract concept "contract/" size=small {}
+  node @d-compose concept "contract/compose/" size=small {}
+  node @d-records concept "contract/records/" size=small {}
+  node @d-recwf concept "contract/records/workflow/" size=small {}
+  node @d-readers concept "adapters/readers/" size=small {}
+  node @d-react concept "adapters/react/" size=small {}
+  node @d-canvas concept "capability/canvas/" size=small {}
+  node @d-interaction concept "core/interaction/" size=small {}
+  node @d-drafts concept "core/drafts/" size=small {}
+
+  node @g-state module "state.ts [NEW]" {}
+  node @g-gesture module "gesture.ts [NEW]" { signature @sig "updateGesture" parameters=["state: Gesture", "event: GestureEvent", "context: SceneContext", "deps: WorkflowDeps"] returns="Step<Gesture, GestureOut, GestureEffect>" }
+  node @g-intake module "intake.ts [NEW]" { signature @sig "receiveIntent" parameters=["state: Gesture", "event: IntentReceived", "context: SceneContext", "deps: WorkflowDeps"] returns="Step<Gesture, GestureOut, GestureEffect>" }
+  node @g-choices module "choices.ts [NEW]" { signature @sig "updateChoices" parameters=["state: Gesture", "event: ChoiceEvent", "context: SceneContext", "deps: WorkflowDeps"] returns="Step<Gesture, GestureOut, GestureEffect>" }
+  node @g-settle module "settle.ts [NEW]" { signature @sig "settleGesture" parameters=["state: Gesture", "event: SettleEvent", "context: SceneContext", "deps: WorkflowDeps"] returns="Step<Gesture, GestureOut, GestureEffect>" }
+  node @g-failures module "failures.ts [MOVE · M29]" { signature @sig "gestureFailure" parameters=["code: GestureCode"] returns="Diagnostic" }
+  node @m-phases module "phases.ts [DELETE]" {}
+  node @m-types module "types.ts [DELETE]" {}
+  node @m-outcome module "outcome.ts [DELETE]" {}
+  node @e-plan-g module "gesture-plan.ts [NEW]" {
+    signature @sig "planGesture" parameters=["capture: GestureCapture", "preview: RoutePreview"] returns="GesturePlan"
+    signature @choices "choicesAfterRefusal" parameters=["capture: GestureCapture<PlacementIntent>", "preview: RoutePreview"] returns="Choices | 'none'"
+    signature @placement "placementCapture" parameters=["capture: GestureCapture"] returns="GestureCapture<PlacementIntent> | 'other'"
+  }
+  node @e-module module "module-move.ts [NEW]" { signature @sig "moduleMove" parameters=["document: RenderDocument", "intent: CanvasEditIntent"] returns="'module-move' | 'plain'" }
+  node @e-plan module "plan.ts [CHANGE]" { signature @sig "planCanvasEdit" parameters=["intent: CanvasEditIntent", "context: EditContext"] returns="Result<readonly Change[]>" }
+  node @e-movement module "movement.ts [CHANGE]" { signature @sig "buildMoveReview" parameters=["intent: PlacementIntent", "context: MovementPreviewContext"] returns="Result<MoveReview>" }
+  node @e-expand module "option.ts [REUSE]" { signature @sig "buildExpandOption" parameters=["intent: PlacementIntent", "context: MovementPreviewContext"] returns="Result<MoveOption | null>" }
+  node @e-rearrange module "option.ts [REUSE]" { signature @sig "buildRearrangeOption" parameters=["intent: PlacementIntent", "context: MovementPreviewContext"] returns="Result<MoveOption | null>" }
+  node @e-materialize module "materialize.ts [CHANGE · P4 split]" { signature @sig "materializeRearrangement" parameters=["input: MaterializedCandidate"] returns="Result<MoveOption | null>" }
+  node @e-acceptance module "acceptance.ts [NEW · P4 split]" { signature @sig "previewMaterializedRearrangement" parameters=["input: MaterializedPreview"] returns="Result<MoveOption | null>" }
+  node @c-api module "api.ts [collection 8]" { signature @sig "moduleMove" parameters=["document: RenderDocument", "intent: CanvasEditIntent"] returns="'module-move' | 'plain' (re-export)" }
+  node @c-workspace module "workspace.ts [collection 1]" { signature @sig "composeWorkspace" parameters=["parts: WorkspaceParts"] returns="WorkspaceController" }
+  node @c-review module "movement-review.ts [DELETE]" {}
+  node @c-movement interface "movement.ts [CHANGE · M29: MoveReview, MoveOptionKind, MoveOption.id deleted]" {}
+  node @c-wgesture interface "gesture.ts [NEW]" {}
+  node @x-preview module "route-preview.ts [CHANGE]" { signature @sig "previewModuleRoutes" parameters=["document: RenderDocument", "intent: PlacementIntent", "changes: readonly Change[]"] returns="Result<PreviewPlan>" }
+  node @x-review module "MovementReview.tsx [CHANGE]" {}
+  node @x-review-css module "MovementReview.module.css [CHANGE]" {}
+  node @k-events module "draft-events.ts [CHANGE · only if M28b]" {}
+  node @k-reconcile module "reconcile.ts [CHANGE · only if M28b]" {}
+
+  wire @t1 @root -> @d-web "contains" kind=parent
+  wire @t2 @root -> @d-canvas "contains" kind=parent
+  wire @t3 @d-web -> @d-gesture "contains" kind=parent
+  wire @t4 @d-web -> @d-review "contains" kind=parent
+  wire @t5 @d-web -> @d-editing "contains" kind=parent
+  wire @t6 @d-editing -> @d-expand "contains" kind=parent
+  wire @t7 @d-editing -> @d-rearrange "contains" kind=parent
+  wire @t8 @d-web -> @d-contract "contains" kind=parent
+  wire @t9 @d-contract -> @d-compose "contains" kind=parent
+  wire @t10 @d-contract -> @d-records "contains" kind=parent
+  wire @t11 @d-records -> @d-recwf "contains" kind=parent
+  wire @t12 @d-web -> @d-readers "contains" kind=parent
+  wire @t13 @d-web -> @d-react "contains" kind=parent
+  wire @t14 @d-canvas -> @d-interaction "contains" kind=parent
+  wire @t15 @d-canvas -> @d-drafts "contains" kind=parent
+  wire @t16 @d-gesture -> @g-state "contains" kind=parent
+  wire @t17 @d-gesture -> @g-gesture "contains" kind=parent
+  wire @t18 @d-gesture -> @g-intake "contains" kind=parent
+  wire @t19 @d-gesture -> @g-choices "contains" kind=parent
+  wire @t20 @d-gesture -> @g-settle "contains" kind=parent
+  wire @t21 @d-gesture -> @g-failures "contains" kind=parent
+  wire @t22 @d-review -> @m-phases "contains" kind=parent
+  wire @t23 @d-review -> @m-types "contains" kind=parent
+  wire @t24 @d-review -> @m-outcome "contains" kind=parent
+  wire @t25 @d-editing -> @e-plan-g "contains" kind=parent
+  wire @t26 @d-editing -> @e-module "contains" kind=parent
+  wire @t27 @d-editing -> @e-plan "contains" kind=parent
+  wire @t28 @d-editing -> @e-movement "contains" kind=parent
+  wire @t29 @d-expand -> @e-expand "contains" kind=parent
+  wire @t30 @d-rearrange -> @e-rearrange "contains" kind=parent
+  wire @t31 @d-rearrange -> @e-materialize "contains" kind=parent
+  wire @t32 @d-rearrange -> @e-acceptance "contains" kind=parent
+  wire @t33 @d-contract -> @c-api "contains" kind=parent
+  wire @t34 @d-compose -> @c-workspace "contains" kind=parent
+  wire @t35 @d-compose -> @c-review "contains" kind=parent
+  wire @t36 @d-records -> @c-movement "contains" kind=parent
+  wire @t37 @d-recwf -> @c-wgesture "contains" kind=parent
+  wire @t38 @d-readers -> @x-preview "contains" kind=parent
+  wire @t39 @d-react -> @x-review "contains" kind=parent
+  wire @t40 @d-react -> @x-review-css "contains" kind=parent
+  wire @t41 @d-interaction -> @k-events "contains" kind=parent
+  wire @t42 @d-drafts -> @k-reconcile "contains" kind=parent
+
+  section @repo "1 · Target repo tree — moving things ([collection N] = specified there)" mode=tree direction=down gap=compact order=1 {
+    show @root @d-web @d-gesture @d-review @d-editing @d-expand @d-rearrange @d-contract @d-compose @d-records @d-recwf @d-readers @d-react @d-canvas @d-interaction @d-drafts detail=label size=small
+    show @g-state @g-gesture @g-intake @g-choices @g-settle @g-failures @m-phases @m-types @m-outcome @e-plan-g @e-module @e-plan @e-movement @e-expand @e-rearrange @e-materialize @e-acceptance detail=label size=small
+    show @c-api @c-workspace @c-review @c-movement @c-wgesture @x-preview @x-review @x-review-css @k-events @k-reconcile detail=label size=small
+    connect @t1 @t2 @t3 @t4 @t5 @t6 @t7 @t8 @t9 @t10 @t11 @t12 @t13 @t14 @t15 @t16 @t17 @t18 @t19 @t20 @t21 @t22 @t23 @t24 @t25 @t26 @t27 @t28 @t29 @t30 @t31 @t32 @t33 @t34 @t35 @t36 @t37 @t38 @t39 @t40 @t41 @t42 source-side=bottom target-side=left
+    root @root
+  }
+
+  node @e-gesture entity "Gesture" {
+    field @phase "phase" type="'idle' | 'sending' | 'choosing' | 'applying'"
+    field @capture "capture" type="GestureCapture (all but idle)"
+    field @request "request" type="RequestId (sending, applying)"
+    field @preview "preview" type="PreviewPlan (sending)"
+    field @choices "choices" type="Choices (choosing, applying): the shown kind is inside it"
+    field @cause "cause" type="'local' | 'server' (choosing)"
+    text @i1 "invariant G1: request is a fresh RequestId for every send (plain move and each applied choice); request != capture.gesture"
+    text @i2 "invariant G3: each gesture gets exactly one of confirmed, discard, reject, and only when it leaves this machine"
+    text @i3 "invariant G4: phase 'choosing' is reached only from a refusal (local or server), never after a confirmed move"
+  }
+  node @e-capture entity "GestureCapture" {
+    field @gesture "gesture" type="GestureId" key=primary
+    field @intent "intent" type="I extends CanvasEditIntent (PlacementIntent in choosing and applying)"
+    field @scene "scene" type="RenderId"
+    field @stamp "stamp" type="SceneStamp"
+    field @base "base" type="Snapshot"
+    field @document "document" type="RenderDocument"
+    field @generation "generation" type="TransportGeneration"
+    text @i1 "invariant: current(capture) <=> same scene and stamp (a new session can reuse a stamp), the open collection listed at the captured revision, and the latest generation = the captured one"
+  }
+  node @e-choice entity "Choice (keyed by ChoiceKind in Choices)" {
+    field @kind "key" type="ChoiceKind = 'expand' | 'rearrange' (the Choices key, not a field)" key=primary
+    field @changes "changes" type="readonly Change[]"
+    field @preview "preview" type="GeometryPreview"
+    text @i1 "invariant G2: Choices = { shown: 'expand', expand: Choice, rearrange: Choice | 'none' } | { shown: 'rearrange', expand: Choice | 'none', rearrange: Choice }: at least one, the shown one present, no kind twice"
+  }
+  node @e-gplan entity "GesturePlan" {
+    field @kind "kind" type="'no-change' | 'placeable' | 'unplaceable' | 'refused'"
+    field @placeable "changes, preview" type="readonly Change[], PreviewPlan (placeable)"
+    field @choices "capture, choices" type="GestureCapture<PlacementIntent>, Choices (unplaceable)"
+    field @problem "problem" type="Diagnostic (refused)"
+    text @i1 "invariant I5: the module path needs moduleMove = every entry in modules, >= 1 entry, nothing resized"
+    text @i2 "invariant I6: duplicate and ancestor selections are refused before any send, on every placement"
+    text @i3 "invariant G6: after a server refusal choices are offered only when moveRefusal[RefusedCode] = offer (constraint-conflict only; open decision Q3)"
+  }
+
+  wire @er1 @e-gesture.@capture -> @e-capture.@gesture "captured" kind=association from=1 to=0..1
+  wire @er2 @e-gesture.@choices -> @e-choice.@kind "offers" kind=association from=1 to=0..many
+  wire @er3 @e-gplan.@choices -> @e-choice.@kind "offers" kind=association from=1 to=0..many
+
+  section @entities "2 · Entities and invariants — a gesture and its choices" mode=er direction=right order=2 {
+    show @e-gesture @e-capture @e-choice @e-gplan
+    connect @er1 @er2 @er3
+  }
+
+  wire @m1 @g-gesture -> @g-intake.@sig "receiveIntent(): Step<Gesture, GestureOut, GestureEffect>" kind=imports
+  wire @m2 @g-gesture -> @g-choices.@sig "updateChoices(): Step<Gesture, GestureOut, GestureEffect>" kind=imports
+  wire @m3 @g-gesture -> @g-settle.@sig "settleGesture(): Step<Gesture, GestureOut, GestureEffect>" kind=imports
+  wire @m4 @g-intake -> @e-plan-g.@sig "planGesture(): GesturePlan" kind=imports
+  wire @m5 @g-settle -> @e-plan-g.@choices "choicesAfterRefusal(): Choices | 'none'" kind=imports
+  wire @m6 @g-intake -> @g-failures.@sig "gestureFailure(): Diagnostic" kind=imports
+  wire @m7 @e-plan-g -> @e-module.@sig "moduleMove(): 'module-move' | 'plain'" kind=imports
+  wire @m8 @e-plan-g -> @e-plan.@sig "planCanvasEdit(): Result<readonly Change[]>" kind=imports
+  wire @m9 @e-plan-g -> @e-movement.@sig "buildMoveReview(): Result<MoveReview>" kind=imports
+  wire @m10 @e-plan-g -> @e-expand.@sig "buildExpandOption(): Result<MoveOption | null>" kind=imports
+  wire @m11 @e-plan-g -> @e-rearrange.@sig "buildRearrangeOption(): Result<MoveOption | null>" kind=imports
+  wire @m12 @e-materialize -> @e-acceptance.@sig "previewMaterializedRearrangement(): Result<MoveOption | null>" kind=imports
+  wire @m13 @c-workspace -> @x-preview.@sig "previewModuleRoutes(): Result<PreviewPlan> (injected as WorkflowDeps.preview)" kind=imports
+  wire @m14 @x-preview -> @c-api.@sig "moduleMove(): 'module-move' | 'plain'" kind=imports
+
+  section @modules "3.1 · Module imports — the gesture machine" mode=modules layout=layered direction=right order=3 {
+    group @g-core "core/" {
+      group @g-ws "workspace/" {
+        group @g-gesture-dir "gesture/" {
+          show @g-gesture @g-intake @g-choices @g-settle @g-failures
+        }
+      }
+      group @g-editing "editing/" {
+        show @e-plan-g
+      }
+    }
+    connect @m1 @m2 @m3 @m4 @m5 @m6
+  }
+
+  section @modules-plan "3.2 · Module imports — the pure plan reuses today's builders" mode=modules layout=layered direction=right order=4 {
+    group @g-editing2 "core/editing/" {
+      show @e-plan-g @e-module @e-plan @e-movement
+      group @g-expand "expand/" {
+        show @e-expand
+      }
+      group @g-rearrange "rearrange/" {
+        show @e-rearrange @e-materialize @e-acceptance
+      }
+    }
+    connect @m7 @m8 @m9 @m10 @m11 @m12
+  }
+
+  section @modules-preview "3.3 · Module imports — the route preview is pure and injected (adapters reach core only through api.ts)" mode=modules layout=layered direction=right order=5 {
+    group @g-contract "contract/" {
+      show @c-api
+      group @g-compose "compose/" {
+        show @c-workspace
+      }
+    }
+    group @g-adapters "adapters/" {
+      group @g-readers "readers/" {
+        show @x-preview
+      }
+    }
+    connect @m13 @m14
+  }
+
+  node @summary concept "4 · Modules summary — collection 6" size=large {
+    table @summary-t columns=["Module", "Current Line Count", "Lines Added", "Lines Removed", "Net", "Expected final line count (estimate)", "What the module does"] {
+      row @sm-1 cells=["core/workspace/gesture/state.ts", "0", "+70", "0", "+70", "70", "NEW · Gesture phases, GestureCapture<I>, Choice, Choices (keyed by kind) and GestureEffect."]
+      row @sm-2 cells=["core/workspace/gesture/gesture.ts", "0", "+120", "0", "+120", "120", "NEW · updateGesture: routes to intake, choices or settle."]
+      row @sm-3 cells=["core/workspace/gesture/intake.ts", "0", "+120", "0", "+120", "120", "NEW · A drop: plan, then send, discard, or show choices at once."]
+      row @sm-4 cells=["core/workspace/gesture/choices.ts", "0", "+140", "0", "+140", "140", "NEW · Show, switch, apply (fresh request), cancel."]
+      row @sm-5 cells=["core/workspace/gesture/settle.ts", "0", "+110", "0", "+110", "110", "NEW · Journal settlements by RequestId; one Canvas settle per gesture."]
+      row @sm-6 cells=["core/workspace/gesture/failures.ts", "85", "+15", "-20", "-5", "80", "MOVE (M29) · Closed failure diagnostics. Moved from movement-review/failures.ts."]
+      row @sm-7 cells=["contract/records/workflow/gesture.ts", "0", "+60", "0", "+60", "60", "NEW · GestureEvent, CanvasEditIntent and PreviewAsk (purpose-keyed: a choice preview names its choice)."]
+      row @sm-8 cells=["core/editing/gesture-plan.ts", "0", "+130", "0", "+130", "130", "NEW (M26, next to the live files) · planGesture, choicesAfterRefusal, placementCapture. Replaces outcome.ts and compose/movement-review.ts (deleted in M29)."]
+      row @sm-9 cells=["core/editing/module-move.ts", "0", "+50", "0", "+50", "50", "NEW · moduleMove: every entry in modules, at least one entry, nothing resized."]
+      row @sm-10 cells=["core/editing/plan.ts", "84", "+20", "-14", "+6", "90", "CHANGE (M28, the wire PR) · Duplicate and ancestor check on every placement; one change builder."]
+      row @sm-11 cells=["core/editing/movement.ts", "138", "+4", "-20", "-16", "122", "CHANGE · Plain-move builder reused by planGesture; chooseMoveOption and the move-only option id go."]
+      row @sm-12 cells=["core/editing/expand/option.ts", "22", "0", "0", "0", "22", "REUSE · buildExpandOption: the Expand choice, unchanged."]
+      row @sm-13 cells=["core/editing/rearrange/option.ts", "22", "0", "0", "0", "22", "REUSE · buildRearrangeOption: the Rearrange choice, unchanged."]
+      row @sm-14 cells=["core/editing/rearrange/materialize.ts", "311", "+5", "-126", "-121", "190", "CHANGE · P4 split: placement records only."]
+      row @sm-15 cells=["core/editing/rearrange/acceptance.ts", "0", "+125", "0", "+125", "125", "NEW, moved · P4 split: preview inspection and acceptance."]
+      row @sm-16 cells=["core/workspace/movement-review/phases.ts", "189", "0", "-189", "-189", "0", "DELETE · Hand-built review machine; replaced by gesture/*."]
+      row @sm-17 cells=["core/workspace/movement-review/types.ts", "29", "0", "-29", "-29", "0", "DELETE · Review types; replaced by gesture/state.ts."]
+      row @sm-18 cells=["core/workspace/movement-review/outcome.ts", "69", "0", "-69", "-69", "0", "DELETE · Review outcome; replaced by planGesture."]
+      row @sm-19 cells=["contract/compose/movement-review.ts", "81", "0", "-81", "-81", "0", "DELETE · Review binding; replaced by planGesture plus the injected preview."]
+      row @sm-20 cells=["adapters/readers/route-preview.ts", "117", "+10", "-22", "-12", "105", "CHANGE (M28) · Pure preview; uses moduleMove; returns a PreviewPlan; a Layout failure keeps its typed origin."]
+      row @sm-21 cells=["contract/records/movement.ts", "57", "+3", "-25", "-22", "35", "CHANGE (M29) · MoveReview, MoveOptionKind and MoveOption.id deleted; builder inputs stay. The view type comes from the gesture phase."]
+      row @sm-22 cells=["adapters/react/MovementReview.tsx", "158", "+30", "-38", "-8", "150", "CHANGE · Reads editing.movementReview, may and MovementCommands; shows disabled reasons."]
+      row @sm-23 cells=["adapters/react/MovementReview.module.css", "25", "+63", "-12", "+51", "76", "CHANGE · P1 token fixes (+57 / -12) and the reason line."]
+      row @sm-24 cells=["capability/canvas/core/interaction/draft-events.ts", "111", "+12", "-3", "+9", "120", "CHANGE, only if M28b · Only if the M28 drive fails: preview-routes on a rejected entry at the same stamp."]
+      row @sm-25 cells=["capability/canvas/core/drafts/reconcile.ts", "107", "+10", "-2", "+8", "115", "CHANGE, only if M28b · Same contingency: keeps that entry's preview."]
+      row @sm-total cells=["TOTAL · 25 files", "1605", "+1097", "-650", "+447", "2052", "Estimates, not gates. Paths are under apps/web/ unless they start with capability/, apps/service/ or name the repo root."]
+    }
+  }
+  section @s-summary "4 · Modules summary — moving things" mode=grid columns=1 order=6 {
+    show @summary
+  }
+
+  node @crud note "5 · Capability ownership — gestures" size=large {
+    table @crud-t columns=["Object", "Create", "Read", "Update", "Delete"] {
+      row @e-gesture-row cells=["Gesture", "core/workspace/state.ts via diagram/state.ts (idle, per open diagram)", "view/editing-view.ts (movementReview); rules/permissions.ts; rules/flags.ts", "gesture/intake.ts, choices.ts, settle.ts", "diagram/render.ts — dropped when another collection installs (I14)"]
+      row @e-capture-row cells=["GestureCapture", "gesture/intake.ts — receiveIntent()", "gesture/choices.ts, settle.ts — the current check", "never", "gesture/settle.ts, choices.ts — on return to idle"]
+      row @e-choice-row cells=["Choice", "core/editing/gesture-plan.ts — planGesture() or choicesAfterRefusal()", "gesture/choices.ts; adapters/effects/scene.ts (preview)", "never", "gesture/choices.ts — cancel, apply confirmed, or diagram changed"]
+      row @e-gplan-row cells=["GesturePlan", "core/editing/gesture-plan.ts — planGesture()", "gesture/intake.ts", "never", "gesture/intake.ts — used once"]
+    }
+  }
+  section @ownership "5 · Capability ownership — gestures" mode=grid columns=1 order=7 {
+    show @crud
+  }
+
+  node @s-idle start "idle" {}
+  node @s-sending state "sending" { text @d "plain move sent; waits through uncertain and retryable" }
+  node @s-choosing state "choosing" { text @d "Expand / Rearrange shown; nothing sent" }
+  node @s-applying state "applying" { text @d "one choice sent with a fresh request" }
+  node @s-saved end "Saved" { text @d "Canvas 'confirmed' once the newer scene shows" }
+  node @s-back end "Snaps back" { text @d "Canvas 'reject' + message" }
+  node @s-quiet end "Nothing happens" { text @d "Canvas 'discard'" }
+
+  wire @s1 @s-idle -> @s-sending "drop" kind=transition guard="placeable" effect="send plain move (fresh RequestId)"
+  wire @s2 @s-idle -> @s-choosing "drop" kind=transition guard="unplaceable (local refusal)" effect="preview the first choice at once"
+  wire @s4 @s-sending -> @s-saved "confirmed" kind=transition
+  wire @s4b @s-sending -> @s-back "refused" kind=transition guard="no choices offered"
+  wire @s5 @s-sending -> @s-choosing "refused" kind=transition guard="constraint-conflict, placement, capture current, choices exist" effect="preview the first choice"
+  wire @s6 @s-choosing -> @s-choosing "option shown" kind=transition effect="preview that choice"
+  wire @s7 @s-choosing -> @s-applying "Apply" kind=transition guard="may.applyMove and capture current" effect="send (fresh RequestId)"
+  wire @s8 @s-applying -> @s-choosing "refused or blocked" kind=transition effect="re-show the same choice"
+  wire @s9 @s-applying -> @s-saved "confirmed" kind=transition
+  wire @s10 @s-choosing -> @s-quiet "Cancel" kind=transition effect="status 'Movement cancelled'"
+  wire @s10b @s-choosing -> @s-back "diagram changed" kind=transition
+
+  section @state-51 "7.1 · A gesture's life once a drop moves something (drops that change nothing or are refused at once: 7.2)" mode=state layout=layered direction=right order=8 {
+    show @s-idle @s-sending @s-choosing @s-applying @s-saved @s-back @s-quiet
+    connect @s1 @s2 @s4 @s4b @s5 @s6 @s7 @s8 @s9 @s10 @s10b
+  }
+
+  node @f-drop start "You drop a node" {}
+  node @f-busy decision "Another move is under way?" {}
+  node @f-refuse end "Snaps back, with a message" { text @d "movement-active, duplicate or ancestor selection, invalid edit" }
+  node @f-valid decision "Valid selection?" {}
+  node @f-change decision "Did anything move?" {}
+  node @f-quiet end "Nothing happens (quiet discard)" {}
+  node @f-fits decision "Can it be placed as dropped? (local preview)" {}
+  node @f-send step "Send the plain move" { text @d "fresh request; preview drawn once the send starts" }
+  node @f-answer decision "Authoring's answer" {}
+  node @f-saved end "Saved" {}
+  node @f-choices step "Show Expand / Rearrange" { text @d "disabled with a reason while a request is sending, uncertain or retryable" }
+  node @f-apply end "Apply one: sent with a new request" {}
+
+  wire @fw1 @f-drop -> @f-busy "check" kind=flow step=1
+  wire @fw2 @f-busy -> @f-refuse "yes" kind=flow style=dashed
+  wire @fw3 @f-busy -> @f-valid "no" kind=flow step=2
+  wire @fw4 @f-valid -> @f-refuse "no" kind=flow style=dashed
+  wire @fw5 @f-valid -> @f-change "yes" kind=flow step=3
+  wire @fw6 @f-change -> @f-quiet "no" kind=flow
+  wire @fw7 @f-change -> @f-fits "yes" kind=flow step=4
+  wire @fw8 @f-fits -> @f-send "yes" kind=flow
+  wire @fw9 @f-fits -> @f-choices "no — refused locally, no server trip" kind=flow
+  wire @fw10 @f-send -> @f-answer "wait" kind=flow step=5
+  wire @fw11 @f-answer -> @f-saved "committed" kind=flow
+  wire @fw12 @f-answer -> @f-choices "constraint-conflict" kind=flow
+  wire @fw13 @f-answer -> @f-refuse "any other refusal" kind=flow style=dashed
+  wire @fw14 @f-choices -> @f-apply "Apply" kind=flow step=6
+
+  section @flow-52 "7.2 · A drop, in plain words" mode=flow layout=layered direction=down order=9 {
+    show @f-drop @f-busy @f-refuse @f-valid @f-change @f-quiet @f-fits @f-send @f-answer @f-saved @f-choices @f-apply
+    connect @fw1 @fw2 @fw3 @fw4 @fw5 @fw6 @fw7 @fw8 @fw9 @fw10 @fw11 @fw12 @fw13 @fw14
+  }
+}

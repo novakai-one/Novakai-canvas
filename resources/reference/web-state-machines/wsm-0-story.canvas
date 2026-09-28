@@ -1,0 +1,252 @@
+canvas 1
+collection @wsm-story "Web state machines · 0 · Story, totals, removals, done, tasks" theme=paper {
+
+  node @t-clicks start "Your clicks (35 controller methods)" {}
+  node @t-canvas start "Canvas drags and drops" {}
+  node @t-stream start "Server change stream" {}
+  node @t-keys start "Undo / Redo keys" {}
+  node @t-answers start "Server answers (5 endpoints)" {}
+  node @t-vars step "16 changeable variables in one closure" {}
+  node @t-view step "One view object, about 20 fields, written from everywhere" { text @d "report() 26 times, problem 24, status 17" }
+  node @t-stores step "6 helper stores call back into it" { text @d "journal, source, inspector, wires, definitions, library" }
+  node @t-reenter step "Calls re-enter it mid-update" { text @d "10 known chains; React can see half an update" }
+  node @t-p1 end "Adjust layout never appears after the server refuses a move" { text @d "the save request reuses the drag's ID; the Canvas drops the preview" }
+  node @t-p2 end "Retry skips the undo/redo gate" {}
+  node @t-p3 end "'Ready' hides a start-up failure" {}
+  node @t-p4 end "Work keeps running after the page closes the workspace" {}
+  node @t-p5 end "Add forms can stay 'Adding…'; React keeps a second copy of them" {}
+  node @t-p6 end "Any change risks every workflow" { text @d "one 1,746-line file; no seams to test or read in parts" }
+
+  wire @tw1 @t-clicks -> @t-vars "calls" kind=flow
+  wire @tw2 @t-canvas -> @t-vars "effects" kind=flow
+  wire @tw3 @t-stream -> @t-vars "events" kind=flow
+  wire @tw4 @t-keys -> @t-vars "keydown" kind=flow
+  wire @tw5 @t-answers -> @t-vars "await" kind=flow
+  wire @tw6 @t-vars -> @t-view "writes" kind=flow
+  wire @tw7 @t-stores -> @t-vars "call back" kind=flow
+  wire @tw8 @t-view -> @t-reenter "notifies" kind=flow
+  wire @tw9 @t-reenter -> @t-p1 "shows up as" kind=flow style=dashed
+  wire @tw10 @t-reenter -> @t-p2 "shows up as" kind=flow style=dashed
+  wire @tw11 @t-reenter -> @t-p3 "shows up as" kind=flow style=dashed
+  wire @tw12 @t-reenter -> @t-p4 "shows up as" kind=flow style=dashed
+  wire @tw13 @t-reenter -> @t-p5 "shows up as" kind=flow style=dashed
+  wire @tw14 @t-reenter -> @t-p6 "shows up as" kind=flow style=dashed
+
+  section @s-today "0 · Situation today — one file runs every browser workflow" mode=flow layout=layered direction=right order=0 {
+    group @g-inputs "WHAT HAPPENS TO THE BROWSER" {
+      show @t-clicks @t-canvas @t-stream @t-keys @t-answers
+    }
+    group @g-file "ONE FILE — workspace-session.ts, 1,746 lines" {
+      show @t-vars @t-view @t-stores @t-reenter
+    }
+    group @g-effects "WHAT YOU FEEL" {
+      show @t-p1 @t-p2 @t-p3 @t-p4 @t-p5 @t-p6
+    }
+    connect @tw1 @tw2 @tw3 @tw4 @tw5 @tw6 @tw7 @tw8 @tw9 @tw10 @tw11 @tw12 @tw13 @tw14
+  }
+
+  node @p-input start "Something happens" { text @d "a click, a drop, a key, a server answer" }
+  node @p-event step "It becomes one event" { text @d "a plain message addressed to one machine" }
+  node @p-queue step "The runner queues it" { text @d "one event at a time; nothing re-enters" }
+  node @p-machine step "Pure machines decide" { text @d "same input, same result; no network, storage, clock or random" }
+  node @p-gate decision "One gate for every send" { text @d "undo in flight, one request per collection, workspace, read" }
+  node @p-state step "New state, each fact stored once" {}
+  node @p-view end "React shows a view worked out from the state" { text @d "buttons say why they are disabled" }
+  node @p-effects step "A list of work to do" { text @d "save to storage, send, read, draw on the Canvas" }
+  node @p-exec step "One executor per kind of work" {}
+  node @p-server end "Authoring decides whether an edit saves" { text @d "unchanged: only the server decides" }
+
+  wire @pw1 @p-input -> @p-event "becomes" kind=flow step=1
+  wire @pw2 @p-event -> @p-queue "queued" kind=flow step=2
+  wire @pw3 @p-queue -> @p-machine "next event" kind=flow step=3
+  wire @pw4 @p-machine -> @p-gate "sends pass" kind=flow
+  wire @pw5 @p-machine -> @p-state "commit" kind=flow step=4
+  wire @pw6 @p-state -> @p-view "publish" kind=flow step=5
+  wire @pw7 @p-gate -> @p-effects "admitted" kind=flow
+  wire @pw8 @p-effects -> @p-exec "run in order" kind=flow step=6
+  wire @pw9 @p-exec -> @p-server "request" kind=flow
+  wire @pw10 @p-exec -> @p-queue "answers come back as events" kind=flow style=dashed
+
+  section @s-proposal "0.1 · Proposal — pure machines, one runner, one gate" mode=flow layout=layered direction=right order=1 {
+    group @g-in "BROWSER · adapters — take things in" {
+      show @p-input @p-event @p-queue
+    }
+    group @g-core "BROWSER · core — pure rules (apps/web/core)" {
+      show @p-machine @p-gate @p-state
+    }
+    group @g-out "BROWSER · adapters — act on the world" {
+      show @p-view @p-effects @p-exec
+    }
+    group @g-server "ON THE SERVER" {
+      show @p-server
+    }
+    connect @pw1 @pw2 @pw3 @pw4 @pw5 @pw6 @pw7 @pw8 @pw9 @pw10
+  }
+
+  node @totals concept "4 · Modules summary — totals by collection (each collection lists every file)" size=large {
+    table @totals-t columns=["Module", "Current Line Count", "Lines Added", "Lines Removed", "Net", "Expected final line count (estimate)", "What the module does"] {
+      row @tr1 cells=["wsm-1-runner.canvas · 16 files", "2017", "+1220", "-1987", "-767", "1250", "The runner, the root machine, effects, the temporary bridge, composition. Deletes workspace-session.ts."]
+      row @tr2 cells=["wsm-2-rules.canvas · 14 files", "0", "+980", "0", "+980", "980", "Cross-workflow rules: lifts, contexts, after-rules F1 to F6."]
+      row @tr3 cells=["wsm-3-requests.canvas · 30 files", "922", "+1880", "-539", "+1341", "2263", "The request journal, the one send gate (sendReadiness + gatedSend), undo/redo, notices."]
+      row @tr4 cells=["wsm-4-startup.canvas · 25 files", "675", "+1520", "-413", "+1107", "1782", "Start-up, change stream (stream phase + reach), catalogue, source editor; service, browser, stores executors."]
+      row @tr5 cells=["wsm-5-diagram.canvas · 18 files", "812", "+1243", "-463", "+780", "1592", "Open, choose, render, install; the scene executor and Canvas intake."]
+      row @tr6 cells=["wsm-6-gesture.canvas · 25 files", "1605", "+1097", "-650", "+447", "2052", "Moving things: decision 1, the pure gesture plan, the review panel."]
+      row @tr7 cells=["wsm-7-forms.canvas · 25 files", "1702", "+1227", "-989", "+238", "1940", "The Add panel (records.ts split) and new connections."]
+      row @tr8 cells=["wsm-8-contract.canvas · 37 files", "2413", "+1209", "-869", "+340", "2753", "Brands, the one ID source, error codes, the type-only import gate (P2a, P2b files), the Canvas split (P7) and GestureId."]
+      row @tr9 cells=["wsm-9-view.canvas · 36 files", "2159", "+1817", "-398", "+1419", "3578", "The projection split by feature, permissions (may), the facade (one file per workflow), React and editor stores."]
+      row @tr10 cells=["Brand ripple (B2a–B6b, ER1–ER3) · about 110 more files", "n/a", "+1500", "-1450", "+50", "n/a", "Type-only edits of 1 to 10 lines per file; not listed one by one."]
+      row @tr-total cells=["TOTAL · 226 listed files (+ ripple)", "12305", "+12193 (+13693)", "-6308 (-7758)", "+5885 (+5935)", "18190", "More lines overall: about 120 small new files replace one large file. Files over 300 after the build: 0 (interaction-handlers.ts is split in P7). The PR sum (plan 13.2) is larger: moves count both ways."]
+    }
+  }
+  section @s-totals "4 · Modules summary — totals (estimates, not gates)" mode=grid columns=1 order=2 {
+    show @totals
+  }
+
+  node @removed concept "6 · Removed functionality and behaviour changes — one row each, nothing silent" role=warning size=large {
+    table @removed-t columns=["Removed", "Affects", "What it does today", "Plain words - what changes for you", "Risk to weigh"] {
+      row @rm1 cells=["workspace-session.ts (1,746 lines)", "The whole browser workspace", "One file runs every workflow", "Same screens and buttons. The logic moves into small machine files.", "A big move. The app must work after each of 55 PRs; a temporary bridge with a written interface carries it (plan 8.5)."]
+      row @rm2 cells=["Request ID = gesture ID (I2)", "Moving nodes, connections", "A drag's ID is reused as its save request's ID", "Each save gets its own new ID.", "Logs show two IDs where there was one."]
+      row @rm3 cells=["No choices after a server refusal (I1, I3)", "Moving modules", "If the server refuses, you can only cancel", "If the server says it cannot place it (constraint-conflict), Expand and Rearrange appear. Other refusals snap back.", "The Canvas must keep the preview after a refusal. If the drive shows it does not, PR M28b changes the Canvas. A second browser cannot force this refusal (it gives revision-conflict), so the server half may stay not verified."]
+      row @rm4 cells=["Uncertain move snaps back (I4)", "Moving nodes", "When the answer is lost, the node jumps back even though it may have saved", "The node stays where you dropped it until Check or Retry settles it.", "You may see a position that is not confirmed yet."]
+      row @rm5 cells=["'Some modules' check (I5)", "Mixed selections", "One module node in the selection sends it to the review, which refuses it", "Mixed selections go the plain way; Authoring decides.", "No local choices for mixed selections."]
+      row @rm6 cells=["Duplicate check only on modules (I6)", "Moving nodes", "Other diagrams send duplicate or parent-plus-child selections", "Refused before sending, everywhere.", "None expected; the server refuses them anyway."]
+      row @rm7 cells=["Ghost preview after a local failure (I7)", "Canvas", "A failed plan leaves the drag drawn as if sent", "Every local refusal snaps back with a message.", "None."]
+      row @rm8 cells=["Retry skips the undo gate (I8)", "Recovery panel", "Retry sends even while an undo is settling", "Retry waits, and shows 'Saving…'.", "Retry can say 'wait' where it used to send."]
+      row @rm9 cells=["'Uncertain' while saving (I9)", "Move review", "Right after Apply the panel says confirmation is pending", "It says 'Saving'.", "None."]
+      row @rm10 cells=["Error pop-ups on blocked move buttons (I10)", "Move review", "Clicking reports an error", "The button is disabled and says why.", "None."]
+      row @rm11 cells=["Stored status text (I11)", "Status bar", "Set from 17 places; 'Ready' hides a start-up failure", "Worked out by a fixed priority, same words. Failures stay visible.", "A diagram opened at start-up says 'Saved', not 'Ready'."]
+      row @rm12 cells=["Palette drop borrows the Object form (I12)", "Add panel", "Dropping a module overwrites your half-typed object", "The drop sends on its own; your form is untouched and not locked.", "None."]
+      row @rm13 cells=["Stored busy and 'adding' flags (I13)", "Add panel", "Can stay 'Adding…' after a refusal", "Worked out from the form phases; checked before locking.", "None."]
+      row @rm14 cells=["Leftovers after switching collection (I14)", "Move review, connection draft, Add forms", "They stay and fail later as stale", "Dropped as soon as another collection opens. A refused add for the old one still leaves its note.", "An unsent connection draft is lost when you switch."]
+      row @rm15 cells=["Dead ?collection= in the address (I15)", "Address bar", "A deleted collection stays in the URL", "The URL is cleared. The source draft is kept.", "None."]
+      row @rm16 cells=["Any render clears the problem bar (I16)", "Problem bar", "Someone else's edit reopens the diagram and wipes your error and refusals", "Only your own opens and chooser actions clear it.", "Errors stay on screen longer."]
+      row @rm17 cells=["Overtaken open fails (I17)", "Opening a diagram", "A newer snapshot mid-open: failure then reopen; chooser shows 'Could not open'", "The open restarts quietly.", "None."]
+      row @rm18 cells=["URL collection after a failed first read (I18)", "Start-up", "Opened against an empty generation", "Opens once a snapshot arrives.", "None."]
+      row @rm19 cells=["'Could not be confirmed' lingers (I19)", "Problem bar", "Cleared only after Check or Retry", "Cleared as soon as nothing is uncertain.", "None."]
+      row @rm20 cells=["Work after closing (I20)", "Leaving the page", "Sends and reads keep running and write storage", "Everything after close is dropped. Unsettled requests return as uncertain next time.", "A request answered after close is checked again on the next visit."]
+      row @rm21 cells=["Half-applied dismissal (I21)", "Problem bar, Recovery list", "React briefly sees the bar cleared but refusals still listed", "Both change together.", "None."]
+      row @rm22 cells=["Canvas 'online' from the stream only (I22)", "Canvas", "Only the change stream turns it online", "A successful read also turns it online.", "None."]
+      row @rm23 cells=["Double-click Check or Retry (I23)", "Recovery panel", "The second click reports 'pending-request'", "Buttons are disabled while a lookup runs.", "None."]
+      row @rm24 cells=["Connection IDs kept forever (I24)", "Memory", "Confirmed connection gestures are never forgotten", "Not tracked.", "None."]
+      row @rm25 cells=["Bar cleared before a refused send (I25)", "Problem bar", "Shows 'Saving…' and clears the bar, then the journal refuses", "Refused before anything changes.", "None."]
+      row @rm26 cells=["Preview timing mark (I26)", "Performance marks", "'canvas:released-route-preview' includes the preview calculation", "Times only the Canvas drawing.", "Old and new timings do not compare."]
+      row @rm27 cells=["showLibrary() and refresh() (I27)", "Controller API", "Two methods nobody calls", "Removed.", "A hidden caller fails to compile."]
+      row @rm28 cells=["MoveOption.id", "Move options", "Each option has a fixed text ID", "Options are keyed by kind: expand, rearrange.", "None."]
+      row @rm29 cells=["Diagnostic.owner and the web copy of the service failure type", "Errors", "owner marks panel-preference errors; failure-source.ts copies a service type", "Where a problem shows lives in the notices; the service's own type is used.", "Code that read owner must switch."]
+      row @rm30 cells=["React's own copy of the Add forms (useLocalCreation)", "Add panel", "AddTools keeps its own drafts and lock", "It reads the view only; each keystroke is an event.", "Typing goes through the runner; watch for lag in the headless drive."]
+      row @rm31 cells=["Apps tests (PR #116, Chris 27 Sep)", "Safety net", "32 tests (2 failing) guarded parts of the session", "Each PR is proven by a headless drive; table tests come later.", "Regressions between drives are not caught automatically."]
+      row @rm32 cells=["KEPT on purpose: quirks 4, 10, 13", "Move review, undo, definitions", "A retryable move cannot be cancelled; the undo gate waits while history reads fail; definition apply reports twice", "Unchanged. Quirk 4 now shows its reason.", "Undo can stay disabled while the history route fails."]
+      row @rm33 cells=["New relationship IDs from the drag ID (I28)", "New connections", "A new wire's ID is 'relationship-' + the drag's ID", "A new wire's ID is 'relationship-' + a fresh random ID. Other ID texts are unchanged: '<uuid>' for requests; collection-, section-, object-, group-, definition-, content-, folder- + a random ID.", "Old and new wires have IDs made two ways; both are valid."]
+      row @rm34 cells=["Snapshot during an install missed (I29)", "Opening a diagram", "A snapshot that arrives while a scene installs can be missed until the next one", "It is applied right after the install.", "None."]
+      row @rm35 cells=["Typing into a kept foreign source draft (I30)", "Source editor", "A foreign or corrupt stored draft is kept, but typing is accepted and every save fails", "The source editor is read-only for the session and says why (stored-draft-kept).", "You cannot type into Source until the workspace changes."]
+      row @rm36 cells=["Move Apply held by any request anywhere (I31)", "Move review", "Any unconfirmed request in any collection held Apply", "Only a request for the same collection, or undo/redo, holds it.", "None expected: requests for other collections touch other records."]
+      row @rm37 cells=["The Add panel's own refusal line (I32)", "Add panel", "A refused add's text shows in the panel unless the bar shows the same text, so it stays after the bar closes", "The refusal shows in the problem bar only; closing the bar clears it.", "After closing the bar, the panel no longer says why the add was refused."]
+      row @rm38 cells=["core/creation/records.ts (296 lines)", "Add panel", "Validation and change building, tied to live Canvas handles", "Split into validation.ts and changes.ts that take plain data (M21); deleted in M24.", "None; same checks."]
+    }
+  }
+  section @s-removed "6 · Removed functionality and behaviour changes" mode=grid columns=1 order=3 {
+    show @removed
+  }
+
+  node @done concept "E1 · Definition of done — exact checks, exact pass conditions (plan 13.4)" size=large {
+    table @done-t columns=["#", "The exact check", "Execute — command", "Pass condition"] {
+      row @d1 cells=["DoD1", "The god file is gone and no new one exists", "test ! -e apps/web/adapters/sessions/workspace-session.ts; wc -l on every changed file", "file absent; every changed file <= 300 lines, or a written reason in §10"]
+      row @d2 cells=["DoD2", "Core is pure", "pnpm exec eslint apps/web/core with M2's rule: no-restricted-globals (window, document, localStorage, sessionStorage, fetch, crypto, performance, setTimeout, setInterval) and no-restricted-properties (Date.now) scoped to apps/*/core/**", "0 errors. (A text grep for document matches 285 lines of RenderDocument today, so grep is not the check.)"]
+      row @d3 cells=["DoD3", "Every request passes one gate, Retry included", "pnpm exec eslint apps/web/core (J3 rules); grep -rn \"gatedSend(\" apps/web/core; grep -rn \"sendReadiness(\" apps/web/core", "0 errors; gatedSend called only in journal/send.ts, journal/recovery.ts; sendReadiness only in rules/gated-send.ts, rules/permissions.ts. The 'post-apply' literal outside core (effects.ts, effects/apply.ts) is expected"]
+      row @d4 cells=["DoD4", "No bare string or number for an ID or domain value", "grep -rnE \"\\b(id|[a-z]+Id|workspace|collection|request|gesture|generation|revision|sequence)\\??: (string|number)\\b\" apps/web/core apps/web/contract; grep -rnE \"(=|:) ''|=== ''|\\?\\? -1\" apps/web/core/workspace", "0 matches each (the named aliases of §4.1 are types, not string)"]
+      row @d5 cells=["DoD5", "No stored busy flags or status text", "grep -rnE \"busy|status: string\" apps/web/core/workspace/*/state.ts apps/web/core/workspace/state.ts", "0 matches"]
+      row @d6 cells=["DoD6", "Build gates pass", "pnpm typecheck; pnpm architecture (type-only imports checked from P2b); pnpm exec eslint apps/web; pnpm exec prettier --check <touched>", "0 errors each"]
+      row @d7 cells=["DoD7", "Standards score", "Review ritual, docs/standards/CODING-STANDARDS.md (\"Review ritual\"), per changed file; scores in the PR body", "each > 144 / 160 (exemption: §16 Q2)"]
+      row @d8 cells=["DoD8", "Behaviour kept", "Headless drive of the §11 rows marked \"Driven in\" this PR", "0 rows failing"]
+      row @d9 cells=["DoD9", "Decision 1", "Headless: overlap drag -> choices at once -> Apply -> Saved; Recovery shows a request ID different from the gesture ID. Server half: M28 note", "choices after a completed move = 0; applied request ID != gesture ID; server half verified or listed under Not verified"]
+      row @d10 cells=["DoD10", "Touched capabilities do not regress", "pnpm exec vitest run capability/<name> for each touched capability (§13.1 \"Capability PRs\")", "new failures vs baseline = 0"]
+      row @d11 cells=["DoD11", "Every quirk decided", "§12.2", "undecided = 0"]
+      row @d12 cells=["DoD12", "Stylesheets", "The auditStyles call from capability/design-system/tests/artifacts.test.ts:108-115, run on the touched .module.css files by a scratch script (not committed); pnpm exec vitest run capability/design-system for Dialog.module.css; headless look", "violations = 0; tokenRatio >= 0.95"]
+    }
+  }
+  section @s-done "E1 · Definition of done" mode=grid columns=1 order=4 {
+    show @done
+  }
+
+  node @tasks concept "E2 · Task list, part 1 of 3 — prep and brands (P1 to B6b); one stack in this order; base origin/owners/delete-apps-tests; each PR 600 changed lines or fewer (added + removed); the app works after every PR" size=large {
+    table @tasks-t columns=["#", "Task", "What the builder is doing", "Task done when…", "Est. lines (+/-)", "What you will observe (headless)", "Achieves", "Depends"] {
+      row @k1 cells=["P1", "web-css-tokens", "Branch exists (owners/web-css-tokens: 5a0fcd6, 275cf40). Rebase and open.", "Commands pass; no behaviour change; the check below passes", "+110 / -30", "DS audit: 0 violations, tokenRatio >= 0.95. Open chooser -> pending strip visible; Add hints muted; Source focus ring", "DoD12", "—"]
+      row @k2 cells=["P2a", "web-type-cycles", "Fix the 14 web cycle reports and 3 core-direction breaks that type-only imports hide: record types that ports hold move to records; panel-types records -> records/panels.ts; fix core/inspector/endpoints.ts. Flag stays off.", "Commands pass; no behaviour change; the check below passes", "+160 / -140", "app loads", "DoD6", "—"]
+      row @k3 cells=["P2b", "type-import-gate", "Fix the other 11 cycle reports (2 service, 7 layout, 2 export), then set tsPreCompilationDeps: true", "Commands pass; no behaviour change; the check below passes", "+160 / -140", "app loads; pnpm dev boots", "DoD6", "P2a"]
+      row @k4 cells=["P3", "web-compose-split", "controller() -> compose/workspace.ts; workspace-inputs -> request-builders + workspace-decoders", "Commands pass; no behaviour change; the check below passes", "+190 / -190 (moves)", "open a diagram", "DoD1", "—"]
+      row @k5 cells=["P4", "web-materialize-split", "materialize.ts -> materialize + acceptance", "Commands pass; no behaviour change; the check below passes", "+165 / -165 (moves)", "drag a module past its edge -> choices appear", "DoD1", "—"]
+      row @k6 cells=["P5", "web-shell-split", "Hooks -> shell-hooks.ts; ProblemBar and StatusBar -> ShellAlerts.tsx", "Commands pass; no behaviour change; the check below passes", "+165 / -165 (moves)", "problem bar shows and dismisses; status bar text", "DoD1", "—"]
+      row @k7 cells=["P6", "web-add-tools-split", "AddTools -> AddTools / AddForms / AddFields (move only)", "Commands pass; no behaviour change; the check below passes", "+190 / -190 (moves)", "type in every Add field; Add diagram, object, group", "DoD1", "—"]
+      row @k8 cells=["P7", "canvas-interactions-split", "interaction-handlers.ts (358) by responsibility: geometry gestures and keyboard commands move out (moves only)", "Commands pass; no behaviour change; the check below passes", "+220 / -200 (moves)", "drag a node -> Saved; arrow keys move a selected node; hover highlights", "DoD1, DoD10", "—"]
+      row @k9 cells=["P8", "web-render-move", "render/ticket.ts, render/admission.ts -> diagram/ (moves, imports updated)", "Commands pass; no behaviour change; the check below passes", "+200 / -195 (moves)", "open a diagram; chooser switch", "DoD1", "—"]
+      row @k10 cells=["B1", "web-brands-foundation", "brands.ts (no GestureId), IdSource, edge/ids.ts, Service TransportGeneration brand and runtime schema, Model type exports; no consumers", "Commands pass; the check below passes", "+330 / -10", "app loads; pnpm dev boots", "DoD4", "P2b"]
+      row @k11 cells=["ER1", "web-error-codes", "Closed WebErrorCode; owner-keyed Diagnostic; foreignFailure(owner, source); library-changed; failure-source copy deleted; owner moves out; service index exports OperationSource", "Commands pass; the check below passes", "+330 / -140", "refused add (duplicate name) -> bar shows the same text; Library edit on a changed library -> library-changed text", "DoD4", "B1"]
+      row @k12 cells=["B2a", "web-brand-workspace", "WorkspaceId through records, readers and panel preferences; '' placeholders -> phases", "Commands pass; the check below passes", "+140 / -110", "reload -> panels and drafts restore", "DoD4", "ER1"]
+      row @k13 cells=["B2b", "web-brand-generation", "TransportGeneration through web and service; stored generations parsed with Service's schema by the 7 readers (§4.1 row 1); '' -> 'unread'", "Commands pass; the check below passes", "+200 / -170", "stop and restart the service -> diagram rerenders; reload with an inspector draft -> it restores", "DoD4", "B2a"]
+      row @k14 cells=["B3a", "web-brand-collection", "CollectionId, FolderId, cursor and time aliases; URL and recovery readers", "Commands pass; the check below passes", "+160 / -140", "open by URL; Library new folder", "DoD4", "B2b"]
+      row @k15 cells=["B3b", "web-brand-model-ids", "Section, object, group, relationship, definition, content IDs; Definitions.tsx and features.ts stop minting", "Commands pass; the check below passes", "+140 / -120", "Definitions -> New -> it appears; add a content block in the inspector", "DoD4", "B3a"]
+      row @k16 cells=["B4", "web-brand-request", "RequestId, ActorId, PlannerId; ReadVersion as an owner record; delete unused editing types. The session mints each Canvas send's request ID (I2 early); the 3 lookups match on the stored gesture", "Commands pass; the check below passes", "+220 / -180", "stop the service -> Add object -> Recovery shows it uncertain -> start the service -> Check -> No receipt found... -> Retry -> Saved; drag a node -> Saved", "DoD4, DoD9", "B3b"]
+      row @k17 cells=["B5", "canvas-gesture-id", "Canvas GestureId brand; Canvas parses at gesture begin in gesture-ids.ts; the web re-exports the type; canvas test fixtures compile", "Commands pass; the check below passes", "+150 / -100", "drag a node -> Saved; drag a module off its edge -> choices", "DoD4, DoD10", "B4, P7"]
+      row @k18 cells=["B6a", "web-brand-draft-keys", "Draft-key brands; RetentionSlot; readers reject a mismatched key", "Commands pass; the check below passes", "+200 / -150", "inspector edit survives reload", "DoD4", "B5"]
+      row @k19 cells=["B6b", "web-brand-panels-source-edit", "PanelSectionId union; SourceEdit brand", "Commands pass; the check below passes", "+110 / -90", "Customize panels -> hide / show; source edit survives reload", "DoD4", "B6a"]
+    }
+  }
+  section @s-tasks "E2 · Task list — part 1 of 3" mode=grid columns=1 order=5 {
+    show @tasks
+  }
+
+  node @tasks-2 concept "E2 · Task list, part 2 of 3 — machines M1 to M19" size=large {
+    table @tasks-t-2 columns=["#", "Task", "What the builder is doing", "Task done when…", "Est. lines (+/-)", "What you will observe (headless)", "Achieves", "Depends"] {
+      row @k20 cells=["M1", "web-workflow-records", "Records and ports only: machine, events (commandKeys), effects (lifecycle, browser, bridge families; Executor), view and permissions skeletons, lifecycle records; ports workflow-deps, bridge, connection-policy (moved)", "Commands pass; the drive below passes; session line count drops", "+330 / -30", "app loads", "DoD5", "B6b, P3"]
+      row @k21 cells=["M2", "web-runner", "Runner; root machine with lifecycle started / disposed; step, state, contexts, finalize, view/project.ts and rules/permissions.ts with no rows yet; bridge adapter skeleton; compose builds runner and session side by side; core-purity lint (no-restricted-globals, Date.now) and ticket-import lint", "Commands pass; the drive below passes; session line count drops", "+560 / -20", "app loads; open a diagram", "DoD2", "M1"]
+      row @k22 cells=["M3", "web-journal-records", "Journal and gate records; RefusedCode, Refusal; apply and journal-storage effects; classifyApply and the refusal tables", "Commands pass; new files only, no live file changed; app loads and opens a diagram", "+270 / -0", "app unchanged", "DoD3", "M2"]
+      row @k23 cells=["M4", "web-journal-core", "Journal send path: state, update, send, entries; sendReadiness + gatedSend; J3 lint with the syntax() helper", "Commands pass; new files only, no live file changed; app loads and opens a diagram", "+520 / -0", "app unchanged", "DoD3", "M3"]
+      row @k24 cells=["M5", "web-journal-recovery-core", "Answers, Check, Retry, Dismiss, restore, autoCheck", "Commands pass; new files only, no live file changed; app loads and opens a diagram", "+320 / -0", "app unchanged", "DoD3", "M4"]
+      row @k25 cells=["M6", "web-journal-executors", "Apply and storage (journal part) executors, reader RetainedEntry mapping and restoredOrigin, waiters, compose/executors.ts; unwired", "Commands pass; new files only, no live file changed; app loads and opens a diagram", "+330 / -10", "app unchanged", "DoD3", "M5"]
+      row @k26 cells=["M7", "web-journal-wire", "lift/journal (owner rows as legacy-settled); the session sends through the runner; journal view part and Check / Retry / Dismiss permissions; facade/journal (Check, Retry, Dismiss); delete submission-session.ts", "Commands pass; the drive below passes; behaviour rows 3, 4, 34, 35, 36, 37, 38 pass; session line count drops", "+250 / -350", "Add object -> Saved; stop the service -> Add object -> Recovery shows uncertain -> start the service -> Check -> No receipt found... -> Retry -> Saved; refused add -> bar -> close -> form unlocks", "DoD3, DoD8", "M6"]
+      row @k27 cells=["M8", "web-notices", "Notices machine; F1, F2, F3, F6; session report and panel reports -> events; problem part of the view", "Commands pass; the drive below passes; behaviour rows 21, 39, 40, 44 pass; session line count drops", "+420 / -60", "two refused adds -> only the newer is listed; close bar -> both gone; a panel-preference problem survives opening another diagram", "DoD5, DoD8", "M7"]
+      row @k28 cells=["M9", "web-startup-core", "Link (stream phase + reach), lifecycle rows, their records and lifts", "Commands pass; new files only, no live file changed; app loads and opens a diagram", "+350 / -0", "app unchanged", "DoD8", "M8"]
+      row @k29 cells=["M10", "web-catalogue-core", "Catalogue and its lift", "Commands pass; new files only, no live file changed; app loads and opens a diagram", "+250 / -0", "app unchanged", "DoD8", "M9"]
+      row @k30 cells=["M11", "web-startup-executors", "Service reads and stream, browser (location, keys), stores executors; unwired", "Commands pass; new files only, no live file changed; app loads and opens a diagram", "+320 / -0", "app unchanged", "DoD2", "M10"]
+      row @k31 cells=["M12", "web-startup-wire", "Runner owns start, reads, stream, restore and library refresh; keys bound by the browser executor (handle -> the session's navigateHistory); delete history-keys.ts", "Commands pass; the drive below passes; behaviour rows 1, 2, 6, 7, 8, 9, 10, 11, 12, 45, 57, 59 pass; session line count drops", "+80 / -290", "reload with ?collection= -> it opens; stop the service -> offline; start it -> rereads; commit via CLI -> diagram updates; Cmd+Z -> undo; Cmd+Z in a text field -> nothing", "DoD2, DoD8", "M11"]
+      row @k32 cells=["M13", "web-diagram-records", "Diagram records and scene effects", "Commands pass; new files only, no live file changed; app loads and opens a diagram", "+160 / -0", "app unchanged", "DoD8", "M12"]
+      row @k33 cells=["M14", "web-diagram-core", "Diagram parent: state, update, navigation, render and install", "Commands pass; new files only, no live file changed; app loads and opens a diagram", "+530 / -0", "app unchanged", "DoD8", "M13, P8"]
+      row @k34 cells=["M15", "web-diagram-refresh-core", "Refresh (restart, gone, reopen, after-install), create, children pass-down skeleton, lift/diagram", "Commands pass; new files only, no live file changed; app loads and opens a diagram", "+400 / -0", "app unchanged", "DoD8", "M14"]
+      row @k35 cells=["M16", "web-diagram-executors", "Scene executor (open, update, close, flags), canvas-intake (inspect; forwards edit intents through LegacySession), F5", "Commands pass; new files only, no live file changed; app loads and opens a diagram", "+240 / -0", "app unchanged", "DoD8", "M15"]
+      row @k36 cells=["M17", "web-diagram-open-wire", "Runner owns open, render, install, create and collection-gone; facade/navigation (open, create), facade/view; delete canvas-session.ts", "Commands pass; the drive below passes; behaviour rows 7, 11, 13, 14, 15, 16, 17, 18, 19, 22, 23, 24, 25, 32, 50 pass; session line count drops", "+230 / -330", "Library click -> diagram; Create -> it opens; delete a collection via CLI -> library + note, URL cleared; drag a node -> Saved; draw a connection -> Inspect opens", "DoD8", "M16"]
+      row @k37 cells=["M18", "web-chooser-wire", "Chooser through the runner; delete render/patches.ts and render/navigation.ts", "Commands pass; the drive below passes; behaviour rows 18, 20, 21 pass; session line count drops", "+80 / -400", "chooser: open, choose, cancel; open while a diagram renders -> the render stops; failure -> Retry; failure -> \"Choose another collection\" -> list", "DoD8", "M17"]
+      row @k38 cells=["M19", "web-history-core", "History machine (new files; history/gate.ts untouched); F4", "Commands pass; new files only, no live file changed; app loads and opens a diagram", "+350 / -0", "app unchanged", "DoD8", "M18"]
+    }
+  }
+  section @s-tasks-2 "E2 · Task list — part 2 of 3" mode=grid columns=1 order=6 {
+    show @tasks-2
+  }
+
+  node @tasks-3 concept "E2 · Task list, part 3 of 3 — machines M20 to M34 and error codes" size=large {
+    table @tasks-t-3 columns=["#", "Task", "What the builder is doing", "Task done when…", "Est. lines (+/-)", "What you will observe (headless)", "Achieves", "Depends"] {
+      row @k39 cells=["M20", "web-history-wire", "read-history; keys handle -> facade; Retry gated; history/gate.ts changes; history/journal.ts deleted; HistoryControls reads may", "Commands pass; the drive below passes; behaviour rows 7, 33, 45, 46, 47, 48, 49 pass; session line count drops", "+160 / -290", "Undo / Redo buttons; Cmd+Z / Shift+Cmd+Z; buttons disabled with a reason while saving; Retry waits while an undo settles", "DoD3, DoD8", "M19"]
+      row @k40 cells=["M21", "web-forms-prep", "Forms records; PaletteDrop type -> records; core/creation/validation.ts and changes.ts next to the live records.ts", "Commands pass; new files only, no live file changed; app loads and opens a diagram", "+370 / -10", "app unchanged", "DoD1", "M20"]
+      row @k41 cells=["M22", "web-forms-core", "Forms child; palette one-shot; pass-down", "Commands pass; new files only, no live file changed; app loads and opens a diagram", "+340 / -0", "app unchanged", "DoD5", "M21"]
+      row @k42 cells=["M23", "web-forms-wire", "facade/forms; AddForms reads the view; delete useLocalCreation; add-form and palette origins leave the bridge", "Commands pass; the drive below passes; behaviour rows 51, 52, 53 pass; session line count drops", "+200 / -330", "Add diagram, object, group; drop a module on the canvas; refused add -> form unlocks; switch collection -> forms empty; add while locked -> disabled with reason", "DoD5, DoD8", "M22"]
+      row @k43 cells=["M24", "web-forms-cleanup", "Delete the now-unimported captures.ts, problem.ts, records.ts", "Commands pass; nothing imports the deleted files; the check below passes", "+0 / -484", "Add object -> Saved", "DoD1", "M23"]
+      row @k44 cells=["M25", "web-connection", "Connection child and wiring; request.ts takes IDs; delete connection/capture.ts", "Commands pass; the drive below passes; behaviour rows 54 pass; session line count drops", "+330 / -250", "draw a connection -> edit label -> Apply -> wire appears; Cancel; draw a second while one is open -> refused", "DoD8", "M24"]
+      row @k45 cells=["M26", "web-gesture-plan", "planGesture, choicesAfterRefusal, placementCapture, moduleMove as new files (plan.ts and route-preview.ts untouched); gesture records", "Commands pass; new files only, no live file changed; app loads and opens a diagram", "+250 / -0", "app unchanged", "DoD9", "M25"]
+      row @k46 cells=["M27", "web-gesture-core", "Gesture child: send, settle, choices, release (decision 1)", "Commands pass; new files only, no live file changed; app loads and opens a diagram", "+560 / -0", "app unchanged", "DoD9", "M26"]
+      row @k47 cells=["M28", "web-gesture-wire", "Full canvas-intake, settle and preview effects, measure; MovementReview reads its view and may; plan.ts duplicate check and route-preview moduleMove switch on (I5, I6); legacy canvas forward removed", "Commands pass; the drive below passes; behaviour rows 26, 27, 28, 29, 30, 31 pass; session line count drops; server-refusal choices verified or listed under Not verified", "+300 / -300", "drag in modules -> Saved; drop in place -> nothing; overlap drag -> choices at once -> Expand preview -> Apply -> Saved (request ID != gesture ID in Recovery); Cancel; buttons show reasons while saving. Server-refusal choices: see M28 note", "DoD9", "M27"]
+      row @k48 cells=["M28b", "canvas-refused-preview (only if needed)", "Only if the M28 drive shows the preview lost: Canvas accepts preview-routes on a rejected entry at the same stamp", "Only if the M28 drive shows the preview lost; Canvas tests add no failures", "+130 / -20", "repeat the M28 drive", "DoD9, DoD10", "M28"]
+      row @k49 cells=["M29", "web-gesture-cleanup", "Delete compose/movement-review.ts, movement-review/{phases,types,outcome}.ts; failures.ts -> gesture/; records/movement.ts shrinks", "Commands pass; the drive below passes; session line count drops", "+90 / -500", "drag in modules -> Saved; overlap drag -> choices", "DoD1", "M28"]
+      row @k50 cells=["M30", "web-editor-sends", "Inspector, wire, definition and library sends through the journal; waiters; settle-definition; blocked editor sends answer the caller", "Commands pass; the drive below passes; behaviour rows 41, 42, 55 pass; session line count drops", "+200 / -210", "Inspector edit -> Apply -> Saved; Wire editor -> Apply -> Saved; Definitions apply / refuse; Library new folder; Apply during an undo -> the store unlocks with a reason", "DoD3, DoD8", "M29"]
+      row @k51 cells=["M31", "web-source-core", "Source machine (with blocked) and records", "Commands pass; new files only, no live file changed; app loads and opens a diagram", "+490 / -0", "app unchanged", "DoD8", "M30"]
+      row @k52 cells=["M32", "web-source-wire", "Source storage part; facade/source; SourceEditor reads its view; delete source-session.ts and records/source.ts", "Commands pass; the drive below passes; behaviour rows 5, 7, 42, 56 pass; session line count drops", "+190 / -390", "Show source -> type -> Apply -> Saved; close dirty -> keep / discard / stay; after discard, reopen -> text reprinted; reload -> dirty draft back", "DoD8", "M31"]
+      row @k53 cells=["M33", "web-status-and-views", "Status; React features read their own view part and command set; busy flags removed; delete core/workspace/status.ts", "Commands pass; the drive below passes; behaviour rows 43 pass; session line count drops", "+330 / -230", "status texts: Connecting, Ready, Saving, Saved, Draft not applied; each panel's disabled reasons", "DoD5, DoD8", "M32"]
+      row @k54 cells=["M34", "web-remove-session", "Delete the bridge and the rest of workspace-session.ts; export through the facade", "Commands pass; the drive below passes; behaviour rows 58, 59 pass; session line count drops", "+60 / -500", "full pass: start, open, add, move, connect, undo, source, chooser, recovery, export, reload", "DoD1, DoD8", "M33"]
+      row @k55 cells=["ER2", "web-error-codes-core", "Remaining core call sites use area codes", "Commands pass; the check below passes", "+200 / -200", "one refused move; one invalid Add", "DoD4", "M34"]
+      row @k56 cells=["ER3", "web-error-codes-adapters", "Readers, stores, React", "Commands pass; the check below passes", "+175 / -175", "one refused add, one offline add", "DoD4", "ER2"]
+    }
+    text @tasks-note "Not scheduled (needs Chris): owner brands (open decision Q1). Tests come later (Chris, 27 Sep). 'Commands' = typecheck, architecture, eslint apps/web, prettier, wc -l, score (plan 13.1). M28b runs only if the M28 drive shows the preview lost." role=caption
+  }
+  section @s-tasks-3 "E2 · Task list — part 3 of 3" mode=grid columns=1 order=7 {
+    show @tasks-3
+  }
+
+}
