@@ -17,8 +17,8 @@ import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
 import type { CollectionId, WorkspaceId } from '../../contract/brands.js';
 /**
- * What drawing a saved collection by its ID reads through. The workspace session passes its own
- * parts, which include these.
+ * What `renderCollection` needs: the workspace to read, a way to read collections out of it, and
+ * the renderer. The workspace session (core/session) passes these.
  */
 export interface WorkspaceRenderDependencies {
   /** The workspace to read. */

@@ -6,8 +6,9 @@
  * job can't be built, and the last drawing stays on screen.
  *
  * This file makes the two mistakes building a job can end in, both at `render-resources`:
- * `missing-asset` when something can't be found, and `invalid-input` when it's malformed. They are
- * Authoring's `Result`, because Authoring's layout check builds jobs too. It never throws.
+ * `missing-asset` when Templates, Assets or Design System refuse, and `invalid-input` when what
+ * they gave back isn't in the form Presentation or Layout expects. They are Authoring's `Result`,
+ * because Authoring's layout check builds jobs too. It never throws.
  */
 import type { FailureSource } from '../../contract/records/transport/failure-source.js';
 import type { AuthoringResult } from '../../contract/records/capability-types.js';

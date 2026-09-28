@@ -39,8 +39,9 @@ import {
 /**
  * Makes the render-job builder, which reads through `inputs`. Its `create` builds the job for one
  * collection (see `RenderJobs` in contract/ports/rendering.ts).
- * Mistakes: `missing-asset` when the theme, a font or an image can't be found, or the chosen
- * preset isn't a theme; `invalid-input` when one of them is malformed.
+ * Mistakes: `missing-asset` when Templates, Assets or Design System refuse, or the pinned preset
+ * isn't a theme; `invalid-input` when what they gave back isn't in the form Presentation or Layout
+ * expects.
  */
 export function createRenderJobs(inputs: RenderJobInputs): RenderJobs {
   return { create: (collection, view, purpose) => create(collection, view, purpose, inputs) };
