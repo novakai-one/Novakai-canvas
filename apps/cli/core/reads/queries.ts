@@ -21,18 +21,18 @@ export interface ReadDependencies {
 }
 
 /** `describe`: the DSL vocabulary as JSON. Fails as the read does. */
-export async function describe(dependencies: ReadDependencies): Promise<Result<string>> {
+export async function describeLanguage(dependencies: ReadDependencies): Promise<Result<string>> {
   return mapped(await dependencies.reads.language(), json);
 }
 
 /** `list`: one line per live collection. Fails as the workspace read does. */
-export async function list(dependencies: ReadDependencies): Promise<Result<string>> {
+export async function listCollections(dependencies: ReadDependencies): Promise<Result<string>> {
   const current = await dependencies.reads.workspace();
   return mapped(current, (observed) => collectionLines(observed.value, dependencies.collections));
 }
 
 /** `read`: the collection's source under its revision comment. Fails as the source read does. */
-export async function read(
+export async function readCollection(
   collection: CollectionId,
   scope: ReadScope,
   dependencies: ReadDependencies,
@@ -41,7 +41,7 @@ export async function read(
 }
 
 /** `inspect`: the service's inspection report as JSON. Fails as the inspect read does. */
-export async function inspect(
+export async function inspectCollection(
   collection: CollectionId,
   dependencies: ReadDependencies,
 ): Promise<Result<string>> {
@@ -52,7 +52,7 @@ export async function inspect(
  * `receipt`: the request's receipt, or that none exists. Fails as the receipt read does, or with
  * `invalid-response` when the receipt names another request.
  */
-export async function receipt(
+export async function readReceipt(
   request: RequestId,
   dependencies: ReadDependencies,
 ): Promise<Result<string>> {

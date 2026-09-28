@@ -4,88 +4,132 @@
  * order are kept. Pure. `parse.ts` checks this after the operand count; a failure names the flag,
  * and nothing was read or sent, so the caller corrects the flag and runs the command again.
  */
-import type { CommandName } from '../../contract/records/command.js';
 import type { LocalFailure, Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
 import { invalidArguments } from './failures.js';
-import type { CommandFlags, TextFlag } from './flags.js';
-import type { CountedCommand, PlacedCommand } from './placed-command.js';
+import { listGivenFlags } from './flags.js';
+import type { TextFlag } from './flags.js';
+import type { PlacedCommand } from './placed-command.js';
 import { lintProfileRequired } from './profile-operands.js';
 import { isAccepted, typedName } from './table.js';
 
-/** A command and the flags it was given, as text. */
-interface FlaggedCommand {
-  readonly name: CommandName;
-  readonly flags: CommandFlags;
-}
-
-/** A rule's verdict: `true` when the flags pass it; otherwise the failure that names the flag. */
+/** A rule's verdict: `true` when the command passes it; otherwise the failure naming the flag. */
 type RuleVerdict = Result<true, LocalFailure>;
 
-/** The verdict of a rule the flags break. */
-interface BrokenRule {
-  readonly ok: false;
-  readonly error: LocalFailure;
-}
-
 /** One placement rule, checked against the command and its flags. */
-type PlacementRule = (flagged: FlaggedCommand) => RuleVerdict;
+type PlacementRule = (placed: PlacedCommand) => RuleVerdict;
 
-/** The placement rules, in the base CLI's order. */
+/** The placement rules, in the base CLI's order (listed on `checkFlagPlacement`). */
 const placementRules: readonly PlacementRule[] = Object.freeze([
-  onlyWhereAccepted(['profile'], '--profile is only valid with profile lint.'),
+  rejectMisplacedProfile,
   requireLintProfile,
-  onlyWhereAccepted(
-    ['id', 'title'],
-    '--id and --title are only valid with profile scaffold or recipe admit.',
-  ),
+  rejectMisplacedIdOrTitle,
   rejectBothScopeFlags,
-  onlyWhereAccepted(['section', 'object'], '--section and --object are only valid with read.'),
-  everyFlagAccepted,
+  rejectMisplacedScopeFlags,
+  rejectUnacceptedFlag,
 ]);
 
 /**
- * The counted command with its flags, once every placement rule passes.
+ * The command, unchanged, once every placement rule passes.
  *
  * Fails with `invalid-arguments` for the first broken rule, in this order:
- * 1. --profile given to any command but `profile lint`.
- * 2. `profile lint` given without --profile.
- * 3. --id or --title given to any command but `profile scaffold` and `recipe admit`.
- * 4. --section and --object given together.
- * 5. --section or --object given to any command but `read`.
- * 6. Any other flag the command does not accept, named as `--X is not valid with COMMAND`.
+ * 1. `rejectMisplacedProfile`: --profile given to any command but `profile lint`.
+ * 2. `requireLintProfile`: `profile lint` given without --profile.
+ * 3. `rejectMisplacedIdOrTitle`: --id or --title given to any command but `profile scaffold` and
+ *    `recipe admit`.
+ * 4. `rejectBothScopeFlags`: --section and --object given together.
+ * 5. `rejectMisplacedScopeFlags`: --section or --object given to any command but `read`.
+ * 6. `rejectUnacceptedFlag`: any other flag the command does not accept, named as
+ *    `--X is not valid with COMMAND`.
  *
- * Flag values are not checked here; `operands.ts` checks them.
+ * Flag values are not checked here; `assembly.ts` checks them.
  */
-export function checkFlagPlacement(
-  counted: CountedCommand,
-  flags: CommandFlags,
+export function checkFlagPlacement(placed: PlacedCommand): Result<PlacedCommand> {
+  // `checkNextRule` passes the first failure along unchanged, so later rules are skipped.
+  const checked = placementRules.reduce(checkNextRule, success(placed));
+  return checked;
+}
+
+/** Checks the command against the next rule, or passes an earlier failure on unchanged. */
+function checkNextRule(
+  checked: Result<PlacedCommand>,
+  rule: PlacementRule,
 ): Result<PlacedCommand> {
-  const flagged = { name: counted.name, flags };
-  const verdicts = placementRules.map((rule) => rule(flagged));
-  const firstBroken = verdicts.find(isBroken);
-  if (firstBroken !== undefined) {
-    return firstBroken;
+  if (!checked.ok) {
+    return checked;
   }
-  return success({ ...counted, flags });
+  const verdict = rule(checked.value);
+  if (!verdict.ok) {
+    return verdict;
+  }
+  return checked;
 }
 
-/** A rule: giving any flag of `group` to a command that does not accept it fails with `message`. */
-function onlyWhereAccepted(
-  group: readonly TextFlag[],
-  message: string,
-): PlacementRule {
-  return (flagged) => rejectGroupWhereNotAccepted(flagged, group, message);
+/** Rule 1: --profile only with `profile lint`. */
+function rejectMisplacedProfile(placed: PlacedCommand): RuleVerdict {
+  return rejectMisplacedFlags(placed, ['profile'], '--profile is only valid with profile lint.');
 }
 
-/** Fails with `message` when any flag of `group` is given to a command that does not accept it. */
-function rejectGroupWhereNotAccepted(
-  flagged: FlaggedCommand,
-  group: readonly TextFlag[],
+/** Rule 2: `profile lint` needs --profile. Checked before the scope flags, as the base CLI does. */
+function requireLintProfile(placed: PlacedCommand): RuleVerdict {
+  const lintWithoutProfile = placed.name === 'profile-lint' && placed.flags.profile === undefined;
+  if (lintWithoutProfile) {
+    return invalidArguments(lintProfileRequired);
+  }
+  return success(true);
+}
+
+/** Rule 3: --id and --title only with `profile scaffold` and `recipe admit`. */
+function rejectMisplacedIdOrTitle(placed: PlacedCommand): RuleVerdict {
+  return rejectMisplacedFlags(
+    placed,
+    ['id', 'title'],
+    '--id and --title are only valid with profile scaffold or recipe admit.',
+  );
+}
+
+/** Rule 4: --section and --object never together, whichever command is given them. */
+function rejectBothScopeFlags(placed: PlacedCommand): RuleVerdict {
+  const bothScopeFlags = placed.flags.section !== undefined && placed.flags.object !== undefined;
+  if (bothScopeFlags) {
+    return invalidArguments('--section and --object are mutually exclusive for read.');
+  }
+  return success(true);
+}
+
+/** Rule 5: --section and --object only with `read`. */
+function rejectMisplacedScopeFlags(placed: PlacedCommand): RuleVerdict {
+  return rejectMisplacedFlags(
+    placed,
+    ['section', 'object'],
+    '--section and --object are only valid with read.',
+  );
+}
+
+/**
+ * Rule 6: the first flag the command does not accept fails, in the order the flags were given
+ * (`listGivenFlags`).
+ */
+function rejectUnacceptedFlag(placed: PlacedCommand): RuleVerdict {
+  const givenFlags = listGivenFlags(placed.flags);
+  const unaccepted = givenFlags.find((flag) => !isAccepted(placed.name, flag));
+  if (unaccepted !== undefined) {
+    return invalidArguments(`--${unaccepted} is not valid with ${typedName(placed.name)}`);
+  }
+  return success(true);
+}
+
+/**
+ * Fails with `message` when any of `restrictedFlags` is given to a command that does not accept
+ * it.
+ */
+function rejectMisplacedFlags(
+  placed: PlacedCommand,
+  restrictedFlags: readonly TextFlag[],
   message: string,
 ): RuleVerdict {
-  const groupMisplaced = group.some((flag) => isGivenButNotAccepted(flagged, flag));
-  if (groupMisplaced) {
+  const misplaced = restrictedFlags.some((flag) => isGivenButNotAccepted(placed, flag));
+  if (misplaced) {
     return invalidArguments(message);
   }
   return success(true);
@@ -93,45 +137,9 @@ function rejectGroupWhereNotAccepted(
 
 /** Whether `flag` was given to a command that does not accept it. */
 function isGivenButNotAccepted(
-  flagged: FlaggedCommand,
+  placed: PlacedCommand,
   flag: TextFlag,
 ): boolean {
-  const isGiven = flagged.flags[flag] !== undefined;
-  return isGiven && !isAccepted(flagged.name, flag);
-}
-
-/** `profile lint` fails without --profile. Checked before the scope flags, as the base CLI does. */
-function requireLintProfile(flagged: FlaggedCommand): RuleVerdict {
-  const lintWithoutProfile = flagged.name === 'profile-lint' && flagged.flags.profile === undefined;
-  if (lintWithoutProfile) {
-    return invalidArguments(lintProfileRequired);
-  }
-  return success(true);
-}
-
-/** --section and --object given together fail, whichever command is given them. */
-function rejectBothScopeFlags(flagged: FlaggedCommand): RuleVerdict {
-  const bothScopeFlags = flagged.flags.section !== undefined && flagged.flags.object !== undefined;
-  if (bothScopeFlags) {
-    return invalidArguments('--section and --object are mutually exclusive for read.');
-  }
-  return success(true);
-}
-
-/**
- * The last rule: the first flag the command does not accept fails, in the order the flags were
- * given (`collectCommandFlags` keeps Node's order).
- */
-function everyFlagAccepted(flagged: FlaggedCommand): RuleVerdict {
-  const givenFlags = Object.keys(flagged.flags);
-  const notAccepted = givenFlags.find((flag) => !isAccepted(flagged.name, flag));
-  if (notAccepted !== undefined) {
-    return invalidArguments(`--${notAccepted} is not valid with ${typedName(flagged.name)}`);
-  }
-  return success(true);
-}
-
-/** Whether the rule's verdict is a failure. */
-function isBroken(verdict: RuleVerdict): verdict is BrokenRule {
-  return !verdict.ok;
+  const isGiven = placed.flags[flag] !== undefined;
+  return isGiven && !isAccepted(placed.name, flag);
 }

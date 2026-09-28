@@ -16,7 +16,7 @@ export type CommandAnswer = string;
 export type PrintedText = string;
 
 /** Where the answer goes: the terminal, or the --out file. */
-export type AnswerDestination =
+type AnswerDestination =
   { readonly kind: 'terminal' } | { readonly kind: 'file'; readonly path: FilePath };
 
 /** The one port delivery uses: the --out write. */
@@ -24,28 +24,29 @@ export interface OutputPorts {
   readonly files: Pick<LocalFiles, 'writeOutput'>;
 }
 
-/** Where the command asked for its answer: the --out file when given, otherwise the terminal. */
-export function chooseDestination(command: Writes): AnswerDestination {
-  if (command.out === undefined) {
-    return { kind: 'terminal' };
-  }
-  return { kind: 'file', path: command.out };
-}
-
 /**
- * Delivers the answer and returns what the terminal prints: the answer itself for the terminal;
- * for a file, `Written: FILE` once the file holds the answer. Fails with `output-unavailable` when
- * the file cannot be written.
+ * Delivers the command's answer where it asked for it, and returns what the terminal prints: the
+ * answer itself; or, with --out, `Written: FILE` once the file holds the answer. Fails with
+ * `output-unavailable` when the file cannot be written.
  */
 export async function deliverAnswer(
   answer: CommandAnswer,
-  destination: AnswerDestination,
+  command: Writes,
   ports: OutputPorts,
 ): Promise<Result<PrintedText>> {
+  const destination = chooseDestination(command);
   if (destination.kind === 'terminal') {
     return success(answer);
   }
   return writeAnswer(answer, destination.path, ports);
+}
+
+/** Where the command asked for its answer: the --out file when given, otherwise the terminal. */
+function chooseDestination(command: Writes): AnswerDestination {
+  if (command.out === undefined) {
+    return { kind: 'terminal' };
+  }
+  return { kind: 'file', path: command.out };
 }
 
 /** Writes the answer to the --out file, then says so. Fails with `output-unavailable`. */

@@ -24,7 +24,7 @@ export interface SubmitDependencies extends RestoreDependencies {
   readonly authoring: ServiceAuthoring;
 }
 
-/** What `author` uses: what `prepare` uses and what `submit` uses. */
+/** What `authorSource` uses: what `prepare` uses and what `submit` uses. */
 export type AuthorDependencies = PrepareDependencies & SubmitDependencies;
 
 /**
@@ -32,7 +32,7 @@ export type AuthorDependencies = PrepareDependencies & SubmitDependencies;
  * input. `preview` sends to preview, the other change commands apply. Fails as `prepare` or
  * `submit` does.
  */
-export async function author(
+export async function authorSource(
   command: ChangeCommand,
   dependencies: AuthorDependencies,
 ): Promise<Result<string>> {

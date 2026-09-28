@@ -52,7 +52,7 @@ const changeModes: Readonly<Record<ChangeMode, ChangeMode>> = Object.freeze({
  * --section or --object as a read scope; neither means the whole collection. Fails with
  * `invalid-arguments` when the ID is not a canonical ID.
  */
-export function readScope(flags: Pick<CommandFlags, 'section' | 'object'>): Result<ReadScope> {
+export function checkReadScope(flags: Pick<CommandFlags, 'section' | 'object'>): Result<ReadScope> {
   if (flags.section !== undefined)
     return mapped(scopeId(sectionId, flags.section), (id) => ({ kind: 'section', id }));
   if (flags.object !== undefined)
@@ -64,7 +64,7 @@ export function readScope(flags: Pick<CommandFlags, 'section' | 'object'>): Resu
  * The change mode: `create`, `replace` and `patch` are their own mode; any other command checks
  * --mode (`create` when absent). Fails with `invalid-mode`.
  */
-export function changeMode(
+export function checkChangeMode(
   name: CommandName,
   flags: Pick<CommandFlags, 'mode'>,
 ): Result<ChangeMode> {
@@ -78,7 +78,7 @@ export function changeMode(
  * --revision: a whole number from 0 to `Number.MAX_SAFE_INTEGER`; absent stays absent. Fails with
  * `invalid-revision`.
  */
-export function revises(text: string | undefined): Result<Revises> {
+export function checkRevision(text: string | undefined): Result<Revises> {
   if (text === undefined) return success({});
   const digits = /^[0-9]+$/.test(text) ? Number(text) : Number.NaN;
   return mapped(
@@ -91,7 +91,7 @@ export function revises(text: string | undefined): Result<Revises> {
 }
 
 /** A collection ID operand (`read`, `inspect`). Fails with `invalid-arguments`. */
-export function collection(text: string): Result<CollectionId> {
+export function checkCollectionId(text: string): Result<CollectionId> {
   return checked(collectionId, text, {
     code: 'invalid-arguments',
     message: 'Collection IDs must be canonical IDs: a letter, then letters, digits, _ or -.',
@@ -99,21 +99,21 @@ export function collection(text: string): Result<CollectionId> {
 }
 
 /** A request ID operand (`receipt`, `retry`, `apply`) or --request. Fails with `invalid-request`. */
-export function request(text: string): Result<RequestId> {
+export function checkRequestId(text: string): Result<RequestId> {
   return checked(requestId, text, { code: 'invalid-request', message: 'Request ID is invalid' });
 }
 
 /** --request; absent stays absent and a fresh ID is minted later. Fails with `invalid-request`. */
-export function retains(flags: Pick<CommandFlags, 'request'>): Result<Retains> {
+export function checkRequestOption(flags: Pick<CommandFlags, 'request'>): Result<Retains> {
   if (flags.request === undefined) return success({});
-  return mapped(request(flags.request), (id) => ({ request: id }));
+  return mapped(checkRequestId(flags.request), (id) => ({ request: id }));
 }
 
 /**
  * A FILE operand. Only an empty path fails here, with the text its read would give:
  * `source-unavailable`. It fails before the credential read, the server check or any send.
  */
-export function sourceFile(text: string): Result<FilePath> {
+export function checkSourceFile(text: string): Result<FilePath> {
   return checked(filePath, text, unreadableSource(text));
 }
 
@@ -121,7 +121,7 @@ export function sourceFile(text: string): Result<FilePath> {
  * --out; absent stays absent. An empty path fails with the text its write would give:
  * `output-unavailable`. It fails before the command runs, so nothing is sent or committed.
  */
-export function writes(flags: Pick<CommandFlags, 'out'>): Result<Writes> {
+export function checkOutOption(flags: Pick<CommandFlags, 'out'>): Result<Writes> {
   if (flags.out === undefined) return success({});
   return mapped(checked(filePath, flags.out, unwritableOutput(flags.out)), (path) => ({
     out: path,
@@ -129,7 +129,7 @@ export function writes(flags: Pick<CommandFlags, 'out'>): Result<Writes> {
 }
 
 /** A profile operand or --profile. Fails with `unknown-profile`. */
-export function profile(text: string): Result<ProfileId> {
+export function checkProfile(text: string): Result<ProfileId> {
   return checked(profileId, text, {
     code: 'unknown-profile',
     message: `Unknown profile: ${text}`,
@@ -142,7 +142,7 @@ export function profile(text: string): Result<ProfileId> {
  * the executable's default, when absent; an empty one is the current directory). Fails with
  * `invalid-server`, before the credential is read.
  */
-export function serviceOptions(
+export function checkServiceOptions(
   flags: Pick<CommandFlags, 'server' | 'workspace'>,
   defaultWorkspace: string,
 ): Result<ServiceOptions> {

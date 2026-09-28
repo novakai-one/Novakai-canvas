@@ -14,7 +14,7 @@ import type { Observed } from '../../contract/records/service-answers.js';
 import type { RequestId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 
-/** What `retry` uses: the journal, the receipt read, and what `submit` uses. */
+/** What `replayRetainedRequest` uses: the journal, the receipt read, and what `submit` uses. */
 export interface RetryDependencies extends SubmitDependencies {
   readonly journal: RequestJournal;
   readonly reads: Pick<ServiceReads, 'receipt'>;
@@ -26,7 +26,7 @@ export interface RetryDependencies extends SubmitDependencies {
  * (`request-unavailable`, `journal-corrupt`), as the receipt lookup does, with `invalid-response`
  * for a receipt of another request, or as `submit` does.
  */
-export async function retry(
+export async function replayRetainedRequest(
   request: RequestId,
   dependencies: RetryDependencies,
 ): Promise<Result<string>> {

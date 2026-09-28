@@ -41,7 +41,7 @@ interface HeaderText {
  * (as before), then an --id that is not a preset ID or a --version that is not
  * `MAJOR.MINOR.PATCH`.
  */
-export function recipeHeader(flags: CommandFlags): Result<RecipeHeader> {
+export function checkRecipeHeader(flags: CommandFlags): Result<RecipeHeader> {
   const text = headerText(flags);
   if (!text.ok) return text;
   return header(text.value);
@@ -51,7 +51,7 @@ export function recipeHeader(flags: CommandFlags): Result<RecipeHeader> {
  * The expansion request for `recipe instantiate PIN --namespace ID`. Fails with
  * `invalid-arguments` when the pin text, its ID, version or digest, or the namespace is malformed.
  */
-export function expansion(
+export function checkExpansion(
   pin: string,
   namespace: string | undefined,
 ): Result<ExpansionRequest> {

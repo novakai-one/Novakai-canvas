@@ -144,14 +144,17 @@ const familyWords: Readonly<Record<FamilyWord, FamilyWord>> = Object.freeze({
   profile: 'profile',
 } satisfies Record<FamilyWord, FamilyWord>);
 
-/** Whether `word` names a command; inherited object keys such as `constructor` do not. */
-export function isCommandName(word: string): word is CommandName {
-  return Object.hasOwn(commandTable, word);
+/**
+ * Whether `word` names a command. A missing word does not, and neither does an inherited object
+ * key such as `constructor`.
+ */
+export function isCommandName(word: string | undefined): word is CommandName {
+  return word !== undefined && Object.hasOwn(commandTable, word);
 }
 
-/** Whether `word` joins the next word into one command name. */
-export function isFamilyWord(word: string): word is FamilyWord {
-  return Object.hasOwn(familyWords, word);
+/** Whether `word` joins the next word into one command name. A missing word does not. */
+export function isFamilyWord(word: string | undefined): word is FamilyWord {
+  return word !== undefined && Object.hasOwn(familyWords, word);
 }
 
 /** Whether the command takes no operand; every other command takes exactly one. */
@@ -159,19 +162,22 @@ export function takesNoOperand(name: CommandName): name is NoOperandCommand {
   return Object.hasOwn(noOperandCommands, name);
 }
 
-/** Whether the command takes `flag`; any text, so a caller may ask about a flag as given. */
+/** Whether the command accepts `flag`. */
 export function isAccepted(
   name: CommandName,
-  flag: string,
+  flag: TextFlag,
 ): boolean {
-  return commandTable[name].accepted.some((taken) => taken === flag);
+  return commandTable[name].accepted.includes(flag);
 }
 
 /** The command as typed: a family command's two words, such as `recipe admit`. */
 export function typedName(name: CommandName): string {
-  const [family, ...member] = name.split('-');
-  if (family === undefined || !isFamilyWord(family)) return name;
-  return `${family} ${member.join('-')}`;
+  const [family, ...memberWords] = name.split('-');
+  if (!isFamilyWord(family)) {
+    return name;
+  }
+  const member = memberWords.join('-');
+  return `${family} ${member}`;
 }
 
 /** Every row, in `--help` order. */

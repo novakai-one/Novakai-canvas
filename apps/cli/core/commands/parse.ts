@@ -1,20 +1,20 @@
 /*
  * Reading a `pnpm canvas` command line into one checked `ParsedCommand`, in the base CLI's order:
  * the arguments are well formed; the first word names a command; the command has exactly the
- * operand it takes; its flags pass the placement rules (`placement.ts`); every value is checked
- * (`operands.ts`). Pure. Every failure comes before anything is read or sent, so the caller
+ * operand it takes and only the flags it accepts (`placement.ts`); every value is checked
+ * (`assembly.ts`). Pure. Every failure comes before anything is read or sent, so the caller
  * corrects the named argument and runs the command again.
  */
 import type { ArgvReading, CanvasFlag, RawArguments } from '../../contract/records/arguments.js';
 import type { CommandName, ParsedCommand } from '../../contract/records/command.js';
 import type { LocalFailure, Result } from '../../contract/errors.js';
-import { failure, success } from '../../contract/errors.js';
-import { invalidArguments } from './failures.js';
-import { collectCommandFlags } from './flags.js';
+import { success } from '../../contract/errors.js';
+import { assembleCommand } from './assembly.js';
+import { invalidArguments, invalidCommand, malformedFlagFailure } from './failures.js';
+import { readTextFlags } from './flags.js';
 import type { CommandFlags } from './flags.js';
-import { assembleCommand } from './operands.js';
 import { checkFlagPlacement } from './placement.js';
-import type { CountedCommand, PlacedCommand } from './placed-command.js';
+import type { PlacedCommand } from './placed-command.js';
 import { isCommandName, isFamilyWord, takesNoOperand } from './table.js';
 import type { NoOperandCommand, OneOperandCommand } from './table.js';
 
@@ -24,25 +24,31 @@ type ScopeFlag = 'section' | 'object';
 /** How many words a command takes after its name. */
 type OperandCount = 0 | 1;
 
-/** What to type instead, after a flag Node refused. */
-const malformedFlagRecovery =
-  'Use canvas describe | list | read ID | create FILE | patch FILE --revision N | preview FILE.';
-
-/** The words `--help` stands for: the `help` command alone. */
-const helpCommandWords: readonly string[] = Object.freeze(['help']);
-
 /** The words and flag values Node read, with no flag refused and no scope flag repeated. */
 interface WellFormedArguments {
   readonly positionals: readonly string[];
   readonly values: ReadonlyMap<CanvasFlag, string | boolean>;
 }
 
-/** A known command, the words typed after it, and the text of each flag. */
+/** The first word, which should name a command, and the words typed after it. */
+interface CommandWords {
+  readonly name: string | undefined;
+  readonly operandWords: readonly string[];
+}
+
+/** A known command, the words typed after it (not yet counted), and the text of each flag. */
 interface IdentifiedCommand {
   readonly name: CommandName;
-  readonly operands: readonly string[];
+  readonly operandWords: readonly string[];
   readonly flags: CommandFlags;
 }
+
+/**
+ * What `--help` stands for: the `help` command alone, with every typed word dropped. The flags
+ * are kept, and `help` accepts all but five of them (`besideHelp` in `table.ts`): `list --help
+ * --out x` still prints usage, while `--help --profile x` still fails placement.
+ */
+const helpWords: CommandWords = Object.freeze({ name: 'help', operandWords: Object.freeze([]) });
 
 /**
  * Reads the command a `pnpm canvas` command line names, with every value checked.
@@ -50,8 +56,8 @@ interface IdentifiedCommand {
  * Steps; the first failure stops parsing and is returned unchanged:
  * 1. Identify the command: a flag Node refused, or --section or --object given twice, is
  *    `invalid-arguments`; a first word that names no command is `invalid-command`.
- * 2. Check the operand and flags: more or fewer words than the command takes, a flag it does not
- *    accept, --section with --object, or `profile lint` without --profile is `invalid-arguments`.
+ * 2. Place the command: more or fewer words than the command takes, a flag it does not accept,
+ *    --section with --object, or `profile lint` without --profile is `invalid-arguments`.
  * 3. Assemble the command: `assembleCommand` checks every value and names each failure.
  *
  * Nothing is read or sent: no file, credential or service. `defaultWorkspace` is the --workspace
@@ -65,7 +71,7 @@ export function parseCommand(
   if (!identified.ok) {
     return identified;
   }
-  const placed = checkOperandAndFlags(identified.value);
+  const placed = placeCommand(identified.value);
   if (!placed.ok) {
     return placed;
   }
@@ -73,55 +79,55 @@ export function parseCommand(
 }
 
 /**
- * The command the first word names, the words after it and the text of each flag, once the
- * arguments are well formed. Fails with `invalid-arguments` for malformed arguments, then with
- * `invalid-command` when there is no word or the first word names no command.
+ * Identifies the command: the arguments must be well formed, then the first word must name a
+ * command. Fails with `invalid-arguments`, then with `invalid-command`.
  */
 function identifyCommand(commandLine: ArgvReading<CanvasFlag>): Result<IdentifiedCommand> {
-  const wellFormed = rejectMalformedArguments(commandLine);
+  const wellFormed = readWellFormedArguments(commandLine);
   if (!wellFormed.ok) {
     return wellFormed;
   }
-  const [word, ...operands] = commandWords(wellFormed.value);
-  if (!isKnownCommand(word)) {
-    return unknownCommand();
+  return lookUpCommand(wellFormed.value);
+}
+
+/**
+ * Places the command's words and flags: exactly the operand it takes, then only the flags it
+ * accepts. Fails with `invalid-arguments`: first for a wrong number of words, then for the first
+ * broken placement rule (`placement.ts`).
+ */
+function placeCommand(identified: IdentifiedCommand): Result<PlacedCommand> {
+  const counted = checkOperandCount(identified);
+  if (!counted.ok) {
+    return counted;
   }
-  const flags = collectCommandFlags(wellFormed.value.values);
-  return success({ name: word, operands, flags });
+  return checkFlagPlacement(counted.value);
 }
 
 /**
  * The words and flag values Node read, once they are well formed. Fails with `invalid-arguments`:
  * first for a flag Node refused, then for --section or --object given more than once.
  */
-function rejectMalformedArguments(
+function readWellFormedArguments(
   commandLine: ArgvReading<CanvasFlag>,
 ): Result<WellFormedArguments> {
   if (commandLine.kind === 'malformed') {
-    return malformedFlag();
+    return malformedFlagFailure();
   }
-  return rejectRepeatedScopeFlags(commandLine.arguments);
-}
-
-/** Node refused a flag: an unknown flag, a text flag with no value, or a value on a switch. */
-function malformedFlag(): Result<never, LocalFailure> {
-  return failure({
-    code: 'invalid-arguments',
-    message: 'Unknown or malformed CLI flag',
-    recovery: malformedFlagRecovery,
-  });
+  return requireSingleScopeFlags(commandLine.arguments);
 }
 
 /**
  * The words and flag values, when --section and --object are each given at most once: Node would
  * keep only the last value. Fails with `invalid-arguments`.
  */
-function rejectRepeatedScopeFlags(given: RawArguments<CanvasFlag>): Result<WellFormedArguments> {
-  const scopeFlagRepeated = given.repeated.some(isScopeFlag);
+function requireSingleScopeFlags(
+  rawArguments: RawArguments<CanvasFlag>,
+): Result<WellFormedArguments> {
+  const scopeFlagRepeated = rawArguments.repeated.some(isScopeFlag);
   if (scopeFlagRepeated) {
     return invalidArguments('Each read scope flag may be provided only once.');
   }
-  return success({ positionals: given.positionals, values: given.values });
+  return success({ positionals: rawArguments.positionals, values: rawArguments.values });
 }
 
 /** Whether the flag is --section or --object. */
@@ -130,14 +136,28 @@ function isScopeFlag(flag: CanvasFlag): flag is ScopeFlag {
 }
 
 /**
- * The words that name the command and its operand. `--help` anywhere asks for the `help` command,
- * so every typed word is dropped; otherwise a family word joins the word after it.
+ * The command the first word names, the words after it and the text of each flag. Fails with
+ * `invalid-command` when there is no word or the first word names no command.
  */
-function commandWords(wellFormed: WellFormedArguments): readonly string[] {
-  if (asksForHelp(wellFormed)) {
-    return helpCommandWords;
+function lookUpCommand(wellFormed: WellFormedArguments): Result<IdentifiedCommand> {
+  const { name, operandWords } = readCommandWords(wellFormed);
+  if (!isCommandName(name)) {
+    return invalidCommand();
   }
-  return joinFamilyWord(wellFormed.positionals);
+  const flags = readTextFlags(wellFormed.values);
+  return success({ name, operandWords, flags });
+}
+
+/**
+ * The first word and the words after it: the help words when --help was given; otherwise the
+ * typed words, with a family word joined to the word after it.
+ */
+function readCommandWords(wellFormed: WellFormedArguments): CommandWords {
+  if (asksForHelp(wellFormed)) {
+    return helpWords;
+  }
+  const [name, ...operandWords] = joinFamilyWord(wellFormed.positionals);
+  return { name, operandWords };
 }
 
 /** Whether --help (or -h) was given. */
@@ -152,74 +172,57 @@ function asksForHelp(wellFormed: WellFormedArguments): boolean {
  */
 function joinFamilyWord(words: readonly string[]): readonly string[] {
   const [family, member, ...rest] = words;
-  if (family === undefined || member === undefined || !isFamilyWord(family)) {
+  if (member === undefined || !isFamilyWord(family)) {
     return words;
   }
-  return [`${family}-${member}`, ...rest];
-}
-
-/** Whether the word names a command; no word at all names none. */
-function isKnownCommand(word: string | undefined): word is CommandName {
-  return word !== undefined && isCommandName(word);
-}
-
-/** No command has this name. */
-function unknownCommand(): Result<never, LocalFailure> {
-  return failure({
-    code: 'invalid-command',
-    message: 'Choose a supported canvas or profile command',
-  });
-}
-
-/**
- * The identified command with exactly the operand it takes and only the flags it accepts. Fails
- * with `invalid-arguments`: first for a wrong operand count, then for the first broken placement
- * rule (`placement.ts`).
- */
-function checkOperandAndFlags(identified: IdentifiedCommand): Result<PlacedCommand> {
-  const counted = checkOperandCount(identified);
-  if (!counted.ok) {
-    return counted;
-  }
-  return checkFlagPlacement(counted.value, identified.flags);
+  const familyCommand = `${family}-${member}`;
+  return [familyCommand, ...rest];
 }
 
 /**
  * The command with exactly the operand it takes: none for `help`, `describe` and `list`, one word
  * for every other command. Fails with `invalid-arguments` for any other number of words.
  */
-function checkOperandCount(identified: IdentifiedCommand): Result<CountedCommand> {
-  const { name, operands } = identified;
+function checkOperandCount(identified: IdentifiedCommand): Result<PlacedCommand> {
+  const { name, operandWords, flags } = identified;
   if (takesNoOperand(name)) {
-    return requireNoOperand(name, operands);
+    return requireNoOperand(name, operandWords, flags);
   }
-  return requireOneOperand(name, operands);
+  return requireOneOperand(name, operandWords, flags);
 }
 
-/** The command alone, when no word follows it. Fails with `invalid-arguments`. */
+/** The command and its flags, when no word follows it. Fails with `invalid-arguments`. */
 function requireNoOperand(
   name: NoOperandCommand,
-  operands: readonly string[],
-): Result<CountedCommand> {
-  if (operands.length > 0) {
+  operandWords: readonly string[],
+  flags: CommandFlags,
+): Result<PlacedCommand> {
+  if (operandWords.length > 0) {
     return wrongOperandCount(name, 0);
   }
-  return success({ name });
+  return success({ name, flags });
 }
 
-/** The command and its one operand. Fails with `invalid-arguments` for no word, or two or more. */
+/**
+ * The command, its one operand and its flags. Fails with `invalid-arguments` for no word, or two
+ * or more.
+ */
 function requireOneOperand(
   name: OneOperandCommand,
-  operands: readonly string[],
-): Result<CountedCommand> {
-  const [operand, ...extra] = operands;
-  if (operand === undefined || extra.length > 0) {
+  operandWords: readonly string[],
+  flags: CommandFlags,
+): Result<PlacedCommand> {
+  const [operand, ...extraWords] = operandWords;
+  if (operand === undefined || extraWords.length > 0) {
     return wrongOperandCount(name, 1);
   }
-  return success({ name, operand });
+  return success({ name, operand, flags });
 }
 
-/** The command was given more or fewer words than it takes. */
+/**
+ * The command was given more or fewer words than it takes. The base CLI's wording is kept: it
+ * names the joined command, such as `recipe-admit requires 1 operand(s)`.
+ */
 function wrongOperandCount(
   name: CommandName,
   expected: OperandCount,

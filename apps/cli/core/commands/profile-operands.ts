@@ -13,9 +13,9 @@ import { failure, success } from '../../contract/errors.js';
 import { checked } from '../shared/checks.js';
 import { joined, unsupported } from '../shared/results.js';
 import type { CommandFlags } from './flags.js';
-import { profile, sourceFile, writes } from './values.js';
+import { checkOutOption, checkProfile, checkSourceFile } from './values.js';
 
-/** `profile lint` without --profile. `parse.ts` reports it with its placement rules. */
+/** `profile lint` without --profile. `placement.ts` reports it with its placement rules. */
 export const lintProfileRequired = 'profile lint requires --profile build-spec@1.';
 
 /** What `profile scaffold` names the starter with, and where it writes it. */
@@ -25,26 +25,26 @@ type Scaffold = { readonly collection: CollectionId; readonly title: string } & 
  * One profile command. describe and scaffold take the profile as their operand, lint takes a FILE
  * and --profile; each command's --out is checked last.
  */
-export function profileCommand(
+export function checkProfileCommand(
   name: ProfileCommand['name'],
   operand: string,
   flags: CommandFlags,
 ): Result<ProfileCommand> {
   switch (name) {
     case 'profile-describe':
-      return joined(profile(operand), writes(flags), (id, written) => ({
+      return joined(checkProfile(operand), checkOutOption(flags), (id, written) => ({
         name,
         profile: id,
         ...written,
       }));
     case 'profile-scaffold':
-      return joined(profile(operand), scaffold(flags), (id, fields) => ({
+      return joined(checkProfile(operand), scaffold(flags), (id, fields) => ({
         name,
         profile: id,
         ...fields,
       }));
     case 'profile-lint':
-      return joined(lintFile(operand, flags.profile), writes(flags), (fields, written) => ({
+      return joined(lintFile(operand, flags.profile), checkOutOption(flags), (fields, written) => ({
         name,
         ...fields,
         ...written,
@@ -59,7 +59,7 @@ function lintFile(
   operand: string,
   text: string | undefined,
 ): Result<{ readonly profile: ProfileId; readonly file: FilePath }> {
-  return joined(lintProfile(text), sourceFile(operand), (id, file) => ({ profile: id, file }));
+  return joined(lintProfile(text), checkSourceFile(operand), (id, file) => ({ profile: id, file }));
 }
 
 /**
@@ -73,7 +73,7 @@ function scaffold(flags: CommandFlags): Result<Scaffold> {
   }));
   if (!text.ok) return text;
   const { id, title } = text.value;
-  return joined(scaffoldId(id), writes(flags), (collection, written) => ({
+  return joined(scaffoldId(id), checkOutOption(flags), (collection, written) => ({
     collection,
     title,
     ...written,
@@ -82,12 +82,12 @@ function scaffold(flags: CommandFlags): Result<Scaffold> {
 
 /**
  * --profile for lint: required, then known. Fails with `invalid-arguments` or `unknown-profile`.
- * `parse.ts` already reported a missing --profile; the check keeps this total.
+ * `placement.ts` already reported a missing --profile; the check keeps this total.
  */
 function lintProfile(text: string | undefined): Result<ProfileId> {
   if (text === undefined)
     return failure({ code: 'invalid-arguments', message: lintProfileRequired });
-  return profile(text);
+  return checkProfile(text);
 }
 
 /** A scaffold flag that is present and not blank; the value is kept as given. */

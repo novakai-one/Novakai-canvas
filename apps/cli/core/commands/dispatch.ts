@@ -7,20 +7,25 @@
 import type { ProfileCommand, ServiceCommand } from '../../contract/records/command.js';
 import type { ExpansionRequest } from '../../contract/records/foreign.js';
 import type { ServiceResources } from '../../contract/ports/service-resources.js';
-import type { RequestId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { admitPreset } from '../presets/admit.js';
 import type { AdmitDependencies } from '../presets/admit.js';
-import { author } from '../authoring/submit.js';
+import { authorSource } from '../authoring/submit.js';
 import type { AuthorDependencies } from '../authoring/submit.js';
-import { retry } from '../authoring/reconcile.js';
+import { replayRetainedRequest } from '../authoring/reconcile.js';
 import type { RetryDependencies } from '../authoring/reconcile.js';
-import { describe, inspect, list, read, receipt } from '../reads/queries.js';
+import {
+  describeLanguage,
+  inspectCollection,
+  listCollections,
+  readCollection,
+  readReceipt,
+} from '../reads/queries.js';
 import type { ReadDependencies } from '../reads/queries.js';
 import { answerProfile } from '../profiles/commands.js';
 import type { ProfileDependencies } from '../profiles/commands.js';
 import { unsupported } from '../shared/results.js';
-import { chooseDestination, deliverAnswer } from './delivery.js';
+import { deliverAnswer } from './delivery.js';
 import type { CommandAnswer, OutputPorts, PrintedText } from './delivery.js';
 
 /** The one port `recipe instantiate` uses: it is a single service call, made here. */
@@ -58,8 +63,7 @@ export async function runServiceCommand(
   if (!answer.ok) {
     return answer;
   }
-  const destination = chooseDestination(command);
-  return deliverAnswer(answer.value, destination, ports);
+  return deliverAnswer(answer.value, command, ports);
 }
 
 /**
@@ -78,8 +82,7 @@ export async function runProfileCommand(
   if (!answer.ok) {
     return answer;
   }
-  const destination = chooseDestination(command);
-  return deliverAnswer(answer.value, destination, ports);
+  return deliverAnswer(answer.value, command, ports);
 }
 
 /**
@@ -94,20 +97,20 @@ function answerServiceCommand(
 ): Promise<Result<CommandAnswer>> {
   switch (command.name) {
     case 'describe':
-      return describe(ports);
+      return describeLanguage(ports);
     case 'list':
-      return list(ports);
+      return listCollections(ports);
     case 'read':
-      return read(command.collection, command.scope, ports);
+      return readCollection(command.collection, command.scope, ports);
     case 'inspect':
-      return inspect(command.collection, ports);
+      return inspectCollection(command.collection, ports);
     case 'receipt':
-      return receipt(command.request, ports);
+      return readReceipt(command.request, ports);
     case 'create':
     case 'replace':
     case 'patch':
     case 'preview':
-      return author(command, ports);
+      return authorSource(command, ports);
     case 'retry':
     case 'apply':
       return replayRetainedRequest(command.request, ports);
@@ -119,18 +122,6 @@ function answerServiceCommand(
     default:
       return Promise.resolve(unsupported(command));
   }
-}
-
-/**
- * `retry`, and `apply` of a retained preview: looks up the request's receipt first, and replays
- * the identical retained request only when none exists. Fails as `retry` in
- * `core/authoring/reconcile.ts` does.
- */
-function replayRetainedRequest(
-  request: RequestId,
-  ports: RetryDependencies,
-): Promise<Result<CommandAnswer>> {
-  return retry(request, ports);
 }
 
 /**
