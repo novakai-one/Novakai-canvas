@@ -8,8 +8,9 @@
 import { Worker as NodeWorker } from 'node:worker_threads';
 import type { RenderingJob } from '../../contract/records/rendering/job.js';
 import type { RenderTransport } from '../../contract/ports/rendering.js';
-import { resultEnvelope } from '../../contract/records/rendering/worker.js';
+import { resultEnvelope, workerHandshake } from '../../contract/records/rendering/worker.js';
 import { failure, success, type Result } from '../../contract/errors.js';
+import type { OperationSource } from '../../contract/records/transport/failure-source.js';
 
 /** A started worker and the outcome of its start-up handshake. */
 interface WorkerSlot {
@@ -39,7 +40,7 @@ const NO_IDLE: IdleWorker = Object.freeze({ kind: 'none' });
 
 /**
  * Starts the pool with one idle worker; `ready` answers once it has loaded, or `unavailable` at
- * `worker` when it fails, exits or exceeds `timeoutMs` during start-up. `entry` is the worker
+ * `worker` when it reports a startup failure, fails, exits or exceeds `timeoutMs` during start-up. `entry` is the worker
  * realm's script; compose names it. `run` fails with `cancelled` at `worker` when the signal
  * aborts, and `unavailable` at `worker` when a worker cannot start, fails, exits, exceeds
  * `timeoutMs` or returns a malformed result.
@@ -92,25 +93,24 @@ function startWorker(
 }
 
 /**
- * Waits for the worker's `{ ready: true }` handshake; it loads code only and never computes a
- * diagram. Fails with `unavailable` at `worker` when the first message is anything else, or the
- * worker fails, exits or exceeds `timeoutMs` (the worker is then terminated).
+ * Waits for the worker's start-up handshake; the worker loads code only and never computes a
+ * diagram. Fails with `unavailable` at `worker` as `readHandshake` names for the first message,
+ * or when the worker fails, exits or exceeds `timeoutMs` (the worker is then terminated).
  */
 function initialized(
   worker: NodeWorker,
   timeoutMs: number,
 ): Promise<Result<void>> {
   return new Promise((resolve) => {
-    function finish(result: Result<void>): void {
+    function finish(startup: Result<void>): void {
       clearTimeout(timer);
-      worker.removeListener('message', ready);
+      worker.removeListener('message', answered);
       worker.removeListener('error', failed);
       worker.removeListener('exit', exited);
-      resolve(result);
+      resolve(startup);
     }
-    function ready(input: unknown): void {
-      if (!isReady(input)) return finish(notReady('Invalid rendering worker initialization'));
-      finish(success(undefined));
+    function answered(input: unknown): void {
+      finish(readHandshake(input));
     }
     function failed(): void {
       finish(notReady('Rendering worker initialization failed'));
@@ -122,10 +122,22 @@ function initialized(
       void worker.terminate();
       finish(notReady('Rendering worker initialization timed out'));
     }, timeoutMs);
-    worker.once('message', ready);
+    worker.once('message', answered);
     worker.once('error', failed);
     worker.once('exit', exited);
   });
+}
+
+/**
+ * The worker's first message read as its start-up handshake. Fails with `unavailable` at `worker`
+ * when the message is not a handshake ("Invalid rendering worker initialization"), or when the
+ * worker reports it could not start (its failure kept as source).
+ */
+function readHandshake(input: unknown): Result<void> {
+  const handshake = workerHandshake.safeParse(input);
+  if (!handshake.success) return notReady('Invalid rendering worker initialization');
+  if (!handshake.data.ready) return startupRefused(handshake.data.error);
+  return success(undefined);
 }
 
 /** A failed handshake: `unavailable` at `worker`. */
@@ -133,9 +145,9 @@ function notReady(message: string): Result<void> {
   return failure('unavailable', 'worker', message);
 }
 
-/** True when `input` is the worker's `{ ready: true }` handshake. */
-function isReady(input: unknown): boolean {
-  return typeof input === 'object' && input !== null && 'ready' in input && input.ready === true;
+/** The worker's reported startup failure: `unavailable` at `worker`, `error` kept as source. */
+function startupRefused(error: OperationSource): Result<void> {
+  return failure('unavailable', 'worker', 'Rendering worker reported a startup failure', error);
 }
 
 /**

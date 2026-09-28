@@ -1,13 +1,15 @@
 /*
- * The render worker realm's message loop: decode each job the parent posts, produce it and post
- * the result back. Impure (worker port). The parent sends one job at a time and cancels a job by
- * terminating this realm; it keeps the prior scene on any failed job.
+ * The render worker realm's side of the worker port: the start-up handshake, then the message
+ * loop that decodes each job the parent posts, produces it and posts the result back. Impure
+ * (worker port). The parent sends one job at a time and cancels a job by terminating this realm;
+ * it keeps the prior scene on any failed job or failed start.
  */
 import { parentPort } from 'node:worker_threads';
-import type { Result } from '../../contract/errors.js';
+import type { Diagnostic, Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 import type { DiagramProducer } from '../../contract/ports/rendering.js';
 import type { RenderingJob } from '../../contract/records/rendering/job.js';
+import { READY_HANDSHAKE, type WorkerHandshake } from '../../contract/records/rendering/worker.js';
 
 /** Parsing is injected at composition; worker transport owns no domain schema or rendering implementation. */
 export interface WorkerOwners {
@@ -32,8 +34,19 @@ export async function serveRenderWorker(owners: WorkerOwners): Promise<Result<vo
   port.on('message', async (input: unknown) => {
     port.postMessage(await rendered(owners.read(input), owners.producer));
   });
-  port.postMessage({ ready: true });
+  port.postMessage(READY_HANDSHAKE);
   return success(undefined);
+}
+
+/**
+ * Tells the parent this realm could not start, with `error` as the reason; the parent answers
+ * its start-up with that failure. Does nothing outside a worker realm, where no parent listens.
+ */
+export function reportStartupFailure(error: Diagnostic): void {
+  const port = parentPort;
+  if (port === null) return;
+  const refused: WorkerHandshake = { ready: false, error };
+  port.postMessage(refused);
 }
 
 /** The produced document, or the job's decode failure without invoking native measurement. */
