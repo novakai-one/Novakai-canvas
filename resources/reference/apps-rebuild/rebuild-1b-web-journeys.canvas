@@ -1,0 +1,203 @@
+canvas 1
+collection @rebuild-1b-web-journeys "Apps rebuild · 1b / Web journeys — drag a module, undo: before and target" {
+
+  node @you participant "You" role=primary {}
+  node @canvas participant "Canvas" role=supporting {}
+  node @ws participant "workspace-session.ts" role=warning {}
+  node @sub participant "submission-session.ts" {}
+  node @service participant "Service" role=supporting {}
+  node @intake participant "Entry point: Canvas" {}
+  node @move-facade participant "Entry point: move panel" {}
+  node @hist-in participant "Keys or Undo button" {}
+  node @m-gesture participant "Rules: drag" role=primary {}
+  node @m-history participant "Rules: undo" role=primary {}
+  node @m-journal participant "Rules: saves" role=primary {}
+  node @x-scene participant "I/O: Canvas" role=supporting {}
+  node @x-service participant "I/O: server reads" role=supporting {}
+
+  section @b1-drag-before "1 · Drag a module — before" mode=sequence direction=down gap=compact order=0 {
+    show @you @canvas @ws @sub @service
+    event @db1 @you -> @canvas "Drop a module node" kind=call activate=true
+    event @db2 @canvas -> @ws "The drop" kind=call
+    event @db3 @ws -> @ws "Refuse if a review is open" kind=call
+    event @db5 @ws -> @ws "Try the plain move" kind=call
+    fragment @db-plan alt "Plain move" {
+      branch @db-same "Nothing changed" {
+        event @db6 @ws -> @canvas "Node returns quietly" kind=return
+      }
+      branch @db-fits "Fits" {
+        event @db7 @ws -> @sub "Send at once. Request ID = drag ID" kind=call
+      }
+      branch @db-nofit "Does not fit" {
+        event @db8a @ws -> @canvas "Item snaps back at once, while the choices are open" kind=return
+        event @db8 @ws -> @you "Review panel: Expand, Rearrange, Cancel, Apply preview" kind=return
+        event @db9 @you -> @ws "Pick an option, click 'Apply preview'" kind=call
+        event @db10 @ws -> @you "If Apply is blocked: an error message" kind=return
+        event @db11 @ws -> @sub "Send" kind=call
+      }
+      branch @db-none "The browser cannot build the move" {
+        event @db12 @ws -> @canvas "Item stays where it was dropped. Nothing is saved" kind=return
+      }
+    }
+    event @db13 @sub -> @service "POST /api/v1/authoring/apply" kind=call
+    event @db14 @service -> @sub "Answer" kind=return
+    event @db14b @sub -> @ws "Result" kind=return
+    fragment @db-answer alt "Answer (only after a send)" {
+      branch @db-saved "Saved" {
+        event @db15 @ws -> @canvas "Move kept. Review closed, diagram redrawn" kind=return
+      }
+      branch @db-refused "Refused (any reason)" {
+        event @db16 @ws -> @canvas "Item snaps back. No choices" kind=return
+      }
+      branch @db-unclear "No clear answer" {
+        event @db17 @ws -> @canvas "Item snaps back" kind=return
+      }
+    }
+  }
+
+  section @b2-drop-target "2 · Drag a module — target: the drop" mode=sequence direction=down gap=compact order=1 {
+    show @you @intake @m-gesture @m-journal @x-scene
+    event @dt1 @you -> @intake "Drop a module node" kind=call activate=true
+    event @dt2 @intake -> @m-gesture "The drop, with a new request ID" kind=call
+    event @dt3 @m-gesture -> @m-gesture "Plan the drop" kind=call
+    fragment @dt-plan alt "Plan" {
+      branch @dt-same "No change" {
+        event @dt4 @m-gesture -> @x-scene "Node returns quietly" kind=call
+      }
+      branch @dt-bad "Not allowed, or the browser cannot build the move" {
+        event @dt5 @m-gesture -> @x-scene "Item snaps back. Reason shown" kind=call
+      }
+      branch @dt-fits "Fits" {
+        event @dt6 @m-gesture -> @m-journal "Send the move (same checks as every save)" kind=call
+      }
+      branch @dt-nofit "Does not fit" {
+        event @dt7 @m-gesture -> @x-scene "Item stays. Preview of Expand" kind=call
+        event @dt7b @m-gesture -> @you "Choices shown at once, Expand first" kind=return
+      }
+    }
+  }
+
+  section @b3-answer-target "3 · Drag a module — target: the answer and the choices" mode=sequence direction=down gap=compact order=2 {
+    show @you @move-facade @m-gesture @m-journal @x-scene
+    event @da1 @m-journal -> @m-gesture "The answer to the move" kind=return
+    fragment @da-answer alt "Answer" {
+      branch @da-saved "Saved" {
+        event @da2 @m-gesture -> @x-scene "Move kept" kind=call
+      }
+      branch @da-conflict "Refused: the layout cannot fit it" {
+        event @da3 @m-gesture -> @x-scene "Item stays. Preview of Expand" kind=call
+        event @da3b @m-gesture -> @you "Choices shown, Expand first" kind=return
+      }
+      branch @da-other "Refused: any other reason" {
+        event @da4 @m-gesture -> @x-scene "Item snaps back" kind=call
+      }
+      branch @da-unclear "No clear answer" {
+        event @da5 @m-gesture -> @you "Item stays. The move waits for Check or Retry" kind=return
+      }
+    }
+    fragment @da-choose opt "While the choices are shown" {
+      event @da6 @m-gesture -> @you "Apply disabled while it cannot be used, with the reason" kind=return
+      event @da7 @you -> @move-facade "Pick Expand or Rearrange, click Apply" kind=call
+      event @da8 @move-facade -> @m-gesture "Apply this choice, with a new request ID" kind=call
+      event @da9 @m-gesture -> @m-journal "Send the choice" kind=call
+      event @da10 @m-journal -> @m-gesture "Answer" kind=return
+      fragment @da-choice-answer alt "Answer" {
+        branch @da-c-saved "Saved" {
+          event @da11 @m-gesture -> @x-scene "Move kept" kind=call
+        }
+        branch @da-c-refused "Refused" {
+          event @da12 @m-gesture -> @you "Choices shown again" kind=return
+        }
+      }
+    }
+  }
+
+  node @rules concept "Drag: what changes" size=large {
+    table @rules-t columns=["Situation", "Before", "Target"] {
+      row @r1 cells=["Plain move fits", "Sent at once", "Sent at once (same)"]
+      row @r2 cells=["Plain move does not fit", "Expand / Rearrange offered at once, Expand first", "(same)"]
+      row @r3 cells=["The item while the choices are shown", "Item snaps back at once", "Stays where you dropped it until Apply, Cancel or a final refusal"]
+      row @r4 cells=["Service refuses: layout cannot fit it", "Item snaps back, no choices", "Choices offered"]
+      row @r5 cells=["Service refuses: any other reason", "Item snaps back", "Item snaps back (same)"]
+      row @r6 cells=["No clear answer (e.g. the connection dropped)", "Item snaps back", "Stays, waits for Check or Retry"]
+      row @r7 cells=["The browser cannot build the move", "Stays where dropped. Nothing saved", "Item snaps back, reason shown"]
+      row @r8 cells=["Which drops get the review", "SOME item in a modules diagram", "EVERY item in a modules diagram"]
+      row @r9 cells=["Request ID", "Same as the drag ID", "New ID for each send and each choice"]
+      row @r10 cells=["Apply blocked", "Error message after the click", "Button disabled, with the reason"]
+    }
+  }
+
+  section @b4-drag-rules "4 · Drag: what changes" mode=grid layout=grid columns=1 order=3 {
+    show @rules
+  }
+
+  section @b5-undo-before "5 · Undo — before" mode=sequence direction=down gap=compact order=4 {
+    show @you @ws @sub @service
+    event @ub1 @you -> @ws "Press Cmd/Ctrl+Z or click 'Undo'" kind=call activate=true
+    fragment @ub-alt alt "Allowed? (nothing saving, no Canvas draft, history known)" {
+      branch @ub-no "No" {
+        event @ub3 @ws -> @you "Nothing happens. NO reason shown" kind=return activate=false
+      }
+      branch @ub-yes "Yes" {
+        event @ub4 @ws -> @ws "Hold every other edit" kind=call
+        event @ub5 @ws -> @sub "Send the undo" kind=call
+        event @ub6 @sub -> @service "POST /api/v1/authoring/apply" kind=call
+        event @ub7 @service -> @sub "Answer" kind=return
+        event @ub7b @sub -> @ws "Result" kind=return
+        event @ub8 @ws -> @ws "Show the new diagram data" kind=call
+        event @ub9 @ws -> @service "GET /api/v1/history" kind=call
+        event @ub10 @service -> @ws "History" kind=return
+        event @ub11 @ws -> @ws "Release the other edits" kind=call
+        event @ub12 @ws -> @you "Undone" kind=return activate=false
+      }
+    }
+  }
+
+  section @b6-undo-target "6 · Undo — target" mode=sequence direction=down gap=compact order=5 {
+    show @you @hist-in @m-history @m-journal @x-service
+    event @ut1 @you -> @hist-in "Press Cmd/Ctrl+Z or click 'Undo'" kind=call activate=true
+    event @ut2 @hist-in -> @m-history "Undo, with a new request ID" kind=call
+    fragment @ut-alt alt "Allowed? (the same checks)" {
+      branch @ut-no "No" {
+        event @ut4 @m-history -> @you "Undo button disabled, with the reason" kind=return activate=false
+      }
+      branch @ut-yes "Yes" {
+        event @ut5 @m-history -> @m-history "Hold every other edit" kind=call
+        event @ut6 @m-history -> @m-journal "Send the undo" kind=call
+        event @ut7 @m-journal -> @m-history "Answer" kind=return
+        event @ut8 @m-history -> @m-history "Show the new diagram data" kind=call
+        event @ut9 @m-history -> @x-service "Read history" kind=call
+        event @ut10 @x-service -> @m-history "History" kind=return
+        event @ut11 @m-history -> @m-history "Release the other edits" kind=call
+        event @ut12 @m-history -> @you "Undone" kind=return activate=false
+      }
+    }
+  }
+
+  node @undo concept "Undo: what changes" size=large {
+    table @undo-t columns=["Situation", "Before", "Target"] {
+      row @u1 cells=["Undo is not allowed right now", "Nothing happens. No reason shown", "Undo button disabled, with the reason"]
+      row @u2 cells=["Other edits while an undo is saving", "Held until the undo is done", "Held (same)"]
+      row @u3 cells=["History cannot be read after an undo", "Other edits stay held", "Stay held (same, kept on purpose)"]
+      row @u4 cells=["Cmd/Ctrl+Z while typing in a field", "Ignored", "Ignored (same)"]
+    }
+  }
+
+  node @size concept "Where each journey's code lives" {
+    table @size-t columns=["Journey", "Before", "Target"] {
+      row @size-drag cells=["Drag a module", "Inside workspace-session.ts, plus movement-review/ (372 lines)", "Rules: drag. 6 files, ~640 lines"]
+      row @size-undo cells=["Undo", "Inside workspace-session.ts, plus history/ (187 lines)", "Rules: undo. 4 files, ~290 lines"]
+      row @size-save cells=["Every save", "submission-session.ts: 234 lines", "Rules: saves. 7 files, ~690 lines"]
+      row @size-file cells=["workspace-session.ts", "1,746 lines, 170 functions", "Deleted"]
+    }
+    text @size-note "Before, one file held every journey, so a single journey has no size of its own. Target sizes are the plan's estimates." role=caption
+  }
+
+  section @b7-undo-rules "7 · Undo: what changes" mode=grid layout=grid columns=1 order=6 {
+    show @undo
+  }
+
+  section @b8-size "8 · Where the code lives: before and target" mode=grid layout=grid columns=1 order=7 {
+    show @size
+  }
+}

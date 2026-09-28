@@ -1,0 +1,139 @@
+canvas 1
+collection @rebuild-5a-web-changes "Apps rebuild · 5a / What changes for you — web" {
+
+  node @overview concept "What changes for someone using the app" size=large {
+    text @overview-d "Only changes a user of the app will notice. Before = the code when the rebuild started (commit 5571c7e, 27 Sep 2026). Target = the web plan and the service design; for the CLI, the finished code."
+    table @overview-t columns=["Area", "Changes you will notice", "Where"] {
+      row @ov-web cells=["Web: behaviour", "31", "This collection, sections 2 to 6"]
+      row @ov-look cells=["Web: look", "5", "This collection, section 7"]
+      row @ov-svc cells=["Service: export", "2", "Collection 5b, section 1"]
+      row @ov-cli cells=["CLI", "14", "Collection 5b, section 2"]
+      row @ov-total cells=["Total", "52", ""]
+    }
+    text @overview-more "Also: 2 web changes you will hardly notice, 6 internal only, and 2 old web oddities kept on purpose (section 8). What stays the same: collection 5b, section 3." role=caption
+  }
+
+  node @moving-refused concept "When a move is refused or not confirmed" size=large {
+    table @moving-refused-t columns=["What", "Before", "Target", "Why"] {
+      row @mv-layout cells=["The server refuses a move because the layout cannot fit it", "The item snaps back. No choices are offered.", "The Expand / Rearrange choices appear, as when the browser refuses. The other 7 refusal reasons still snap back.", "The fix is the same whichever side finds the problem"]
+      row @mv-hold cells=["The dragged item while those choices are open", "Snaps back at once", "Stays where you dropped it until Apply, Cancel or a final refusal", "The preview of each choice needs the item in place"]
+      row @mv-unconfirmed cells=["A plain move whose save cannot be confirmed (for example, the connection dropped)", "Snaps back", "Stays, and waits for Check or Retry", "The save may have landed, so snapping back could show the wrong place"]
+      row @mv-unbuilt cells=["The browser cannot build the move", "The item stays where you dropped it. Nothing is saved.", "The item snaps back and the reason is shown", "The canvas must not show a position that was not saved"]
+    }
+  }
+
+  node @moving-review concept "Which moves get the review, and its buttons" size=large {
+    table @moving-review-t columns=["What", "Before", "Target", "Why"] {
+      row @mv-mixed cells=["Dragging a mix of items: some in a modules diagram, some not", "The move review is used if any item is in modules", "Used only if every item is in modules. A mixed drag saves as a plain move and the server decides.", "The review can only plan module moves"]
+      row @mv-parent cells=["Dragging an item together with its own parent, or the same item twice", "Refused only in modules diagrams", "Refused in every diagram, before anything is sent", "One rule everywhere"]
+      row @mv-label cells=["Move review label while the chosen option saves", "uncertain", "sending", "It is not uncertain yet"]
+      row @mv-disabled cells=["Choice, Apply and Cancel buttons when they cannot be used", "Clicking shows an error", "The button is disabled and shows the reason (saving, awaiting confirmation, ...)", "You see why before you click"]
+      row @mv-apply cells=["Move Apply blocked by other saves", "Any unfinished save, in any collection, blocks Apply", "Only a save in the same collection, or an undo/redo, blocks Apply", "Saves in other collections cannot clash"]
+    }
+  }
+
+  node @saving concept "Saving and the Recovery panel" size=large {
+    table @saving-t columns=["What", "Before", "Target", "Why"] {
+      row @sv-retry cells=["Retry in the Recovery panel", "Resends without the usual checks. No 'Saving...' shown.", "Goes through the same checks as every save and shows 'Saving...'", "One path for every save"]
+      row @sv-stale cells=["The 'could not be confirmed' message", "Stays until you click Check or Retry", "Clears as soon as no save is unconfirmed", "The old message went stale"]
+      row @sv-lookup cells=["Check / Retry while a lookup is running", "A second click gives a pending-request error", "Both buttons are disabled while the lookup runs", "Prevents a pointless error"]
+    }
+  }
+
+  node @status concept "Status bar and problem bar" size=large {
+    table @status-t columns=["What", "Before", "Target", "Why"] {
+      row @st-startup cells=["Status after start-up", "A start-up failure is replaced by 'Ready'. A diagram opened at start-up shows 'Ready'.", "The failure stays. An opened diagram shows 'Saved'. The wording is unchanged.", "Status now comes from the current state, in a fixed order"]
+      row @st-clear cells=["When the problem bar clears", "Any diagram redraw, even a background reopen, clears it and dismisses refusals", "Only opens and chooser actions that you start clear it", "Errors vanished without you doing anything"]
+      row @st-blocked cells=["A save blocked before sending", "Flashes 'Saving...' and clears the problem bar", "Nothing flashes. The problem bar is kept.", "Nothing was actually saving"]
+    }
+  }
+
+  node @opening concept "Opening and switching collections" size=large {
+    table @opening-t columns=["What", "Before", "Target", "Why"] {
+      row @op-leave cells=["Leaving a collection while a move review, a new-connection draft or an Add form is open", "The review and the draft are kept. Add forms are emptied later.", "All three are dropped at once. A refused add for the old collection still shows its note.", "They belonged to the old diagram"]
+      row @op-deleted cells=["The open collection is deleted somewhere else", "The URL keeps ?collection= with the deleted ID", "The URL is cleared. The source draft is kept.", "A reload would open a dead link"]
+      row @op-newer cells=["A newer change arrives while a diagram is opening", "Opening fails, then reopens. The chooser shows 'Could not open' + Retry.", "Opening restarts quietly with the newer data", "It was a false failure"]
+      row @op-firstread cells=["The first read fails at start-up and the URL names a collection", "Tries to open with no data", "Opens once the data arrives", "The open could never succeed"]
+      row @op-online cells=["Canvas online state", "Follows the live update stream only", "A successful read also sets it online", "A read proves the server is reachable"]
+      row @op-drawing cells=["A change arrives while a diagram is being drawn", "Can be missed until the next change", "Applied right after drawing finishes", "The change was lost"]
+    }
+  }
+
+  node @adding concept "Add panel" size=large {
+    table @adding-t columns=["What", "Before", "Target", "Why"] {
+      row @ad-drop cells=["Drop a palette item onto the canvas", "Fills and locks the Object form", "Saves on its own. The Object form is untouched and nothing locks.", "A drop is a one-shot action"]
+      row @ad-stuck cells=["Add button after a refused add", "The busy (adding) state can stay stuck", "Checks run before the lock. The busy state is always current.", "The stuck state blocked adding"]
+      row @ad-text cells=["Text of a refused add", "Also shown in the Add panel, and still there after the problem bar is closed", "Shown in the problem bar only. Closing the bar clears it.", "Shown once, cleared once"]
+      row @ad-newdiagram cells=["Start an Object or Group form, add a diagram, pick it, click Add", "'Choose an existing diagram.' Nothing is added.", "It is added", "The form now reads the collection at each edit"]
+      row @ad-group cells=["Group form when there is no diagram", "Shows the Object note under the heading 'Object'", "Heading 'Group' and the note 'Add a diagram before adding a group.'", "Wrong form text"]
+    }
+  }
+
+  node @editors concept "Source editor, definitions and library" size=large {
+    table @editors-t columns=["What", "Before", "Target", "Why"] {
+      row @ed-source cells=["Source editor: the stored draft is from another workspace, or corrupt", "Typing is accepted, every save errors, Apply is refused", "Read-only for the session, with the reason shown", "Say it once, up front"]
+      row @ed-late cells=["Definitions: a late Apply answer arrives after you switched workspace", "It acts on the new workspace's drafts", "Ignored", "It was for the old workspace"]
+      row @ed-store cells=["Definitions: storing an Apply result fails", "The draft unlocks while its save is still open", "The draft stays locked and the problem is shown", "Prevents editing a draft that is mid-save"]
+      row @ed-twice cells=["Definitions: Apply", "Confirmed: drafts written twice. Refused: reported twice.", "Once each", "Duplicate work and messages"]
+      row @ed-library cells=["Library: folder and archive controls right after switching collection", "Can act on the previous collection", "Act on the collection shown", "Wrong target"]
+    }
+  }
+
+  node @look concept "How the web app looks" size=large {
+    table @look-t columns=["What", "Before", "Target", "Why"] {
+      row @lk-hints cells=["Add panel hints", "Full text colour, about 13px", "Muted grey, 12px", "The colour token was missing"]
+      row @lk-strip cells=["Chooser loading strip", "Invisible (transparent)", "Visible", "The colour token was missing"]
+      row @lk-export cells=["Export error text", "Normal text colour", "Red", "The colour token was missing"]
+      row @lk-dialogs cells=["Tall dialogs (Create, chooser failure, source confirm)", "The whole dialog scrolls", "The body scrolls. The header stays in view.", "Keeps the title and actions in view"]
+      row @lk-size cells=["Move review panel and chooser size", "Fixed pixel sizes", "Follow the density and text-size settings. A long change list scrolls inside the panel.", "Your settings were ignored"]
+    }
+  }
+
+  node @small concept "Web changes you will hardly notice" size=large {
+    table @small-t columns=["What", "Before", "Target"] {
+      row @sm-request cells=["Request ID in the Recovery panel", "The same as the drag ID", "Differs from the drag ID. Each send and each applied choice gets a new ID."]
+      row @sm-wire cells=["New wire IDs in the source text", "'relationship-' plus the drag ID", "'relationship-' plus a new random ID"]
+    }
+    text @small-internal "Internal only (6): work stops after the page closes, a one-frame view mismatch is gone, a memory leak is fixed, a timing measure is narrowed, unused controller calls are removed, no stray storage key is written." role=caption
+  }
+
+  node @kept concept "Old web oddities kept on purpose" size=large {
+    table @kept-t columns=["What stays", "Why"] {
+      row @kp-cancel cells=["A move whose save may still land cannot be cancelled. Cancel now shows why.", "Cancelling could clash with a save that lands"]
+      row @kp-undo cells=["Undo/redo stays held while history reads fail", "The next save rereads history. Releasing early risks undoing against a stale history."]
+    }
+    text @kept-ref "2 old oddities are kept; the rest are fixed in sections 2 to 6." role=caption
+  }
+
+  section @s-overview "1 · What changes for you: overview" mode=grid layout=grid columns=1 order=0 {
+    show @overview
+  }
+
+  section @s-moving "2 · Web: moving things on the canvas" mode=grid layout=grid columns=2 order=1 {
+    show @moving-refused @moving-review
+  }
+
+  section @s-saving "3 · Web: saving, status bar and problem bar" mode=grid layout=grid columns=2 order=2 {
+    show @saving @status
+  }
+
+  section @s-opening "4 · Web: opening and switching collections" mode=grid layout=grid columns=1 order=3 {
+    show @opening
+  }
+
+  section @s-adding "5 · Web: Add panel" mode=grid layout=grid columns=1 order=4 {
+    show @adding
+  }
+
+  section @s-editors "6 · Web: source editor, definitions, library" mode=grid layout=grid columns=1 order=5 {
+    show @editors
+  }
+
+  section @s-look "7 · Web: how it looks" mode=grid layout=grid columns=1 order=6 {
+    show @look
+  }
+
+  section @s-small "8 · Web: hardly noticeable, and 2 old oddities kept on purpose" mode=grid layout=grid columns=2 order=7 {
+    show @small @kept
+  }
+}

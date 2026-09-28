@@ -1,0 +1,247 @@
+canvas 1
+collection @rebuild-0-overview "Apps rebuild · 0 / Overview — before and target" {
+
+  node @sc-web concept "Web — apps/web" size=large {
+    table @sc-web-t columns=["Measure", "Before", "Target"] {
+      row @sc-web-r1 cells=["Files over 300 lines", "6 (2 of them tests)", "0"]
+      row @sc-web-r2 cells=["Largest file", "adapters/sessions/workspace-session.ts: 1,746 lines", "adapters/react/shell/WorkspaceShell.tsx: ~224 lines"]
+      row @sc-web-r3 cells=["ID fields typed as plain string or number (core + contract)", "166", "0"]
+      row @sc-web-r4 cells=["Kinds of ID given a named type", "2 (borrowed from other parts)", "16"]
+      row @sc-web-r5 cells=["Places that make new IDs", "10 lines in 4 files", "1"]
+      row @sc-web-r6 cells=["Import loops", "14, plus 3 imports in the wrong direction", "0"]
+      row @sc-web-r7 cells=["Error codes from a fixed list", "No: any text (29 codes in use)", "Yes: ~57 codes in 8 groups"]
+      row @sc-web-r8 cells=["Stylesheets using only design tokens", "9 of 17 (46 raw values)", "17 of 17"]
+      row @sc-web-r9 cells=["Folders inside adapters / core / contract", "5 / 9 / 4", "11 / 13 / 6"]
+      row @sc-web-r10 cells=["tests/ folder", "19 files, 2,757 lines", "Removed"]
+    }
+  }
+
+  node @sc-service concept "Service — apps/service" size=large {
+    table @sc-service-t columns=["Measure", "Before", "Target"] {
+      row @sc-service-r1 cells=["Files over 300 lines", "2 (1 of them a test)", "0"]
+      row @sc-service-r2 cells=["Largest file", "adapters/resources/resource-selection.ts: 398 lines", "adapters/http/server.ts: ~220 lines"]
+      row @sc-service-r3 cells=["ID fields typed as plain string or number (core + contract)", "24", "0"]
+      row @sc-service-r4 cells=["ID types the service defines itself", "0", "6"]
+      row @sc-service-r5 cells=["Places that make new IDs", "3 calls in 1 file", "Same file, now typed"]
+      row @sc-service-r6 cells=["Import loops", "2", "0"]
+      row @sc-service-r7 cells=["Error codes from a fixed list", "Partly: its own 6 are fixed; codes sent over HTTP are any text", "Yes: 6 own + 26 sent over HTTP, each with an HTTP status"]
+      row @sc-service-r8 cells=["Folders holding code files", "17", "29"]
+      row @sc-service-r9 cells=["Code files / lines", "98 / 7,447", "128 / ~8,210"]
+      row @sc-service-r10 cells=["tests/ folder", "3 files, 657 lines", "Removed"]
+    }
+  }
+
+  node @sc-cli concept "CLI — apps/cli" size=large {
+    table @sc-cli-t columns=["Measure", "Before", "Target"] {
+      row @sc-cli-r1 cells=["Files over 300 lines", "3 (1 of them a test)", "0"]
+      row @sc-cli-r2 cells=["Largest file", "tests/commands.test.ts: 502. Largest non-test: adapters/edge/headless.ts: 367", "core/themes/grammar.ts: 232 lines"]
+      row @sc-cli-r3 cells=["ID fields typed as plain string or number (core + contract)", "36", "0"]
+      row @sc-cli-r4 cells=["ID types the CLI defines itself", "3", "7"]
+      row @sc-cli-r5 cells=["Places that make new IDs", "1", "1"]
+      row @sc-cli-r6 cells=["Import loops", "0", "0"]
+      row @sc-cli-r7 cells=["Error codes from a fixed list", "No: any text", "Yes: 34"]
+      row @sc-cli-r8 cells=["Folders holding code files", "12", "23"]
+      row @sc-cli-r9 cells=["Code files / lines", "44 / 5,238", "109 / 9,408"]
+      row @sc-cli-r10 cells=["tests/ folder", "1 file, 502 lines", "Removed"]
+    }
+  }
+
+  node @sc-all concept "All of /apps" size=medium {
+    list @d ["Before: 360 code files, 36,166 lines", "Files over 300 lines: 11 before, 0 target", "Test files: 23 (3,916 lines), all removed"]
+  }
+  node @sc-key note "How to read the numbers" size=medium {
+    list @d ["Counted: code files only (.ts, .tsx, .css, .mjs), tests included. README, package.json and index.html are not counted", "Before = the code when the rebuild started (commit 5571c7e)", "Target: web and service = the plan's estimates (~). CLI = the finished code", "I/O = network, files, browser storage, drawing on screen. Rules = code that only decides"]
+  }
+
+  node @wb-react module "adapters/react/" { text @d "49 files, 4,536 lines. One flat folder." }
+  node @wb-sessions module "adapters/sessions/" role=warning { text @d "10 files, 3,263 lines. workspace-session.ts alone: 1,746." }
+  node @wb-adapters module "adapters/ readers, edge, preferences" { text @d "13 files, 1,589 lines" }
+  node @wb-editing module "core/editing/" { text @d "48 files, 4,961 lines" }
+  node @wb-workspace module "core/workspace/" { text @d "15 files, 1,457 lines" }
+  node @wb-core module "core/ other folders" { text @d "25 files, 2,412 lines: definitions, creation, inspector, recovery, panels, output, preferences" }
+  node @wb-contract module "contract/" { text @d "38 files, 2,493 lines" }
+  node @wb-cli module "cli/" { text @d "1 file, 13 lines" }
+  node @wb-tests module "tests/" role=warning { text @d "19 files, 2,757 lines. Removed." }
+
+  node @wt-react module "adapters/react/" { text @d "17 feature folders" }
+  node @wt-io module "adapters/ runner, effects, facade (new)" role=success { list @d ["runner/ 1 file, ~140 lines: handles one event at a time", "effects/ 6 files, ~710 lines: does the I/O (server, storage, Canvas, browser)", "facade/ 13 files: what the buttons call (8 of them ~450 lines; 5 have no estimate)"] }
+  node @wt-adapters module "adapters/ other folders" { text @d "browser, service, storage, authoring, language, layout, library" }
+  node @wt-workspace module "core/workspace/" { text @d "74 files: 68 of them come to ~6,100 lines, 6 have no estimate. Largest ~160. Rules only, no I/O." }
+  node @wt-core module "core/ other folders" { text @d "shared, failures, canvas-edits, movement, connection, creation, definitions, drafts, inspector, panels, preferences, library" }
+  node @wt-contract module "contract/" { text @d "types.ts, schemas, records, ports, react, api, compose. New: records/workflow/ 17 files, ~1,170 lines" }
+  node @wt-cli module "cli/" { text @d "1 file, ~18 lines. The one place that reads the window, storage, random numbers and the clock." }
+
+  wire @w-rules @wb-sessions -> @wt-workspace "rules move to" kind=flow
+  wire @w-io @wb-sessions -> @wt-io "I/O moves to" kind=flow
+  wire @w-react @wb-react -> @wt-react "split by feature" kind=flow
+  wire @w-editing @wb-editing -> @wt-core "split by job" kind=flow
+  wire @w-workspace @wb-workspace -> @wt-workspace "partly kept" kind=flow
+  wire @w-core @wb-core -> @wt-core "split by job" kind=flow
+  wire @w-adapters @wb-adapters -> @wt-adapters "split by job" kind=flow
+  wire @w-contract @wb-contract -> @wt-contract "reorganised" kind=flow
+  wire @w-cli @wb-cli -> @wt-cli "same job" kind=flow
+
+  node @ws-before module "Before: 4 session files, 2,317 lines" role=warning {
+    list @files ["workspace-session.ts: 1,746", "source-session.ts: 261", "submission-session.ts: 234", "canvas-session.ts: 76"]
+    text @d "One file decides, builds and sends every change. React talks to it through one object with 40 members."
+  }
+  node @ws-jobs concept "Target: core/workspace/ — 74 files, one folder per job" role=success size=large {
+    table @ws-jobs-t columns=["Folder", "What it decides"] {
+      row @j1 cells=["lifecycle/", "Start and stop"]
+      row @j2 cells=["link/", "Whether the server can be reached"]
+      row @j3 cells=["catalogue/", "The last workspace data read from the server"]
+      row @j4 cells=["journal/", "Saves: store, send, check, retry, restore"]
+      row @j5 cells=["history/", "Undo and redo"]
+      row @j6 cells=["source/", "Text editor"]
+      row @j7 cells=["notices/", "Problem bar and status"]
+      row @j8 cells=["diagram/", "Which diagram is open"]
+      row @j9 cells=["gesture/", "Drag or move on the Canvas"]
+      row @j10 cells=["connection/", "Drawing a wire"]
+      row @j11 cells=["forms/", "Add panel"]
+      row @j12 cells=["rules/", "The check every save passes before it is sent; what you can click now"]
+      row @j13 cells=["view/", "What the screen draws from"]
+      row @j14 cells=["lift/", "Passes messages between the folders above"]
+    }
+  }
+  wire @ws-rules @ws-before -> @ws-jobs "rules move to" kind=flow
+  wire @ws-io @ws-before -> @wt-io "I/O moves to" kind=flow
+
+  node @vb-adapters module "adapters/" role=warning { text @d "36 files, 4,151 lines. Rules and I/O mixed. Biggest: rendering 884, planning 774, resources 682, http 670" }
+  node @vb-core module "core/" { text @d "13 files, 785 lines" }
+  node @vb-contract module "contract/" { text @d "44 files, 1,758 lines" }
+  node @vb-cli module "cli/" { text @d "2 files, 96 lines" }
+  node @vb-tests module "tests/" role=warning { text @d "3 files, 657 lines. Removed." }
+
+  node @vt-adapters module "adapters/" { text @d "13 files, ~1,166 lines. I/O only: render worker, http, files, credentials, storage, raster, notifications" }
+  node @vt-core module "core/" role=success { text @d "66 files, ~4,440 lines: authoring-roles, resources, export, transport, presets, rendering, session, workspace" }
+  node @vt-contract module "contract/" { text @d "47 files, ~2,507 lines" }
+  node @vt-cli module "cli/" { text @d "2 files, ~100 lines" }
+
+  wire @v-rules @vb-adapters -> @vt-core "rules move to" kind=flow
+  wire @v-io @vb-adapters -> @vt-adapters "keeps only I/O" kind=flow
+  wire @v-core @vb-core -> @vt-core "grows" kind=flow
+  wire @v-contract @vb-contract -> @vt-contract "same job" kind=flow
+  wire @v-cli @vb-cli -> @vt-cli "same job" kind=flow
+
+  node @cb-adapters module "adapters/" role=warning { text @d "8 files, 1,611 lines. inputs/ 1,172 (builds requests), edge/ 439" }
+  node @cb-core module "core/" { text @d "19 files, 2,336 lines: profiles, commands, render, output" }
+  node @cb-contract module "contract/" { text @d "14 files, 720 lines" }
+  node @cb-cli module "cli/" { text @d "2 files, 69 lines" }
+  node @cb-tests module "tests/" role=warning { text @d "1 file, 502 lines. Removed." }
+
+  node @ct-adapters module "adapters/" { text @d "11 files, 1,182 lines. I/O only: files, service-http, render, argv" }
+  node @ct-core module "core/" role=success { text @d "60 files, 5,887 lines: profiles, render, commands, authoring, themes, resources, reads, presets, shared, diagnostics" }
+  node @ct-contract module "contract/" { text @d "36 files, 2,288 lines" }
+  node @ct-cli module "cli/" { text @d "2 files, 51 lines" }
+
+  wire @c-rules @cb-adapters -> @ct-core "request building moves to" kind=flow
+  wire @c-io @cb-adapters -> @ct-adapters "keeps only I/O" kind=flow
+  wire @c-core @cb-core -> @ct-core "grows" kind=flow
+  wire @c-contract @cb-contract -> @ct-contract "same job" kind=flow
+  wire @c-cli @cb-cli -> @ct-cli "same job" kind=flow
+
+  node @who-web concept "Web" size=large {
+    table @who-web-t columns=["Decision", "Before", "Target"] {
+      row @ww1 cells=["Saving a change", "One 1,746-line file decides, builds and sends it", "Small rule files decide; separate files do the sending"]
+      row @ww2 cells=["Checks before a save", "Retry skips them", "Every save and every retry passes the same checks"]
+      row @ww3 cells=["Request ID of a drag's save", "The same as the drag's ID", "Each save gets its own"]
+      row @ww4 cells=["What you can click now", "7 stored 'busy' flags", "Worked out from the current state. A blocked button says why"]
+      row @ww5 cells=["Where a dropped node lands", "Web works it out", "Shared layout code works it out. Web handles only the drag"]
+      row @ww6 cells=["New IDs", "Made in 10 places, kept as plain text", "Made in 1 place, each kind with its own type"]
+      row @ww7 cells=["Errors", "Any text. One place reads the message to decide", "A fixed list of codes. Code never reads the message"]
+    }
+  }
+  node @who-service concept "Service" size=large {
+    table @who-service-t columns=["Decision", "Before", "Target"] {
+      row @wv1 cells=["Rules and I/O", "Mixed in the same folder", "In separate folders"]
+      row @wv2 cells=["Layout numbers", "Loose numbers in the code (3, 8, 12, 2, 4, 4096)", "One named table"]
+      row @wv3 cells=["'sha256:' prefix on file hashes", "Added or removed by hand in 7 places", "One function adds it, one removes it"]
+      row @wv4 cells=["Error codes sent over HTTP", "Any text. An unknown one becomes 422", "A fixed list of 26, each with its HTTP status"]
+    }
+  }
+  node @who-cli concept "CLI" size=large {
+    table @who-cli-t columns=["Decision", "Before", "Target"] {
+      row @wc1 cells=["Building a change request", "Done next to the file reading", "Done by the rules. The I/O part only sends it"]
+      row @wc2 cells=["Retrying", "The rules name server paths", "Look for a receipt first, then resend the same request"]
+      row @wc3 cells=["A bad ID", "Found late, after reading files or calling the server", "Refused before any file read or server call"]
+      row @wc4 cells=["Error codes", "Any text", "A fixed list of 34"]
+    }
+  }
+
+  node @ix-1a concept "1a · Web journeys: open, add, connect" size=medium { text @d "Each click, step by step, before and target." text @cid "rebuild-1a-web-journeys" role=caption }
+  node @ix-1b concept "1b · Web journeys: drag, undo" size=medium { text @d "Drag a module and undo, step by step." text @cid "rebuild-1b-web-journeys" role=caption }
+  node @ix-2a concept "2a · Web folders and big files" size=medium { text @d "Every folder before and target. Files over 300 lines." text @cid "rebuild-2a-web-folders" role=caption }
+  node @ix-2b concept "2b · Web: how a click runs" size=medium { text @d "The new pieces, the 16 machines, typed IDs." text @cid "rebuild-2b-web-how-it-runs" role=caption }
+  node @ix-3 concept "3 · Service" size=medium { text @d "Folders, jobs, types, big files, 2 export fixes." text @cid "rebuild-3-service" role=caption }
+  node @ix-4 concept "4 · CLI" size=medium { text @d "Folders, jobs, IDs and error codes, commands." text @cid "rebuild-4-cli" role=caption }
+  node @ix-5a concept "5a · What changes for you: web" size=medium { text @d "Every web change you will notice." text @cid "rebuild-5a-web-changes" role=caption }
+  node @ix-5b concept "5b · What changes for you: service and CLI" size=medium { text @d "Service and CLI changes, and what stays the same." text @cid "rebuild-5b-service-cli-changes" role=caption }
+
+  section @s1 "1 · Scoreboard — before and target" mode=grid layout=grid columns=2 order=0 {
+    show @sc-all @sc-key @sc-web @sc-service @sc-cli
+  }
+
+  section @s2 "2 · Web folders — before and target" mode=flow layout=layered direction=right order=1 {
+    group @s2-before "BEFORE — apps/web: 218 files, 23,481 lines" {
+      show @wb-sessions @wb-workspace @wb-editing @wb-core @wb-react @wb-adapters @wb-contract @wb-cli @wb-tests
+      align @wb-sessions @wb-workspace @wb-editing @wb-core @wb-react @wb-adapters @wb-contract @wb-cli @wb-tests
+    }
+    group @s2-target "TARGET — apps/web" {
+      show @wt-io @wt-workspace @wt-core @wt-react @wt-adapters @wt-contract @wt-cli
+      align @wt-io @wt-workspace @wt-core @wt-react @wt-adapters @wt-contract @wt-cli
+    }
+    rank @wb-sessions @wt-io
+    rank @wb-workspace @wt-workspace
+    rank @wb-editing @wt-core
+    rank @wb-react @wt-react
+    rank @wb-adapters @wt-adapters
+    rank @wb-contract @wt-contract
+    rank @wb-cli @wt-cli
+    connect @w-rules @w-io @w-workspace @w-editing @w-core @w-react @w-adapters @w-contract @w-cli
+  }
+
+  section @s3 "3 · workspace-session.ts breaks into small parts" mode=flow layout=layered direction=right order=2 {
+    show @ws-before @ws-jobs @wt-io
+    connect @ws-rules @ws-io
+  }
+
+  section @s4 "4 · Service folders — before and target" mode=flow layout=layered direction=right order=3 {
+    group @s4-before "BEFORE — apps/service: 98 files, 7,447 lines" {
+      show @vb-adapters @vb-core @vb-contract @vb-cli @vb-tests
+      align @vb-adapters @vb-core @vb-contract @vb-cli @vb-tests
+    }
+    group @s4-target "TARGET — apps/service: 128 files, ~8,210 lines" {
+      show @vt-adapters @vt-core @vt-contract @vt-cli
+      align @vt-adapters @vt-core @vt-contract @vt-cli
+    }
+    rank @vb-adapters @vt-adapters
+    rank @vb-core @vt-core
+    rank @vb-contract @vt-contract
+    rank @vb-cli @vt-cli
+    connect @v-rules @v-io @v-core @v-contract @v-cli
+  }
+
+  section @s5 "5 · CLI folders — before and target" mode=flow layout=layered direction=right order=4 {
+    group @s5-before "BEFORE — apps/cli: 44 files, 5,238 lines" {
+      show @cb-adapters @cb-core @cb-contract @cb-cli @cb-tests
+      align @cb-adapters @cb-core @cb-contract @cb-cli @cb-tests
+    }
+    group @s5-target "TARGET — apps/cli: 109 files, 9,408 lines" {
+      show @ct-adapters @ct-core @ct-contract @ct-cli
+      align @ct-adapters @ct-core @ct-contract @ct-cli
+    }
+    rank @cb-adapters @ct-adapters
+    rank @cb-core @ct-core
+    rank @cb-contract @ct-contract
+    rank @cb-cli @ct-cli
+    connect @c-rules @c-io @c-core @c-contract @c-cli
+  }
+
+  section @s6 "6 · Who decides what — before and target" mode=grid layout=grid columns=3 order=5 {
+    show @who-web @who-service @who-cli
+  }
+
+  section @s7 "7 · The other collections" mode=grid layout=grid columns=4 order=6 {
+    show @ix-1a @ix-1b @ix-2a @ix-2b @ix-3 @ix-4 @ix-5a @ix-5b
+  }
+}

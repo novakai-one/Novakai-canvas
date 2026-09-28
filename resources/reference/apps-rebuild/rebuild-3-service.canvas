@@ -1,0 +1,215 @@
+canvas 1
+collection @rebuild-3-service "Apps rebuild · 3 / Service — before and target" {
+
+  node @glance concept "apps/service — before vs target" size=large {
+    table @glance-t columns=["Measure", "Before (commit 5571c7e)", "Target (design)"] {
+      row @g1 cells=["Code files", "98", "128"]
+      row @g2 cells=["Lines", "7,447", "~8,210"]
+      row @g3 cells=["contract/ — what web and cli import, data shapes, wiring", "44 files · 1,758 lines", "47 files · ~2,507 lines"]
+      row @g4 cells=["core/ — rules only", "13 files · 785 lines", "66 files · ~4,440 lines"]
+      row @g5 cells=["adapters/ — I/O", "36 files · 4,151 lines. 22 of them (2,831 lines) do no I/O: they are rules", "13 files · ~1,166 lines. I/O only"]
+      row @g6 cells=["tests/", "3 files · 657 lines", "Removed"]
+      row @g7 cells=["Files over 300 lines", "2", "0"]
+      row @g8 cells=["Largest file", "adapters/resources/resource-selection.ts · 398 lines", "adapters/http/server.ts · ~220 lines"]
+      row @g9 cells=["Names web + cli import from the service", "41", "16"]
+      row @g10 cells=["ID types the service defines itself", "0", "6"]
+      row @g11 cells=["Kinds of error that get thrown", "9 (throw is used 33 times in 10 files)", "0. Errors are returned as values"]
+      row @g12 cells=["Behaviour changes on purpose", "—", "2, both in export (section 6)"]
+      row @g13 cells=["Changes other apps see", "—", "CLI: 2 lines in one file. Web: the error code on HTTP answers becomes a fixed list of 26"]
+    }
+    text @glance-note "I/O = sockets, files, worker threads, credentials, storage. Rules = code that only decides and touches none of these. Counts are code files; README and package.json are not counted. Target numbers are the design's estimates (~)." role=caption
+  }
+
+  node @b-cli module "cli/" size=small { text @n "2 files · 96 lines" }
+  node @b-ctop module "contract/ top-level files" size=small { text @n "6 files · 323 lines" }
+  node @b-compose module "contract/compose/" size=small { text @n "5 files · 540 lines" }
+  node @b-ports module "contract/ports/" size=small { text @n "9 files · 114 lines" }
+  node @b-records module "contract/records/" size=small { text @n "24 files · 781 lines, one folder" }
+  node @b-c-export module "core/export/" size=small { text @n "5 files · 428 lines" }
+  node @b-c-rendering module "core/rendering/" size=small { text @n "3 files · 96 lines" }
+  node @b-c-transport module "core/transport/" size=small { text @n "3 files · 214 lines" }
+  node @b-c-workspace module "core/workspace/" size=small { text @n "2 files · 47 lines" }
+  node @b-a-builtins module "adapters/builtins/" size=small { text @n "3 files · 422 lines" text @r "2 of 3 are rules" role=caption }
+  node @b-a-http module "adapters/http/" size=small { text @n "5 files · 670 lines" text @r "2 of 5 are rules" role=caption }
+  node @b-a-planning module "adapters/planning/" size=small role=warning { text @n "7 files · 774 lines" text @r "all 7 are rules" role=caption }
+  node @b-a-rendering module "adapters/rendering/" size=small { text @n "11 files · 884 lines" text @r "5 of 11 are rules" role=caption }
+  node @b-a-resources module "adapters/resources/" size=small role=warning { text @n "3 files · 682 lines" text @r "all 3 are rules" role=caption }
+  node @b-a-runtime module "adapters/runtime/" size=small { text @n "3 files · 180 lines" text @r "1 of 3 is rules" role=caption }
+  node @b-a-workspace module "adapters/workspace/" size=small { text @n "4 files · 539 lines" text @r "2 of 4 are rules" role=caption }
+  node @b-tests module "tests/" size=small { text @n "3 files · 657 lines" }
+
+  node @t-cli module "cli/" size=small { text @n "2 files · ~100 lines" }
+  node @t-ctop module "contract/ top-level files" size=small { text @n "7 files · ~402 lines" }
+  node @t-compose module "contract/compose/" size=small { text @n "11 files · ~685 lines" }
+  node @t-ports module "contract/ports/" size=small { text @n "8 files · ~400 lines" }
+  node @t-records module "contract/records/" size=small { text @n "21 files · ~1,020 lines, 6 topic folders" }
+  node @t-c-session module "core/session/" size=small { text @n "5 files · ~285 lines" }
+  node @t-c-workspace module "core/workspace/" size=small { text @n "3 files · ~170 lines" }
+  node @t-c-roles module "core/authoring-roles/" size=small { text @n "11 files · ~865 lines" }
+  node @t-c-resources module "core/resources/" size=small { text @n "12 files · ~755 lines" }
+  node @t-c-presets module "core/presets/" size=small { text @n "7 files · ~580 lines" }
+  node @t-c-rendering module "core/rendering/" size=small { text @n "8 files · ~375 lines" }
+  node @t-c-export module "core/export/" size=small { text @n "9 files · ~750 lines" }
+  node @t-c-transport module "core/transport/" size=small { text @n "11 files · ~660 lines" }
+  node @t-a-http module "adapters/http/" size=small { text @n "2 files · ~275 lines" }
+  node @t-a-worker module "adapters/render-worker/" size=medium { text @n "5 files · ~455 lines" }
+  node @t-a-files module "adapters/files/" size=small { text @n "2 files · ~140 lines" }
+  node @t-a-small module "adapters/credentials/, storage/, raster/, notifications/" size=small { text @n "1 file each · ~110, ~110, ~40, ~36 lines" }
+
+  node @jobs concept "Who does what — before vs target" size=large {
+    table @jobs-t columns=["Job", "Before: folder", "Target: folder", "Size: before to target"] {
+      row @j1 cells=["Start the server and the render worker", "cli/", "cli/", "2 files, 96 to 2 files, ~100"]
+      row @j2 cells=["What web and cli can import", "contract/ top level", "contract/ top level", "4 files, 146 to 7 files, ~402"]
+      row @j3 cells=["Session: read, prepare, apply, render, inspect, export, close", "contract/, adapters/runtime/, core/workspace/", "core/session/", "3 files, 172 to 5 files, ~285"]
+      row @j4 cells=["Read the workspace", "adapters/workspace/, core/workspace/", "core/workspace/", "2 files, 117 to 3 files, ~170"]
+      row @j5 cells=["Planners and checks the service plugs into Authoring", "adapters/planning/, adapters/resources/", "core/authoring-roles/", "8 files, 818 to 11 files, ~865"]
+      row @j6 cells=["Choose and prepare themes and assets", "adapters/resources/", "core/resources/", "2 files, 638 to 12 files, ~755"]
+      row @j7 cells=["Built-in presets and theme checks", "adapters/builtins/, adapters/rendering/", "core/presets/", "3 files, 493 to 7 files, ~580"]
+      row @j8 cells=["Build render jobs, render, cache, inspect", "adapters/rendering/, core/rendering/", "core/rendering/", "6 files, 323 to 8 files, ~375"]
+      row @j9 cells=["Export: DSL, Markdown, SVG, PNG", "core/export/, adapters/workspace/, contract/", "core/export/", "7 files, 769 to 9 files, ~750"]
+      row @j10 cells=["HTTP rules: who may call, routes, status codes, events", "core/transport/, adapters/http/", "core/transport/", "6 files, 463 to 11 files, ~660"]
+      row @j11 cells=["Real I/O: sockets, files, worker threads, credentials, storage", "Spread through adapters/", "adapters/, 7 folders", "14 files, 1,320 to 13 files, ~1,166"]
+      row @j12 cells=["Wire everything together at start-up", "contract/compose/", "contract/compose/", "5 files, 540 to 11 files, ~685"]
+      row @j13 cells=["Data shapes", "contract/records/, one folder", "contract/records/, 6 topic folders", "24 files, 781 to 21 files, ~1,020"]
+      row @j14 cells=["Interfaces between parts", "contract/ports/", "contract/ports/", "9 files, 114 to 8 files, ~400"]
+      row @j15 cells=["Tests", "tests/", "—", "3 files, 657 to removed"]
+      row @j16 cells=["Total", "", "", "98 files, 7,447 to 128 files, ~8,210"]
+    }
+  }
+
+  node @types-ids concept "IDs and errors — before vs target" size=large {
+    table @types-ids-t columns=["What", "Before", "Target"] {
+      row @y1 cells=["IDs: workspace, collection, port, path, tokens, render job", "Plain text or numbers", "6 ID types of the service's own. Passing one where another is expected does not compile. IDs from other parts are reused, never copied"]
+      row @y2 cells=["'sha256:' prefix on file hashes", "Added or removed by hand in 7 places", "One function adds it, one removes it"]
+      row @y3 cells=["Theme pin text (id@version#sha256:...)", "3 copies: 2 build it, 1 reads it", "1 file builds and reads it"]
+      row @y4 cells=["The service's own error codes", "6 codes, listed twice", "The same 6, listed once. Their help text sits in one table, same wording as today"]
+      row @y5 cells=["Error code on HTTP answers", "Any text", "A fixed list of 26 codes"]
+      row @y6 cells=["Error code to HTTP status", "9 codes listed. Any other code gets 422", "All 26 listed. Same statuses as today, apart from the export fix (section 6)"]
+      row @y7 cells=["How errors are passed back", "Thrown, as 9 kinds of error", "Returned as values. Nothing is thrown"]
+    }
+  }
+
+  node @types-shapes concept "Other shapes — before vs target" size=large {
+    table @types-shapes-t columns=["What", "Before", "Target"] {
+      row @y8 cells=["Render check report", "'valid' plus a list of problems, so 'valid, but with problems' can happen", "Two shapes: valid or invalid. Same JSON as today"]
+      row @y9 cells=["Preview or apply", "An optional yes/no flag", "Two named modes: with preview, without preview"]
+      row @y10 cells=["HTTP header sent twice", "Replaced by the text '<duplicate>'", "Held as: missing, one value, or repeated"]
+      row @y11 cells=["Query value sent twice", "Values glued together with a hidden character", "Each key holds a list of values"]
+      row @y12 cells=["Who is calling", "'agent:cli' and '127.0.0.1' typed out twice each", "Each named once and reused"]
+      row @y13 cells=["Start-up and shut-down state", "Yes/no values and an empty-or-waiting value", "Named states: existing or new, open or closing, serving or stopping"]
+      row @y14 cells=["Render job", "Has a field that is always empty", "Field removed"]
+      row @y15 cells=["Result of reading a collection for the library", "Shape not stated", "A named shape"]
+      row @y16 cells=["HTTP routes", "18 in the router, plus the live events route", "The same routes, as one fixed list"]
+    }
+  }
+
+  node @f-sel concept "resource-selection.ts" size=medium role=warning { text @n "398 lines · adapters/resources/" }
+  node @f-test concept "transport.test.ts" size=small role=warning { text @n "395 lines · tests/" }
+  node @f-export concept "export.ts" size=small { text @n "289 lines · adapters/workspace/" }
+  node @f-http concept "http-server.ts + http-io.ts" size=small { text @n "254 + 132 lines · adapters/http/" }
+  node @f-cmd concept "resource-commands.ts" size=medium { text @n "240 lines · adapters/resources/" }
+  node @f-wiring concept "wiring.ts" size=small { text @n "223 lines · contract/compose/" }
+  node @f-router concept "http-router.ts" size=small { text @n "216 lines · adapters/http/" }
+  node @r-sel concept "core/resources/selection/" size=medium role=success { text @n "6 files · ~415 lines · largest ~95" }
+  node @r-test concept "Removed" size=medium { text @n "All apps tests are removed" }
+  node @r-export concept "core/export/" size=medium role=success { text @n "route.ts ~75 · lease.ts ~110 · text.ts ~80" }
+  node @r-http concept "adapters/http/server.ts" size=medium role=success { text @n "~220 lines, the largest target file. Its rules move to core/transport/: request kind, browser access, status codes, events" }
+  node @r-cmd concept "core/resources/commands/" size=medium role=success { text @n "6 files · ~340 lines · largest ~95" }
+  node @r-wiring concept "contract/compose/" size=medium role=success { text @n "5 files: capabilities, workspace, authoring, export, wiring (~70)" }
+  node @r-router concept "core/transport/" size=medium role=success { text @n "routes.ts ~90 · resource-routes.ts ~65 · source-scope.ts ~70 · json-body.ts ~45" }
+  node @big-note note "Before: 2 files over 300 lines, 5 more over 200. Target: 0 over 300, 1 over 200 (server.ts, ~220)." size=medium {}
+
+  wire @w-sel @f-sel -> @r-sel "split" kind=flow
+  wire @w-test @f-test -> @r-test "removed" kind=flow style=dashed
+  wire @w-export @f-export -> @r-export "split" kind=flow
+  wire @w-http @f-http -> @r-http "merged" kind=flow
+  wire @w-cmd @f-cmd -> @r-cmd "split" kind=flow
+  wire @w-wiring @f-wiring -> @r-wiring "split" kind=flow
+  wire @w-router @f-router -> @r-router "split" kind=flow
+
+  node @x1-start start "Export as DSL or Markdown" size=small {}
+  node @x1-fail step "Building the export text fails" size=small {}
+  node @x1-before step "Before: the diagram's asset files stay protected from clean-up until the server stops" role=warning size=medium { text @n "You get a vague 'Request did not complete'." }
+  node @x1-after step "Target: the protection is always released" role=success size=medium { text @n "You get export's own error: encoding-failed, at export.dsl or export.markdown." }
+  node @x2-start step "Export fails for a server-side reason" size=small { text @n "Storage, fonts or clean-up (encoding-failed, cleanup-failed, resource-rejected)" }
+  node @x2-before step "Before: invalid-input, HTTP 422 ('fix your input')" role=warning size=medium { text @n "The caller cannot fix a server fault by changing the input." }
+  node @x2-after step "Target: unavailable, HTTP 503 ('restore and retry')" role=success size=medium { text @n "Input mistakes keep 422. Cancel keeps 409." }
+  node @x-note note "Who notices: fix 1 changes the message you see. Fix 2 changes only the code and status: the web does not act on export status, and the CLI does not call export. Everything else keeps today's codes, messages, statuses and JSON shapes." size=medium {}
+
+  wire @x1-w1 @x1-start -> @x1-fail "build text" kind=flow
+  wire @x1-w2 @x1-fail -> @x1-before "before" kind=flow style=dashed
+  wire @x1-w3 @x1-fail -> @x1-after "target" kind=flow
+  wire @x2-w1 @x2-start -> @x2-before "before" kind=flow style=dashed
+  wire @x2-w2 @x2-start -> @x2-after "target" kind=flow
+
+  section @s1 "1 · At a glance — before vs target" mode=grid layout=grid columns=1 order=0 {
+    show @glance
+  }
+
+  section @s2 "2 · Folders — before vs target" mode=modules layout=grid columns=2 order=1 {
+    group @gb "BEFORE · 98 files · 7,447 lines" layout=grid columns=1 {
+      show @b-cli
+      group @gb-contract "contract/ · 44 files · 1,758 lines" layout=grid columns=2 {
+        show @b-ctop @b-compose @b-ports @b-records
+      }
+      group @gb-core "core/ · 13 files · 785 lines" layout=grid columns=2 {
+        show @b-c-export @b-c-rendering @b-c-transport @b-c-workspace
+      }
+      group @gb-adapters "adapters/ · 36 files · 4,151 lines · 22 files (2,831 lines) are rules, not I/O" layout=grid columns=2 {
+        show @b-a-builtins @b-a-http @b-a-planning @b-a-rendering @b-a-resources @b-a-runtime @b-a-workspace
+      }
+      show @b-tests
+    }
+    group @gt "TARGET · 128 files · ~8,210 lines" layout=grid columns=1 {
+      show @t-cli
+      group @gt-contract "contract/ · 47 files · ~2,507 lines" layout=grid columns=2 {
+        show @t-ctop @t-compose @t-ports @t-records
+      }
+      group @gt-core "core/ · rules only · 66 files · ~4,440 lines" role=success layout=grid columns=2 {
+        show @t-c-session @t-c-workspace @t-c-roles @t-c-resources @t-c-presets @t-c-rendering @t-c-export @t-c-transport
+      }
+      group @gt-adapters "adapters/ · I/O only · 13 files · ~1,166 lines" layout=grid columns=2 {
+        show @t-a-http @t-a-worker @t-a-files @t-a-small
+      }
+    }
+  }
+
+  section @s3 "3 · Who does what — before vs target" mode=grid layout=grid columns=1 order=2 {
+    show @jobs
+  }
+
+  section @s4 "4 · Types — before vs target" mode=grid layout=grid columns=2 order=3 {
+    show @types-ids @types-shapes
+  }
+
+  section @s5 "5 · Big files — where they go" mode=flow layout=layered direction=right order=4 {
+    group @g5-before "BEFORE · 7 files over 200 lines" {
+      show @f-sel @f-test @f-export @f-http @f-cmd @f-wiring @f-router
+    }
+    group @g5-target "TARGET · no file over 300 lines" {
+      show @r-sel @r-test @r-export @r-http @r-cmd @r-wiring @r-router
+    }
+    show @big-note
+    align @f-sel @f-test @f-export @f-http @f-cmd @f-wiring @f-router
+    align @r-sel @r-test @r-export @r-http @r-cmd @r-wiring @r-router
+    rank @f-sel @r-sel
+    rank @f-test @r-test
+    rank @f-export @r-export
+    rank @f-http @r-http
+    rank @f-cmd @r-cmd
+    rank @f-wiring @r-wiring
+    rank @f-router @r-router
+    connect @w-sel @w-test @w-export @w-http @w-cmd @w-wiring @w-router
+  }
+
+  section @s6 "6 · Bug fixes — the only behaviour changes" mode=flow layout=layered direction=right order=5 {
+    group @g6-fix1 "Fix 1 · A failed DSL or Markdown export keeps asset files protected" {
+      show @x1-start @x1-fail @x1-before @x1-after
+    }
+    group @g6-fix2 "Fix 2 · Server faults blamed on the caller" {
+      show @x2-start @x2-before @x2-after
+    }
+    show @x-note
+    connect @x1-w1 @x1-w2 @x1-w3 @x2-w1 @x2-w2
+  }
+}

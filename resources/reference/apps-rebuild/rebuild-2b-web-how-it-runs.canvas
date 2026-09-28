@@ -1,0 +1,165 @@
+canvas 1
+collection @rebuild-2b-web-how-it-runs "Apps rebuild · 2b / Web — how a click runs, the machines, IDs: before and target" {
+
+  node @n-react step "React: panels and buttons" size=small {}
+  node @n-outside system "Local service, browser storage, canvas" size=small {}
+  node @b-controller step "Controller" { text @d "One object with 40 members: 36 methods + 4 store handles." }
+  node @b-session step "workspace-session.ts  -  1,746 lines" role=warning { text @d "Holds all the state and does its own I/O. 9 more session files beside it run their own async code." }
+  node @b-view step "WorkspaceView" { text @d "One flat object. It holds 2 of the app's 7 'busy' flags." }
+
+  wire @bw-click @n-react -> @b-controller "click calls a method" kind=flow
+  wire @bw-call @b-controller -> @b-session "calls" kind=flow
+  wire @bw-io @b-session -> @n-outside "fetch, save, draw, called directly" kind=flow
+  wire @bw-update @b-session -> @b-view "updates" kind=flow
+  wire @bw-redraw @b-view -> @n-react "redraw" kind=flow style=dashed
+
+  section @s-before-flow "1 · Before: how a click reaches the code" mode=flow layout=layered direction=right order=0 {
+    show @n-react @b-controller @b-session @n-outside @b-view
+    connect @bw-click @bw-call @bw-io @bw-update @bw-redraw
+  }
+
+  node @p-facade step "Entry points (facade)  -  13 files" role=success { text @d "The code a button calls. Makes any new IDs, builds one event and sends it. Replaces the 40-member controller." }
+  node @p-runner step "Queue (runner)  -  1 file, ~140 lines" role=success { text @d "Takes events one at a time, passes them to the machines, runs the I/O, and tells React when a change is finished. Nothing like it before." }
+  node @p-machines step "Machines (rules)  -  16" role=success { text @d "11 in core/workspace/, 5 in their feature folders. Each is a state plus one function: an event comes in; a new state and a list of I/O to do come out. No network, storage, clock or random numbers." }
+  node @p-effects step "I/O (executors)  -  6 files, ~710 lines" role=success { text @d "The machines only ask for I/O (fetch, save, draw). The executors do it." }
+  node @p-view step "View  -  5 files, ~510 lines" role=success { text @d "What React draws from, worked out from the state. It also says what you can do now, and why not." }
+  node @p-brands step "Named ID types  -  ~130 lines" role=success { text @d "A request ID cannot be passed where a collection ID is expected. New IDs come from one ID maker (~90 lines)." }
+
+  wire @pw-click @n-react -> @p-facade "click" kind=flow step=1
+  wire @pw-event @p-facade -> @p-runner "one event" kind=flow step=2
+  wire @pw-step @p-runner -> @p-machines "event" kind=flow step=3
+  wire @pw-ask @p-machines -> @p-effects "ask for I/O" kind=flow step=4
+  wire @pw-io @p-effects -> @n-outside "fetch, save, draw" kind=flow step=5
+  wire @pw-answer @p-effects -> @p-runner "answer comes back as an event" kind=flow step=6 style=dashed
+  wire @pw-view @p-machines -> @p-view "new state" kind=flow step=7
+  wire @pw-redraw @p-view -> @n-react "redraw" kind=flow step=8 style=dashed
+  wire @pw-ids @p-facade -> @p-brands "new IDs have named types" kind=flow style=dashed
+
+  section @s-target-flow "2 · Target: the new pieces, one line each (sizes are targets)" mode=flow layout=layered direction=right order=1 {
+    show @n-react @p-facade @p-brands @p-runner @p-machines @p-effects @p-view @n-outside
+    connect @pw-click @pw-event @pw-step @pw-ask @pw-io @pw-answer @pw-view @pw-redraw @pw-ids
+  }
+
+  node @m-lifecycle concept "lifecycle  -  2 files, ~140" { text @d "Start-up and shut-down. Waits for the first read. Opens the collection named in the URL." }
+  node @m-link concept "link  -  2 files, ~125" { text @d "Whether the service is reachable. The live change stream." }
+  node @m-catalogue concept "catalogue  -  2 files, ~140" { text @d "The last accepted workspace read: the data plus the collections." }
+  node @m-journal concept "journal  -  7 files, ~690" { text @d "Saves: store, send, answer, check, retry, dismiss. Replaces submission-session." }
+  node @m-history concept "history  -  4 files, ~290" { text @d "Undo and redo. Holds new edits while an undo finishes." }
+  node @m-source concept "source  -  4 files, ~400" { text @d "The DSL source editor. Replaces source-session." }
+  node @m-notices concept "notices  -  2 files, ~150" { text @d "The problem bar and one status note." }
+  node @m-diagram concept "diagram  -  9 files, ~1,013" { text @d "Which diagram is open: open, switch collection, render, create." }
+  node @m-gesture concept "gesture  -  6 files, ~640" { text @d "A drag on the canvas and its move choices (Expand / Rearrange)." }
+  node @m-connection concept "connection  -  2 files, ~160" { text @d "Drawing a new wire." }
+  node @m-forms concept "forms  -  3 files, ~320" { text @d "The Add panel forms: diagram, object, group." }
+  node @m-panels concept "panels" { text @d "Side panel layout." }
+  node @m-preferences concept "preferences" { text @d "Settings and theme." }
+  node @m-library concept "library" { text @d "Collection library and folders." }
+  node @m-drafts concept "drafts" { text @d "Object and wire inspector drafts." }
+  node @m-definitions concept "definitions" { text @d "Definitions panel drafts." }
+  node @m-before note "Before: all of this lived in workspace-session.ts (1,746 lines) plus submission-session and source-session." {}
+  node @m-support concept "The parts around the machines (target)" size=large {
+    table @t columns=["Part", "Job", "Files", "Lines"] {
+      row @r1 cells=["Root", "Sends each event to the right machine", "5", "~380"]
+      row @r2 cells=["lift/", "Passes one machine's results on to other machines", "7", "~490"]
+      row @r3 cells=["rules/", "Checks that span machines, including the one check every save passes before it is sent", "8", "~650"]
+      row @r4 cells=["view/", "Builds the view React draws from", "5", "~510"]
+    }
+    text @d "core/workspace/: 15 files, 1,457 lines before; 74 files target (68 of them ~6,100 lines)." role=caption
+  }
+
+  section @s-machines "3 · Target: the 16 machines — 11 in core/workspace/, 5 in their feature folders" mode=grid layout=grid columns=1 order=2 {
+    show @m-before
+    group @mg-root "In core/workspace/: the root machine holds these" layout=grid columns=4 {
+      show @m-lifecycle @m-link @m-catalogue @m-journal @m-history @m-source @m-notices
+    }
+    group @mg-diagram "In core/workspace/: the diagram machine holds 3 more. They exist only while a diagram is open" layout=grid columns=4 {
+      show @m-diagram @m-gesture @m-connection @m-forms
+    }
+    group @mg-later "In their feature folders (core/panels/, preferences/, library/, drafts/, definitions/). The root sends them their events. No size estimates yet" layout=grid columns=5 {
+      show @m-panels @m-preferences @m-library @m-drafts @m-definitions
+    }
+    show @m-support
+  }
+
+  node @i-workspace entity "Workspace" {
+    field @b "before" type="string, in 15 places"
+    field @t "target (owner: Authoring)" type="WorkspaceId"
+    field @sb "sequence, before" type="number, in 3 places"
+    field @st "sequence, target" type="WorkspaceSequence"
+  }
+  node @i-folder entity "Folder" {
+    field @b "before" type="FolderId"
+    field @t "target (owner: Library)" type="FolderId"
+    text @d "Already named before." role=caption
+  }
+  node @i-collection entity "Collection" {
+    field @b "before" type="string, in 26 places"
+    field @t "target (owner: Model)" type="CollectionId"
+    field @rb "revision, before" type="number, in 6 places"
+    field @rt "revision, target" type="CollectionRevision"
+  }
+  node @i-section entity "Section" {
+    field @b "before" type="string, in 13 places"
+    field @t "target (owner: Model)" type="SectionId"
+  }
+  node @i-object entity "Object" {
+    field @b "before" type="string"
+    field @t "target (owner: Model)" type="ObjectId"
+  }
+  node @i-group entity "Group" {
+    field @b "before" type="string"
+    field @t "target (owner: Model)" type="GroupId"
+  }
+  node @i-relationship entity "Relationship" {
+    field @b "before" type="string"
+    field @t "target (owner: Model)" type="RelationshipId"
+    text @d "ID text changes: relationship-<drag ID> becomes relationship-<random ID>." role=caption
+  }
+  node @i-gesture entity "Gesture (a canvas drag)" {
+    field @b "before" type="string, in 3 places"
+    field @t "target (owner: Canvas)" type="GestureId"
+  }
+  node @i-request entity "Request" {
+    field @b "before" type="string, in 12 places"
+    field @t "target (owner: Authoring)" type="RequestId"
+    text @d "Before: same value as the drag's ID. Target: its own ID." role=caption
+  }
+  node @i-note note "Totals" {
+    text @d1 "Plain string / number ID fields in web core + contract: 166 before, 0 target."
+    text @d2 "Object, group and relationship IDs share 46 plain 'id: string' fields before."
+    text @d3 "New IDs are made in 10 places across 4 files before, one a React file. Target: 1 place (cli/main.ts) feeds one ID maker."
+  }
+
+  wire @iw-ws @i-workspace -> @i-collection "holds" kind=flow
+  wire @iw-folder @i-folder -> @i-collection "holds" kind=flow
+  wire @iw-sections @i-collection -> @i-section "holds" kind=flow
+  wire @iw-objects @i-section -> @i-object "holds" kind=flow
+  wire @iw-groups @i-section -> @i-group "holds" kind=flow
+  wire @iw-joins @i-relationship -> @i-object "joins 2" kind=flow
+  wire @iw-sends @i-gesture -> @i-request "sends" kind=flow
+  wire @iw-changes @i-request -> @i-collection "changes" kind=flow
+
+  section @s-ids "4 · IDs: plain string / number before, named types in the target" mode=flow layout=layered direction=right order=3 {
+    show @i-workspace @i-folder @i-collection @i-section @i-object @i-group @i-relationship @i-gesture @i-request @i-note
+    below @i-folder @i-workspace
+    below @i-gesture @i-note
+    connect @iw-ws @iw-folder @iw-sections @iw-objects @iw-groups @iw-joins @iw-sends @iw-changes
+  }
+
+  node @o-table concept "Other IDs and codes" size=large {
+    table @t columns=["What it is", "Before", "Target", "Owner"] {
+      row @r1 cells=["Service connection number (changes on reconnect)", "string, in 27 places", "TransportGeneration (new)", "Service"]
+      row @r2 cells=["Definition, and content inside an object", "string", "DefinitionId, DescendantId", "Model"]
+      row @r3 cells=["Move choice on a drag", "string, in 10 places", "A fixed choice: expand or rearrange", "Web"]
+      row @r4 cells=["Counters that keep only the latest answer", "3 plain number counters inside workspace-session.ts", "4 named counter types, each moved only by its own machine", "Web"]
+      row @r5 cells=["Browser storage key", "string", "9 fixed slot names", "Web"]
+      row @r6 cells=["Draft keys", "string", "One named type each for object, wire and definition drafts", "Web"]
+      row @r7 cells=["Error codes", "any text", "A fixed list in 8 groups", "Web"]
+    }
+    text @d "6 more get a name but no check yet: TargetId, SceneKey, WorkspaceSequence, CollectionRevision, LibraryCursor, VisitTime. Each later becomes a checked type in the part that owns it." role=caption
+  }
+
+  section @s-other-ids "5 · Other IDs and codes: before vs target" mode=grid layout=grid columns=1 order=4 {
+    show @o-table
+  }
+}
