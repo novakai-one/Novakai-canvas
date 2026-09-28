@@ -46,6 +46,9 @@ export interface AuthoringRequestDraft {
 /** Who every CLI request is sent as. */
 const actor = Object.freeze({ id: 'agent:cli', kind: 'agent' });
 
+/** The version of Authoring's request format every CLI request is written in. */
+const requestFormatVersion = 1;
+
 /**
  * Builds the whole Authoring request from `draft`, and checks it with Authoring's own check.
  * If the check refuses it, gives back `mistake`, the failure the caller chose.
@@ -54,17 +57,32 @@ export function buildAuthoringRequest(
   draft: AuthoringRequestDraft,
   mistake: Result<never, LocalFailure>,
 ): Result<AuthoringRequest> {
-  const request = {
+  const assembled = assembleRequest(draft);
+  const checked = requestSchema.safeParse(assembled);
+  if (!checked.success) {
+    return mistake;
+  }
+  return success(checked.data);
+}
+
+/**
+ * Puts the caller's parts together with the sender and the format's version; it is typed `unknown`
+ * because only Authoring's check says whether it is a request.
+ */
+function assembleRequest(draft: AuthoringRequestDraft): unknown {
+  return {
     workspace: draft.workspace,
     request: draft.request,
     actor,
-    version: 1,
+    version: requestFormatVersion,
     expected: draft.expected,
-    scope: draft.expected.map((item) => item.key),
+    scope: listExpectedKeys(draft.expected),
     assets: draft.assets,
     intent: { kind: 'change', ...draft.change },
   };
-  const checkedRequest = requestSchema.safeParse(request);
-  if (!checkedRequest.success) return mistake;
-  return success(checkedRequest.data);
+}
+
+/** Lists the key of each record the request expects, which are the only records it may write. */
+function listExpectedKeys(expected: readonly ReadVersion[]): readonly ReadVersion['key'][] {
+  return expected.map((readVersion) => readVersion.key);
 }

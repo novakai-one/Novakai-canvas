@@ -12,6 +12,7 @@ import { prepareResources } from '../resources/stage.js';
 import type { ResourceDependencies } from '../resources/stage.js';
 import { parseSource } from '../shared/parse-source.js';
 import { buildChangeRequest, checkCollectionRecordId } from './change-request.js';
+import type { ChangeDraft } from './change-request.js';
 import { chooseRequestId } from './request-id.js';
 import type { ChangeCommand, ChangeIntent, ChangeMode } from '../../contract/records/command.js';
 import type { CollectionValidator } from '../../contract/ports/collection-validator.js';
@@ -22,7 +23,7 @@ import type { SourceParser } from '../../contract/ports/source-parser.js';
 import type { AuthoringRequest, WorkspaceSnapshot } from '../../contract/records/foreign.js';
 import type { ServiceAnswer } from '../../contract/records/service-answers.js';
 import type { RetainedRequest } from '../../contract/records/retained-request.js';
-import type { CollectionRevision } from '../../contract/brands.js';
+import type { CollectionRevision, ServiceGeneration } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 
 /**
@@ -49,69 +50,98 @@ export async function prepareChangeRequest(
   dependencies: PrepareDependencies,
 ): Promise<Result<RetainedRequest>> {
   const source = await dependencies.files.readSource(command.file);
-  if (!source.ok) return source;
-  const current = await dependencies.reads.workspace();
-  if (!current.ok) return current;
-  return prepareCaptured(command, source.value, current.value, dependencies);
+  if (!source.ok) {
+    return source;
+  }
+  const workspace = await dependencies.reads.workspace();
+  if (!workspace.ok) {
+    return workspace;
+  }
+  return buildAndStage(command, source.value, workspace.value, dependencies);
 }
 
 /**
- * The request, then its resources. Resource preparation finishes before retention or submission.
- * Fails with `invalid-source`, as {@link requestOf} does, or as resource staging does.
+ * Builds the request from the source text and the workspace as read, then stages the fonts and
+ * images the source names.
  */
-async function prepareCaptured(
+async function buildAndStage(
   command: ChangeCommand,
   source: string,
-  current: ServiceAnswer<WorkspaceSnapshot>,
+  workspace: ServiceAnswer<WorkspaceSnapshot>,
   dependencies: PrepareDependencies,
 ): Promise<Result<RetainedRequest>> {
   const parsed = parseSource(dependencies.language, source);
-  if (!parsed.ok) return parsed;
-  const request = requestOf(command, source, parsed.value.collection, current.value, dependencies);
-  if (!request.ok) return request;
-  const retained = { generation: current.generation, request: request.value, backups: [] };
-  return prepareResources(command.file, parsed.value.resources, retained, dependencies);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  const declaredId = parsed.value.collection;
+  const request = buildCommandRequest(command, source, declaredId, workspace.value, dependencies);
+  if (!request.ok) {
+    return request;
+  }
+  const unstaged = keepWithoutBackups(request.value, workspace.generation);
+  return prepareResources(command.file, parsed.value.resources, unstaged, dependencies);
 }
 
 /**
- * The change's Authoring request under the given `--request` or a fresh ID, for the collection
- * the source declares. Fails as `checkCollectionRecordId`, `chooseRequestId` or
- * `buildChangeRequest` does.
+ * Builds the command's Authoring request for the collection the source declares, sent under the
+ * typed `--request` or a fresh ID.
  */
-function requestOf(
+function buildCommandRequest(
   command: ChangeCommand,
   source: string,
-  declared: string,
+  declaredId: string,
   snapshot: WorkspaceSnapshot,
   dependencies: PrepareDependencies,
 ): Result<AuthoringRequest> {
-  const intent = intentOf(command);
-  const collection = checkCollectionRecordId(intent, declared);
-  if (!collection.ok) return collection;
+  const intent = chooseIntent(command);
+  const collection = checkCollectionRecordId(intent, declaredId);
+  if (!collection.ok) {
+    return collection;
+  }
   const requestId = chooseRequestId(command, dependencies.requestIds);
-  if (!requestId.ok) return requestId;
-  const draft = { intent, collection: collection.value, source, request: requestId.value };
+  if (!requestId.ok) {
+    return requestId;
+  }
+  const draft: ChangeDraft = {
+    intent,
+    collection: collection.value,
+    source,
+    request: requestId.value,
+  };
   return buildChangeRequest(draft, snapshot, dependencies.collections);
 }
 
-/** The preconditions the command asks for: preview by its --mode, the others by their name. */
-function intentOf(command: ChangeCommand): ChangeIntent {
+/** Works out what Authoring must check first: `preview` by its `--mode`, the others by name. */
+function chooseIntent(command: ChangeCommand): ChangeIntent {
   switch (command.name) {
     case 'create':
       return { mode: 'create' };
     case 'preview':
-      return intent(command.mode, command.revision);
+      return intentForMode(command.mode, command.revision);
     default:
-      return intent(command.name, command.revision);
+      return intentForMode(command.name, command.revision);
   }
 }
 
-/** `create` needs no revision; `replace` and `patch` keep the one the agent read, when given. */
-function intent(
+/** Builds the intent for a mode: `replace` and `patch` keep the revision if one was given. */
+function intentForMode(
   mode: ChangeMode,
   revision: CollectionRevision | undefined,
 ): ChangeIntent {
-  if (mode === 'create') return { mode };
-  if (revision === undefined) return { mode };
+  if (mode === 'create') {
+    return { mode };
+  }
+  if (revision === undefined) {
+    return { mode };
+  }
   return { mode, revision };
+}
+
+/** Wraps the request as the journal keeps it: with the service's generation, no byte copies yet. */
+function keepWithoutBackups(
+  request: AuthoringRequest,
+  generation: ServiceGeneration,
+): RetainedRequest {
+  return { generation, request, backups: [] };
 }

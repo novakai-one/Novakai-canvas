@@ -18,7 +18,8 @@ import type { ChangeCommand } from '../../contract/records/command.js';
 import type { ServiceAuthoring } from '../../contract/ports/service-authoring.js';
 import type { RequestJournal } from '../../contract/ports/request-journal.js';
 import type { RetainedRequest } from '../../contract/records/retained-request.js';
-import type { SubmitMode } from '../../contract/records/service-answers.js';
+import type { ChangePreview, SubmitMode } from '../../contract/records/service-answers.js';
+import type { RequestId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
 import { unsupported } from '../shared/results.js';
@@ -42,8 +43,11 @@ export async function sendSourceChange(
   dependencies: SourceChangeDependencies,
 ): Promise<Result<string>> {
   const prepared = await prepareChangeRequest(command, dependencies);
-  if (!prepared.ok) return prepared;
-  return submitRequest(prepared.value, modeOf(command), dependencies);
+  if (!prepared.ok) {
+    return prepared;
+  }
+  const mode = chooseSubmitMode(command);
+  return submitRequest(prepared.value, mode, dependencies);
 }
 
 /**
@@ -59,56 +63,70 @@ export async function submitRequest(
   dependencies: SubmitDependencies,
 ): Promise<Result<string>> {
   const saved = await dependencies.journal.save(prepared);
-  if (!saved.ok) return saved;
+  if (!saved.ok) {
+    return saved;
+  }
   const restored = await restoreResources(prepared.backups, dependencies);
-  if (!restored.ok) return restored;
-  return send(prepared, mode, dependencies.authoring);
+  if (!restored.ok) {
+    return restored;
+  }
+  return sendToAuthoring(prepared, mode, dependencies.authoring);
 }
 
-/** `preview` previews; `create`, `replace` and `patch` apply. */
-function modeOf(command: ChangeCommand): SubmitMode {
-  if (command.name === 'preview') return 'preview';
+/** Chooses how the change is sent: `preview` previews; `create`, `replace` and `patch` apply. */
+function chooseSubmitMode(command: ChangeCommand): SubmitMode {
+  if (command.name === 'preview') {
+    return 'preview';
+  }
   return 'apply';
 }
 
-/** The retained request to the mode's Authoring call; only the canonical envelope is sent. */
-function send(
+/** Sends the kept request to Authoring's preview or apply call, as `mode` says. */
+function sendToAuthoring(
   retained: RetainedRequest,
   mode: SubmitMode,
   authoring: ServiceAuthoring,
 ): Promise<Result<string>> {
   switch (mode) {
     case 'preview':
-      return previewed(retained, authoring);
+      return previewChange(retained, authoring);
     case 'apply':
-      return applied(retained, authoring);
+      return applyChange(retained, authoring);
     default:
       return Promise.resolve(unsupported(mode));
   }
 }
 
-/** Reviewable owner output and the stable command that applies it. Fails as the preview does. */
-async function previewed(
+/** Asks Authoring what the change would do, and gives back that preview as text to print. */
+async function previewChange(
   retained: RetainedRequest,
   authoring: ServiceAuthoring,
 ): Promise<Result<string>> {
-  const id = retained.request.request;
-  const answer = await authoring.preview(retained);
-  if (!answer.ok) return answer;
-  return success(
-    `Preview request ${id}\n${JSON.stringify(answer.value, null, 2)}\nApply with: canvas apply ${id}`,
-  );
+  const preview = await authoring.preview(retained);
+  if (!preview.ok) {
+    return preview;
+  }
+  const previewText = formatPreview(preview.value, retained.request.request);
+  return success(previewText);
 }
 
-/**
- * The committed receipt of this request. Fails as the apply does (`invalid-response` when the
- * answer carries no receipt), or with `invalid-response` for a receipt of another request.
- */
-async function applied(
+/** Writes the preview as JSON, between the request's ID and the command that applies it. */
+function formatPreview(
+  preview: ChangePreview,
+  request: RequestId,
+): string {
+  const previewJson = JSON.stringify(preview, null, 2);
+  return `Preview request ${request}\n${previewJson}\nApply with: canvas apply ${request}`;
+}
+
+/** Asks Authoring to save the change, and gives back its receipt once it is for this request. */
+async function applyChange(
   retained: RetainedRequest,
   authoring: ServiceAuthoring,
 ): Promise<Result<string>> {
   const receipt = await authoring.apply(retained);
-  if (!receipt.ok) return receipt;
+  if (!receipt.ok) {
+    return receipt;
+  }
   return formatReceipt(receipt.value, retained.request.request);
 }

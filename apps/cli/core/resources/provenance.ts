@@ -18,6 +18,9 @@ export interface Credit {
   readonly attribution?: string;
 }
 
+/** A credit with nothing in it, for a part the declaration leaves out. */
+const noCredit: Credit = Object.freeze({});
+
 /**
  * Builds what Assets needs to store one font or image: its bytes and type, its alt text, and
  * where it came from (source, license and attribution).
@@ -26,12 +29,9 @@ export function buildStageInput(
   declaration: ResourceRequest,
   bytes: LocalBytes,
 ): StageInput {
-  return {
-    base64: bytes.base64,
-    mediaType: bytes.mediaType,
-    alt: chooseAltText(declaration),
-    provenance: { source: declaration.source, ...collectCredit(declaration) },
-  };
+  const alt = chooseAltText(declaration);
+  const provenance = describeProvenance(declaration);
+  return { base64: bytes.base64, mediaType: bytes.mediaType, alt, provenance };
 }
 
 /** Chooses a declaration's alt text: its `alt`, or its name (such as `logo`) when it has none. */
@@ -41,17 +41,29 @@ export function chooseAltText(declaration: ResourceRequest): string {
 
 /** Collects a declaration's license and attribution, leaving out any it doesn't give. */
 export function collectCredit(declaration: ResourceRequest): Credit {
-  return { ...licensed(declaration), ...attributed(declaration) };
+  const licenseCredit = pickLicense(declaration);
+  const attributionCredit = pickAttribution(declaration);
+  return { ...licenseCredit, ...attributionCredit };
 }
 
-/** The declaration's license, or nothing when it names none. */
-function licensed(request: ResourceRequest): Credit {
-  if (request.license === undefined) return {};
-  return { license: request.license };
+/** Says where the bytes came from: the declaration's source, then its license and attribution. */
+function describeProvenance(declaration: ResourceRequest): StageInput['provenance'] {
+  const credit = collectCredit(declaration);
+  return { source: declaration.source, ...credit };
 }
 
-/** The declaration's attribution, or nothing when it names none. */
-function attributed(request: ResourceRequest): Credit {
-  if (request.attribution === undefined) return {};
-  return { attribution: request.attribution };
+/** Picks the declaration's license, or no credit when it names none. */
+function pickLicense(declaration: ResourceRequest): Credit {
+  if (declaration.license === undefined) {
+    return noCredit;
+  }
+  return { license: declaration.license };
+}
+
+/** Picks the declaration's attribution, or no credit when it names none. */
+function pickAttribution(declaration: ResourceRequest): Credit {
+  if (declaration.attribution === undefined) {
+    return noCredit;
+  }
+  return { attribution: declaration.attribution };
 }

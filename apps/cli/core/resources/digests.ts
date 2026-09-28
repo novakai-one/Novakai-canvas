@@ -28,7 +28,7 @@ export function formatPin(digest: AssetDigest | PresetDigest): PinnedDigest {
  * source's `source=` value. Gives back `undefined` when it isn't a pin.
  */
 export function parseAssetPin(text: string): AssetDigest | undefined {
-  return hexOfPin(text, assetDigest);
+  return readPinnedDigest(text, assetDigest);
 }
 
 /**
@@ -36,16 +36,27 @@ export function parseAssetPin(text: string): AssetDigest | undefined {
  * in `recipe instantiate`. `text` is unchecked. Gives back `undefined` when it isn't a pin.
  */
 export function parsePresetPin(text: string): PresetDigest | undefined {
-  return hexOfPin(text, presetDigest);
+  return readPinnedDigest(text, presetDigest);
 }
 
-/** The hex after Model's pin prefix as `owner` brands it; `undefined` when either check refuses. */
-function hexOfPin<T>(
+/** Reads the hex after `sha256:`, checked by `digestCheck`; `undefined` if either check refuses. */
+function readPinnedDigest<T>(
   text: string,
-  owner: Parser<T>,
+  digestCheck: Parser<T>,
 ): T | undefined {
-  if (!pinnedDigest.safeParse(text).success) return undefined;
-  const digest = owner.safeParse(text.slice(pinPrefix.length));
-  if (!digest.success) return undefined;
+  if (!isPin(text)) {
+    return undefined;
+  }
+  const hex = text.slice(pinPrefix.length);
+  const digest = digestCheck.safeParse(hex);
+  if (!digest.success) {
+    return undefined;
+  }
   return digest.data;
+}
+
+/** Whether the text is a pin: `sha256:` then 64 hex digits. */
+function isPin(text: string): boolean {
+  const pin = pinnedDigest.safeParse(text);
+  return pin.success;
 }

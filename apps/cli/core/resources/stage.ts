@@ -20,9 +20,8 @@ import type {
 import type { ResourceRequest, StageInput } from '../../contract/records/foreign.js';
 import { resourceAlias } from '../../contract/brands.js';
 import type { AssetDigest, FilePath, ResourceAlias } from '../../contract/brands.js';
-import type { FailureInput, LocalFailure, Result, SourceLocation } from '../../contract/errors.js';
+import type { LocalFailure, Result, SourceLocation } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
-import { checked } from '../shared/checks.js';
 import { combined } from '../shared/results.js';
 import { parseAssetPin } from './digests.js';
 import { buildStageInput } from './provenance.js';
@@ -41,12 +40,6 @@ export interface ResourceDependencies extends StagingDependencies {
   readonly resources: Pick<ServiceResources, 'stage' | 'blob' | 'freeze'>;
 }
 
-/** A declaration Language or the theme grammar gave no alias: a broken answer, not user input. */
-const unnamedResource: FailureInput = Object.freeze({
-  code: 'invalid-response',
-  message: 'A resource declaration has no alias',
-});
-
 /**
  * Stages the fonts and images a source declares, then has the service write their digests into
  * `retained`'s request; this is called freezing the request. Gives back that request with its
@@ -60,8 +53,10 @@ export async function prepareResources(
   dependencies: ResourceDependencies,
 ): Promise<Result<RetainedRequest>> {
   const staged = await stageResources(file, declarations, dependencies);
-  if (!staged.ok) return staged;
-  return freeze(retained, staged.value, dependencies);
+  if (!staged.ok) {
+    return staged;
+  }
+  return freezeRequest(retained, staged.value, dependencies);
 }
 
 /**
@@ -75,14 +70,11 @@ export async function stageResources(
   declarations: readonly ResourceRequest[],
   dependencies: StagingDependencies,
 ): Promise<Result<readonly StagedBackup[]>> {
-  const read = await Promise.all(
-    declarations
-      .filter((item) => item.kind !== 'theme')
-      .map((item) => readDeclaredResource(file, item, dependencies.reader)),
-  );
-  const declared = combined(read);
-  if (!declared.ok) return declared;
-  return combined(await Promise.all(declared.value.map((item) => stage(item, dependencies))));
+  const read = await readEachDeclaredResource(file, declarations, dependencies.reader);
+  if (!read.ok) {
+    return read;
+  }
+  return stageEachResource(read.value, dependencies);
 }
 
 /**
@@ -96,99 +88,165 @@ export async function readDeclaredResource(
   declaration: ResourceRequest,
   reader: ResourceReader,
 ): Promise<Result<ResourceToStage, LocalFailure>> {
-  const alias = checked(resourceAlias, declaration.alias, unnamedResource);
-  if (!alias.ok) return alias;
-  const pinned = parseAssetPin(declaration.source);
-  if (pinned !== undefined) return success({ kind: 'pinned', alias: alias.value, digest: pinned });
-  return localResource(file, declaration, alias.value, reader);
+  const alias = checkAlias(declaration);
+  if (!alias.ok) {
+    return alias;
+  }
+  const pin = parseAssetPin(declaration.source);
+  if (pin !== undefined) {
+    return success(pinnedResource(alias.value, pin));
+  }
+  return readLocalResource(file, declaration, alias.value, reader);
 }
 
 /** Lists each staged font or image's name and the digest of its stored bytes, in order. */
 export function listNamedAssetDigests(
   staged: readonly StagedBackup[],
 ): readonly NamedAssetDigest[] {
-  return staged.map((item) => ({ alias: item.alias, digest: item.backup.digest }));
+  return staged.map(pairAliasWithDigest);
 }
 
-/**
- * The declared file's bytes as an Assets stage input. Fails as the resource read does, with the
- * declaration's `location`: `absolute-path`, `path-escape`, `source-unavailable`,
- * `unsupported-media`, `resource-mismatch` or `resource-too-large`.
- */
-async function localResource(
-  file: FilePath,
-  request: ResourceRequest,
-  alias: ResourceAlias,
-  reader: ResourceReader,
-): Promise<Result<ResourceToStage, LocalFailure>> {
-  const bytes = await reader.read(file, request);
-  if (!bytes.ok) return located(bytes.error, declarationPlace(file, request, alias));
-  return success({ kind: 'local', alias, input: buildStageInput(request, bytes.value) });
-}
-
-/** Where `request` is declared in `file`: Language's line and column of the declaration. */
-function declarationPlace(
-  file: FilePath,
-  request: ResourceRequest,
-  alias: ResourceAlias,
-): SourceLocation {
-  const { line, column } = request.span.start;
-  return { file, line, column, alias };
-}
-
-/** The read failure with the declaration's place; its code, message and recovery are kept. */
-function located(
-  error: LocalFailure,
-  location: SourceLocation,
-): Result<never, LocalFailure> {
-  return failure({ ...error, location });
-}
-
-/** Exact aliases are retained after all declared bytes have been admitted. */
-async function freeze(
+/** Has the service write the staged digests into the request, and keeps the byte copies with it. */
+async function freezeRequest(
   retained: RetainedRequest,
-  values: readonly StagedBackup[],
+  staged: readonly StagedBackup[],
   dependencies: ResourceDependencies,
 ): Promise<Result<RetainedRequest>> {
-  const frozen = await dependencies.resources.freeze(
-    retained.request,
-    listNamedAssetDigests(values),
-  );
-  if (!frozen.ok) return frozen;
-  return success({
-    ...retained,
-    request: frozen.value,
-    backups: values.map((item) => item.backup),
-  });
+  const assets = listNamedAssetDigests(staged);
+  const frozen = await dependencies.resources.freeze(retained.request, assets);
+  if (!frozen.ok) {
+    return frozen;
+  }
+  const backups = staged.map((resource) => resource.backup);
+  const prepared: RetainedRequest = { ...retained, request: frozen.value, backups };
+  return success(prepared);
 }
 
-/** A pinned digest is backed up as it is; local bytes are staged first. */
-function stage(
+/** Reads every declared font and image at once (themes hold no bytes, so they are skipped). */
+async function readEachDeclaredResource(
+  file: FilePath,
+  declarations: readonly ResourceRequest[],
+  reader: ResourceReader,
+): Promise<Result<readonly ResourceToStage[], LocalFailure>> {
+  const byteDeclarations = declarations.filter(holdsBytes);
+  const readCalls = byteDeclarations.map((declaration) =>
+    readDeclaredResource(file, declaration, reader),
+  );
+  const reads = await Promise.all(readCalls);
+  return combined(reads);
+}
+
+/** Whether the declaration names a font or image; a theme declaration holds no bytes. */
+function holdsBytes(declaration: ResourceRequest): boolean {
+  return declaration.kind !== 'theme';
+}
+
+/** Stages every read font and image at once; gives back all their copies or the first failure. */
+async function stageEachResource(
+  resources: readonly ResourceToStage[],
+  dependencies: StagingDependencies,
+): Promise<Result<readonly StagedBackup[]>> {
+  const stageCalls = resources.map((resource) => stageResource(resource, dependencies));
+  const staged = await Promise.all(stageCalls);
+  return combined(staged);
+}
+
+/** Stages one font or image: a pinned one is only copied back, local bytes are stored first. */
+function stageResource(
   resource: ResourceToStage,
   dependencies: StagingDependencies,
 ): Promise<Result<StagedBackup>> {
-  if (resource.kind === 'pinned') return backup(resource.alias, resource.digest, dependencies);
-  return stageLocal(resource.alias, resource.input, dependencies);
+  if (resource.kind === 'pinned') {
+    return copyStoredBytes(resource.alias, resource.digest, dependencies);
+  }
+  return stageLocalBytes(resource.alias, resource.input, dependencies);
 }
 
-/** One upload is followed by an exact normalized byte read for durable local replay protection. */
-async function stageLocal(
+/** Stores local bytes in the service, then copies back the exact bytes it stored. */
+async function stageLocalBytes(
   alias: ResourceAlias,
   input: StageInput,
   dependencies: StagingDependencies,
 ): Promise<Result<StagedBackup>> {
   const digest = await dependencies.resources.stage(input);
-  if (!digest.ok) return digest;
-  return backup(alias, digest.value, dependencies);
+  if (!digest.ok) {
+    return digest;
+  }
+  return copyStoredBytes(alias, digest.value, dependencies);
 }
 
-/** Every referenced byte, including already-pinned resources, is retained before the Authoring request can be sent. */
-async function backup(
+/** Reads back the exact bytes the service holds for `digest`, as the copy kept for a retry. */
+async function copyStoredBytes(
   alias: ResourceAlias,
   digest: AssetDigest,
   dependencies: StagingDependencies,
 ): Promise<Result<StagedBackup>> {
   const bytes = await dependencies.resources.blob(digest);
-  if (!bytes.ok) return bytes;
-  return success({ alias, backup: bytes.value });
+  if (!bytes.ok) {
+    return bytes;
+  }
+  const staged: StagedBackup = { alias, backup: bytes.value };
+  return success(staged);
+}
+
+/** Checks the declaration has a name, such as `logo` in `asset @logo`. */
+function checkAlias(declaration: ResourceRequest): Result<ResourceAlias, LocalFailure> {
+  const alias = resourceAlias.safeParse(declaration.alias);
+  if (!alias.success) {
+    return unnamedResourceFailure();
+  }
+  return success(alias.data);
+}
+
+/** Describes a font or image named by a `sha256:` pin, which is used as it is. */
+function pinnedResource(
+  alias: ResourceAlias,
+  digest: AssetDigest,
+): ResourceToStage {
+  return { kind: 'pinned', alias, digest };
+}
+
+/** Reads the declared file into what Assets stores; a failed read says where it was declared. */
+async function readLocalResource(
+  file: FilePath,
+  declaration: ResourceRequest,
+  alias: ResourceAlias,
+  reader: ResourceReader,
+): Promise<Result<ResourceToStage, LocalFailure>> {
+  const bytes = await reader.read(file, declaration);
+  if (!bytes.ok) {
+    const place = declarationPlace(file, declaration, alias);
+    return locatedReadFailure(bytes.error, place);
+  }
+  const input = buildStageInput(declaration, bytes.value);
+  const local: ResourceToStage = { kind: 'local', alias, input };
+  return success(local);
+}
+
+/** Finds where the declaration is in `file`: the line and column Language gave it, and its name. */
+function declarationPlace(
+  file: FilePath,
+  declaration: ResourceRequest,
+  alias: ResourceAlias,
+): SourceLocation {
+  const { line, column } = declaration.span.start;
+  return { file, line, column, alias };
+}
+
+/** Pairs one staged font or image's name with the digest of its stored bytes. */
+function pairAliasWithDigest(resource: StagedBackup): NamedAssetDigest {
+  return { alias: resource.alias, digest: resource.backup.digest };
+}
+
+/** Makes the mistake for a declaration Language or the theme grammar gave no alias. */
+function unnamedResourceFailure(): Result<never, LocalFailure> {
+  return failure({ code: 'invalid-response', message: 'A resource declaration has no alias' });
+}
+
+/** Makes the read mistake again, adding where the file was declared; all else is kept. */
+function locatedReadFailure(
+  readFailure: LocalFailure,
+  place: SourceLocation,
+): Result<never, LocalFailure> {
+  return failure({ ...readFailure, location: place });
 }
