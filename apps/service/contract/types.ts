@@ -4,7 +4,7 @@
  */
 import type { ResourceCommands } from './ports/workspace.js';
 import type {
-  Authoring,
+  HistoryStatus,
   Snapshot,
   Receipt,
   AuthoringResult,
@@ -25,7 +25,7 @@ export interface WorkspaceSession {
   readonly installation: BuiltinResources;
   readonly resources: ResourceCommands;
   read(): Promise<AuthoringResult<Snapshot>>;
-  history(): ReturnType<Authoring['history']>;
+  history(): Promise<AuthoringResult<HistoryStatus>>;
   prepare(
     request: Request,
     signal: AbortSignal,

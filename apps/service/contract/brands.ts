@@ -12,6 +12,7 @@ import type { Digest as PresetDigest } from '@novakai/canvas-templates';
 import type { Digest as AuthoringDigest } from '@novakai/canvas-authoring';
 
 export type { WorkspaceId, PlannerId, ActorId, Timestamp } from '@novakai/canvas-authoring';
+export type { SectionId, ObjectId } from '@novakai/canvas-model';
 export type { AssetDigest, AuthoringDigest };
 
 /** 64 lowercase hex characters: the grammar of both service secrets. */

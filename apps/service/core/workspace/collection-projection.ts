@@ -4,42 +4,69 @@
  * any rejection. Shared with apps/web through the public index.
  */
 import type { Collection } from '../../contract/records/capabilities.js';
+import type {
+  CollectionProjectionInput,
+  ObjectProjectionInput,
+  SectionProjectionInput,
+} from '../../contract/records/workspace/contents.js';
+import type { ObjectId } from '../../contract/brands.js';
+
+/** One Model section. */
+type ModelSection = Collection['sections'][number];
+
+/** One Model object. */
+type ModelObject = Collection['objects'][number];
 
 /**
- * Builds the Library projection input for one collection. An object's description is its text
- * blocks joined by newlines; `visibleIn` lists the sections that show it. Never fails.
+ * Builds the Library projection input for one collection: its identity, title and description
+ * (empty text when it has none), each section's ID and title, and each object's projection (see
+ * `projectObject`). Never fails.
  */
-export function projectCollection(collection: Collection): unknown {
+export function projectCollection(collection: Collection): CollectionProjectionInput {
   return {
     id: collection.id,
     revision: collection.revision,
     title: collection.title,
     description: collection.description ?? '',
-    sections: collection.sections.map((section) => ({ id: section.id, title: section.title })),
-    objects: collection.objects.map((object) => ({
-      id: object.id,
-      label: object.label,
-      description: object.content
-        .filter((block) => block.kind === 'text')
-        .map((block) => block.text)
-        .join('\n'),
-      visibleIn: collection.sections
-        .filter((section) => visible(collection, section.id, object.id))
-        .map((section) => section.id),
-    })),
+    sections: collection.sections.map(projectSection),
+    objects: collection.objects.map((object) => projectObject(object, collection.sections)),
   };
 }
 
-/** True when the section shows the object as an appearance or as a group that represents it. */
-function visible(
-  collection: Collection,
-  sectionId: string,
-  objectId: string,
+/** A section's ID and title. */
+function projectSection(section: ModelSection): SectionProjectionInput {
+  return { id: section.id, title: section.title };
+}
+
+/**
+ * An object's ID and label, its text blocks joined by newlines as the description, and the
+ * sections that show it (see `showsObject`).
+ */
+function projectObject(
+  object: ModelObject,
+  sections: readonly ModelSection[],
+): ObjectProjectionInput {
+  const showing = sections.filter((section) => showsObject(section, object.id));
+  return {
+    id: object.id,
+    label: object.label,
+    description: textDescription(object),
+    visibleIn: showing.map((section) => section.id),
+  };
+}
+
+/** The object's text blocks joined by newlines; empty text when it has none. */
+function textDescription(object: ModelObject): string {
+  const textBlocks = object.content.filter((block) => block.kind === 'text');
+  return textBlocks.map((block) => block.text).join('\n');
+}
+
+/** Whether the section shows the object as an appearance or as a group that represents it. */
+function showsObject(
+  section: ModelSection,
+  object: ObjectId,
 ): boolean {
-  const section = collection.sections.find((section) => section.id === sectionId);
-  if (!section) return false;
-  return (
-    section.appearances.some((item) => item.object === objectId) ||
-    section.groups.some((item) => item.represents === objectId)
-  );
+  const appears = section.appearances.some((appearance) => appearance.object === object);
+  const represented = section.groups.some((group) => group.represents === object);
+  return appears || represented;
 }

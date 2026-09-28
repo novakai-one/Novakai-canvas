@@ -15,14 +15,17 @@ import type {
   StoredBlob,
 } from '../records/capabilities.js';
 import type { AuthoringDigest } from '../brands.js';
-import type { WorkspaceContents } from '../records/workspace/contents.js';
+import type {
+  CollectionProjectionInput,
+  WorkspaceContents,
+} from '../records/workspace/contents.js';
 import type { ResourceSelection } from '../records/planning/selection.js';
 import type { PresetPreparation, ResourceResult } from '../records/presets/preparation.js';
 
 /** Reads a snapshot into checked contents; projects one collection into Library's input. */
 export interface WorkspaceReader {
   /** Library's input for one collection: descriptions, sections, visibility. Never fails. */
-  project(collection: Collection): unknown;
+  project(collection: Collection): CollectionProjectionInput;
   /**
    * The checked collections, catalog and presets of one snapshot. Fails with
    * `invariant-violation` when Model, Library or Templates rejects a stored record.

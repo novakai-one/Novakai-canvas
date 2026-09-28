@@ -6,6 +6,7 @@
 export type {
   Authoring,
   Snapshot,
+  HistoryStatus,
   StoredRecord,
   RecordKey,
   ReadVersion,
@@ -69,7 +70,7 @@ export type {
   VisualAsset,
   ReactBindings as PresentationBindings,
 } from '@novakai/canvas-presentation';
-export type { Scene } from '@novakai/canvas-layout';
+export type { Scene, Warning as SceneWarning } from '@novakai/canvas-layout';
 export type { Organisation, LibrarySnapshot } from '@novakai/canvas-library';
 export type {
   Artifact,

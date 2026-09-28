@@ -1,3 +1,8 @@
+/*
+ * The Authoring store bridge: Persistence's conditional storage behind Authoring's snapshot,
+ * receipt and commit roles. Storage failures keep their Persistence evidence under an Authoring
+ * code. Authoring owns admission and uncertain-commit recovery; trusted compose alone binds it.
+ */
 import { receiptSchema, failure } from '@novakai/canvas-authoring';
 import type {
   Result,
@@ -7,9 +12,14 @@ import type {
   CommitRequest,
   ErrorCode,
 } from '@novakai/canvas-authoring';
-import type { Result as StorageResult, StorageError } from '@novakai/canvas-persistence';
+import type {
+  Result as StorageResult,
+  StorageError,
+  WorkspaceState,
+} from '@novakai/canvas-persistence';
 import type { AuthoringStore, ConditionalStorage } from '../../contract/ports/storage.js';
-const storageCodes: Readonly<Record<StorageError['code'], ErrorCode>> = {
+/** The Authoring code of each Persistence failure code. Every storage code has a row (checked by the type). */
+const storageCodes: Readonly<Record<StorageError['code'], ErrorCode>> = Object.freeze({
   'invalid-input': 'invalid-input',
   'unsupported-version': 'unsupported-version',
   'revision-conflict': 'revision-conflict',
@@ -18,7 +28,7 @@ const storageCodes: Readonly<Record<StorageError['code'], ErrorCode>> = {
   'corrupt-record': 'corrupt-record',
   'missing-resource': 'missing-asset',
   'destination-not-empty': 'revision-conflict',
-};
+});
 /** Preserve distinguishable physical failures so Authoring chooses receipt reconciliation, never blind retry. */
 function translate<T>(result: StorageResult<T>): Result<T> {
   if (result.ok) return result;
@@ -35,7 +45,7 @@ function translate<T>(result: StorageResult<T>): Result<T> {
 function rawSnapshot(
   storage: ConditionalStorage,
   workspace: WorkspaceId,
-): Result<unknown> {
+): Result<SnapshotView> {
   const current = translate(storage.readSnapshot());
   if (!current.ok) return current;
   if (String(current.value.workspace) !== workspace)
@@ -46,9 +56,19 @@ function rawSnapshot(
     );
   return { ok: true, value: view(current.value) };
 }
+/**
+ * The raw snapshot Authoring parses: the stored workspace, its commit sequence and its record
+ * slots, unchecked. Authoring alone checks the shape.
+ */
+interface SnapshotView {
+  readonly workspace: WorkspaceState['workspace'];
+  readonly sequence: WorkspaceState['sequence'];
+  readonly records: WorkspaceState['slots'];
+}
 /** Same stored state → same frozen view, so Authoring's parse caches hit. */
-const views = new WeakMap<object, { workspace: unknown; sequence: unknown; records: unknown }>();
-function view(state: { workspace: unknown; sequence: unknown; slots: object }) {
+const views = new WeakMap<WorkspaceState['slots'], SnapshotView>();
+/** The frozen view of the stored state; the cached one while the slots, workspace and sequence are unchanged. */
+function view(state: WorkspaceState): SnapshotView {
   const known = views.get(state.slots);
   if (
     known !== undefined &&
