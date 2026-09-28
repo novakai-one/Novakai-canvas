@@ -177,7 +177,8 @@ export function createPanelController(bindings: PanelBindings): PanelController 
   };
 }
 
-function defaultInterfaceVisibility(): InterfaceVisibility {
+/** Returns the interface controls a workspace starts with: tools, zoom and outline on; minimap, roads and labels off. */
+export function defaultInterfaceVisibility(): InterfaceVisibility {
   return {
     hidden: false,
     tools: true,
