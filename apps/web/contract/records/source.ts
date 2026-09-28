@@ -2,7 +2,7 @@ import type { Snapshot, Request, Receipt } from './owners.js';
 import type { RecoveredSource } from './editor-recovery.js';
 import type { ActiveDiagram } from './active-diagram.js';
 import type { Submission } from './submission.js';
-import type { RequestId, TransportGeneration, WorkspaceId } from '../brands.js';
+import type { PlannerId, TransportGeneration, WorkspaceId } from '../brands.js';
 import type { Result, Diagnostic } from '../errors.js';
 import type { WorkspaceDecoders } from '../ports/workspace-decoders.js';
 import type { RequestBuilders } from '../ports/request-builders.js';
@@ -59,10 +59,17 @@ export interface SourceCallbacks {
   ): Promise<Result<Receipt>>;
 }
 export interface SourceBindings extends SourceCallbacks {
-  readonly inputs: Pick<WorkspaceDecoders, 'sourceRecovery'> &
-    Pick<RequestBuilders, 'source' | 'dsl'>;
+  readonly inputs: Pick<WorkspaceDecoders, 'sourceRecovery'> & Pick<RequestBuilders, 'source'>;
   readonly retention: DraftRetention;
-  /** A new request ID from the ID source. Fails with `id-unavailable`; nothing is sent. */
-  nextRequestId(): Result<RequestId>;
+  /** The planner every source request names: the request identity's DSL planner. */
+  readonly dslPlanner: PlannerId;
+  /**
+   * `source` as a DSL replace request of `captured`'s collection, under a new request ID from the
+   * ID source. Fails with `id-unavailable` (nothing is built) or as the DSL builder does.
+   */
+  replaceRequest(
+    captured: CapturedSourceBase,
+    source: string,
+  ): Result<Request>;
 }
 export type SourceFactory = (callbacks: SourceCallbacks) => SourceController;

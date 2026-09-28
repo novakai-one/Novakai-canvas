@@ -1,9 +1,10 @@
 /*
  * The workspace controller assembly: the Canvas and Language owners, the decoders and request
  * builders (with the request identity checked here), every editor session factory and the
- * submission session, joined into one workspace session. Called once by compose.ts before
- * rendering, which supplies every browser handle (draft storage, navigation, clock) and the ID
- * source, so nothing here reads a browser global. The session it returns owns recovery.
+ * submission session, joined into one workspace session. The source editor's Apply request joins
+ * the ID source to the DSL builder here, so the editor never mints. Called once by compose.ts
+ * before rendering, which supplies every browser handle (draft storage, navigation, clock) and the
+ * ID source, so nothing here reads a browser global. The session it returns owns recovery.
  */
 import { createCanvas } from '@novakai/canvas-canvas';
 import { createLanguage } from '@novakai/canvas-language';
@@ -32,7 +33,9 @@ import type { IdSource } from '../ports/ids.js';
 import type { WorkspaceBindings } from '../ports/workspace.js';
 import type { PanelController } from '../panel-types.js';
 import type { WorkspaceController } from '../records/workspace.js';
-import type { RequestIdentity } from '../ports/request-builders.js';
+import type { RequestBuilders } from '../ports/request-builders.js';
+import type { RequestIdentity } from '../records/request-identity.js';
+import type { SourceBindings } from '../records/source.js';
 import type { VisitTime } from '../brands.js';
 import type { Result } from '../errors.js';
 import { createMovementReviewBinding } from './movement-review.js';
@@ -99,7 +102,8 @@ function workspaceController(
       createSourceController({
         inputs,
         retention,
-        nextRequestId: ids.requestId,
+        dslPlanner: identity.planners.dsl,
+        replaceRequest: sourceReplaceRequest(ids, builders),
         ...callbacks,
       }),
     sessions: createCanvasSessions(canvas, () => viewport(element)),
@@ -126,5 +130,21 @@ function sidePanels(panels: SidePanels): WorkspaceBindings['panels'] {
       panels.open(side, open);
       if (side === 'right' && open) panels.selectTab('inspect');
     },
+  };
+}
+
+/**
+ * The source editor's Apply request: the draft as a DSL replace of the captured collection, under
+ * a new request ID from the ID source. Fails with `id-unavailable` (nothing is built) or as the
+ * DSL builder does.
+ */
+function sourceReplaceRequest(
+  ids: Pick<IdSource, 'requestId'>,
+  builders: Pick<RequestBuilders, 'dsl'>,
+): SourceBindings['replaceRequest'] {
+  return (captured, source) => {
+    const request = ids.requestId();
+    if (!request.ok) return request;
+    return builders.dsl(captured.base, captured.collection, source, 'replace', request.value);
   };
 }

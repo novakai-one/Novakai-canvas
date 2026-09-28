@@ -9,11 +9,8 @@ import { recordId, requestSchema, historyStatusSchema } from '@novakai/canvas-au
 import type { HistoryStatus } from '@novakai/canvas-authoring';
 import type { Language } from '@novakai/canvas-language';
 import type { OrganisationChange } from '@novakai/canvas-library';
-import type {
-  PlannerKind,
-  RequestBuilders,
-  RequestIdentity,
-} from '../../contract/ports/request-builders.js';
+import type { RequestBuilders } from '../../contract/ports/request-builders.js';
+import type { PlannerKind, RequestIdentity } from '../../contract/records/request-identity.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
 import { languageFailure } from '../../contract/foreign-failures.js';

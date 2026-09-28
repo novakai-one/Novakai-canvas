@@ -7,7 +7,7 @@
  */
 import type { OrganisationChange } from '@novakai/canvas-library';
 import type { Result } from '../errors.js';
-import type { CollectionId, Direction, PlannerId, RequestId } from '../brands.js';
+import type { CollectionId, Direction, RequestId } from '../brands.js';
 import type { EditingBase } from '../records/editor-recovery.js';
 import type { Collection, Snapshot, Request, Change } from '../records/owners.js';
 
@@ -56,16 +56,4 @@ export interface RequestBuilders {
     id: CollectionId,
     title: string,
   ): string;
-}
-
-/** The Authoring planners the browser's change requests name. */
-export type PlannerKind = 'model' | 'dsl' | 'library';
-
-/**
- * Who sends the browser's requests and the planner each kind of change names. Checked once at
- * composition with Authoring's schemas (`contract/compose/request-identity.ts`).
- */
-export interface RequestIdentity {
-  readonly actor: Request['actor'];
-  readonly planners: Readonly<Record<PlannerKind, PlannerId>>;
 }

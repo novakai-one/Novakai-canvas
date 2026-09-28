@@ -7,7 +7,7 @@
 import { actorId, plannerId } from '@novakai/canvas-authoring';
 import type { Result } from '../errors.js';
 import { failure } from '../errors.js';
-import type { RequestIdentity } from '../ports/request-builders.js';
+import type { RequestIdentity } from '../records/request-identity.js';
 
 /**
  * The request identity: the human browser actor, and the `model`, `dsl` and `library` planners

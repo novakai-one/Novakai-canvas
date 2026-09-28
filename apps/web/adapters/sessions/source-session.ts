@@ -80,7 +80,7 @@ export function createSourceController(bindings: SourceBindings): SourceControll
     const captured = state.sourceBase;
     if (request.intent.kind !== 'change' || captured.kind === 'none') return false;
     return (
-      request.intent.planner === 'dsl' &&
+      request.intent.planner === bindings.dslPlanner &&
       request.scope.some((key) => isCollectionKey(key, captured.collection))
     );
   }
@@ -239,25 +239,12 @@ export function createSourceController(bindings: SourceBindings): SourceControll
   async function applySource(): Promise<void> {
     const captured = admittedSourceBase();
     if (captured === null) return;
-    const request = sourceRequest(captured);
+    const request = bindings.replaceRequest(captured, state.source);
     if (!request.ok) {
       report(request.error);
       return;
     }
     await bindings.submit(request.value, captured.generation, state.sourceEdit, null);
-  }
-  /** The source text as a DSL replace request under a new request ID. Fails with
-   * `id-unavailable` or as the DSL builder does. */
-  function sourceRequest(captured: CapturedSourceBase): Result<Request> {
-    const id = bindings.nextRequestId();
-    if (!id.ok) return id;
-    return bindings.inputs.dsl(
-      captured.base,
-      captured.collection,
-      state.source,
-      'replace',
-      id.value,
-    );
   }
 
   return {
