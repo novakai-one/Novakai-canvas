@@ -3,14 +3,14 @@
  * profile lint. Pure apart from the parser. Language's diagnostics are kept whole under
  * `invalid-source`; the caller fixes the source and runs the command again.
  */
-import type { SourceLanguage } from '../../contract/ports/source-language.js';
+import type { SourceParser } from '../../contract/ports/source-parser.js';
 import type { ParsedSource } from '../../contract/records/foreign.js';
 import type { Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 
 /** The parsed source. Fails with `invalid-source`; `source` holds Language's diagnostics. */
 export function parseSource(
-  language: SourceLanguage,
+  language: SourceParser,
   text: string,
 ): Result<ParsedSource> {
   const parsed = language.parse(text);

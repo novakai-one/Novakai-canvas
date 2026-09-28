@@ -10,7 +10,7 @@ import type { ResourceReader } from '../../contract/ports/resource-reader.js';
 import type { ServiceResources } from '../../contract/ports/service-resources.js';
 import type { RetainedRequest } from '../../contract/records/retained-request.js';
 import type {
-  AssetBinding,
+  NamedAssetDigest,
   StagedBackup,
   StagedResource,
 } from '../../contract/records/staged-resource.js';
@@ -96,7 +96,7 @@ export async function declaredResource(
 }
 
 /** Each staged alias and the digest of its bytes, in declaration order. */
-export function assetBindings(staged: readonly StagedBackup[]): readonly AssetBinding[] {
+export function namedAssetDigests(staged: readonly StagedBackup[]): readonly NamedAssetDigest[] {
   return staged.map((item) => ({ alias: item.alias, digest: item.backup.digest }));
 }
 
@@ -140,7 +140,7 @@ async function freeze(
   values: readonly StagedBackup[],
   dependencies: ResourceDependencies,
 ): Promise<Result<RetainedRequest>> {
-  const frozen = await dependencies.resources.freeze(retained.request, assetBindings(values));
+  const frozen = await dependencies.resources.freeze(retained.request, namedAssetDigests(values));
   if (!frozen.ok) return frozen;
   return success({
     ...retained,

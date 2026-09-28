@@ -1,14 +1,20 @@
 /*
  * Why this file exists
  *
- * Core does the CLI's thinking, and only `compose.ts` and `compose/` may start it. They need one
- * door into core. For `pnpm canvas list`, compose calls `parseCommand`, then `runServiceCommand`.
+ * Core does the CLI's thinking, but it can't open a file or a connection. The setup code
+ * (`compose.ts` and `compose/`) is where real files and connections are plugged in, and it is the
+ * only code that may start core. For `pnpm canvas list`, it calls `parseCommand`, then
+ * `runServiceCommand`.
  *
- * This file is that door: it passes on core's entry points and nothing else. No adapter imports
- * it. Each entry point's own comment says what it gives back and what can go wrong.
+ * This file is that one door into core: it passes on core's entry points and nothing else. The
+ * code that touches files and the network (`adapters/`) never imports it.
  */
 
-/** `pnpm canvas`: check the typed line, then answer with the help text or run the command. */
+/**
+ * `pnpm canvas`: check the typed line, then answer with the help text or run the command.
+ * `helpText` is the help text itself. `ServiceCommandDependencies` is every tool a service command
+ * may use, such as the service's calls and the file reader.
+ */
 export { parseCommand } from '../core/commands/parse.js';
 export { helpText } from '../core/commands/help.js';
 export { runProfileCommand, runServiceCommand } from '../core/commands/dispatch.js';

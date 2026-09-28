@@ -8,12 +8,12 @@ import type { LocalFiles } from '../../contract/ports/local-files.js';
 import type { RequestIds } from '../../contract/ports/request-ids.js';
 import type { ServiceReads } from '../../contract/ports/service-reads.js';
 import type { ServiceResources } from '../../contract/ports/service-resources.js';
-import type { SourceLanguage } from '../../contract/ports/source-language.js';
-import type { ThemeGrammar } from '../../contract/ports/theme-grammar.js';
+import type { SourceParser } from '../../contract/ports/source-parser.js';
+import type { ThemeReader } from '../../contract/ports/theme-reader.js';
 import type {
   Admission,
   ResourceRequest,
-  Snapshot,
+  WorkspaceSnapshot,
   ThemeSource,
 } from '../../contract/records/foreign.js';
 import type { RetainedRequest } from '../../contract/records/retained-request.js';
@@ -21,7 +21,7 @@ import type { StagedBackup } from '../../contract/records/staged-resource.js';
 import type { ServiceAnswer, PresetPreparation } from '../../contract/records/service-answers.js';
 import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
-import { assetBindings, stageResources } from '../resources/stage.js';
+import { namedAssetDigests, stageResources } from '../resources/stage.js';
 import type { StagingDependencies } from '../resources/stage.js';
 import { submit } from '../authoring/submit.js';
 import type { SubmitDependencies } from '../authoring/submit.js';
@@ -31,13 +31,13 @@ import { mapped, unsupported } from '../shared/results.js';
 import { recipeSource } from './recipe-admission.js';
 
 /**
- * What admission uses: the preset file read, the parser, the theme grammar, staging, Templates
+ * What admission uses: the preset file read, the parser, the theme reader, staging, Templates
  * preparation, the workspace read, request IDs, and what `submit` uses.
  */
 export interface AdmitDependencies extends StagingDependencies, SubmitDependencies {
   readonly files: Pick<LocalFiles, 'readSource'>;
-  readonly language: SourceLanguage;
-  readonly themeGrammar: ThemeGrammar;
+  readonly language: SourceParser;
+  readonly themeReader: ThemeReader;
   readonly reads: Pick<ServiceReads, 'workspace'>;
   readonly resources: Pick<ServiceResources, 'stage' | 'blob' | 'prepare' | 'restore'>;
   readonly requestIds: RequestIds;
@@ -88,11 +88,11 @@ async function readPreset(
 function presetSource(
   command: AdmitCommand,
   text: string,
-  readers: Pick<AdmitDependencies, 'language' | 'themeGrammar'>,
+  readers: Pick<AdmitDependencies, 'language' | 'themeReader'>,
 ): Result<PresetSource> {
   switch (command.name) {
     case 'theme-admit':
-      return mapped(readers.themeGrammar.read(text), themeSource);
+      return mapped(readers.themeReader.read(text), themeSource);
     case 'recipe-admit':
       return recipeSource(command.recipe, text, readers.language);
     default:
@@ -115,7 +115,7 @@ async function preparePreset(
   if (!staged.ok) return staged;
   const preparation = await dependencies.resources.prepare(
     parsed.admission,
-    assetBindings(staged.value),
+    namedAssetDigests(staged.value),
   );
   if (!preparation.ok) return preparation;
   return success({ staged: staged.value, preparation: preparation.value });
@@ -144,14 +144,14 @@ async function retain(
 function retainedPreset(
   command: AdmitCommand,
   prepared: PreparedPreset,
-  current: ServiceAnswer<Snapshot>,
+  current: ServiceAnswer<WorkspaceSnapshot>,
   requestIds: RequestIds,
 ): Result<RetainedRequest> {
   const requestId = requestIdFor(command, requestIds);
   if (!requestId.ok) return requestId;
   const draft = {
     preparation: prepared.preparation,
-    assets: assetBindings(prepared.staged),
+    assets: namedAssetDigests(prepared.staged),
     request: requestId.value,
   };
   const request = presetRequest(draft, current.value);

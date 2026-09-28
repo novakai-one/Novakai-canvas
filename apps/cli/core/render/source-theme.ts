@@ -7,7 +7,7 @@
 import type { RenderSources } from '../../contract/ports/render-sources.js';
 import type { ParsedSource, Span } from '../../contract/records/foreign.js';
 import type { ThemeChoice } from '../../contract/records/render.js';
-import type { RenderEvidence } from '../../contract/records/render-failure.js';
+import type { RenderFailureSource } from '../../contract/records/render-failure.js';
 import type { RenderFault } from '../../contract/records/render-fault.js';
 import type { SourceFile } from '../../contract/records/source-file.js';
 import type { Result } from '../../contract/errors.js';
@@ -24,7 +24,7 @@ export function withTheme(
   source: SourceFile,
   theme: ThemeChoice,
   parse: RenderSources['parse'],
-): Result<SourceFile, RenderEvidence> {
+): Result<SourceFile, RenderFailureSource> {
   const parsed = parse(source.source);
   if (!parsed.ok) return parsed;
   return mapped(themedText(source.source, parsed.value, theme), (text) => ({

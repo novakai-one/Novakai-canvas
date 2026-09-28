@@ -10,12 +10,12 @@ import { parseSource } from '../shared/parse-source.js';
 import { changeRequest, collectionRecordId } from './change-request.js';
 import { requestIdFor } from './request-id.js';
 import type { ChangeCommand, ChangeIntent, ChangeMode } from '../../contract/records/command.js';
-import type { CollectionReader } from '../../contract/ports/collection-reader.js';
+import type { CollectionValidator } from '../../contract/ports/collection-validator.js';
 import type { LocalFiles } from '../../contract/ports/local-files.js';
 import type { RequestIds } from '../../contract/ports/request-ids.js';
 import type { ServiceReads } from '../../contract/ports/service-reads.js';
-import type { SourceLanguage } from '../../contract/ports/source-language.js';
-import type { Request, Snapshot } from '../../contract/records/foreign.js';
+import type { SourceParser } from '../../contract/ports/source-parser.js';
+import type { AuthoringRequest, WorkspaceSnapshot } from '../../contract/records/foreign.js';
 import type { ServiceAnswer } from '../../contract/records/service-answers.js';
 import type { RetainedRequest } from '../../contract/records/retained-request.js';
 import type { CollectionRevision } from '../../contract/brands.js';
@@ -28,8 +28,8 @@ import type { Result } from '../../contract/errors.js';
 export interface PrepareDependencies extends ResourceDependencies {
   readonly files: Pick<LocalFiles, 'readSource'>;
   readonly reads: Pick<ServiceReads, 'workspace'>;
-  readonly language: SourceLanguage;
-  readonly collections: CollectionReader;
+  readonly language: SourceParser;
+  readonly collections: CollectionValidator;
   readonly requestIds: RequestIds;
 }
 
@@ -56,7 +56,7 @@ export async function prepare(
 async function prepareCaptured(
   command: ChangeCommand,
   source: string,
-  current: ServiceAnswer<Snapshot>,
+  current: ServiceAnswer<WorkspaceSnapshot>,
   dependencies: PrepareDependencies,
 ): Promise<Result<RetainedRequest>> {
   const parsed = parseSource(dependencies.language, source);
@@ -75,9 +75,9 @@ function requestOf(
   command: ChangeCommand,
   source: string,
   declared: string,
-  snapshot: Snapshot,
+  snapshot: WorkspaceSnapshot,
   dependencies: PrepareDependencies,
-): Result<Request> {
+): Result<AuthoringRequest> {
   const intent = intentOf(command);
   const collection = collectionRecordId(intent, declared);
   if (!collection.ok) return collection;

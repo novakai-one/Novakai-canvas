@@ -86,16 +86,15 @@ export interface RawArguments<F extends string> {
 }
 
 /**
- * What Node made of a typed line: `read`, with its words and flags, or `malformed`, when a flag
+ * What Node made of a typed line: `split` into its words and flags, or `malformed`, when a flag
  * couldn't be read. `flag` is that flag as typed, such as `--nope` or `--out` with no text.
  */
 export type ArgvReading<F extends string> =
-  | { readonly kind: 'read'; readonly arguments: RawArguments<F> }
+  | { readonly kind: 'split'; readonly arguments: RawArguments<F> }
   | { readonly kind: 'malformed'; readonly flag: string };
 
 /**
- * A typed `pnpm canvas` line, after Node has split it into words and flags. It is either `read`,
- * holding the words and flags, or `malformed`, when a flag couldn't be read (a flag the CLI
- * doesn't have, or one missing its value).
+ * A typed `pnpm canvas` line after Node read it: `ArgvReading` with `pnpm canvas`'s flags. A flag
+ * is `malformed` when the CLI doesn't have it, or it is missing its value.
  */
 export type CommandLine = ArgvReading<CanvasFlag>;

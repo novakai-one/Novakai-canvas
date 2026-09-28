@@ -7,13 +7,13 @@
 import { z } from 'zod';
 import type { LoweredIntent } from '@novakai/canvas-language';
 import type { Templates } from '@novakai/canvas-templates';
-import type { RenderEvidence } from '../../contract/records/render-failure.js';
-import type { FontBinding, RenderThemes } from '../../contract/ports/render-themes.js';
+import type { RenderFailureSource } from '../../contract/records/render-failure.js';
+import type { ThemeFont, RenderThemes } from '../../contract/ports/render-themes.js';
 import { renderFaultFailure, nativeFault, success, type Result } from '../../contract/errors.js';
 import type {
   Assets,
   Catalog,
-  HeadlessBindings,
+  HeadlessTools,
   ThemeAdmission,
 } from '../../contract/records/foreign.js';
 
@@ -23,7 +23,7 @@ export interface ThemeOwners {
   readonly assets: Pick<Assets, 'resolve'>;
   readonly templates: Pick<Templates<LoweredIntent>, 'read' | 'planAdmission'>;
   /** The service's theme preparation, which admission runs before Templates plans the theme. */
-  readonly prepareTheme: HeadlessBindings['prepareTheme'];
+  readonly prepareTheme: HeadlessTools['prepareTheme'];
 }
 
 /**
@@ -38,13 +38,13 @@ export function createRenderThemes(owners: ThemeOwners): RenderThemes {
 }
 
 /** The service's theme preparation's answer. */
-type PreparedTheme = ReturnType<HeadlessBindings['prepareTheme']>;
+type PreparedTheme = ReturnType<HeadlessTools['prepareTheme']>;
 
 /** One theme admission's input: the catalog, the theme and its staged fonts. */
 interface ThemeInput {
   readonly catalog: Catalog;
   readonly theme: ThemeAdmission;
-  readonly fonts: readonly FontBinding[];
+  readonly fonts: readonly ThemeFont[];
 }
 
 /**
@@ -55,7 +55,7 @@ interface ThemeInput {
 function admittedTheme(
   owners: ThemeOwners,
   input: ThemeInput,
-): Result<Catalog, RenderEvidence> {
+): Result<Catalog, RenderFailureSource> {
   const admission = z.json().safeParse(input.theme);
   if (!admission.success) return renderFaultFailure(nativeFault(admission.error));
   const prepared = owners.prepareTheme(admission.data, input.catalog, input.fonts, owners);
@@ -67,7 +67,7 @@ function plannedTheme(
   owners: ThemeOwners,
   catalog: Catalog,
   prepared: PreparedTheme,
-): Result<Catalog, RenderEvidence> {
+): Result<Catalog, RenderFailureSource> {
   if (!prepared.ok) return prepared;
   const planned = owners.templates.planAdmission(catalog, prepared.value);
   if (!planned.ok) return planned;

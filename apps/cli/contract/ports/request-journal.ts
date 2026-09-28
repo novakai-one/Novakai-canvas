@@ -21,8 +21,8 @@ export interface RequestJournal {
    */
   save(retained: RetainedRequest): Promise<Result<void, LocalFailure>>;
   /**
-   * Reads back the kept request for `request`, with its byte copies. Fails with
-   * `request-unavailable` (missing or unreadable) or `journal-corrupt` (damaged, or another ID's).
+   * Reads back the kept request for `request`, with its byte copies, but without the generation it
+   * was sent under. Fails with `request-unavailable` (missing or unreadable) or `journal-corrupt`.
    */
   read(request: RequestId): Promise<Result<JournalRecord, LocalFailure>>;
 }

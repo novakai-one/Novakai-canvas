@@ -12,7 +12,7 @@ import type { ThemeSource, ThemeSourceFailure } from '../records/foreign.js';
 import type { Result } from '../errors.js';
 
 /** Templates' reader of `.theme` text. */
-export interface ThemeGrammar {
+export interface ThemeReader {
   /**
    * Reads `.theme` text into the theme it declares and its body, mono and strong fonts. Fails
    * with Templates' `invalid-theme` or `duplicate-token`, whichever it finds first.

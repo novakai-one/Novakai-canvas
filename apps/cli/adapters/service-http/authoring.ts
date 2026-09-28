@@ -14,13 +14,13 @@ import type {
   SubmitMode,
 } from '../../contract/records/service-answers.js';
 import {
-  appliedAnswer,
-  changePreview,
-  receiptAnswer,
+  appliedAnswerSchema,
+  changePreviewSchema,
+  receiptAnswerSchema,
 } from '../../contract/records/service-answers.js';
 import type { RequestId } from '../../contract/brands.js';
 import type { CliFailure, Result } from '../../contract/errors.js';
-import { failure, success, unconfirmedApply } from '../../contract/errors.js';
+import { failure, success, unconfirmedApplyFailure } from '../../contract/errors.js';
 
 /** The transport's POST; this adapter never sends a GET. */
 type TransportPost = Pick<HttpTransport, 'post'>;
@@ -53,7 +53,7 @@ async function preview(
 ): Promise<Result<ChangePreview>> {
   const answer = await send(transport, retained, 'preview');
   if (!answer.ok) return answer;
-  const checked = changePreview.safeParse(answer.value.value);
+  const checked = changePreviewSchema.safeParse(answer.value.value);
   if (!checked.success)
     return failure({
       code: 'invalid-response',
@@ -121,11 +121,11 @@ function appliedReceipt(
   value: unknown,
   request: RequestId,
 ): Result<ReceiptLookup> {
-  const answer = appliedAnswer.safeParse(value);
+  const answer = appliedAnswerSchema.safeParse(value);
   if (!answer.success)
-    return failure(unconfirmedApply(request, 'Service returned an invalid apply confirmation'));
-  const receipt = receiptAnswer.safeParse(answer.data.receipt);
+    return unconfirmedApplyFailure(request, 'Service returned an invalid apply confirmation');
+  const receipt = receiptAnswerSchema.safeParse(answer.data.receipt);
   if (!receipt.success)
-    return failure(unconfirmedApply(request, 'Service returned an invalid receipt'));
+    return unconfirmedApplyFailure(request, 'Service returned an invalid receipt');
   return success(receipt.data);
 }

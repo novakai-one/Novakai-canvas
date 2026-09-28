@@ -6,8 +6,8 @@
  * source to fill in. Language owns the profiles and does that work.
  *
  * This file names the three things the profile commands ask Language for: describe a profile,
- * start a source from it, and check a source against it. None of them touches a file, and none
- * can fail.
+ * start a source from it, and check a source against it. None touches a file or returns an error;
+ * `lint` reports whether the source passed.
  */
 import type { ProfileId } from '../brands.js';
 import type {

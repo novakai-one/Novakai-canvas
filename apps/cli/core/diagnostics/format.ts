@@ -3,10 +3,10 @@
  * machine consumers, and nothing parses these lines back.
  */
 import type { CliFailure, LocalFailure } from '../../contract/errors.js';
-import type { FailureSource, OperationSource } from '../../contract/records/foreign.js';
+import type { FailureSource, ServiceFailureRecord } from '../../contract/records/foreign.js';
 
 /** A validation batch: the evidence that is not an operation failure. */
-type ValidationSource = Exclude<FailureSource, OperationSource>;
+type ValidationSource = Exclude<FailureSource, ServiceFailureRecord>;
 /** One validation diagnostic: a record issue (code, path) or a Language issue (code, span). */
 type ValidationIssue = ValidationSource['diagnostics'][number];
 /** A Model record issue addressed by its path. */
@@ -29,7 +29,7 @@ export function formatFailure(error: CliFailure): readonly string[] {
 
 /** One failure's lines; the evidence sits between the message and the recovery line. */
 function failureLines(
-  error: LocalFailure | OperationSource,
+  error: LocalFailure | ServiceFailureRecord,
   message: string,
 ): readonly string[] {
   return [`${error.code}: ${message}`, ...sourceLines(error.source), error.recovery];
@@ -50,7 +50,7 @@ function sourceLines(source: FailureSource | undefined): readonly string[] {
 }
 
 /** A nested owner failure keeps its order and its cleanup failure. */
-function operationLines(source: OperationSource): readonly string[] {
+function operationLines(source: ServiceFailureRecord): readonly string[] {
   return [
     `${source.code} ${source.path}: ${source.message}`,
     source.recovery,

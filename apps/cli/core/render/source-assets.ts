@@ -14,7 +14,7 @@ import type {
   ResourceRequest,
   StoredBlob,
 } from '../../contract/records/foreign.js';
-import type { RenderEvidence } from '../../contract/records/render-failure.js';
+import type { RenderFailureSource } from '../../contract/records/render-failure.js';
 import type { RenderFault } from '../../contract/records/render-fault.js';
 import type { SourceFile } from '../../contract/records/source-file.js';
 import { assetId, type AssetDigest, type AssetId, type FilePath } from '../../contract/brands.js';
@@ -28,7 +28,7 @@ import { admitResource, type AdmissionDependencies } from './resource-admission.
 /** What a source's asset records use: Language's parse, admission and the stored bytes. */
 export interface AssetDependencies extends AdmissionDependencies {
   readonly sources: Pick<RenderSources, 'parse'>;
-  readonly assets: Pick<RenderAssets, 'stage' | 'resolve'>;
+  readonly assets: Pick<RenderAssets, 'stage' | 'readBack'>;
 }
 
 /**
@@ -46,12 +46,12 @@ export interface AssetDependencies extends AdmissionDependencies {
 export async function sourceAssets(
   source: SourceFile,
   dependencies: AssetDependencies,
-): Promise<Result<readonly CollectionAsset[], RenderEvidence>> {
+): Promise<Result<readonly CollectionAsset[], RenderFailureSource>> {
   const parsed = dependencies.sources.parse(source.source);
   if (!parsed.ok) return parsed;
   const declarations = parsed.value.resources.filter(isAsset);
   const described = await Promise.all(
-    declarations.map((request) => assetRecord(source.file, request, dependencies)),
+    declarations.map((request) => assetRecord(source.path, request, dependencies)),
   );
   const records = combined(described);
   if (!records.ok) return records;
@@ -72,10 +72,10 @@ async function assetRecord(
   file: FilePath,
   request: ResourceRequest,
   dependencies: AssetDependencies,
-): Promise<Result<CollectionAsset, RenderEvidence>> {
+): Promise<Result<CollectionAsset, RenderFailureSource>> {
   const digest = await admitResource(file, request, dependencies);
   if (!digest.ok) return digest;
-  const stored = dependencies.assets.resolve(digest.value);
+  const stored = dependencies.assets.readBack(digest.value);
   if (!stored.ok) return stored;
   return describedAsset(request, digest.value, stored.value);
 }

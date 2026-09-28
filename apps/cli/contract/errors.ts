@@ -2,26 +2,26 @@
  * Why this file exists
  *
  * When a command goes wrong, the agent must learn what went wrong and what to do next, the same
- * way every time. `pnpm canvas read` with no collection prints
- * `invalid-arguments: read requires 1 operand(s)`, then "Correct the named input and retry."
+ * way every time. `pnpm canvas create missing.canvas` prints
+ * `source-unavailable: Cannot read UTF-8 source: missing.canvas`, then what to do next.
  *
- * This file holds the fixed list of failure codes and the shapes a failure takes. It also holds
- * `Result`, what every step answers with: `Success` (it worked, here is the value) or `Failure`
- * (it found a mistake). Code branches on the code, never on the message. Nothing here throws or
- * prints; `cli/canvas.ts` prints.
+ * This file holds the fixed list of failure codes, and `Result`: `Success` (it worked, here is the
+ * value) or `Failure` (it found a mistake). A failure is either a mistake the CLI found itself
+ * (`LocalFailure`), or a failure record the service package wrote, kept whole (`ForeignFailure`).
+ * Code branches on the code, never on the message. Nothing here prints.
  */
 import { filePath, type FilePath, type RequestId, type ResourceAlias } from './brands.js';
 import type {
   FailureSource,
-  OperationSource,
+  ServiceFailureRecord,
   SourcePosition,
   ThemeSourceCode,
 } from './records/foreign.js';
 import type { NativeDetail, ProviderFault, RenderFault } from './records/render-fault.js';
 
 /**
- * A mistake the CLI found itself, grouped by where it happens. The last two codes come from
- * Templates' `.theme` grammar and are passed on as written.
+ * A mistake the CLI found itself, grouped by where it happens. The last line, `ThemeSourceCode`,
+ * holds Templates' two `.theme` codes, passed on as written.
  */
 export type LocalCode =
   // Typed wrong. Nothing was read or sent.
@@ -59,17 +59,20 @@ export type LocalCode =
   | 'connection-uncertain' // No sure answer. Check the receipt before trying again.
   | 'invalid-response' // An answer broke its own contract, such as an apply with no receipt.
   // The program itself.
-  | 'cli-unavailable' // Something threw unexpectedly, or a fresh request ID failed its check.
+  | 'cli-unavailable' // The CLI couldn't finish: an unexpected throw, or a bad fresh request ID.
   | 'render-unavailable' // render:png couldn't start.
   | ThemeSourceCode; // `invalid-theme` or `duplicate-token`.
 
-/** A failure the service wrote. The CLI keeps its record whole, in `foreign`. */
+/**
+ * A failure record the service package wrote, kept whole in `foreign`: either from the running
+ * service, or from the package's reader of the agent's credential file.
+ */
 export type ForeignCode =
-  | 'service-rejected' // The service answered with a failure.
-  | 'credential-unavailable'; // The agent's credential file couldn't be read.
+  | 'service-rejected' // The running service answered with a failure.
+  | 'credential-unavailable'; // The service package couldn't read the agent's credential file.
 
 /** Every code a CLI failure can carry. */
-export type CliErrorCode = LocalCode | ForeignCode;
+export type CliFailureCode = LocalCode | ForeignCode;
 
 /**
  * Where a source declares the font or image a failure is about. Printed before the message, as
@@ -95,13 +98,13 @@ export interface LocalFailure {
   readonly source?: FailureSource;
 }
 
-/** A failure the service wrote, kept whole and printed exactly as written. */
+/** A failure record the service package wrote, kept whole and printed exactly as written. */
 export interface ForeignFailure {
   readonly code: ForeignCode;
-  readonly foreign: OperationSource;
+  readonly foreign: ServiceFailureRecord;
 }
 
-/** Any CLI failure: a mistake the CLI found, or a failure the service wrote. */
+/** Any CLI failure: a mistake the CLI found, or a failure record the service package wrote. */
 export type CliFailure = LocalFailure | ForeignFailure;
 
 /** A step that worked. `ok` is true and `value` holds what the step made. */
@@ -110,7 +113,7 @@ export interface Success<T> {
   readonly value: T;
 }
 
-/** A step that found a mistake. `ok` is false and `error` says what went wrong and how to fix it. */
+/** A step that found a mistake. `ok` is false and `error` says what went wrong. */
 export interface Failure<E> {
   readonly ok: false;
   readonly error: E;
@@ -142,59 +145,60 @@ export function failure(input: FailureInput): Result<never, LocalFailure> {
 }
 
 /**
- * The mistake for a source file that can't be read as UTF-8 text (`source-unavailable`). `path`
- * is the path as typed, which may be empty, so it is plain text.
+ * Makes the failure for a source file that can't be read as UTF-8 text (`source-unavailable`).
+ * `path` is the path as typed, which may be empty, so it is plain text.
  */
-export function unreadableSource(path: string): FailureInput {
-  return { code: 'source-unavailable', message: `Cannot read UTF-8 source: ${path}` };
+export function unreadableSourceFailure(path: string): Result<never, LocalFailure> {
+  return failure({ code: 'source-unavailable', message: `Cannot read UTF-8 source: ${path}` });
 }
 
 /**
- * The mistake for an `--out` file that can't be written (`output-unavailable`). `path` is the
- * path as typed, which may be empty, so it is plain text.
+ * Makes the failure for an `--out` file that can't be written (`output-unavailable`). `path` is
+ * the path as typed, which may be empty, so it is plain text.
  */
-export function unwritableOutput(path: string): FailureInput {
-  return { code: 'output-unavailable', message: `Cannot write output: ${path}` };
+export function unwritableOutputFailure(path: string): Result<never, LocalFailure> {
+  return failure({ code: 'output-unavailable', message: `Cannot write output: ${path}` });
 }
 
-/** The mistake for a request that fails Authoring's own check (`invalid-input`). */
-export const malformedRequest: FailureInput = Object.freeze({
-  code: 'invalid-input',
-  message: 'Request identity or generated preconditions are invalid',
-});
+/** Makes the failure for a request that fails Authoring's own check (`invalid-input`). */
+export function invalidInputFailure(): Result<never, LocalFailure> {
+  return failure({
+    code: 'invalid-input',
+    message: 'Request identity or generated preconditions are invalid',
+  });
+}
 
 /**
- * The mistake for an apply answer that doesn't confirm the change was saved (`invalid-response`).
- * It may have been saved, so the advice is to check `request`'s receipt before trying again.
+ * Makes the failure for an apply answer that doesn't confirm the change was saved
+ * (`invalid-response`). It may have been saved, so the advice is to check `request`'s receipt.
  */
-export function unconfirmedApply(
+export function unconfirmedApplyFailure(
   request: RequestId,
   message: string,
-): FailureInput {
-  return {
+): Result<never, LocalFailure> {
+  return failure({
     code: 'invalid-response',
     message,
     recovery: `Check canvas receipt ${request} before retrying.`,
-  };
+  });
 }
 
-/** Wraps a failure the service wrote as a failed step, without changing it. */
+/** Makes a failed step from a failure record the service package wrote, without changing it. */
 export function foreignFailure(
   code: ForeignCode,
-  foreign: OperationSource,
+  foreign: ServiceFailureRecord,
 ): Result<never, ForeignFailure> {
   return { ok: false, error: { code, foreign } };
 }
 
-/** Wraps one of render:png's own faults as a failed step. It keeps the fault's exact type. */
+/** Makes a failed step from one of render:png's own faults. It keeps the fault's exact type. */
 export function renderFaultFailure<F extends RenderFault>(fault: F): Result<never, F> {
   return { ok: false, error: fault };
 }
 
 /**
- * Turns a native error into a `provider-failed` fault. A native error is one Node throws from a
- * file, temp-folder or wasm step. Keeps its message, and its path, OS code (such as `ENOENT`) and
- * syscall when they are well formed. Never fails.
+ * Turns an error Node threw from a file, temp-folder or wasm step into a `provider-failed` fault.
+ * Keeps its message, and its path, OS code (such as `ENOENT`) and syscall when well formed.
  */
 export function nativeFault(thrown: unknown): ProviderFault {
   return {

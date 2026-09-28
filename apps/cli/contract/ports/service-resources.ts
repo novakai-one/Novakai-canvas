@@ -10,9 +10,14 @@
  */
 import type { AssetDigest } from '../brands.js';
 import type { Result } from '../errors.js';
-import type { Admission, ExpansionRequest, Request, StageInput } from '../records/foreign.js';
+import type {
+  Admission,
+  ExpansionRequest,
+  AuthoringRequest,
+  StageInput,
+} from '../records/foreign.js';
 import type { ByteBackup } from '../records/retained-request.js';
-import type { AssetBinding } from '../records/staged-resource.js';
+import type { NamedAssetDigest } from '../records/staged-resource.js';
 import type { PresetPreparation } from '../records/service-answers.js';
 
 /**
@@ -30,16 +35,22 @@ export interface ServiceResources {
    * the new request. An answer that fails Authoring's request check is `invalid-input`.
    */
   freeze(
-    request: Request,
-    assets: readonly AssetBinding[],
-  ): Promise<Result<Request>>;
+    request: AuthoringRequest,
+    assets: readonly NamedAssetDigest[],
+  ): Promise<Result<AuthoringRequest>>;
   /** Stores a kept copy of bytes again, so a retried request finds them. */
   restore(backup: ByteBackup): Promise<Result<void>>;
-  /** Has Templates prepare a theme or recipe for saving, with its stored fonts and images. */
+  /**
+   * Has Templates prepare `admission`, the theme or recipe to save, with its stored fonts and
+   * images. Gives back the key it will be saved under.
+   */
   prepare(
     admission: Admission,
-    assets: readonly AssetBinding[],
+    assets: readonly NamedAssetDigest[],
   ): Promise<Result<PresetPreparation>>;
-  /** Expands a pinned recipe under a namespace into source text to edit. Saves nothing. */
+  /**
+   * Copies a saved recipe out as source text to edit, as a new collection whose ID is
+   * `--namespace`. Saves nothing.
+   */
   instantiate(expansion: ExpansionRequest): Promise<Result<string>>;
 }

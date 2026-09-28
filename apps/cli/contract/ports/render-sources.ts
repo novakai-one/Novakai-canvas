@@ -8,14 +8,14 @@
  * This file names those three steps. None reads a file or changes anything saved.
  * `adapters/render/sources.ts` asks Language and Model.
  */
-import type { RenderEvidence } from '../records/render-failure.js';
+import type { RenderFailureSource } from '../records/render-failure.js';
 import type { Collection, ParsedSource, ResolvedResources } from '../records/foreign.js';
 import type { Result } from '../errors.js';
 
 /** What a render asks of Language and Model about its `.canvas` sources. */
 export interface RenderSources {
   /** Parses one source's text with Language. Fails with Language's findings. */
-  parse(source: string): Result<ParsedSource, RenderEvidence>;
+  parse(source: string): Result<ParsedSource, RenderFailureSource>;
   /**
    * Turns `source` into a new collection, with its font, image and theme names filled in from
    * `resources`. Fails with Language's findings.
@@ -23,7 +23,7 @@ export interface RenderSources {
   lower(
     source: string,
     resources: ResolvedResources,
-  ): Result<Collection, RenderEvidence>;
+  ): Result<Collection, RenderFailureSource>;
   /** Checks a whole collection with Model, and gives it back typed. Fails with Model's findings. */
-  validate(candidate: unknown): Result<Collection, RenderEvidence>;
+  validate(candidate: unknown): Result<Collection, RenderFailureSource>;
 }

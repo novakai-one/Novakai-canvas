@@ -6,22 +6,33 @@
  * secret token could be sent somewhere else. Once a value is checked, its type says so: a
  * `CollectionRevision` is a checked number, never just any number.
  *
- * This file declares those checked types and the checks that make them. Types another part owns,
- * such as Model's `CollectionId`, are passed on from their owner, never copied. It never runs a
- * check itself; the checks of typed commands and service answers call these.
+ * This file defines those checked types and the check that makes each one. The code that reads
+ * typed commands and service answers runs the checks. Types another part owns, such as Model's
+ * `CollectionId`, are passed on from their owner, never copied.
  */
 import { z } from 'zod';
 import type { assetId, collectionId } from '@novakai/canvas-model';
 import { profileIds } from '@novakai/canvas-language';
+import type { RecipeFamily } from './records/foreign.js';
 
+/** Authoring's IDs and their checks: a saved record, a change request, and a workspace. */
 export { recordId, requestId, workspaceId } from '@novakai/canvas-authoring';
 export type { RecordId, RequestId, WorkspaceId } from '@novakai/canvas-authoring';
+/** Model's ID checks: a font or image, a collection, a section and an object. */
 export { assetId, collectionId, sectionId, objectId } from '@novakai/canvas-model';
 export type { SectionId, ObjectId } from '@novakai/canvas-model';
-/** Checks Model's content pin: `sha256:` then 64 lowercase hex digits. Gives plain text back. */
+/**
+ * Checks a pin: `sha256:` then 64 lowercase hex digits. A source names stored bytes this way
+ * (`source="sha256:…"`), and so does `recipe instantiate`. Model's check only says yes or no.
+ */
 export { digest as pinnedDigest } from '@novakai/canvas-model';
+/**
+ * Templates' saved themes and recipes, which it calls presets: a preset's ID (such as `atlas`),
+ * its version (such as `1.0.0`), and the digest of its content (64 hex digits, no `sha256:`).
+ */
 export { presetId, version, digest as presetDigest } from '@novakai/canvas-templates';
 export type { PresetId, Version, Digest as PresetDigest } from '@novakai/canvas-templates';
+/** The digest of a stored font or image's bytes, as Assets writes it (64 hex digits). */
 export { digest as assetDigest } from '@novakai/canvas-assets';
 export type { Digest as AssetDigest } from '@novakai/canvas-assets';
 /** A collection profile Language knows, such as `build-spec@1`. Language owns the profiles. */
@@ -29,6 +40,22 @@ export type { ProfileId } from '@novakai/canvas-language';
 
 /** Checks a profile name against the profiles Language knows, such as `build-spec@1`. */
 export const profileId = z.enum(profileIds);
+
+/**
+ * Every recipe family, keyed by itself. Templates doesn't share its own check, so this copy stops
+ * compiling if Templates adds, drops or renames a family.
+ */
+const recipeFamilies = Object.freeze({
+  er: 'er',
+  modules: 'modules',
+  sop: 'sop',
+  mindmap: 'mindmap',
+  sequence: 'sequence',
+  infographic: 'infographic',
+} as const satisfies { readonly [Family in RecipeFamily]: Family });
+
+/** Checks `--family`: a recipe's diagram family, such as `er`. */
+export const recipeFamily = z.enum(recipeFamilies);
 
 /**
  * Checks a file or folder path on this machine: any text that isn't empty. A relative path is
@@ -53,11 +80,11 @@ export const agentToken = z.string().min(1).brand<'AgentToken'>();
  * Checks a service generation: a label (1 to 128 characters) the service makes each time it
  * starts. Every answer carries one, and a saved request is sent again under the newest one.
  */
-export const generation = z.string().min(1).max(128).brand<'ServiceGeneration'>();
+export const serviceGeneration = z.string().min(1).max(128).brand<'ServiceGeneration'>();
 
 /**
- * Checks a collection's revision as Model counts it: a whole number from 0 up. `--revision 3` and
- * the revision the service stored both pass through here, so the two compare directly.
+ * Checks a collection's revision: Model's count of its saved changes, a whole number from 0 up.
+ * `--revision 3` and the revision the service stored both pass here, so the two compare directly.
  */
 export const collectionRevision = z
   .number()
@@ -67,8 +94,8 @@ export const collectionRevision = z
   .brand<'CollectionRevision'>();
 
 /**
- * Checks a saved record's storage version as Authoring counts it: a whole number from 0 up.
- * Authoring has no check of its own to share, so it lives here.
+ * Checks a saved record's storage version: Authoring's count of writes to that record, a whole
+ * number from 0 up. It is not a collection's revision. A change sends it, so a stale write fails.
  */
 export const storageVersion = z
   .number()
@@ -78,25 +105,19 @@ export const storageVersion = z
   .brand<'StorageVersion'>();
 
 /**
- * Checks render:png's `--collection` when it isn't a `.canvas` file: a recipe ID or the ID of a
- * collection that ships with the repo. Text that isn't empty; the render looks the name up.
+ * Checks render:png's `--collection` when it isn't a `.canvas` file: a recipe ID, or the ID of a
+ * collection that ships with the repo. Only checked to be text; the render looks it up.
  */
-export const collectionName = z.string().min(1).brand<'CollectionName'>();
+export const recipeOrCollectionId = z.string().min(1).brand<'RecipeOrCollectionId'>();
 
-/** Checks render:png's `--theme`: a theme ID, as text that isn't empty. The render looks it up. */
-export const themeName = z.string().min(1).brand<'ThemeName'>();
+/** Checks render:png's `--theme`: a theme ID such as `atlas`. Only checked to be text. */
+export const themeId = z.string().min(1).brand<'ThemeId'>();
 
 /**
  * Checks the name a source gives one font or image, such as `@logo` in a `.canvas` file or a font
  * role in a `.theme` file: text that isn't empty.
  */
 export const resourceAlias = z.string().min(1).brand<'ResourceAlias'>();
-
-/**
- * Checks where a hand-placed object or hand-drawn wire sits, as the service prints it, such as
- * `@section/@object`. Any text; the CLI only passes it on.
- */
-export const manualAddress = z.string().brand<'ManualAddress'>();
 
 /** A collection ID that passed Model's `collectionId`. Model shares the check, not the type. */
 export type CollectionId = z.infer<typeof collectionId>;
@@ -113,26 +134,23 @@ export type LoopbackOrigin = z.infer<typeof loopbackOrigin>;
 /** The agent's secret token, checked by {@link agentToken}. */
 export type AgentToken = z.infer<typeof agentToken>;
 
-/** A service generation, checked by {@link generation}: the label of one service start. */
-export type Generation = z.infer<typeof generation>;
+/** The label of one service start, checked by {@link serviceGeneration}. */
+export type ServiceGeneration = z.infer<typeof serviceGeneration>;
 
-/** A collection revision, checked by {@link collectionRevision}: a whole number from 0 up. */
+/** A collection's revision, checked by {@link collectionRevision}: a whole number from 0 up. */
 export type CollectionRevision = z.infer<typeof collectionRevision>;
 
 /** A saved record's storage version, checked by {@link storageVersion}. */
 export type StorageVersion = z.infer<typeof storageVersion>;
 
-/** render:png's collection name, checked by {@link collectionName}: a recipe or collection ID. */
-export type CollectionName = z.infer<typeof collectionName>;
+/** render:png's `--collection` name, checked by {@link recipeOrCollectionId}. */
+export type RecipeOrCollectionId = z.infer<typeof recipeOrCollectionId>;
 
-/** render:png's theme ID, checked by {@link themeName}. */
-export type ThemeName = z.infer<typeof themeName>;
+/** render:png's `--theme`, checked by {@link themeId}. */
+export type ThemeId = z.infer<typeof themeId>;
 
 /** The name a source gives one font or image, checked by {@link resourceAlias}. */
 export type ResourceAlias = z.infer<typeof resourceAlias>;
-
-/** Where a hand-placed object or wire sits, checked by {@link manualAddress}. */
-export type ManualAddress = z.infer<typeof manualAddress>;
 
 /** Whether `text` parses as a URL that is exactly an `http://127.0.0.1` origin. */
 function isLoopbackOrigin(text: string): boolean {

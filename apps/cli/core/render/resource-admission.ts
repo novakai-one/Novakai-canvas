@@ -8,7 +8,7 @@
 import type { RenderAssets } from '../../contract/ports/render-assets.js';
 import type { ResourceReader } from '../../contract/ports/resource-reader.js';
 import type { ResourceRequest } from '../../contract/records/foreign.js';
-import type { RenderEvidence } from '../../contract/records/render-failure.js';
+import type { RenderFailureSource } from '../../contract/records/render-failure.js';
 import type { StagedResource } from '../../contract/records/staged-resource.js';
 import type { AssetDigest, FilePath } from '../../contract/brands.js';
 import { success, type Result } from '../../contract/errors.js';
@@ -30,7 +30,7 @@ export async function admitResource(
   file: FilePath,
   request: ResourceRequest,
   dependencies: AdmissionDependencies,
-): Promise<Result<AssetDigest, RenderEvidence>> {
+): Promise<Result<AssetDigest, RenderFailureSource>> {
   const resource = await declaredResource(file, request, dependencies.resources);
   if (!resource.ok) return resource;
   return storedDigest(resource.value, dependencies.assets);
@@ -40,7 +40,7 @@ export async function admitResource(
 function storedDigest(
   resource: StagedResource,
   assets: AdmissionDependencies['assets'],
-): Promise<Result<AssetDigest, RenderEvidence>> {
+): Promise<Result<AssetDigest, RenderFailureSource>> {
   if (resource.kind === 'pinned') return Promise.resolve(success(resource.digest));
   return assets.stage(resource.input);
 }

@@ -25,7 +25,10 @@ export interface InputFiles {
   shippedCollections(): Promise<Result<readonly SourceFile[], ProviderFault>>;
   /** Reads one file's text. A relative path is taken from the folder the command runs in. */
   read(path: FilePath): Promise<Result<SourceFile, ProviderFault>>;
-  /** Finds the path of a recipe family's shipped source, such as `er`'s. Reads nothing. */
+  /**
+   * Gives the path of a recipe family's shipped source, such as `er`'s. Reads nothing. Fails only
+   * if the joined path were empty, which can't happen.
+   */
   recipeFile(family: RecipeFamily): Result<FilePath, ProviderFault>;
 }
 
@@ -41,7 +44,7 @@ export interface RasterEngine {
  */
 export interface SectionFiles {
   /** Makes the `--out` folder, and any folders above it that are missing. */
-  prepare(): Promise<Result<void, ProviderFault>>;
+  makeOutFolder(): Promise<Result<void, ProviderFault>>;
   /** Writes one section's image bytes to its file, and gives back the file's path. */
   write(
     section: SectionId,

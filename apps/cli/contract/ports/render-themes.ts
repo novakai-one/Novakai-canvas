@@ -8,13 +8,14 @@
  * This file names the shipped catalog and that one step. `adapters/render/themes.ts` asks the
  * service and Templates.
  */
-import type { RenderEvidence } from '../records/render-failure.js';
+import type { RenderFailureSource } from '../records/render-failure.js';
 import type { Catalog, FontRole, ThemeAdmission } from '../records/foreign.js';
 import type { AssetDigest } from '../brands.js';
 import type { Result } from '../errors.js';
 
-/** One of a theme's fonts: its role (such as body or mono) and the digest of its stored bytes. */
-export interface FontBinding {
+/** One of a theme's fonts: its role and the digest of its stored bytes. */
+export interface ThemeFont {
+  /** The font's role, such as `body` or `mono`. Templates and the service call it `alias`. */
   readonly alias: FontRole;
   readonly digest: AssetDigest;
 }
@@ -30,6 +31,6 @@ export interface RenderThemes {
   admit(
     catalog: Catalog,
     theme: ThemeAdmission,
-    fonts: readonly FontBinding[],
-  ): Result<Catalog, RenderEvidence>;
+    fonts: readonly ThemeFont[],
+  ): Result<Catalog, RenderFailureSource>;
 }

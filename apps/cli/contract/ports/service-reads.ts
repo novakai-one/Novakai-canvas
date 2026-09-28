@@ -10,7 +10,7 @@
  */
 import type { CollectionId, RequestId } from '../brands.js';
 import type { Result } from '../errors.js';
-import type { InspectionReport, Snapshot } from '../records/foreign.js';
+import type { InspectionReport, WorkspaceSnapshot } from '../records/foreign.js';
 import type { ReadScope } from '../records/command.js';
 import type {
   LanguageDescription,
@@ -26,9 +26,12 @@ import type {
  */
 export interface ServiceReads {
   /** Asks for the DSL vocabulary, which `describe` prints as JSON. */
-  language(): Promise<Result<LanguageDescription>>;
-  /** Asks for every saved record in the workspace, and the service's generation. */
-  workspace(): Promise<Result<ServiceAnswer<Snapshot>>>;
+  vocabulary(): Promise<Result<LanguageDescription>>;
+  /**
+   * Asks for every saved record in the workspace, and the service's generation (the label of one
+   * service start; see `brands.ts`).
+   */
+  workspace(): Promise<Result<ServiceAnswer<WorkspaceSnapshot>>>;
   /** Asks for one collection's source, or only the section or object `scope` names. */
   source(
     collection: CollectionId,

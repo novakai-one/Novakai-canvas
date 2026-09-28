@@ -6,20 +6,20 @@
  */
 import type { HttpTransport, ResourceAction } from '../../contract/ports/http-transport.js';
 import type { ServiceResources } from '../../contract/ports/service-resources.js';
-import type { Request } from '../../contract/records/foreign.js';
+import type { AuthoringRequest } from '../../contract/records/foreign.js';
 import type { ByteBackup } from '../../contract/records/retained-request.js';
-import { byteBackup } from '../../contract/records/retained-request.js';
+import { byteBackupSchema } from '../../contract/records/retained-request.js';
 import type { PresetPreparation } from '../../contract/records/service-answers.js';
 import {
-  blobAnswer,
-  preparedAnswer,
-  presetDocument,
-  stagedAnswer,
+  blobAnswerSchema,
+  preparedAnswerSchema,
+  presetDocumentSchema,
+  stagedAnswerSchema,
 } from '../../contract/records/service-answers.js';
 import { requestSchema } from '../../contract/schemas.js';
 import type { AssetDigest } from '../../contract/brands.js';
 import type { LocalFailure, Result } from '../../contract/errors.js';
-import { failure, malformedRequest, success } from '../../contract/errors.js';
+import { failure, invalidInputFailure, success } from '../../contract/errors.js';
 
 /** The transport's POST; this adapter never sends a GET. */
 type TransportPost = Pick<HttpTransport, 'post'>;
@@ -59,7 +59,7 @@ async function call<T>(
 
 /** The digest of the bytes Assets admitted. Fails with `invalid-response`. */
 function stagedDigest(value: unknown): Result<AssetDigest> {
-  const parsed = stagedAnswer.safeParse(value);
+  const parsed = stagedAnswerSchema.safeParse(value);
   if (!parsed.success) return invalidResponse('Invalid Assets admission');
   return success(parsed.data.descriptor.digest);
 }
@@ -69,9 +69,9 @@ function stagedDigest(value: unknown): Result<AssetDigest> {
  * (bad answer, or bad digest).
  */
 function blobBackup(value: unknown): Result<ByteBackup> {
-  const parsed = blobAnswer.safeParse(value);
+  const parsed = blobAnswerSchema.safeParse(value);
   if (!parsed.success) return invalidResponse('Invalid normalized Assets bytes');
-  const checked = byteBackup.safeParse({
+  const checked = byteBackupSchema.safeParse({
     digest: parsed.data.descriptor.digest,
     base64: parsed.data.base64,
   });
@@ -80,9 +80,9 @@ function blobBackup(value: unknown): Result<ByteBackup> {
 }
 
 /** The frozen request, checked by Authoring's request schema. Fails with `invalid-input`. */
-function frozenRequest(value: unknown): Result<Request> {
+function frozenRequest(value: unknown): Result<AuthoringRequest> {
   const checked = requestSchema.safeParse(value);
-  if (!checked.success) return failure(malformedRequest);
+  if (!checked.success) return invalidInputFailure();
   return success(checked.data);
 }
 
@@ -96,8 +96,8 @@ function restored(): Result<void> {
  * Fails with `invalid-response`.
  */
 function preparation(value: unknown): Result<PresetPreparation> {
-  const parsed = preparedAnswer.safeParse(value);
-  const document = presetDocument.safeParse(value);
+  const parsed = preparedAnswerSchema.safeParse(value);
+  const document = presetDocumentSchema.safeParse(value);
   if (!parsed.success || !document.success)
     return invalidResponse('Service returned invalid preset preparation');
   return success({ key: parsed.data.key, document: document.data });

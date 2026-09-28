@@ -53,9 +53,13 @@ export interface RevisionOption {
   readonly revision?: CollectionRevision;
 }
 
-/** What `recipe admit` saves a recipe under: its `--id`, `--version`, `--family` and `--title`. */
+/**
+ * What `recipe admit` saves a recipe under: its `--id`, `--version`, `--family` and `--title`.
+ * Templates stores saved themes and recipes as presets, so the ID and version are a preset's.
+ */
 export interface RecipeHeader {
   readonly id: PresetId;
+  /** Such as `1.0.0`. */
   readonly version: Version;
   readonly family: RecipeFamily;
   readonly title: string;
@@ -89,6 +93,7 @@ export type ServiceCommand =
       readonly recipe: RecipeHeader;
     } & RequestOption &
       OutOption)
+  /** `expansion`: the saved recipe's pin, and `--namespace`, the new collection's ID. */
   | ({ readonly name: 'recipe-instantiate'; readonly expansion: ExpansionRequest } & OutOption);
 
 /** A `profile` command. It runs on this machine alone and never talks to the service. */
@@ -125,15 +130,15 @@ export type AdmitCommand = Extract<
 >;
 
 /**
- * What Authoring must check before a change: for `create`, that the collection doesn't exist yet;
- * for `replace` and `patch`, that it is still at the revision the agent read.
+ * A change's mode, with what Authoring (the service's part that saves changes) must check first:
+ * for `create`, that the collection doesn't exist yet; otherwise, the revision the agent read.
  */
 export type ChangeIntent =
   { readonly mode: 'create' } | ({ readonly mode: 'replace' | 'patch' } & RevisionOption);
 
 /** Where a service command is sent (`--server`), and the workspace it uses (`--workspace`). */
 export interface ServerAndWorkspace {
-  /** `--server`: the service's address, always on this machine. */
+  /** `--server`: the service's address, always `http://127.0.0.1` on this machine. */
   readonly server: LoopbackOrigin;
   /** `--workspace`: the folder holding the agent's credential and the saved requests. */
   readonly workspace: FilePath;

@@ -11,8 +11,8 @@ import type {
   RenderChoice,
   RenderFormat,
 } from '../../contract/records/render.js';
-import { collectionName, filePath, themeName } from '../../contract/brands.js';
-import type { CollectionName, FilePath } from '../../contract/brands.js';
+import { recipeOrCollectionId, filePath, themeId } from '../../contract/brands.js';
+import type { RecipeOrCollectionId, FilePath } from '../../contract/brands.js';
 import type { FailureInput, Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 import { checked } from '../shared/checks.js';
@@ -74,7 +74,7 @@ function selector(raw: RenderArguments): Result<CollectionSelector> {
   const text = flagText(raw, 'collection');
   const absent = required('collection');
   if (isCanvasFile(text)) return mapped(checked(filePath, text, absent), canvasFile);
-  return mapped(checked(collectionName, text, absent), namedCollection);
+  return mapped(checked(recipeOrCollectionId, text, absent), namedCollection);
 }
 
 /** --out, as given. Fails with `invalid-arguments` when absent or empty. */
@@ -93,7 +93,7 @@ function sectionFormat(raw: RenderArguments): Result<RenderFormat> {
 /** --theme, then --theme-file; an absent one stays absent. Fails with `invalid-arguments`. */
 function themeChoice(raw: RenderArguments): Result<Pick<RenderChoice, 'theme' | 'themeFile'>> {
   return joined(
-    optionalText(raw, 'theme', themeName, (theme) => ({ theme })),
+    optionalText(raw, 'theme', themeId, (theme) => ({ theme })),
     optionalText(raw, 'theme-file', filePath, (themeFile) => ({ themeFile })),
     (theme, themeFile) => ({ ...theme, ...themeFile }),
   );
@@ -142,8 +142,8 @@ function canvasFile(path: FilePath): CollectionSelector {
 }
 
 /** A recipe or shipped collection selector. */
-function namedCollection(name: CollectionName): CollectionSelector {
-  return { kind: 'named', name };
+function namedCollection(name: RecipeOrCollectionId): CollectionSelector {
+  return { kind: 'id', id: name };
 }
 
 /** A flag the render needs is absent or empty. */

@@ -36,7 +36,12 @@ import type {
   ServerAndWorkspace,
 } from '../../contract/records/command.js';
 import type { FailureInput, Result } from '../../contract/errors.js';
-import { failure, success, unreadableSource, unwritableOutput } from '../../contract/errors.js';
+import {
+  failure,
+  success,
+  unreadableSourceFailure,
+  unwritableOutputFailure,
+} from '../../contract/errors.js';
 import { checked } from '../shared/checks.js';
 import type { FlagTextAsTyped } from './flags.js';
 
@@ -178,7 +183,11 @@ export function checkRequestOption(flags: Pick<FlagTextAsTyped, 'request'>): Res
  * The mistake it can find: an empty path (`source-unavailable`, as for a file that can't be read).
  */
 export function checkFilePath(typedFilePath: string): Result<FilePath> {
-  return checked(filePath, typedFilePath, unreadableSource(typedFilePath));
+  const path = filePath.safeParse(typedFilePath);
+  if (!path.success) {
+    return unreadableSourceFailure(typedFilePath);
+  }
+  return success(path.data);
 }
 
 /**
@@ -191,11 +200,11 @@ export function checkOutOption(flags: Pick<FlagTextAsTyped, 'out'>): Result<OutO
   if (flags.out === undefined) {
     return success({});
   }
-  const out = checked(filePath, flags.out, unwritableOutput(flags.out));
-  if (!out.ok) {
-    return out;
+  const out = filePath.safeParse(flags.out);
+  if (!out.success) {
+    return unwritableOutputFailure(flags.out);
   }
-  return success({ out: out.value });
+  return success({ out: out.data });
 }
 
 /**

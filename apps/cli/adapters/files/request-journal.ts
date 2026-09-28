@@ -9,7 +9,7 @@
 import { readFile, mkdir, open } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { FilePath, RequestId } from '../../contract/brands.js';
-import { journalFile } from '../../contract/records/retained-request.js';
+import { journalFileSchema } from '../../contract/records/retained-request.js';
 import type { JournalRecord, RetainedRequest } from '../../contract/records/retained-request.js';
 import type { RequestJournal } from '../../contract/ports/request-journal.js';
 import type { FailureInput, LocalFailure, Result } from '../../contract/errors.js';
@@ -120,7 +120,7 @@ function decode(
   path: string,
   id: RequestId,
 ): Result<JournalRecord, LocalFailure> {
-  const file = journalFile.safeParse(jsonValue(text));
+  const file = journalFileSchema.safeParse(jsonValue(text));
   if (!file.success) return failure(corrupt(path, id));
   if (file.data.request.request !== id) return failure(corrupt(path, id));
   return success({ request: file.data.request, backups: file.data.backups });

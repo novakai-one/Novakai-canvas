@@ -10,7 +10,7 @@ import type { ProfileCommand } from '../../contract/records/command.js';
 import type { ParsedSource } from '../../contract/records/foreign.js';
 import type { CollectionProfiles } from '../../contract/ports/collection-profiles.js';
 import type { LocalFiles } from '../../contract/ports/local-files.js';
-import type { SourceLanguage } from '../../contract/ports/source-language.js';
+import type { SourceParser } from '../../contract/ports/source-parser.js';
 import type { ProfileId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
@@ -20,7 +20,7 @@ import { unsupported } from '../shared/results.js';
 /** What the profile commands read: the lint file, the Language parser and the profiles. */
 export interface ProfileDependencies {
   readonly files: Pick<LocalFiles, 'readSource'>;
-  readonly language: SourceLanguage;
+  readonly language: SourceParser;
   readonly profiles: CollectionProfiles;
 }
 

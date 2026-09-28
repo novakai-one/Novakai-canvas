@@ -4,7 +4,7 @@
  * Language parser. Templates owns the canonical form and the immutable identity. The caller fixes
  * the recipe file and runs the command again.
  */
-import type { SourceLanguage } from '../../contract/ports/source-language.js';
+import type { SourceParser } from '../../contract/ports/source-parser.js';
 import type { RecipeHeader } from '../../contract/records/command.js';
 import type { Admission, ResourceRequest } from '../../contract/records/foreign.js';
 import type { Result } from '../../contract/errors.js';
@@ -24,7 +24,7 @@ export interface RecipeSource {
 export function recipeSource(
   header: RecipeHeader,
   text: string,
-  language: SourceLanguage,
+  language: SourceParser,
 ): Result<RecipeSource> {
   return mapped(parseSource(language, text), (parsed) => ({
     admission: recipeAdmission(header, text),

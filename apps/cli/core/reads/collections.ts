@@ -3,16 +3,16 @@
  * injected Model check. An invalid stored collection is listed as invalid, never hidden, so an
  * invalid library cannot pass for an empty one.
  */
-import type { CollectionReader } from '../../contract/ports/collection-reader.js';
-import type { Snapshot, StoredRecord } from '../../contract/records/foreign.js';
+import type { CollectionValidator } from '../../contract/ports/collection-validator.js';
+import type { WorkspaceSnapshot, StoredRecord } from '../../contract/records/foreign.js';
 
 /** What `list` prints when the workspace holds no live collection. */
 const emptyLibrary = 'No collections yet. Use canvas create diagram.canvas.';
 
 /** One `ID  rN  title  N sections` line per live collection, in snapshot order. */
 export function collectionLines(
-  snapshot: Snapshot,
-  reader: CollectionReader,
+  snapshot: WorkspaceSnapshot,
+  reader: CollectionValidator,
 ): string {
   const lines = snapshot.records.filter(isLiveCollection).map((record) => line(record, reader));
   if (lines.length === 0) return emptyLibrary;
@@ -27,7 +27,7 @@ function isLiveCollection(record: StoredRecord): boolean {
 /** The collection's Model-checked ID, revision, title and section count. */
 function line(
   record: StoredRecord,
-  reader: CollectionReader,
+  reader: CollectionValidator,
 ): string {
   const collection = reader.validate(record.value);
   if (!collection.ok) return `${record.key.id}\tInvalid collection — inspect service diagnostics`;

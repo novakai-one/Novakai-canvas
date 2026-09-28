@@ -19,14 +19,14 @@ export type ReadRoute =
   | '/api/v1/inspect'
   | '/api/v1/receipt';
 
-/** The font, image, theme and recipe steps under `/api/v1/resources/`. */
+/** The font, image, theme and recipe steps under `/api/v1/resources/` (`service-resources.ts`). */
 export type ResourceAction = 'stage' | 'blob' | 'freeze' | 'restore' | 'prepare' | 'instantiate';
 
 /** The routes a command may send a change or a file to. */
 export type WriteRoute =
   '/api/v1/authoring/preview' | '/api/v1/authoring/apply' | `/api/v1/resources/${ResourceAction}`;
 
-/** A read route's query, such as `{ id: 'my-diagram' }`, sent in this order. */
+/** A read route's query, such as `{ id: 'my-diagram' }`. Keys are sent in the order written. */
 export type RouteQuery = Readonly<Record<string, string>>;
 
 /**

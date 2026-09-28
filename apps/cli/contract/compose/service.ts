@@ -3,8 +3,8 @@
  *
  * Core can decide what a service command does, but it can't open a file or a connection. So
  * `read my-diagram` needs real parts plugged in first: the agent's token from the workspace, an
- * HTTP connection to `--server`, and the calls made over it. `create` also needs files, the
- * request journal and fresh request IDs.
+ * HTTP connection to `--server`, and the read, change and file-store calls made over it. `create`
+ * also needs files, the request journal and fresh request IDs.
  *
  * This file builds those parts for one command, then runs it. It reads the credential file and
  * makes random IDs. Mistakes come back as values, never thrown.
@@ -32,20 +32,21 @@ import {
   type FilePath,
   type RequestId,
 } from '../brands.js';
-import { composeLanguage } from './language.js';
-import { composeThemeGrammar } from './theme-grammar.js';
+import { createLanguageWithModel } from './language.js';
+import { createThemeReader } from './theme-reader.js';
 
 /**
- * Runs one service command against the service at `options.server`, and gives back the text to
- * print. Fails if the agent's token can't be read, or as the command does.
+ * Runs one service command against the service at `target.server`, with the agent's token from
+ * `target.workspace`, and gives back the text to print. Fails if the token can't be read, or as
+ * the command does.
  */
 export async function runService(
   command: ServiceCommand,
-  options: ServerAndWorkspace,
+  target: ServerAndWorkspace,
 ): Promise<Result<string>> {
-  const token = await readToken(options.workspace);
+  const token = await readToken(target.workspace);
   if (!token.ok) return token;
-  return runServiceCommand(command, servicePorts(options, token.value));
+  return runServiceCommand(command, servicePorts(target, token.value));
 }
 
 /**
@@ -63,10 +64,10 @@ async function readToken(workspace: FilePath): Promise<Result<AgentToken>> {
 
 /** Every service port, each bound once: three service-call adapters share one transport. */
 function servicePorts(
-  options: ServerAndWorkspace,
+  target: ServerAndWorkspace,
   token: AgentToken,
 ): ServiceCommandDependencies {
-  const transport = createTransport(options.server, token);
+  const transport = createTransport(target.server, token);
   const files = createLocalFiles();
   return {
     reads: createServiceReads(transport),
@@ -74,11 +75,11 @@ function servicePorts(
     resources: createServiceResources(transport),
     files,
     writer: files,
-    journal: createRequestJournal(options.workspace),
+    journal: createRequestJournal(target.workspace),
     reader: createResourceReader(),
     collections: { validate },
-    language: composeLanguage(),
-    themeGrammar: composeThemeGrammar(),
+    language: createLanguageWithModel(),
+    themeReader: createThemeReader(),
     requestIds: { next: nextRequestId },
   };
 }

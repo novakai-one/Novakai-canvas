@@ -7,9 +7,12 @@
  * This file checks those values, with the same rules as Templates, which stores recipes. It never
  * reads a file or asks the service.
  */
-import { presetId as presetIdSchema, version as versionSchema } from '../../contract/brands.js';
+import {
+  presetId as presetIdSchema,
+  recipeFamily as recipeFamilySchema,
+  version as versionSchema,
+} from '../../contract/brands.js';
 import type { PresetDigest, PresetId, Version } from '../../contract/brands.js';
-import { recipeFamily as recipeFamilySchema } from '../../contract/schemas.js';
 import type { RecipeHeader } from '../../contract/records/command.js';
 import type { ExpansionRequest } from '../../contract/records/foreign.js';
 import type { FailureInput, Result } from '../../contract/errors.js';

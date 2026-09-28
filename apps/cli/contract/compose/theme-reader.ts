@@ -8,9 +8,9 @@
  * it reads no file.
  */
 import { readThemeSource } from '@novakai/canvas-templates';
-import type { ThemeGrammar } from '../ports/theme-grammar.js';
+import type { ThemeReader } from '../ports/theme-reader.js';
 
-/** Gives back Templates' `.theme` reader as the CLI's `ThemeGrammar`. Never fails. */
-export function composeThemeGrammar(): ThemeGrammar {
+/** Makes the CLI's `ThemeReader` from Templates' `.theme` reader. Never fails. */
+export function createThemeReader(): ThemeReader {
   return { read: readThemeSource };
 }

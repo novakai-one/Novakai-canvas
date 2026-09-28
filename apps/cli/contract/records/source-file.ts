@@ -13,6 +13,6 @@ import type { FilePath } from '../brands.js';
 
 /** One source file's text, not checked yet, and the path it was read from. */
 export interface SourceFile {
-  readonly file: FilePath;
+  readonly path: FilePath;
   readonly source: string;
 }

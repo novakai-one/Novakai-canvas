@@ -5,10 +5,10 @@
  * and where: `pnpm render:png --collection states --out out/ --format svg`.
  *
  * This file names what those flags ask for once checked, and the JSON a finished render prints:
- * the files it wrote and the theme it used. It declares types only; `core/render/request.ts`
- * checks the flags. A render never changes a saved collection.
+ * the files it wrote and the theme it used. Themes are one kind of Templates "preset" (a saved
+ * theme or recipe), so a theme's ID and digest have preset types. It declares types only.
  */
-import type { CollectionName, FilePath, PresetDigest, PresetId, ThemeName } from '../brands.js';
+import type { RecipeOrCollectionId, FilePath, PresetDigest, PresetId, ThemeId } from '../brands.js';
 import type { Collection, InspectionReport } from './foreign.js';
 
 /** The image format every section file is written in. */
@@ -18,21 +18,24 @@ export type RenderFormat = 'svg' | 'png';
 export type LabelMode = 'all' | 'default';
 
 /**
- * What `--collection` names. Text ending in `.canvas` is a file. Any other text is a name, looked
+ * What `--collection` names. Text ending in `.canvas` is a file. Any other text is an ID, looked
  * up as a recipe ID first, then as a shipped collection's ID.
  */
 export type CollectionSelector =
   | { readonly kind: 'file'; readonly path: FilePath }
-  | { readonly kind: 'named'; readonly name: CollectionName };
+  | { readonly kind: 'id'; readonly id: RecipeOrCollectionId };
 
-/** The theme to draw with, not the collection's own: `--theme`, or the `--theme-file`'s `@id`. */
-export type ThemeChoice = ThemeName | PresetId;
+/**
+ * The theme to draw with, not the collection's own: `--theme` as typed, or the `--theme-file`'s
+ * `@id`, which Templates has already checked as a preset ID.
+ */
+export type ThemeChoice = ThemeId | PresetId;
 
 /** What render:png's flags ask for, checked. */
 export interface RenderChoice {
   readonly collection: CollectionSelector;
   /** `--theme`: wins over the `--theme-file`'s `@id`. */
-  readonly theme?: ThemeName;
+  readonly theme?: ThemeId;
   /** `--theme-file`: a `.theme` file, added to the shipped themes for this render only. */
   readonly themeFile?: FilePath;
   /** `--out`: the folder the section files are written to. */
@@ -47,7 +50,7 @@ export interface RenderRequest extends RenderChoice {
   readonly root: FilePath;
 }
 
-/** A theme the render knew (shipped, or from `--theme-file`), and a hash of its content. */
+/** A theme the render knew (shipped, or from `--theme-file`), and Templates' hash of it. */
 export interface ThemeDigest {
   readonly id: PresetId;
   readonly digest: PresetDigest;

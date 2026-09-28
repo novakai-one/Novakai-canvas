@@ -7,11 +7,11 @@
  * runs render:png again.
  */
 import type { InputFiles } from '../../contract/ports/render-files.js';
-import type { FontBinding, RenderThemes } from '../../contract/ports/render-themes.js';
-import type { ThemeGrammar } from '../../contract/ports/theme-grammar.js';
+import type { ThemeFont, RenderThemes } from '../../contract/ports/render-themes.js';
+import type { ThemeReader } from '../../contract/ports/theme-reader.js';
 import type { Catalog, FontRequest, ThemeSource } from '../../contract/records/foreign.js';
 import type { RenderChoice, ThemeChoice } from '../../contract/records/render.js';
-import type { RenderEvidence } from '../../contract/records/render-failure.js';
+import type { RenderFailureSource } from '../../contract/records/render-failure.js';
 import type { FilePath, PresetId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
@@ -25,12 +25,12 @@ export interface AdmittedThemes {
 }
 
 /**
- * What theme admission uses: the shipped and given theme files, the theme grammar, fonts and the
+ * What theme admission uses: the shipped and given theme files, the theme reader, fonts and the
  * admission rule.
  */
 export interface ThemeDependencies extends AdmissionDependencies {
   readonly themes: RenderThemes;
-  readonly themeGrammar: ThemeGrammar;
+  readonly themeReader: ThemeReader;
   readonly inputFiles: Pick<InputFiles, 'shippedThemes' | 'read'>;
 }
 
@@ -41,7 +41,7 @@ interface AdmittedFile {
 }
 
 /** A catalog, or the evidence of the first theme that failed. */
-type CatalogResult = Result<Catalog, RenderEvidence>;
+type CatalogResult = Result<Catalog, RenderFailureSource>;
 
 /**
  * Every shipped theme, then the --theme-file, admitted into the installation's catalog; the choice
@@ -52,7 +52,7 @@ type CatalogResult = Result<Catalog, RenderEvidence>;
 export async function admitThemes(
   request: Pick<RenderChoice, 'theme' | 'themeFile'>,
   dependencies: ThemeDependencies,
-): Promise<Result<AdmittedThemes, RenderEvidence>> {
+): Promise<Result<AdmittedThemes, RenderFailureSource>> {
   const paths = await dependencies.inputFiles.shippedThemes();
   if (!paths.ok) return paths;
   const shipped = await admitInOrder(paths.value, dependencies);
@@ -89,7 +89,7 @@ async function withThemeFile(
   request: Pick<RenderChoice, 'theme' | 'themeFile'>,
   catalog: Catalog,
   dependencies: ThemeDependencies,
-): Promise<Result<AdmittedThemes, RenderEvidence>> {
+): Promise<Result<AdmittedThemes, RenderFailureSource>> {
   if (request.themeFile === undefined) return success(chosen(catalog, request.theme));
   const admitted = await admitThemeFile(request.themeFile, catalog, dependencies);
   return mapped(admitted, (file) => chosen(file.catalog, request.theme ?? file.id));
@@ -103,12 +103,12 @@ async function admitThemeFile(
   path: FilePath,
   catalog: Catalog,
   dependencies: ThemeDependencies,
-): Promise<Result<AdmittedFile, RenderEvidence>> {
+): Promise<Result<AdmittedFile, RenderFailureSource>> {
   const file = await dependencies.inputFiles.read(path);
   if (!file.ok) return file;
-  const theme = dependencies.themeGrammar.read(file.value.source);
+  const theme = dependencies.themeReader.read(file.value.source);
   if (!theme.ok) return theme;
-  return admitTheme(file.value.file, theme.value, catalog, dependencies);
+  return admitTheme(file.value.path, theme.value, catalog, dependencies);
 }
 
 /**
@@ -120,9 +120,9 @@ async function admitTheme(
   theme: ThemeSource,
   catalog: Catalog,
   dependencies: ThemeDependencies,
-): Promise<Result<AdmittedFile, RenderEvidence>> {
+): Promise<Result<AdmittedFile, RenderFailureSource>> {
   const staged = await Promise.all(
-    theme.fonts.map((font) => fontBinding(file, font, dependencies)),
+    theme.fonts.map((font) => stagedThemeFont(file, font, dependencies)),
   );
   const fonts = combined(staged);
   if (!fonts.ok) return fonts;
@@ -131,11 +131,11 @@ async function admitTheme(
 }
 
 /** One font's role and the digest of its staged bytes. Fails as the font's admission does. */
-async function fontBinding(
+async function stagedThemeFont(
   file: FilePath,
   font: FontRequest,
   dependencies: ThemeDependencies,
-): Promise<Result<FontBinding, RenderEvidence>> {
+): Promise<Result<ThemeFont, RenderFailureSource>> {
   const digest = await admitResource(file, font, dependencies);
   return mapped(digest, (admitted) => ({ alias: font.alias, digest: admitted }));
 }

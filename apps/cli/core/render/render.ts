@@ -13,7 +13,7 @@ import type { InputFiles, RasterEngine, SectionFiles } from '../../contract/port
 import type { RenderOutput } from '../../contract/ports/render-output.js';
 import type { RenderSources } from '../../contract/ports/render-sources.js';
 import type { RenderThemes } from '../../contract/ports/render-themes.js';
-import type { ThemeGrammar } from '../../contract/ports/theme-grammar.js';
+import type { ThemeReader } from '../../contract/ports/theme-reader.js';
 import type { ResourceReader } from '../../contract/ports/resource-reader.js';
 import type {
   Catalog,
@@ -22,7 +22,7 @@ import type {
   RenderDocument,
 } from '../../contract/records/foreign.js';
 import type { RenderReport, RenderRequest } from '../../contract/records/render.js';
-import type { RenderEvidence, RenderFailure } from '../../contract/records/render-failure.js';
+import type { RenderFailureSource, RenderFailure } from '../../contract/records/render-failure.js';
 import { renderFaultFailure, nativeFault, success, type Result } from '../../contract/errors.js';
 import { chosenCollection } from './collection.js';
 import { pinResources } from './pins.js';
@@ -38,7 +38,7 @@ const recovery =
 
 /**
  * What one open render runs with: the environment's ports, the file ports, resource reads and the
- * theme grammar.
+ * theme reader.
  */
 interface JoinedPorts {
   readonly sources: RenderSources;
@@ -49,7 +49,7 @@ interface JoinedPorts {
   readonly raster: RasterEngine;
   readonly sectionFiles: SectionFiles;
   readonly resources: ResourceReader;
-  readonly themeGrammar: ThemeGrammar;
+  readonly themeReader: ThemeReader;
 }
 
 /** A checked collection and the catalog it was drawn against. */
@@ -82,7 +82,7 @@ export async function renderCollection(
   return closedAfter(rendered, await guarded(environment.close()));
 }
 
-/** The open environment's ports joined with the render's file ports, resource reads and grammar. */
+/** The open environment's ports joined with the file ports, resource reads and theme reader. */
 function joinPorts(
   environment: RenderEnvironment,
   ports: RenderPorts,
@@ -96,19 +96,21 @@ function joinPorts(
     raster: ports.raster,
     sectionFiles: ports.sectionFiles,
     resources: ports.resources,
-    themeGrammar: ports.themeGrammar,
+    themeReader: ports.themeReader,
   };
 }
 
 /** `work`'s own outcome; a rejection becomes `provider-failed` with its native evidence. */
-function guarded<T>(work: Promise<Result<T, RenderEvidence>>): Promise<Result<T, RenderEvidence>> {
+function guarded<T>(
+  work: Promise<Result<T, RenderFailureSource>>,
+): Promise<Result<T, RenderFailureSource>> {
   return work.catch((error: unknown) => renderFaultFailure(nativeFault(error)));
 }
 
 /** After the close: the render's own failure first, then the close's; otherwise the report. */
 function closedAfter(
-  rendered: Result<RenderReport, RenderEvidence>,
-  closed: Result<void, RenderEvidence>,
+  rendered: Result<RenderReport, RenderFailureSource>,
+  closed: Result<void, RenderFailureSource>,
 ): Result<RenderReport, RenderFailure> {
   if (!rendered.ok) return rejected(rendered.error);
   if (!closed.ok) return rejected(closed.error);
@@ -116,7 +118,7 @@ function closedAfter(
 }
 
 /** `source` as the `render-failed` record render:png prints. */
-function rejected(source: RenderEvidence): Result<never, RenderFailure> {
+function rejected(source: RenderFailureSource): Result<never, RenderFailure> {
   return {
     ok: false,
     error: { code: 'render-failed', message: 'Headless render rejected', recovery, source },
@@ -130,7 +132,7 @@ function rejected(source: RenderEvidence): Result<never, RenderFailure> {
 async function renderIn(
   request: RenderRequest,
   ports: JoinedPorts,
-): Promise<Result<RenderReport, RenderEvidence>> {
+): Promise<Result<RenderReport, RenderFailureSource>> {
   const themes = await admitThemes(request, ports);
   if (!themes.ok) return themes;
   const collection = await chosenCollection(request.collection, themes.value, ports);
@@ -146,8 +148,8 @@ async function drawn(
   request: RenderRequest,
   ports: JoinedPorts,
   drawing: Drawing,
-): Promise<Result<RenderReport, RenderEvidence>> {
-  const document = await ports.output.produce(drawing.collection, drawing.catalog);
+): Promise<Result<RenderReport, RenderFailureSource>> {
+  const document = await ports.output.layOut(drawing.collection, drawing.catalog);
   if (!document.ok) return document;
   const snapshot = renderSnapshot(
     drawing.collection,
@@ -172,11 +174,11 @@ async function exported(
   request: RenderRequest,
   ports: JoinedPorts,
   produced: Produced,
-): Promise<Result<RenderReport, RenderEvidence>> {
-  const exporter = await ports.output.exporter({
+): Promise<Result<RenderReport, RenderFailureSource>> {
+  const exporter = await ports.output.prepareExporter({
     document: produced.document,
     snapshot: produced.snapshot,
-    pins: pinResources(produced.catalog, produced.snapshot.collection.assets),
+    resolvedResources: pinResources(produced.catalog, produced.snapshot.collection.assets),
     resources: resourceInspector(produced.snapshot.resources),
   });
   if (!exporter.ok) return exporter;

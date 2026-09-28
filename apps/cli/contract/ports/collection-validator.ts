@@ -11,7 +11,10 @@
 import type { Collection, ModelResult } from '../records/foreign.js';
 
 /** Model's check of a saved collection. */
-export interface CollectionReader {
-  /** Checks the data is a valid collection. Gives it back typed, or Model's findings. */
+export interface CollectionValidator {
+  /**
+   * Checks the data is a valid collection. Gives it back typed, or Model's findings, in Model's
+   * own `Result` (the same `ok`, `value` and `error` fields as the CLI's).
+   */
   validate(stored: unknown): ModelResult<Collection>;
 }

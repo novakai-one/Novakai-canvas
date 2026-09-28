@@ -2,11 +2,11 @@
  * Why this file exists
  *
  * Both programs start with nothing but the typed words. `pnpm canvas list` has to be read,
- * checked, and then run with real files and a real connection to the service. `pnpm render:png`
- * has to be read, checked, and then run with real files and drawing parts.
+ * checked, and then run with real parts: files on disk and a connection to the service.
+ * `pnpm render:png` is read and checked the same way, then run with files and the PNG engine.
  *
  * This file does that for both: it reads the words, lets core check them, and runs the command
- * with the parts `compose/` builds. Every mistake comes back as a value, never thrown;
+ * with the real parts that `compose/` builds. Every mistake comes back as a value, never thrown;
  * `cli/canvas.ts` and `cli/render.ts` print it.
  */
 import { readArguments } from '../adapters/argv/node-args.js';
@@ -31,10 +31,10 @@ import { runService } from './compose/service.js';
  * Runs one `pnpm canvas` command, from the typed words to the text to print.
  *
  * `defaultWorkspace` is the folder used when `--workspace` isn't typed, as plain text. Fails as
- * the command does, or with `cli-unavailable` if that folder is empty or anything throws. Never
- * rejects.
+ * the command does, or with `cli-unavailable` if `defaultWorkspace` is empty text or anything
+ * throws. Never rejects.
  */
-export async function runCli(
+export async function runCanvas(
   argv: readonly string[],
   defaultWorkspace: string,
 ): Promise<Result<string>> {
@@ -57,7 +57,7 @@ const cliUnavailable: FailureInput = {
  *
  * `repoRoot` is the repo folder the shipped files are in, as plain text. Fails with
  * `invalid-arguments` before anything is read, `render-unavailable` if the render can't start (or
- * `repoRoot` is empty), or `render-failed`. Never rejects. It never changes a saved collection.
+ * `repoRoot` is empty text), or `render-failed`. Never rejects or changes a saved collection.
  */
 export async function runRender(
   argv: readonly string[],
@@ -121,7 +121,7 @@ async function boundRender(
 ): Promise<Result<RenderReport, RenderFailure | LocalFailure>> {
   try {
     const wiring = await import('./compose/render.js');
-    return await renderCollection(request, await wiring.composeRenderPorts(request));
+    return await renderCollection(request, await wiring.createRenderPorts(request));
   } catch {
     return failure(renderUnavailable);
   }

@@ -36,7 +36,7 @@ export function createInputFiles(root: FilePath): InputFiles {
  */
 export function createSectionFiles(target: SectionTarget): SectionFiles {
   return {
-    prepare: () => prepareOutput(target.out),
+    makeOutFolder: () => prepareOutput(target.out),
     write: (section, bytes) => writeSection(target, section, bytes),
   };
 }
@@ -113,7 +113,7 @@ async function readSource(path: FilePath): Promise<Result<SourceFile, ProviderFa
 
 /** The UTF-8 text of an absolute `file`. Throws the native read error. */
 async function readText(file: FilePath): Promise<SourceFile> {
-  return { source: await readFile(file, 'utf8'), file };
+  return { source: await readFile(file, 'utf8'), path: file };
 }
 
 /**

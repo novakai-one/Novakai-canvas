@@ -10,7 +10,12 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import type { LocalFiles } from '../../contract/ports/local-files.js';
 import type { LocalFailure, Result } from '../../contract/errors.js';
-import { failure, success, unreadableSource, unwritableOutput } from '../../contract/errors.js';
+import {
+  failure,
+  success,
+  unreadableSourceFailure,
+  unwritableOutputFailure,
+} from '../../contract/errors.js';
 import type { FilePath } from '../../contract/brands.js';
 
 /** The largest source file a command reads. */
@@ -31,7 +36,7 @@ async function readSource(file: FilePath): Promise<Result<string, LocalFailure>>
       return failure({ code: 'source-too-large', message: 'DSL source exceeds 16 MiB' });
     return success(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
   } catch {
-    return failure(unreadableSource(file));
+    return unreadableSourceFailure(file);
   }
 }
 /**
@@ -46,6 +51,6 @@ async function writeOutput(
     await writeFile(path, text, 'utf8');
     return success(undefined);
   } catch {
-    return failure(unwritableOutput(path));
+    return unwritableOutputFailure(path);
   }
 }

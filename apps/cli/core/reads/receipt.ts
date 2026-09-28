@@ -7,7 +7,7 @@ import type { Receipt } from '../../contract/records/foreign.js';
 import type { ReceiptLookup } from '../../contract/records/service-answers.js';
 import type { RequestId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
-import { failure, success, unconfirmedApply } from '../../contract/errors.js';
+import { failure, success, unconfirmedApplyFailure } from '../../contract/errors.js';
 
 /**
  * `receipt`'s text: no commit is information, not a failure. Fails with `invalid-response` when
@@ -30,7 +30,7 @@ export function appliedReceipt(
   request: RequestId,
 ): Result<string> {
   if (lookup.kind === 'none')
-    return failure(unconfirmedApply(request, 'Apply returned no committed receipt'));
+    return unconfirmedApplyFailure(request, 'Apply returned no committed receipt');
   return matchedReceipt(lookup.receipt, request);
 }
 

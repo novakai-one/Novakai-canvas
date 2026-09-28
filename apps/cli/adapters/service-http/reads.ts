@@ -9,9 +9,9 @@ import type { ServiceReads } from '../../contract/ports/service-reads.js';
 import type { ReadScope } from '../../contract/records/command.js';
 import type { ServiceAnswer } from '../../contract/records/service-answers.js';
 import {
-  languageDescription,
-  readoutAnswer,
-  receiptAnswer,
+  languageDescriptionSchema,
+  readoutAnswerSchema,
+  receiptAnswerSchema,
 } from '../../contract/records/service-answers.js';
 import type { Parser } from '../../contract/schemas.js';
 import { snapshotSchema } from '../../contract/schemas.js';
@@ -28,11 +28,11 @@ type TransportGet = Pick<HttpTransport, 'get'>;
  */
 export function createServiceReads(transport: TransportGet): ServiceReads {
   return {
-    language: () =>
+    vocabulary: () =>
       value(
         observed(
           transport.get('/api/v1/language'),
-          languageDescription,
+          languageDescriptionSchema,
           'Service returned an invalid language description',
         ),
       ),
@@ -46,7 +46,7 @@ export function createServiceReads(transport: TransportGet): ServiceReads {
       value(
         observed(
           transport.get('/api/v1/source', sourceQuery(collection, scope)),
-          readoutAnswer,
+          readoutAnswerSchema,
           'Service returned an invalid source readout',
         ),
       ),
@@ -61,7 +61,7 @@ export function createServiceReads(transport: TransportGet): ServiceReads {
     receipt: (request) =>
       observed(
         transport.get('/api/v1/receipt', { id: request }),
-        receiptAnswer,
+        receiptAnswerSchema,
         'Service returned an invalid receipt',
       ),
   };

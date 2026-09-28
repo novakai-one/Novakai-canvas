@@ -5,7 +5,8 @@
  * types `create my-diagram.canvas` without `--request`, the CLI makes a fresh ID. A fresh ID is
  * random, and core stays free of randomness so it always gives the same answer.
  *
- * This file names where fresh IDs come from, so compose can plug in a random source.
+ * This file names where fresh IDs come from, so the setup code (`contract/compose/`) can plug in
+ * a random source.
  */
 import type { RequestId } from '../brands.js';
 import type { Result } from '../errors.js';

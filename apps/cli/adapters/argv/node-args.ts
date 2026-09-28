@@ -53,7 +53,7 @@ export function readArguments<F extends string>(
   });
   const refused = refusedFlag(parsed.tokens, spec);
   if (refused !== undefined) return { kind: 'malformed', flag: refused.rawName };
-  return { kind: 'read', arguments: rawArguments(parsed, spec) };
+  return { kind: 'split', arguments: rawArguments(parsed, spec) };
 }
 
 /** The first flag token Node's strict mode would refuse; absent when every flag is accepted. */

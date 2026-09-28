@@ -8,7 +8,7 @@
 import type { RenderSources } from '../../contract/ports/render-sources.js';
 import type { Collection, ResolvedResources } from '../../contract/records/foreign.js';
 import type { CollectionSelector, ThemeChoice } from '../../contract/records/render.js';
-import type { RenderEvidence } from '../../contract/records/render-failure.js';
+import type { RenderFailureSource } from '../../contract/records/render-failure.js';
 import type { SourceFile } from '../../contract/records/source-file.js';
 import type { Result } from '../../contract/errors.js';
 import { renderFaultFailure, success } from '../../contract/errors.js';
@@ -33,7 +33,7 @@ export async function chosenCollection(
   selector: CollectionSelector,
   themes: AdmittedThemes,
   dependencies: CollectionDependencies,
-): Promise<Result<Collection, RenderEvidence>> {
+): Promise<Result<Collection, RenderFailureSource>> {
   const original = await collectionSource(selector, themes.catalog, dependencies);
   if (!original.ok) return original;
   const source = themedSource(original.value, themes.choice, dependencies.sources.parse);
@@ -46,7 +46,7 @@ function themedSource(
   source: SourceFile,
   choice: ThemeChoice | undefined,
   parse: RenderSources['parse'],
-): Result<SourceFile, RenderEvidence> {
+): Result<SourceFile, RenderFailureSource> {
   if (choice === undefined) return success(source);
   return withTheme(source, choice, parse);
 }
@@ -60,7 +60,7 @@ async function lowered(
   source: SourceFile,
   themes: AdmittedThemes,
   dependencies: CollectionDependencies,
-): Promise<Result<Collection, RenderEvidence>> {
+): Promise<Result<Collection, RenderFailureSource>> {
   const assets = await sourceAssets(source, dependencies);
   if (!assets.ok) return assets;
   const pins = pinResources(themes.catalog, assets.value);
@@ -78,7 +78,7 @@ function withChoice(
   pins: ResolvedResources,
   choice: ThemeChoice | undefined,
   sources: Pick<RenderSources, 'validate'>,
-): Result<Collection, RenderEvidence> {
+): Result<Collection, RenderFailureSource> {
   if (choice === undefined) return sources.validate(collection);
   const pin = pins.themes[choice];
   if (pin === undefined) return renderFaultFailure({ code: 'missing-theme', theme: choice });

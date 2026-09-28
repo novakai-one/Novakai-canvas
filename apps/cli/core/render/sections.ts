@@ -8,7 +8,7 @@ import type { RasterEngine, SectionFiles } from '../../contract/ports/render-fil
 import type { SectionExporter } from '../../contract/ports/render-output.js';
 import type { RenderDocument } from '../../contract/records/foreign.js';
 import type { RenderFormat } from '../../contract/records/render.js';
-import type { RenderEvidence } from '../../contract/records/render-failure.js';
+import type { RenderFailureSource } from '../../contract/records/render-failure.js';
 import { sectionId, type FilePath, type SectionId } from '../../contract/brands.js';
 import { failure, success, type Result } from '../../contract/errors.js';
 import { combined } from '../shared/results.js';
@@ -29,7 +29,7 @@ export async function exportSections(
   ports: SectionPorts,
   exporter: SectionExporter,
   document: RenderDocument,
-): Promise<Result<readonly FilePath[], RenderEvidence>> {
+): Promise<Result<readonly FilePath[], RenderFailureSource>> {
   const sections = combined(document.scene.sections.map((section) => checkedSection(section.id)));
   if (!sections.ok) return sections;
   const ready = await prepared(format, ports);
@@ -55,17 +55,17 @@ function checkedSection(id: string): Result<SectionId> {
 async function prepared(
   format: RenderFormat,
   ports: SectionPorts,
-): Promise<Result<void, RenderEvidence>> {
+): Promise<Result<void, RenderFailureSource>> {
   const raster = await rasterFor(format, ports.raster);
   if (!raster.ok) return raster;
-  return ports.sectionFiles.prepare();
+  return ports.sectionFiles.makeOutFolder();
 }
 
 /** PNG starts the raster engine; SVG needs nothing. */
 function rasterFor(
   format: RenderFormat,
   raster: RasterEngine,
-): Promise<Result<void, RenderEvidence>> {
+): Promise<Result<void, RenderFailureSource>> {
   if (format !== 'png') return Promise.resolve(success(undefined));
   return raster.prepare();
 }
@@ -75,7 +75,7 @@ async function written(
   files: SectionFiles,
   exporter: SectionExporter,
   sections: readonly SectionId[],
-): Promise<Result<readonly FilePath[], RenderEvidence>> {
+): Promise<Result<readonly FilePath[], RenderFailureSource>> {
   const results = await Promise.all(
     sections.map((section) => writtenSection(files, exporter, section)),
   );
@@ -87,7 +87,7 @@ async function writtenSection(
   files: SectionFiles,
   exporter: SectionExporter,
   section: SectionId,
-): Promise<Result<FilePath, RenderEvidence>> {
+): Promise<Result<FilePath, RenderFailureSource>> {
   const bytes = await exporter.export(section);
   if (!bytes.ok) return bytes;
   return files.write(section, bytes.value);

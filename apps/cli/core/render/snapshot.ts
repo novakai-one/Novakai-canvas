@@ -14,13 +14,13 @@ import type {
   RenderDocument,
   Resource,
 } from '../../contract/records/foreign.js';
-import type { RenderEvidence } from '../../contract/records/render-failure.js';
+import type { RenderFailureSource } from '../../contract/records/render-failure.js';
 import { renderFaultFailure, success, type Result } from '../../contract/errors.js';
 import { assetOfPin } from '../resources/digests.js';
 import { combined, mapped } from '../shared/results.js';
 
 /** What the snapshot reads: the stored asset bytes and the base64 decoder. */
-export type SnapshotAssets = Pick<RenderAssets, 'resolve' | 'decodeBase64'>;
+export type SnapshotAssets = Pick<RenderAssets, 'readBack' | 'decodeBase64'>;
 
 /** One font the rendered document embeds. */
 type DocumentFont = RenderDocument['fonts'][number];
@@ -37,7 +37,7 @@ export function renderSnapshot(
   document: RenderDocument,
   catalog: Catalog,
   assets: SnapshotAssets,
-): Result<ExportSnapshot, RenderEvidence> {
+): Result<ExportSnapshot, RenderFailureSource> {
   const resources = retainedResources(document, catalog, collection, assets);
   if (!resources.ok) return resources;
   return success({
@@ -58,7 +58,7 @@ function retainedResources(
   catalog: Catalog,
   collection: Collection,
   assets: SnapshotAssets,
-): Result<readonly Resource[], RenderEvidence> {
+): Result<readonly Resource[], RenderFailureSource> {
   const assetResources = combined(collection.assets.map((asset) => assetResource(asset, assets)));
   return mapped(assetResources, (retained) => [
     ...retained,
@@ -74,11 +74,11 @@ function retainedResources(
 function assetResource(
   asset: CollectionAsset,
   assets: SnapshotAssets,
-): Result<Resource, RenderEvidence> {
+): Result<Resource, RenderFailureSource> {
   const digest = assetOfPin(asset.digest);
   if (digest === undefined)
     return renderFaultFailure({ code: 'invalid-asset-pin', asset: asset.id, digest: asset.digest });
-  return mapped(assets.resolve(digest), (blob) => ({
+  return mapped(assets.readBack(digest), (blob) => ({
     kind: 'asset',
     digest: blob.descriptor.digest,
     mediaType: blob.descriptor.mediaType,

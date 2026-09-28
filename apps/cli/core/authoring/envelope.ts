@@ -1,17 +1,17 @@
 /*
  * The one Authoring request envelope the CLI sends: actor `agent:cli`, envelope version 1, the
  * preconditions, a write scope of exactly their keys, the bound assets and the change intent,
- * checked by Authoring's request schema. Pure. A rejected envelope is the failure the caller
+ * checked by Authoring's request schema. Pure. A rejected envelope is the failed step the caller
  * names, and nothing is sent.
  */
 import type { ChangeMode } from '../../contract/records/command.js';
-import type { ReadVersion, Request } from '../../contract/records/foreign.js';
+import type { ReadVersion, AuthoringRequest } from '../../contract/records/foreign.js';
 import type { PresetDocument } from '../../contract/records/service-answers.js';
-import type { AssetBinding } from '../../contract/records/staged-resource.js';
+import type { NamedAssetDigest } from '../../contract/records/staged-resource.js';
 import type { RequestId, WorkspaceId } from '../../contract/brands.js';
-import type { FailureInput, Result } from '../../contract/errors.js';
+import type { LocalFailure, Result } from '../../contract/errors.js';
+import { success } from '../../contract/errors.js';
 import { requestSchema } from '../../contract/schemas.js';
-import { checked } from '../shared/checks.js';
 
 /** The DSL planner's payload: the source, sent unchanged, and how it changes the collection. */
 export interface SourceChange {
@@ -33,7 +33,7 @@ export interface EnvelopeDraft {
   readonly request: RequestId;
   /** Each record the request expects at a version, or absent; also the write scope. */
   readonly expected: readonly ReadVersion[];
-  readonly assets: readonly AssetBinding[];
+  readonly assets: readonly NamedAssetDigest[];
   readonly change: PlannedChange;
 }
 
@@ -41,13 +41,13 @@ export interface EnvelopeDraft {
 const actor = Object.freeze({ id: 'agent:cli', kind: 'agent' });
 
 /**
- * The checked Authoring request of `draft`, scoped to exactly its preconditions' keys. Fails with
- * `rejectedAs` when Authoring's request schema rejects it.
+ * The checked Authoring request of `draft`, scoped to exactly its preconditions' keys. Gives back
+ * `rejected` when Authoring's request schema refuses it.
  */
 export function envelope(
   draft: EnvelopeDraft,
-  rejectedAs: FailureInput,
-): Result<Request> {
+  rejected: Result<never, LocalFailure>,
+): Result<AuthoringRequest> {
   const request = {
     workspace: draft.workspace,
     request: draft.request,
@@ -58,5 +58,7 @@ export function envelope(
     assets: draft.assets,
     intent: { kind: 'change', ...draft.change },
   };
-  return checked<Request>(requestSchema, request, rejectedAs);
+  const checkedRequest = requestSchema.safeParse(request);
+  if (!checkedRequest.success) return rejected;
+  return success(checkedRequest.data);
 }

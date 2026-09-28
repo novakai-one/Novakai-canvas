@@ -6,12 +6,12 @@
  */
 import type {
   ReadVersion,
-  Request,
-  Snapshot,
+  AuthoringRequest,
+  WorkspaceSnapshot,
   StoredRecord,
 } from '../../contract/records/foreign.js';
 import type { PresetPreparation } from '../../contract/records/service-answers.js';
-import type { AssetBinding } from '../../contract/records/staged-resource.js';
+import type { NamedAssetDigest } from '../../contract/records/staged-resource.js';
 import type { RecordId, RequestId } from '../../contract/brands.js';
 import type { FailureInput, Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
@@ -21,7 +21,7 @@ import { envelope } from './envelope.js';
 export interface PresetDraft {
   readonly preparation: PresetPreparation;
   /** The staged fonts and images, bound under the aliases the preset file declares. */
-  readonly assets: readonly AssetBinding[];
+  readonly assets: readonly NamedAssetDigest[];
   readonly request: RequestId;
 }
 
@@ -38,8 +38,8 @@ const unpreparedPreset: FailureInput = Object.freeze({
  */
 export function presetRequest(
   draft: PresetDraft,
-  snapshot: Snapshot,
-): Result<Request> {
+  snapshot: WorkspaceSnapshot,
+): Result<AuthoringRequest> {
   const metadata = snapshot.records.find(isMetadata);
   if (metadata === undefined)
     return failure({ code: 'invalid-response', message: 'Workspace metadata is missing' });
@@ -55,7 +55,7 @@ export function presetRequest(
       assets: draft.assets,
       change: { planner: 'preset', payload: draft.preparation.document },
     },
-    unpreparedPreset,
+    failure(unpreparedPreset),
   );
 }
 
@@ -66,7 +66,7 @@ function isMetadata(record: StoredRecord): boolean {
 
 /** The stored version of the preset record `id`, or `absent` when none is stored. */
 function presetVersion(
-  snapshot: Snapshot,
+  snapshot: WorkspaceSnapshot,
   id: RecordId,
 ): ReadVersion['version'] {
   const stored = snapshot.records.find((item) => item.key.kind === 'preset' && item.key.id === id);

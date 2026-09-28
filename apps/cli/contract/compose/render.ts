@@ -5,8 +5,9 @@
  * draw. Something must build those parts for real: the file readers, the PNG engine, a throwaway
  * font and image store, Language, the Design System, Templates and the service's layout.
  *
- * This file builds them for one render and hands them over as `RenderPorts`. If opening fails
- * part way, it closes the store it made. A render never changes a saved collection.
+ * This file builds them for one render and hands them over as one bundle of parts, `RenderPorts`.
+ * If opening the render's environment (`RenderPorts.open`) fails part way, it closes the store it
+ * made. A render never changes a saved collection.
  */
 import { join } from 'node:path';
 import {
@@ -31,17 +32,17 @@ import type { RenderEnvironment, RenderPorts } from '../ports/render.js';
 import type { TempAssetStore } from '../ports/render-assets.js';
 import type { RenderOutput } from '../ports/render-output.js';
 import type { RenderRequest } from '../records/render.js';
-import type { RenderEvidence } from '../records/render-failure.js';
-import type { HeadlessBindings, Language } from '../records/foreign.js';
+import type { RenderFailureSource } from '../records/render-failure.js';
+import type { HeadlessTools, Language } from '../records/foreign.js';
 import { renderFaultFailure, nativeFault, success, type Result } from '../errors.js';
-import { composeLanguage } from './language.js';
-import { composeThemeGrammar } from './theme-grammar.js';
+import { createLanguageWithModel } from './language.js';
+import { createThemeReader } from './theme-reader.js';
 
 /**
- * Builds everything one render needs. Rejects if the service's drawing code can't be loaded;
- * `compose.ts` turns that into `render-unavailable`.
+ * Builds the bundle of parts one render needs. Rejects (throws) if the service's drawing code
+ * can't be loaded; `compose.ts` turns that into `render-unavailable`.
  */
-export async function composeRenderPorts(request: RenderRequest): Promise<RenderPorts> {
+export async function createRenderPorts(request: RenderRequest): Promise<RenderPorts> {
   const service = await createHeadlessBindings();
   return {
     open: () => openEnvironment(request, service),
@@ -49,7 +50,7 @@ export async function composeRenderPorts(request: RenderRequest): Promise<Render
     raster: createRaster(request.root),
     sectionFiles: createSectionFiles(request),
     resources: createResourceReader(),
-    themeGrammar: composeThemeGrammar(),
+    themeReader: createThemeReader(),
   };
 }
 
@@ -61,8 +62,8 @@ export async function composeRenderPorts(request: RenderRequest): Promise<Render
  */
 async function openEnvironment(
   request: RenderRequest,
-  service: HeadlessBindings,
-): Promise<Result<RenderEnvironment, RenderEvidence>> {
+  service: HeadlessTools,
+): Promise<Result<RenderEnvironment, RenderFailureSource>> {
   const store = await openTempAssets();
   if (!store.ok) return store;
   const environment = await environmentIn(request, service, store.value).catch(thrown);
@@ -81,7 +82,7 @@ interface Environment {
 
 /** What the environment port is joined from besides the capability values. */
 interface PortOwners {
-  readonly service: HeadlessBindings;
+  readonly service: HeadlessTools;
   readonly request: RenderRequest;
   readonly store: TempAssetStore;
 }
@@ -92,9 +93,9 @@ interface PortOwners {
  */
 async function environmentIn(
   request: RenderRequest,
-  service: HeadlessBindings,
+  service: HeadlessTools,
   store: TempAssetStore,
-): Promise<Result<RenderEnvironment, RenderEvidence>> {
+): Promise<Result<RenderEnvironment, RenderFailureSource>> {
   const installation = await prepareInstallation(
     join(request.root, 'resources'),
     join(request.root, 'capability/design-system'),
@@ -106,27 +107,27 @@ async function environmentIn(
 }
 
 /** A step that threw instead of returning its failure, as `provider-failed` with its evidence. */
-function thrown(error: unknown): Result<never, RenderEvidence> {
+function thrown(error: unknown): Result<never, RenderFailureSource> {
   return renderFaultFailure(nativeFault(error));
 }
 
 /** `error` as the outcome once `store` is closed; a failed close is not reported over it. */
 async function closedAfter(
   store: TempAssetStore,
-  error: RenderEvidence,
-): Promise<Result<never, RenderEvidence>> {
+  error: RenderFailureSource,
+): Promise<Result<never, RenderFailureSource>> {
   await store.close();
   return { ok: false, error };
 }
 
 /** Language, the Design System and Templates over the installation's tokens. Cannot fail. */
 function capabilities(
-  service: HeadlessBindings,
+  service: HeadlessTools,
   assets: TempAssetStore['assets'],
   installation: BuiltinResources,
 ): Environment {
   const system = composeDesignSystem();
-  const language = composeLanguage();
+  const language = createLanguageWithModel();
   const codecs = service.createPresetCodecs({
     system,
     language,

@@ -4,7 +4,7 @@
  * the temporary store; nothing stored is changed. Every failure is Assets' own, returned as a
  * value; core/render/render.ts owns recovery.
  */
-import type { RenderEvidence } from '../../contract/records/render-failure.js';
+import type { RenderFailureSource } from '../../contract/records/render-failure.js';
 import type { RenderAssets } from '../../contract/ports/render-assets.js';
 import type { AssetDigest } from '../../contract/brands.js';
 import { success, type Result } from '../../contract/errors.js';
@@ -14,7 +14,7 @@ import type { Assets, StageInput } from '../../contract/records/foreign.js';
 export function createRenderAssets(assets: Pick<Assets, 'stage' | 'resolve'>): RenderAssets {
   return {
     stage: (input) => stagedDigest(assets, input),
-    resolve: (digest) => assets.resolve(digest),
+    readBack: (digest) => assets.resolve(digest),
     decodeBase64: (text) => Buffer.from(text, 'base64'),
   };
 }
@@ -23,7 +23,7 @@ export function createRenderAssets(assets: Pick<Assets, 'stage' | 'resolve'>): R
 async function stagedDigest(
   assets: Pick<Assets, 'stage'>,
   input: StageInput,
-): Promise<Result<AssetDigest, RenderEvidence>> {
+): Promise<Result<AssetDigest, RenderFailureSource>> {
   const admitted = await assets.stage(input);
   if (!admitted.ok) return admitted;
   return success(admitted.value.descriptor.digest);

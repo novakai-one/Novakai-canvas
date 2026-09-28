@@ -8,10 +8,10 @@ import type { InputFiles } from '../../contract/ports/render-files.js';
 import type { RenderSources } from '../../contract/ports/render-sources.js';
 import type { Catalog } from '../../contract/records/foreign.js';
 import type { CollectionSelector } from '../../contract/records/render.js';
-import type { RenderEvidence } from '../../contract/records/render-failure.js';
+import type { RenderFailureSource } from '../../contract/records/render-failure.js';
 import type { RenderFault } from '../../contract/records/render-fault.js';
 import type { SourceFile } from '../../contract/records/source-file.js';
-import { presetId, type CollectionName, type PresetId } from '../../contract/brands.js';
+import { presetId, type RecipeOrCollectionId, type PresetId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { renderFaultFailure, success } from '../../contract/errors.js';
 
@@ -33,9 +33,9 @@ export function collectionSource(
   selector: CollectionSelector,
   catalog: Catalog,
   dependencies: SourceDependencies,
-): Promise<Result<SourceFile, RenderEvidence>> {
+): Promise<Result<SourceFile, RenderFailureSource>> {
   if (selector.kind === 'file') return dependencies.inputFiles.read(selector.path);
-  return namedSource(selector.name, catalog, dependencies);
+  return namedSource(selector.id, catalog, dependencies);
 }
 
 /**
@@ -43,10 +43,10 @@ export function collectionSource(
  * Fails as {@link recipeSource} or {@link shippedSource} does.
  */
 function namedSource(
-  name: CollectionName,
+  name: RecipeOrCollectionId,
   catalog: Catalog,
   dependencies: SourceDependencies,
-): Promise<Result<SourceFile, RenderEvidence>> {
+): Promise<Result<SourceFile, RenderFailureSource>> {
   const recipe = recipeNamed(catalog, name);
   if (recipe === undefined) return shippedSource(name, dependencies);
   return Promise.resolve(recipeSource(recipe, dependencies.inputFiles));
@@ -59,10 +59,10 @@ function namedSource(
 function recipeSource(
   recipe: RecipePreset,
   inputFiles: SourceDependencies['inputFiles'],
-): Result<SourceFile, RenderEvidence> {
+): Result<SourceFile, RenderFailureSource> {
   const file = inputFiles.recipeFile(recipe.payload.family);
   if (!file.ok) return file;
-  return success({ source: recipe.payload.source, file: file.value });
+  return success({ source: recipe.payload.source, path: file.value });
 }
 
 /**
@@ -70,9 +70,9 @@ function recipeSource(
  * shipped files cannot be read, or `collection-selection` unless exactly one matches.
  */
 async function shippedSource(
-  name: CollectionName,
+  name: RecipeOrCollectionId,
   dependencies: SourceDependencies,
-): Promise<Result<SourceFile, RenderEvidence>> {
+): Promise<Result<SourceFile, RenderFailureSource>> {
   const sources = await dependencies.inputFiles.shippedCollections();
   if (!sources.ok) return sources;
   const parse = dependencies.sources.parse;
@@ -84,7 +84,7 @@ async function shippedSource(
 
 /** The single match. Fails with `collection-selection`, counting the matches, unless there is one. */
 function onlyMatch(
-  name: CollectionName,
+  name: RecipeOrCollectionId,
   matches: readonly SourceFile[],
 ): Result<SourceFile, RenderFault> {
   const [match] = matches;
@@ -99,7 +99,7 @@ function onlyMatch(
  */
 function recipeNamed(
   catalog: Catalog,
-  name: CollectionName,
+  name: RecipeOrCollectionId,
 ): RecipePreset | undefined {
   const id = presetId.safeParse(name);
   if (!id.success) return undefined;
@@ -117,7 +117,7 @@ function isRecipeWithId(
 /** Whether Language parses `source` and its collection ID is `name`. */
 function declares(
   source: SourceFile,
-  name: CollectionName,
+  name: RecipeOrCollectionId,
   parse: RenderSources['parse'],
 ): boolean {
   const parsed = parse(source.source);

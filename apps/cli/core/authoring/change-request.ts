@@ -6,13 +6,13 @@
  * counts as present) and also expects the catalog; `replace` and `patch` need the revision the
  * agent read. Nothing is sent; the caller fixes the named input and runs the command again.
  */
-import type { CollectionReader } from '../../contract/ports/collection-reader.js';
+import type { CollectionValidator } from '../../contract/ports/collection-validator.js';
 import type { ChangeIntent } from '../../contract/records/command.js';
 import type {
   Collection,
   ReadVersion,
-  Request,
-  Snapshot,
+  AuthoringRequest,
+  WorkspaceSnapshot,
   StoredRecord,
 } from '../../contract/records/foreign.js';
 import type {
@@ -21,9 +21,9 @@ import type {
   RequestId,
   StorageVersion,
 } from '../../contract/brands.js';
-import type { FailureInput, Result } from '../../contract/errors.js';
+import type { FailureInput, LocalFailure, Result } from '../../contract/errors.js';
 import { collectionRevision, recordId, storageVersion } from '../../contract/brands.js';
-import { failure, malformedRequest, success } from '../../contract/errors.js';
+import { failure, invalidInputFailure, success } from '../../contract/errors.js';
 import { checked } from '../shared/checks.js';
 import { envelope } from './envelope.js';
 
@@ -72,8 +72,15 @@ export function collectionRecordId(
   intent: ChangeIntent,
   text: string,
 ): Result<RecordId> {
-  if (intent.mode === 'create') return checked(recordId, text, malformedRequest);
-  return checked(recordId, text, missingCollection);
+  const id = recordId.safeParse(text);
+  if (!id.success) return unstorableIdFailure(intent);
+  return success(id.data);
+}
+
+/** `invalid-input` for `create`; `not-found` for `replace` and `patch`, as no record is stored. */
+function unstorableIdFailure(intent: ChangeIntent): Result<never, LocalFailure> {
+  if (intent.mode === 'create') return invalidInputFailure();
+  return failure(missingCollection);
 }
 
 /**
@@ -84,9 +91,9 @@ export function collectionRecordId(
  */
 export function changeRequest(
   draft: ChangeDraft,
-  snapshot: Snapshot,
-  reader: CollectionReader,
-): Result<Request> {
+  snapshot: WorkspaceSnapshot,
+  reader: CollectionValidator,
+): Result<AuthoringRequest> {
   const record = snapshot.records.find(
     (item) => item.key.kind === 'collection' && item.key.id === draft.collection,
   );
@@ -103,7 +110,7 @@ export function changeRequest(
 function expectedVersion(
   intent: ChangeIntent,
   record: StoredRecord | undefined,
-  reader: CollectionReader,
+  reader: CollectionValidator,
 ): Result<ReadVersion['version']> {
   if (intent.mode !== 'create') return storedVersion(record, intent.revision, reader);
   if (record !== undefined)
@@ -121,7 +128,7 @@ function expectedVersion(
 function storedVersion(
   record: StoredRecord | undefined,
   requested: CollectionRevision | undefined,
-  reader: CollectionReader,
+  reader: CollectionValidator,
 ): Result<StorageVersion> {
   if (record === undefined) return failure(missingCollection);
   const counters = countersOf(record, reader);
@@ -136,7 +143,7 @@ function storedVersion(
  */
 function countersOf(
   record: StoredRecord,
-  reader: CollectionReader,
+  reader: CollectionValidator,
 ): Result<CollectionCounters> {
   const collection = reader.validate(record.value);
   if (!collection.ok)
@@ -194,9 +201,9 @@ function matchedRevision(
  */
 function withCatalog(
   draft: ChangeDraft,
-  snapshot: Snapshot,
+  snapshot: WorkspaceSnapshot,
   version: ReadVersion['version'],
-): Result<Request> {
+): Result<AuthoringRequest> {
   const catalog = snapshot.records.find((item) => item.key.kind === 'catalog' && !item.deleted);
   if (catalog === undefined)
     return failure({ code: 'invalid-response', message: 'Workspace catalog is missing' });
@@ -210,7 +217,7 @@ function withCatalog(
       assets: [],
       change: { planner: 'dsl', payload: { source: draft.source, mode: draft.intent.mode } },
     },
-    malformedRequest,
+    invalidInputFailure(),
   );
 }
 

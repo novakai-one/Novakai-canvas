@@ -4,7 +4,7 @@
  * written to the workspace; service failures are returned whole, and the caller fixes the named
  * input and runs the command again.
  */
-import type { CollectionReader } from '../../contract/ports/collection-reader.js';
+import type { CollectionValidator } from '../../contract/ports/collection-validator.js';
 import type { ServiceReads } from '../../contract/ports/service-reads.js';
 import type { ReadScope } from '../../contract/records/command.js';
 import type { CollectionId, RequestId } from '../../contract/brands.js';
@@ -17,12 +17,12 @@ import { sourceText } from './source.js';
 /** What the read commands use: the service's read calls and Model's collection check. */
 export interface ReadDependencies {
   readonly reads: ServiceReads;
-  readonly collections: CollectionReader;
+  readonly collections: CollectionValidator;
 }
 
 /** `describe`: the DSL vocabulary as JSON. Fails as the read does. */
 export async function describeLanguage(dependencies: ReadDependencies): Promise<Result<string>> {
-  return mapped(await dependencies.reads.language(), json);
+  return mapped(await dependencies.reads.vocabulary(), json);
 }
 
 /** `list`: one line per live collection. Fails as the workspace read does. */

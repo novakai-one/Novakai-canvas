@@ -12,9 +12,9 @@ import type { TransportResponse } from '../../contract/records/foreign.js';
 import type { LocalFailure, Result } from '../../contract/errors.js';
 import { failure, foreignFailure, success } from '../../contract/errors.js';
 import {
-  generation,
+  serviceGeneration,
   type AgentToken,
-  type Generation,
+  type ServiceGeneration,
   type LoopbackOrigin,
 } from '../../contract/brands.js';
 
@@ -78,13 +78,13 @@ async function send(
 function answer(input: unknown): Result<ServiceAnswer<unknown>> {
   const envelope = responseEnvelope.safeParse(input);
   if (!envelope.success) return invalidEnvelope();
-  const sent = generation.safeParse(envelope.data.generation);
+  const sent = serviceGeneration.safeParse(envelope.data.generation);
   if (!sent.success) return invalidEnvelope();
   return observed(sent.data, envelope.data.outcome);
 }
 /** A successful outcome's value under its generation; a failed one as `service-rejected`, kept whole. */
 function observed(
-  sent: Generation,
+  sent: ServiceGeneration,
   outcome: TransportResponse['outcome'],
 ): Result<ServiceAnswer<unknown>> {
   if (!outcome.ok) return foreignFailure('service-rejected', outcome.error);

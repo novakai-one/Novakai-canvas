@@ -12,7 +12,7 @@ import type {
   RenderOutput,
   SectionExporter,
 } from '../../contract/ports/render-output.js';
-import type { RenderEvidence } from '../../contract/records/render-failure.js';
+import type { RenderFailureSource } from '../../contract/records/render-failure.js';
 import type { LabelMode, RenderFormat } from '../../contract/records/render.js';
 import type {
   Documents,
@@ -30,9 +30,9 @@ export interface ExportChoices {
   documentsFor(pins: ResolvedResources): Documents;
 }
 
-/** The output port's Export. Builds nothing and cannot fail; `exporter` fails as {@link openExporter}. */
-export function createExporter(choices: ExportChoices): Pick<RenderOutput, 'exporter'> {
-  return { exporter: (input) => openExporter(input, choices) };
+/** The output port's Export. Cannot fail; `prepareExporter` fails as {@link openExporter}. */
+export function createExporter(choices: ExportChoices): Pick<RenderOutput, 'prepareExporter'> {
+  return { prepareExporter: (input) => openExporter(input, choices) };
 }
 
 /**
@@ -42,7 +42,7 @@ export function createExporter(choices: ExportChoices): Pick<RenderOutput, 'expo
 async function openExporter(
   input: ExportInput,
   choices: ExportChoices,
-): Promise<Result<SectionExporter, RenderEvidence>> {
+): Promise<Result<SectionExporter, RenderFailureSource>> {
   const presentation = await createReactBindings(input.document.fonts);
   if (!presentation.ok) return presentation;
   const exporter = composeExport({
@@ -50,7 +50,7 @@ async function openExporter(
     readerCss: '',
     allLabels: choices.labels === 'all',
     snapshots: lease(input.snapshot),
-    documents: choices.documentsFor(input.pins),
+    documents: choices.documentsFor(input.resolvedResources),
     resources: input.resources,
   });
   return success({
@@ -71,7 +71,7 @@ async function sectionBytes(
   snapshot: ExportSnapshot,
   format: RenderFormat,
   section: SectionId,
-): Promise<Result<Uint8Array, RenderEvidence>> {
+): Promise<Result<Uint8Array, RenderFailureSource>> {
   const artifact = await exporter.service.exportArtifact({
     identity: { collectionId: snapshot.collection.id, revision: snapshot.collection.revision },
     format,
