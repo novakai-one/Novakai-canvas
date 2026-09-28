@@ -1,5 +1,7 @@
 # apps/cli — how agents author collections
 
+Diagrams of Levels 1–4.3: Canvas collections `cli-explained-levels-1-3` and `cli-explained-level-4` (sources in resources/reference/cli-explained/).
+
 Read this top to bottom. Each level adds one step of detail.
 
 ## Level 1 — What this folder is

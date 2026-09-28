@@ -1,0 +1,285 @@
+canvas 1
+collection @cli-explained-levels-1-3 "CLI explained · Levels 1–3 — what it is, its 7 purposes, the route a command takes" {
+
+  node @l1-person start "Person in a browser" size=small {}
+  node @l1-agent start "AI agent in a terminal" size=small {}
+  node @l1-web step "apps/web" { text @d "The visual front door. People click and drag." }
+  node @l1-cli step "apps/cli" role=primary { text @d "The typed front door. Agents type pnpm canvas commands, because they cannot click a canvas." }
+  node @l1-service step "apps/service" { text @d "The local server." }
+  node @l1-authoring step "Authoring" { text @d "Decides whether a change is saved." }
+  node @l1-saved end "Saved collections" role=success size=small {}
+  node @l1-note note "Note" { text @d "The CLI decides nothing about diagrams. It reads what was typed, sends it on and prints the answer. Model, Layout and the other capabilities decide whether a diagram is valid." role=caption }
+
+  wire @l1-w1 @l1-person -> @l1-web "clicks" kind=flow
+  wire @l1-w2 @l1-agent -> @l1-cli "types a command" kind=flow
+  wire @l1-w3 @l1-web -> @l1-service "HTTP" kind=flow
+  wire @l1-w4 @l1-cli -> @l1-service "HTTP" kind=flow
+  wire @l1-w5 @l1-service -> @l1-authoring "every change" kind=flow
+  wire @l1-w6 @l1-authoring -> @l1-saved "saves" kind=flow
+
+  node @l2-start start "Agent types a command" { text @d "pnpm canvas <command>, or pnpm render:png" }
+  node @l2-note note "Note" { text @d "1 to 5 need the server (apps/service). 6 and 7 run locally, with no server." role=caption }
+  node @l2-word decision "Which command?" role=decision size=small {}
+  node @p1 step "1 · Learn the diagram language" { code @c "describe" }
+  node @p2 step "2 · Look at what exists" { code @c "list, read, inspect" }
+  node @p3 step "3 · Change a diagram" { code @c "create, replace, patch; or preview, then apply" }
+  node @p4 step "4 · Recover a save whose answer was lost" { code @c "receipt, retry" }
+  node @p5 step "5 · Add reusable pieces" { code @c "theme admit, recipe admit, recipe instantiate" }
+  node @p6 step "6 · Work with build specs" role=supporting { code @c "profile describe, profile scaffold, profile lint" }
+  node @p7 step "7 · Draw a diagram to image files" role=supporting { code @c "pnpm render:png" text @d "A separate program. Changes nothing saved." }
+
+  wire @l2-w1 @l2-start -> @l2-word "reads the command" kind=flow
+  wire @l2-w4 @l2-word -> @p1 "1" kind=flow
+  wire @l2-w5 @l2-word -> @p2 "2" kind=flow
+  wire @l2-w6 @l2-word -> @p3 "3" kind=flow
+  wire @l2-w7 @l2-word -> @p4 "4" kind=flow
+  wire @l2-w8 @l2-word -> @p5 "5" kind=flow
+  wire @l2-w9 @l2-word -> @p6 "6" kind=flow
+  wire @l2-w10 @l2-word -> @p7 "7" kind=flow
+
+  node @u-task start "Agent gets a diagram task" size=small {}
+  node @u-check step "Check the result" { code @c "inspect, or pnpm render:png" }
+  node @u-ok decision "Looks right?" role=decision size=small {}
+  node @u-done end "Done" role=success size=small {}
+
+  wire @u-w0 @u-task -> @p1 "start here" kind=flow
+  wire @u-w1 @p1 -> @p2 "knows the words" kind=flow
+  wire @u-w2 @p2 -> @p3 "has the ID and revision" kind=flow
+  wire @u-w3 @p3 -> @u-check "saved" kind=flow
+  wire @u-w4 @u-check -> @u-ok "judge" kind=flow
+  wire @u-yes @u-ok -> @u-done "yes" kind=flow
+  wire @u-no @u-ok -> @p3 "no: patch again" kind=flow style=dashed
+
+  node @q-agent participant "Agent (terminal)" {}
+  node @q-canvas participant "cli/canvas.ts" {}
+  node @q-compose participant "contract/compose.ts" {}
+  node @q-argv participant "adapters/argv/node-args.ts" {}
+  node @q-parse participant "core/commands/parse.ts" {}
+  node @q-runsvc participant "contract/compose/service.ts" {}
+  node @q-dispatch participant "core/commands/dispatch.ts" {}
+  node @q-purpose participant "core/reads/queries.ts" {}
+  node @q-http participant "adapters/service-http/" {}
+  node @q-service participant "apps/service" {}
+  node @q-other note "Not on this route" { text @d "help and profile never reach the server: compose.ts answers help, and profile runs locally (3.2). pnpm render:png has its own route: cli/render.ts, runRender, parseRenderChoice, renderCollection." role=caption }
+  node @q-words note "Three words" { text @d "port = a type in contract/ports/ that core calls; compose plugs an adapter into it (3.3). envelope = the wrapper around every server answer: {generation, outcome}. generation = which run of the server answered; it changes when the server restarts." role=caption }
+
+  node @s-parsed start "ParsedCommand from parse.ts" size=small {}
+  node @s-k1 decision "kind: help?" role=decision size=small {}
+  node @s-k2 decision "kind: profile?" role=decision size=small {}
+  node @s-help step "usage text" { text @d "core/commands/help.ts" }
+  node @s-profile step "runProfile" { text @d "contract/compose/profiles.ts. No server." }
+  node @s-answer step "answerProfile" { text @d "core/profiles/commands.ts" }
+  node @s-runsvc step "runService" { text @d "contract/compose/service.ts. Plugs in the adapters." }
+  node @s-n1 decision "describe, list, read, inspect or receipt?" role=decision {}
+  node @s-n2 decision "create, replace, patch or preview?" role=decision {}
+  node @s-n3 decision "apply or retry?" role=decision {}
+  node @s-n4 decision "theme admit or recipe admit?" role=decision {}
+  node @s-reads step "core/reads/queries.ts" { text @d "the function with the same name as the command" }
+  node @s-author step "core/authoring/submit.ts" { code @c "author" }
+  node @s-retry step "core/authoring/reconcile.ts" { code @c "retry" text @d "apply runs the same code" }
+  node @s-admit step "core/presets/admit.ts" { code @c "admitPreset" }
+  node @s-inst step "recipe instantiate: no core file" { code @c "resources.instantiate" text @d "one server call" }
+
+  wire @s-w1 @s-parsed -> @s-k1 "compose.ts dispatch()" kind=flow
+  wire @s-w2 @s-k1 -> @s-help "yes" kind=flow
+  wire @s-w3 @s-k1 -> @s-k2 "no" kind=flow
+  wire @s-w4 @s-k2 -> @s-profile "yes" kind=flow
+  wire @s-w5 @s-profile -> @s-answer "executeProfile (in dispatch.ts)" kind=flow
+  wire @s-w6 @s-k2 -> @s-runsvc "no: service" kind=flow
+  wire @s-w7 @s-runsvc -> @s-n1 "executeService, then dispatch.ts run()" kind=flow
+  wire @s-w8 @s-n1 -> @s-reads "yes" kind=flow
+  wire @s-w9 @s-n1 -> @s-n2 "no" kind=flow
+  wire @s-w10 @s-n2 -> @s-author "yes" kind=flow
+  wire @s-w11 @s-n2 -> @s-n3 "no" kind=flow
+  wire @s-w12 @s-n3 -> @s-retry "yes" kind=flow
+  wire @s-w13 @s-n3 -> @s-n4 "no" kind=flow
+  wire @s-w14 @s-n4 -> @s-admit "yes" kind=flow
+  wire @s-w15 @s-n4 -> @s-inst "no" kind=flow
+
+  node @f-canvas module "cli/canvas.ts" { text @d "pnpm canvas starts here" }
+  node @f-render module "cli/render.ts" { text @d "pnpm render:png starts here" }
+  node @f-index module "contract/index.ts" { text @d "The public face: runCli, runRender, formatFailure" }
+  node @f-compose module "contract/compose.ts + compose/" { text @d "Plugs the parts together" }
+  node @f-api module "contract/api.ts" { text @d "The only contract file that imports core" }
+  node @f-core module "core/ (every file)" role=primary { text @d "The decisions. No network, no files, no clock." }
+  node @f-adapters module "adapters/ (every file)" { text @d "Terminal words, HTTP, files, the image renderer" }
+  node @f-core2 module "core/ (every file)" role=primary { text @d "The decisions" }
+  node @f-adapters2 module "adapters/ (every file)" { text @d "HTTP, files, terminal words, the image renderer" }
+  node @f-ports module "contract/ports/" { text @d "Port types: the calls core may make" }
+  node @f-shapes module "contract/ records/, brands, errors, schemas" { text @d "Data shapes, failure codes, success and failure" }
+  node @f-chain-note note "Note" { text @d "Solid line: a real import. Label: the names imported." role=caption }
+  node @f-note note "Not allowed" { list @rules ["core imports adapters", "adapters import core", "an adapter imports another adapter", "a contract file other than compose imports adapters", "core imports a package or node:", "cli imports anything but index.ts"] text @d "pnpm architecture checks every line except the last." role=caption }
+  node @f-meet note "At runtime" { text @d "core calls a port. The adapter compose.ts plugged into that port answers. Neither imports the other." role=caption }
+
+  wire @f-w1 @f-canvas -> @f-index "runCli, formatFailure" kind=imports
+  wire @f-w2 @f-render -> @f-index "runRender, formatFailure" kind=imports
+  wire @f-w3 @f-index -> @f-compose "runCli, runRender" kind=imports
+  wire @f-w4 @f-index -> @f-api "formatFailure" kind=imports
+  wire @f-w5 @f-compose -> @f-api "parseCommand, usage, executeService ..." kind=imports
+  wire @f-w6 @f-api -> @f-core "parseCommand, executeService, formatFailure ..." kind=imports
+  wire @f-w7 @f-compose -> @f-adapters "readArguments, createTransport ..." kind=imports
+  wire @f-w8 @f-core2 -> @f-ports "uses the port type" kind=imports
+  wire @f-w9 @f-adapters2 -> @f-ports "fills the port type" kind=imports
+  wire @f-w10 @f-core2 -> @f-shapes "types, success(), failure()" kind=imports
+  wire @f-w11 @f-adapters2 -> @f-shapes "types, success(), failure()" kind=imports
+
+  node @c-words start "Words typed in the terminal" size=small {}
+  node @c-canvas step "cli/canvas.ts" { text @d "Starts the program. Prints the answer or the failure." }
+  node @c-runcli step "contract/compose.ts runCli" { text @d "Any throw becomes cli-unavailable." }
+  node @c-argv step "adapters/argv/node-args.ts" { code @c "readArguments" }
+  node @c-parse step "core/commands/parse.ts" { text @d "Builds the Command. Refuses with invalid-arguments, invalid-command, invalid-server, invalid-revision ..." }
+  node @c-compose step "contract/compose.ts dispatch()" { text @d "Picks by kind: help, profile or service." }
+  node @c-runsvc step "contract/compose/service.ts" { text @d "Reads the token with @novakai/canvas-service's reader. Fails: credential-unavailable." }
+  node @c-dispatch step "core/commands/dispatch.ts" { text @d "Picks by name. A failed --out write: output-unavailable." }
+  node @c-purpose step "core/<purpose>/" { text @d "Its own codes, for example not-found, revision-conflict." }
+  node @c-adapters step "adapters/ service-http/reads, authoring, resources; files/..." { text @d "A bad answer shape: invalid-response. Files: source-unavailable, retention-unavailable ..." }
+  node @c-transport step "adapters/service-http/transport.ts" size=large { text @d "connection-uncertain, invalid-response, service-rejected" }
+  node @c-early note "Note" { text @d "Any step can stop early: its failed Result passes back up unchanged to cli/canvas.ts." role=caption }
+  node @c-ok decision "cli/canvas.ts: result.ok?" role=decision {}
+  node @c-stdout end "stdout: the answer" role=success size=small {}
+  node @c-format step "formatFailure" { text @d "core/diagnostics/format.ts. Branches on the code, never the message." }
+  node @c-foreign decision "Was it written by apps/service code?" role=decision { text @d "the server's refusal, or its credential reader" }
+  node @c-own end "Prints apps/service's own code and message" role=warning { code @c "service-rejected, credential-unavailable" }
+  node @c-local end "Prints code: message, then evidence, then how to recover" role=warning {}
+
+  wire @c-w0 @c-words -> @c-canvas "string[]" kind=flow
+  wire @c-w1 @c-canvas -> @c-runcli "runCli(args, workspace)" kind=flow
+  wire @c-w2 @c-runcli -> @c-argv "readArguments" kind=flow
+  wire @c-w3 @c-argv -> @c-parse "ArgvReading" kind=flow
+  wire @c-w4 @c-parse -> @c-compose "Result: the Command (inside ParsedCommand)" kind=flow
+  wire @c-w5 @c-compose -> @c-runsvc "ServiceCommand + ServiceOptions" kind=flow
+  wire @c-w6 @c-runsvc -> @c-dispatch "ServiceCommand + ServicePorts" kind=flow
+  wire @c-w7 @c-dispatch -> @c-purpose "the Command's fields" kind=flow
+  wire @c-w8 @c-purpose -> @c-adapters "a port call" kind=flow
+  wire @c-w9 @c-adapters -> @c-transport "transport.get() or .post()" kind=flow
+  wire @c-w10 @c-transport -> @c-ok "Result, back up the same route" kind=flow
+  wire @c-yes @c-ok -> @c-stdout "yes" kind=flow
+  wire @c-no @c-ok -> @c-format "no: stderr, exit code 1" kind=flow
+  wire @c-w11 @c-format -> @c-foreign "CliFailure" kind=flow
+  wire @c-fy @c-foreign -> @c-own "yes" kind=flow
+  wire @c-fn @c-foreign -> @c-local "no" kind=flow
+
+  node @e-command concept "Command" {
+    text @d "What was asked. contract/records/command.ts"
+    code @a "help"
+    code @b "ServiceCommand"
+    code @c "ProfileCommand"
+  }
+  node @e-parsed concept "ParsedCommand" {
+    text @d "What parse.ts returns"
+    code @a "kind: help | profile | service"
+    code @b "command: the Command (not for help)"
+    code @c "options (service only): server, workspace"
+  }
+  node @e-service concept "ServiceCommand" {
+    text @d "One member per server command"
+    code @a "name: describe | list | read | create | ..."
+    code @b "that command's fields: collection, scope, file, revision, request ..."
+    code @c "out (only with --out): the file path"
+  }
+  node @e-result concept "Result" {
+    text @d "The answer or a failure. Nothing throws. contract/errors.ts"
+    code @a "ok: true | false"
+    code @b "value: the answer, when ok"
+    code @c "error: a failure, when not ok"
+  }
+  node @e-local concept "LocalFailure" {
+    text @d "A failure the CLI found"
+    code @a "code: one of 32 local codes"
+    code @b "message, recovery"
+    code @c "location, source: evidence"
+  }
+  node @e-foreign concept "ForeignFailure" {
+    text @d "A failure apps/service code wrote"
+    code @a "code: service-rejected | credential-unavailable"
+    code @b "foreign: its own record, kept whole"
+  }
+
+  wire @e-w1 @e-parsed -> @e-command "wraps" kind=reference
+  wire @e-w2 @e-command -> @e-service "one member is" kind=reference
+  wire @e-w3 @e-result -> @e-local "error is one of" kind=reference
+  wire @e-w4 @e-result -> @e-foreign "error is one of" kind=reference
+
+  section @s1 "1 · What apps/cli is — two front doors, one server" mode=flow direction=right order=0 {
+    show @l1-person @l1-agent @l1-web @l1-cli @l1-service @l1-authoring @l1-saved @l1-note
+    connect @l1-w1 @l1-w2 @l1-w3 @l1-w4 @l1-w5 @l1-w6
+  }
+
+  section @s2-1 "2.1 · The 7 things it does" mode=flow direction=right order=1 {
+    show @l2-start @l2-word @p1 @p2 @p3 @p4 @p5 @p6 @p7 @l2-note
+    connect @l2-w1 @l2-w4 @l2-w5 @l2-w6 @l2-w7 @l2-w8 @l2-w9 @l2-w10
+    below @p2 @p1
+    below @p3 @p2
+    below @p4 @p3
+    below @p5 @p4
+    below @p6 @p5
+    below @p7 @p6
+  }
+
+  section @s2-2 "2.2 · The usual agent path" mode=flow direction=down order=2 {
+    show @u-task @p1 @p2 @p3 @u-check @u-ok @u-done
+    connect @u-w0 @u-w1 @u-w2 @u-w3 @u-w4 @u-yes @u-no
+  }
+
+  section @s3-1 "3.1 · The route every server command takes (example: describe)" mode=sequence direction=down gap=compact order=3 {
+    show @q-agent @q-canvas @q-compose @q-argv @q-parse @q-runsvc @q-dispatch @q-purpose @q-http @q-service @q-other @q-words
+    event @q1 @q-agent -> @q-canvas "pnpm canvas describe" kind=call activate=true
+    event @q2 @q-canvas -> @q-compose "runCli(args, workspace)" kind=call activate=true
+    event @q3 @q-compose -> @q-argv "readArguments(args, canvasFlags)" kind=call
+    event @q4 @q-argv -> @q-compose "ArgvReading" kind=return activate=false
+    event @q5 @q-compose -> @q-parse "parseCommand(reading, {workspace})" kind=call
+    event @q6 @q-parse -> @q-parse "assembleCommand (operands.ts, values.ts)" kind=call
+    event @q7 @q-parse -> @q-compose "Result<ParsedCommand>, kind: service" kind=return activate=false
+    event @q8 @q-compose -> @q-compose "compose.ts dispatch(): help, profile or service?" kind=call
+    event @q9 @q-compose -> @q-runsvc "runService(command, options)" kind=call activate=true
+    event @q10 @q-runsvc -> @q-runsvc "readToken, then servicePorts plugs in the adapters" kind=call
+    event @q11 @q-runsvc -> @q-dispatch "executeService(command, ports)" kind=call activate=true
+    event @q12 @q-dispatch -> @q-dispatch "run(): picks by command name" kind=call
+    event @q13 @q-dispatch -> @q-purpose "describe(deps)" kind=call activate=true
+    event @q14 @q-purpose -> @q-http "deps.reads.language(): a port call" kind=call
+    event @q15 @q-http -> @q-service "GET /api/v1/language + the agent token" kind=call
+    event @q16 @q-service -> @q-http "envelope {generation, outcome}" kind=return activate=false
+    event @q17 @q-http -> @q-purpose "Result: the value, or a failure code" kind=return activate=false
+    event @q18 @q-purpose -> @q-dispatch "Result<string>: JSON text" kind=return activate=false
+    event @q19 @q-dispatch -> @q-dispatch "output(): with --out, writes the file" kind=call
+    event @q20 @q-dispatch -> @q-canvas "Result<string>, back through runService and runCli" kind=return activate=false
+    fragment @q-end alt "cli/canvas.ts checks result.ok" {
+      branch @q-yes "ok" {
+        event @q21 @q-canvas -> @q-agent "stdout: the answer" kind=return activate=false
+      }
+      branch @q-no "not ok" {
+        event @q22 @q-canvas -> @q-agent "stderr: formatFailure(error), exit code 1" kind=return activate=false
+      }
+    }
+  }
+
+  section @s3-2 "3.2 · Two switches pick where a command goes" mode=flow direction=down order=4 {
+    show @s-parsed @s-k1 @s-k2 @s-help @s-profile @s-answer @s-runsvc
+    show @s-n1 @s-n2 @s-n3 @s-n4 @s-reads @s-author @s-retry @s-admit @s-inst
+    connect @s-w1 @s-w2 @s-w3 @s-w4 @s-w5 @s-w6 @s-w7 @s-w8 @s-w9 @s-w10 @s-w11 @s-w12 @s-w13 @s-w14 @s-w15
+  }
+
+  section @s3-3 "3.3 · Four folders — the import chain from cli/ to core/" mode=flow direction=right order=5 {
+    show @f-canvas @f-render @f-index @f-compose @f-api @f-core @f-adapters @f-chain-note
+    connect @f-w1 @f-w2 @f-w3 @f-w4 @f-w5 @f-w6 @f-w7
+  }
+
+  section @s3-3b "3.3 · Four folders — core/ and adapters/ meet only at contract/" mode=flow direction=right order=6 {
+    show @f-core2 @f-adapters2 @f-ports @f-shapes @f-meet @f-note
+    connect @f-w8 @f-w9 @f-w10 @f-w11
+    below @f-adapters2 @f-core2
+    below @f-shapes @f-ports
+  }
+
+  section @s3-4 "3.4 · Where Command, Result and failure codes travel" mode=flow direction=down order=7 {
+    show @c-words @c-canvas @c-runcli @c-argv @c-parse @c-compose @c-runsvc @c-dispatch @c-purpose @c-adapters @c-transport
+    show @c-ok @c-stdout @c-format @c-foreign @c-own @c-local @c-early
+    connect @c-w0 @c-w1 @c-w2 @c-w3 @c-w4 @c-w5 @c-w6 @c-w7 @c-w8 @c-w9 @c-w10
+    connect @c-yes @c-no @c-w11 @c-fy @c-fn
+  }
+
+  section @s3-5 "3.5 · What each carrier holds" mode=modules direction=right order=8 {
+    show @e-parsed @e-command @e-service @e-result @e-local @e-foreign
+    connect @e-w1 @e-w2 @e-w3 @e-w4
+  }
+}
