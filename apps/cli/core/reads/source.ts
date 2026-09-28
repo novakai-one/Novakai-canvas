@@ -13,24 +13,36 @@ import type { ManualTarget, ReadAnswer } from '../../contract/records/service-an
 
 /** The notice printed above a section or object read. */
 const partialNotice =
-  '# Read-only partial context; referenced objects/views and manual geometry may be omitted. Read those IDs separately or use the full collection.\n';
+  '# Read-only partial context; referenced objects/views and manual geometry may be omitted. Read those IDs separately or use the full collection.';
 
 /**
  * Writes `read`'s answer as the text to print: `#` comment lines on top, then the source as sent.
  * The comments name the collection and revision, a partial read, and any hand-placed objects.
  */
 export function formatReadAnswer(answer: ReadAnswer): string {
-  return `${scopeNotice(answer.scope)}# ${answer.collection} revision=${answer.revision}${manualNote(answer.manual)}\n${answer.source}`;
+  const partialReadLines = scopeNoticeLines(answer.scope);
+  const revisionLine = `# ${answer.collection} revision=${answer.revision}`;
+  const manualLines = manualNoteLines(answer.manual);
+  const lines = [...partialReadLines, revisionLine, ...manualLines, answer.source];
+  return lines.join('\n');
 }
 
-/** Nothing for a whole-collection read; the partial-context notice otherwise. */
-function scopeNotice(scope: ReadScope): string {
-  if (scope.kind === 'all') return '';
-  return partialNotice;
+/** Writes the partial-read notice for a section or object read, and nothing for a whole one. */
+function scopeNoticeLines(scope: ReadScope): readonly string[] {
+  if (scope.kind === 'all') {
+    return [];
+  }
+  return [partialNotice];
 }
 
-/** Human geometry survives matching replacements; agents reset it explicitly when reflow is wanted. */
-function manualNote(manual: readonly ManualTarget[]): string {
-  if (manual.length === 0) return '';
-  return `\n# manual geometry: ${manual.length} target(s) — replace preserves these; reset layout @section / reset route @section/@wire to reflow`;
+/**
+ * Writes a note counting the objects and wires placed by hand, or nothing when there are none.
+ * `replace` keeps them where they are, so the note says how to let layout move them again.
+ */
+function manualNoteLines(manual: readonly ManualTarget[]): readonly string[] {
+  if (manual.length === 0) {
+    return [];
+  }
+  const manualNote = `# manual geometry: ${manual.length} target(s) — replace preserves these; reset layout @section / reset route @section/@wire to reflow`;
+  return [manualNote];
 }

@@ -13,9 +13,11 @@
 import type { CollectionValidator } from '../../contract/ports/collection-validator.js';
 import type { ServiceReads } from '../../contract/ports/service-reads.js';
 import type { ReadScope } from '../../contract/records/command.js';
+import type { InspectionReport } from '../../contract/records/foreign.js';
+import type { LanguageDescription } from '../../contract/records/service-answers.js';
 import type { CollectionId, RequestId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
-import { mapped } from '../shared/results.js';
+import { success } from '../../contract/errors.js';
 import { formatCollectionList } from './collections.js';
 import { formatReceiptLookup } from './receipt.js';
 import { formatReadAnswer } from './source.js';
@@ -33,7 +35,12 @@ export interface ReadDependencies {
  * Fails as the service question fails.
  */
 export async function describeLanguage(dependencies: ReadDependencies): Promise<Result<string>> {
-  return mapped(await dependencies.reads.vocabulary(), json);
+  const vocabulary = await dependencies.reads.vocabulary();
+  if (!vocabulary.ok) {
+    return vocabulary;
+  }
+  const vocabularyText = jsonText(vocabulary.value);
+  return success(vocabularyText);
 }
 
 /**
@@ -42,10 +49,14 @@ export async function describeLanguage(dependencies: ReadDependencies): Promise<
  * Fails as the service question fails.
  */
 export async function listCollections(dependencies: ReadDependencies): Promise<Result<string>> {
-  const current = await dependencies.reads.workspace();
-  return mapped(current, (observed) =>
-    formatCollectionList(observed.value, dependencies.collections),
-  );
+  const workspaceAnswer = await dependencies.reads.workspace();
+  if (!workspaceAnswer.ok) {
+    return workspaceAnswer;
+  }
+  // The answer also names the service's generation, which `list` doesn't print.
+  const snapshot = workspaceAnswer.value.value;
+  const collectionList = formatCollectionList(snapshot, dependencies.collections);
+  return success(collectionList);
 }
 
 /**
@@ -58,7 +69,12 @@ export async function readCollection(
   scope: ReadScope,
   dependencies: ReadDependencies,
 ): Promise<Result<string>> {
-  return mapped(await dependencies.reads.source(collection, scope), formatReadAnswer);
+  const readAnswer = await dependencies.reads.source(collection, scope);
+  if (!readAnswer.ok) {
+    return readAnswer;
+  }
+  const sourceText = formatReadAnswer(readAnswer.value);
+  return success(sourceText);
 }
 
 /**
@@ -69,7 +85,12 @@ export async function inspectCollection(
   collection: CollectionId,
   dependencies: ReadDependencies,
 ): Promise<Result<string>> {
-  return mapped(await dependencies.reads.inspect(collection), json);
+  const report = await dependencies.reads.inspect(collection);
+  if (!report.ok) {
+    return report;
+  }
+  const reportText = jsonText(report.value);
+  return success(reportText);
 }
 
 /**
@@ -81,12 +102,19 @@ export async function readReceipt(
   request: RequestId,
   dependencies: ReadDependencies,
 ): Promise<Result<string>> {
-  const found = await dependencies.reads.receipt(request);
-  if (!found.ok) return found;
-  return formatReceiptLookup(found.value.value, request);
+  const receiptAnswer = await dependencies.reads.receipt(request);
+  if (!receiptAnswer.ok) {
+    return receiptAnswer;
+  }
+  // The answer also names the service's generation, which `receipt` doesn't print.
+  const lookup = receiptAnswer.value.value;
+  return formatReceiptLookup(lookup, request);
 }
 
-/** Read-only grammar and inspection output is JSON, never a requirement to author diagram JSON. */
-function json(value: unknown): string {
-  return JSON.stringify(value, null, 2);
+/**
+ * Writes the vocabulary or a layout report as JSON text, indented by two spaces. Only these look-only
+ * answers print as JSON; agents still write diagrams as `.canvas` text.
+ */
+function jsonText(answer: LanguageDescription | InspectionReport): string {
+  return JSON.stringify(answer, null, 2);
 }

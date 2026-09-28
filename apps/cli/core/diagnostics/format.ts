@@ -8,7 +8,12 @@
  * This file turns one failure into those lines. It only makes text: the failure stays a typed
  * value for code to branch on, and nothing reads these lines back.
  */
-import type { CliFailure, LocalFailure } from '../../contract/errors.js';
+import type {
+  CliFailure,
+  ForeignFailure,
+  LocalFailure,
+  SourceLocation,
+} from '../../contract/errors.js';
 import type { FailureSource, ServiceFailureRecord } from '../../contract/records/foreign.js';
 
 /** A validation batch: the evidence that is not an operation failure. */
@@ -17,6 +22,8 @@ type ValidationSource = Exclude<FailureSource, ServiceFailureRecord>;
 type ValidationIssue = ValidationSource['diagnostics'][number];
 /** A Model record issue addressed by its path. */
 type RecordIssue = Extract<ValidationIssue, { readonly path: string }>;
+/** A Language issue addressed by its place in the text. */
+type LanguageIssue = Exclude<ValidationIssue, RecordIssue>;
 
 /**
  * Turns a failure into the lines to print: `code: message`, the lines saying why, then what to do
@@ -25,61 +32,115 @@ type RecordIssue = Extract<ValidationIssue, { readonly path: string }>;
  * A failure the service sent (a `ForeignFailure`) prints the service's own code and words.
  */
 export function formatFailure(error: CliFailure): readonly string[] {
-  switch (error.code) {
-    case 'service-rejected':
-    case 'credential-unavailable':
-      return failureLines(error.foreign, error.foreign.message);
-    default:
-      return failureLines(error, locatedMessage(error));
+  if (isForeignFailure(error)) {
+    return foreignFailureLines(error.foreign);
   }
+  return localFailureLines(error);
 }
 
-/** One failure's lines; the evidence sits between the message and the recovery line. */
+/** Whether the failure is a record the service package wrote, rather than a mistake the CLI found. */
+function isForeignFailure(error: CliFailure): error is ForeignFailure {
+  return error.code === 'service-rejected' || error.code === 'credential-unavailable';
+}
+
+/** Writes a failure record the service package wrote, with the service's own code and message. */
+function foreignFailureLines(foreign: ServiceFailureRecord): readonly string[] {
+  return failureLines(foreign, foreign.message);
+}
+
+/** Writes a mistake the CLI found, naming the font or image declaration first when there is one. */
+function localFailureLines(local: LocalFailure): readonly string[] {
+  const message = locatedMessage(local);
+  return failureLines(local, message);
+}
+
+/** Writes `code: message` first, then the lines saying why, then what to do next. */
 function failureLines(
-  error: LocalFailure | ServiceFailureRecord,
+  failureRecord: LocalFailure | ServiceFailureRecord,
   message: string,
 ): readonly string[] {
-  return [`${error.code}: ${message}`, ...sourceLines(error.source), error.recovery];
+  const headline = `${failureRecord.code}: ${message}`;
+  const reasons = sourceLines(failureRecord.source);
+  return [headline, ...reasons, failureRecord.recovery];
 }
 
-/** The message, after the resource declaration's place when the failure names one. */
-function locatedMessage(error: LocalFailure): string {
-  if (error.location === undefined) return error.message;
-  const { file, line, column, alias } = error.location;
-  return `${file}:${line}:${column} asset @${alias}: ${error.message}`;
+/** Puts the place of the font or image declaration before the message, when the mistake has one. */
+function locatedMessage(local: LocalFailure): string {
+  if (local.location === undefined) {
+    return local.message;
+  }
+  const place = declarationPlace(local.location);
+  return `${place}: ${local.message}`;
 }
 
-/** No evidence prints nothing; validation and operation evidence print differently. */
+/** Writes where a source declares a font or image, such as `walk.canvas:4:1 asset @logo`. */
+function declarationPlace(location: SourceLocation): string {
+  return `${location.file}:${location.line}:${location.column} asset @${location.alias}`;
+}
+
+/**
+ * Writes the lines saying why: nothing when there is no evidence, one block per Language or Model
+ * finding, or the lines of a service failure record.
+ */
 function sourceLines(source: FailureSource | undefined): readonly string[] {
-  if (source === undefined) return [];
-  if ('diagnostics' in source) return source.diagnostics.flatMap(diagnosticLines);
-  return operationLines(source);
+  if (source === undefined) {
+    return [];
+  }
+  if (isValidationSource(source)) {
+    return source.diagnostics.flatMap(diagnosticLines);
+  }
+  return serviceFailureLines(source);
 }
 
-/** A nested owner failure keeps its order and its cleanup failure. */
-function operationLines(source: ServiceFailureRecord): readonly string[] {
-  return [
-    `${source.code} ${source.path}: ${source.message}`,
-    source.recovery,
-    ...sourceLines(source.source),
-    ...sourceLines(source.cleanup),
-  ];
+/** Whether the evidence is a batch of Language or Model findings, rather than a service failure. */
+function isValidationSource(source: FailureSource): source is ValidationSource {
+  return 'diagnostics' in source;
 }
 
-/** A record issue prints its path; a Language issue prints its span, expectation and recovery. */
+/**
+ * Writes a service failure record: its code, path and message, what to do next, then its own
+ * evidence and its cleanup failure, in that order.
+ */
+function serviceFailureLines(serviceFailure: ServiceFailureRecord): readonly string[] {
+  const headline = `${serviceFailure.code} ${serviceFailure.path}: ${serviceFailure.message}`;
+  const reasons = sourceLines(serviceFailure.source);
+  const cleanupReasons = sourceLines(serviceFailure.cleanup);
+  return [headline, serviceFailure.recovery, ...reasons, ...cleanupReasons];
+}
+
+/** Writes one finding: a Model finding by its path, a Language finding by its place in the text. */
 function diagnosticLines(issue: ValidationIssue): readonly string[] {
-  if ('path' in issue) return [`${issue.code} ${issue.path}: ${issue.message}`];
-  const location = `${issue.span.start.line}:${issue.span.start.column}`;
-  return [
-    `${issue.code} ${location} ${issue.target}: ${issue.message}`,
-    `Expected: ${issue.expected}`,
-    issue.recovery,
-    ...ownerLines(issue.source),
-  ];
+  if (isRecordIssue(issue)) {
+    return [recordIssueLine(issue)];
+  }
+  return languageIssueLines(issue);
 }
 
-/** The Model issue behind a Language issue, when Language kept one. */
-function ownerLines(issue: RecordIssue | undefined): readonly string[] {
-  if (issue === undefined) return [];
-  return [`${issue.code} ${issue.path}: ${issue.message}`];
+/** Whether the finding is Model's, addressed by a path rather than a place in the text. */
+function isRecordIssue(issue: ValidationIssue): issue is RecordIssue {
+  return 'path' in issue;
+}
+
+/** Writes a Model finding as one line: its code, path and message. */
+function recordIssueLine(issue: RecordIssue): string {
+  return `${issue.code} ${issue.path}: ${issue.message}`;
+}
+
+/**
+ * Writes a Language finding: its code, line and column, target and message, then what was
+ * expected, what to do next, and the Model finding behind it when Language kept one.
+ */
+function languageIssueLines(issue: LanguageIssue): readonly string[] {
+  const start = issue.span.start;
+  const headline = `${issue.code} ${start.line}:${start.column} ${issue.target}: ${issue.message}`;
+  const modelReasons = modelIssueLines(issue.source);
+  return [headline, `Expected: ${issue.expected}`, issue.recovery, ...modelReasons];
+}
+
+/** Writes the Model finding behind a Language finding, or nothing when Language kept none. */
+function modelIssueLines(modelIssue: RecordIssue | undefined): readonly string[] {
+  if (modelIssue === undefined) {
+    return [];
+  }
+  return [recordIssueLine(modelIssue)];
 }
