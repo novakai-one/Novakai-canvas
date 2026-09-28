@@ -1,34 +1,36 @@
 /*
- * Flag text as the user typed it, before any value is checked: which flags carry text, the text of
- * each, and the order they were given. Pure. `parse.ts` reads them from Node's values; the value
- * checks (`values.ts`, `recipe-values.ts`, `profile-commands.ts`) mint each flag's brand and fill
- * its default.
+ * Why this file exists
+ *
+ * When an agent types `--section intro`, the CLI first keeps `intro` exactly as typed. Nothing is
+ * checked yet, so every value here is plain text, and the types say so. Checking comes later, in
+ * `values.ts`: that is where `--revision 3` becomes a checked revision number and `--workspace`
+ * becomes a checked folder path.
+ *
+ * This file only sorts the typed flags into two things the next steps need: the text typed after
+ * each flag, and the order the flags were typed in.
  */
 import type { CanvasFlag } from '../../contract/records/arguments.js';
 
-/** A flag that carries text: every flag but the `--help` switch. */
+/** A flag that is followed by a value. That's every flag except `--help`, which stands alone. */
 export type TextFlag = Exclude<CanvasFlag, 'help'>;
 
-/** Each text flag as given; an absent flag is an omitted key. Each value's check fills its default. */
+/** The text typed after each flag, exactly as typed. A flag that wasn't typed is left out. */
 export type CommandFlags = Readonly<Partial<Record<TextFlag, string>>>;
 
-/** The text flags given: the text of each, and their names in the order Node read them. */
+/** The typed flags: the text after each one, and the order they were typed in. */
 export interface GivenFlags {
   readonly text: CommandFlags;
-  /** Used only to name the first flag a command does not accept. */
+  /** Kept only so a mistake can name the first flag the command doesn't use. */
   readonly givenOrder: readonly TextFlag[];
 }
 
-/** The --workspace text used when the flag is absent: the executable's default workspace. */
-export type WorkspaceText = string;
-
-/** Node's value for one flag: text for a text flag, `true` for a switch. */
+/** What Node read for one flag: the typed text, or `true` for `--help`. */
 type FlagValue = string | boolean;
 
-/** One text flag and its text. */
+/** One flag and the text typed after it. */
 type TextEntry = [TextFlag, string];
 
-/** The text flags among Node's values, and the order they were given. `--help` is left out. */
+/** Sorts Node's flags into the text after each one and the order they were typed. Skips `--help`. */
 export function readGivenFlags(flagValues: ReadonlyMap<CanvasFlag, FlagValue>): GivenFlags {
   const textEntries = [...flagValues].filter(isTextEntry);
   const text: CommandFlags = Object.fromEntries(textEntries);
@@ -36,13 +38,13 @@ export function readGivenFlags(flagValues: ReadonlyMap<CanvasFlag, FlagValue>): 
   return { text, givenOrder };
 }
 
-/** Whether the entry is a text flag with its text. */
+/** Whether the entry is a flag with typed text after it. */
 function isTextEntry(entry: readonly [CanvasFlag, FlagValue]): entry is TextEntry {
   const [flag, value] = entry;
   return flag !== 'help' && typeof value === 'string';
 }
 
-/** The flag an entry names. */
+/** The flag an entry is for. */
 function flagOfEntry(entry: TextEntry): TextFlag {
   const [flag] = entry;
   return flag;

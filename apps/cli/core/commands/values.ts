@@ -34,7 +34,7 @@ import type {
 import type { FailureInput, Result } from '../../contract/errors.js';
 import { failure, success, unreadableSource, unwritableOutput } from '../../contract/errors.js';
 import { checked } from '../shared/checks.js';
-import type { CommandFlags, WorkspaceText } from './flags.js';
+import type { CommandFlags } from './flags.js';
 
 /** The service origin when --server is absent: the local service's default port. */
 const defaultServer = 'http://127.0.0.1:5174';
@@ -175,23 +175,35 @@ export function checkProfile(profileText: string): Result<ProfileId> {
 }
 
 /**
- * --server (the local service's default port when absent), then --workspace (`defaultWorkspace`
- * when absent; an empty one is the current directory). Fails with `invalid-server`, before the
- * credential is read.
+ * Checks where to send the command (`--server`) and which workspace folder to use (`--workspace`).
+ * If `--server` wasn't typed, the local service's usual address is used. If `--workspace` wasn't
+ * typed, `defaultWorkspace` is used. Stops with `invalid-server` at an address that isn't the local
+ * service, before any credential is read.
  */
 export function checkServiceOptions(
   flags: Pick<CommandFlags, 'server' | 'workspace'>,
-  defaultWorkspace: WorkspaceText,
+  defaultWorkspace: FilePath,
 ): Result<ServiceOptions> {
   const server = checkServer(flags.server ?? defaultServer);
   if (!server.ok) {
     return server;
   }
-  const workspace = checkWorkspace(flags.workspace ?? defaultWorkspace);
+  const workspace = chooseWorkspace(flags.workspace, defaultWorkspace);
   if (!workspace.ok) {
     return workspace;
   }
   return success({ server: server.value, workspace: workspace.value });
+}
+
+/** The typed `--workspace`, checked; or `defaultWorkspace` when it wasn't typed. */
+function chooseWorkspace(
+  typedWorkspace: string | undefined,
+  defaultWorkspace: FilePath,
+): Result<FilePath> {
+  if (typedWorkspace === undefined) {
+    return success(defaultWorkspace);
+  }
+  return checkWorkspace(typedWorkspace);
 }
 
 /** A --section ID as a section scope. Fails with `invalid-arguments`. */

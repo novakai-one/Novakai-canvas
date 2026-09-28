@@ -141,9 +141,24 @@ export interface ForeignFailure {
 /** Any CLI failure. */
 export type CliFailure = LocalFailure | ForeignFailure;
 
-/** The CLI's own success-or-failure envelope. A failure never carries a partial value. */
-export type Result<T, E = CliFailure> =
-  { readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: E };
+/** A step that worked. `ok` is true and `value` holds what the step made. */
+export interface Success<T> {
+  readonly ok: true;
+  readonly value: T;
+}
+
+/** A step that found a mistake. `ok` is false and `error` says what went wrong and how to fix it. */
+export interface Failure<E> {
+  readonly ok: false;
+  readonly error: E;
+}
+
+/**
+ * What every CLI step answers with: either it worked, or it found a mistake. Check `ok` to know
+ * which. `success(value)` makes the first; `failure(...)` makes the second. A failure never carries
+ * a half-finished value.
+ */
+export type Result<T, E = CliFailure> = Success<T> | Failure<E>;
 
 /** What `failure` needs. `recovery` may be omitted. */
 export type FailureInput = Omit<LocalFailure, 'recovery'> & { readonly recovery?: string };

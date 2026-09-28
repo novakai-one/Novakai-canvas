@@ -1,21 +1,29 @@
 /*
- * Reading a `pnpm canvas` command line into one checked `ParsedCommand`, in the base CLI's order.
- * Each check hands the next one the stage type it makes (`command-stages.ts`). Pure. Every failure
- * comes before anything is read or sent, so the caller corrects the named argument and runs the
- * command again.
+ * Why this file exists
+ *
+ * An agent uses the CLI by typing a line like this:
+ *
+ *   pnpm canvas read my-diagram --section intro
+ *
+ * Before the CLI can do anything, it has to work out what that line asks for: which command it is,
+ * what it acts on, and which options came with it. This file does that. It turns the typed line
+ * into one `ParsedCommand` the rest of the CLI can run. If something was typed wrong, it says what,
+ * so the agent can fix it and try again.
+ *
+ * It only looks at the words. It never opens a file or talks to the server.
+ *
+ * How to read the steps below: every step answers with a `Result` (see `contract/errors.ts`).
+ * `ok: true` means the step worked and `value` holds what it made. `ok: false` means it found a
+ * mistake. The mistakes themselves are made in `failures.ts`.
  */
-import type { RawArguments, CanvasFlag } from '../../contract/records/arguments.js';
+import type { CanvasFlag, CommandLine, RawArguments } from '../../contract/records/arguments.js';
+import type { FilePath } from '../../contract/brands.js';
 import type { CommandName, ParsedCommand } from '../../contract/records/command.js';
 import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
 import { checkAcceptedFlags } from './accepted-flags.js';
 import { assembleCommand } from './assembly.js';
-import type {
-  AcceptedCommand,
-  CanvasCommandLine,
-  IdentifiedCommand,
-  WellFormedArguments,
-} from './command-stages.js';
+import type { AcceptedCommand, IdentifiedCommand, WellFormedArguments } from './command-stages.js';
 import { chooseCommandWords } from './command-words.js';
 import {
   invalidArgumentsFailure,
@@ -23,37 +31,34 @@ import {
   unknownCommandFailure,
 } from './failures.js';
 import { readGivenFlags } from './flags.js';
-import type { WorkspaceText } from './flags.js';
 import { countOperand } from './operand-count.js';
 import { isCommandName } from './table.js';
 
-/** The read scope flags: each may be given once, and never together. */
+/** The two flags that pick part of a collection to read. Each may be typed only once. */
 type ScopeFlag = 'section' | 'object';
 
 /**
- * Reads the command a `pnpm canvas` command line names, with every value checked.
+ * Works out which command was typed, and checks it was typed correctly.
  *
- * Steps; the first failure stops parsing and is returned unchanged:
- * 1. Identify the command. --help drops every typed word and becomes the `help` command; otherwise
- *    the first word names the command, joined with the next for `theme`, `recipe` and `profile`.
- *    A flag Node refused, or --section or --object given twice, is `invalid-arguments`; a first
- *    word that names no command is `invalid-command`.
- * 2. Check the operand and flags: more or fewer words than the command takes, or a flag it does
- *    not accept (the rules in `accepted-flags.ts`), is `invalid-arguments`.
- * 3. Assemble the command: `assembleCommand` checks every value and names each failure.
+ * It takes three steps. If a step finds a mistake, it stops there and returns that mistake.
+ * 1. Find the command. In `read my-diagram`, the command is `read`.
+ * 2. Check the words and flags fit that command. `read` needs one word after it (the collection
+ *    to read) and doesn't use `--out`.
+ * 3. Check each value, for example that `--revision` is a number, and fill in what was left out.
+ *    If `--workspace` wasn't typed, the command uses `defaultWorkspace`.
  *
- * Nothing is read or sent: no file, credential or service. `defaultWorkspace` is used when
- * --workspace is absent.
+ * The mistakes it can find: a flag it can't read, `--section` or `--object` typed twice, an
+ * unknown command, too many or too few words, a flag the command doesn't use, or a bad value.
  */
 export function parseCommand(
-  commandLine: CanvasCommandLine,
-  defaultWorkspace: WorkspaceText,
+  commandLine: CommandLine,
+  defaultWorkspace: FilePath,
 ): Result<ParsedCommand> {
   const identified = identifyCommand(commandLine);
   if (!identified.ok) {
     return identified;
   }
-  const accepted = checkOperandAndFlags(identified.value);
+  const accepted = checkWordsAndFlags(identified.value);
   if (!accepted.ok) {
     return accepted;
   }
@@ -61,17 +66,21 @@ export function parseCommand(
 }
 
 /**
- * The command the words name, the words after it and the flags as given. --help makes it `help`
- * (`chooseCommandWords`). Fails with `invalid-arguments` for arguments that are not well formed,
- * then with `invalid-command`.
+ * Step 1: finds which command was typed.
+ *
+ * `--help` anywhere means the `help` command. Otherwise the first word is the command, and
+ * `theme`, `recipe` and `profile` join the word after them: `recipe admit` is one command.
+ *
+ * Stops at a flag it can't read, at `--section` or `--object` typed twice, or at a first word
+ * that isn't a command.
  */
-function identifyCommand(commandLine: CanvasCommandLine): Result<IdentifiedCommand> {
+function identifyCommand(commandLine: CommandLine): Result<IdentifiedCommand> {
   const wellFormed = requireWellFormedArguments(commandLine);
   if (!wellFormed.ok) {
     return wellFormed;
   }
   const words = chooseCommandWords(wellFormed.value);
-  const name = requireCommandName(words.firstWord);
+  const name = requireKnownCommand(words.firstWord);
   if (!name.ok) {
     return name;
   }
@@ -80,10 +89,12 @@ function identifyCommand(commandLine: CanvasCommandLine): Result<IdentifiedComma
 }
 
 /**
- * Counts the operand, then checks every flag is one the command accepts. Fails with
- * `invalid-arguments`: first for a wrong number of words, then for the first broken flag rule.
+ * Step 2: checks the words and flags fit the command.
+ *
+ * First the number of words after the command (`countOperand`), then that every flag is one the
+ * command uses (`checkAcceptedFlags`). Stops at the first that doesn't fit.
  */
-function checkOperandAndFlags(identified: IdentifiedCommand): Result<AcceptedCommand> {
+function checkWordsAndFlags(identified: IdentifiedCommand): Result<AcceptedCommand> {
   const counted = countOperand(identified);
   if (!counted.ok) {
     return counted;
@@ -92,10 +103,10 @@ function checkOperandAndFlags(identified: IdentifiedCommand): Result<AcceptedCom
 }
 
 /**
- * The words and flag values Node read, once they are well formed. Fails with `invalid-arguments`:
- * first for a flag Node refused, then for --section or --object given more than once.
+ * The words and flags, once every flag could be read and neither `--section` nor `--object` was
+ * typed twice.
  */
-function requireWellFormedArguments(commandLine: CanvasCommandLine): Result<WellFormedArguments> {
+function requireWellFormedArguments(commandLine: CommandLine): Result<WellFormedArguments> {
   if (commandLine.kind === 'malformed') {
     return malformedFlagFailure();
   }
@@ -103,9 +114,8 @@ function requireWellFormedArguments(commandLine: CanvasCommandLine): Result<Well
 }
 
 /**
- * The words and flag values, once neither --section nor --object was given twice: Node would keep
- * only the last value. Other repeated flags are allowed, so `repeated` is not passed on. Fails with
- * `invalid-arguments`; the base CLI's wording does not name the flag.
+ * Refuses `--section` or `--object` typed twice. Node would silently keep only the last one, so
+ * the agent might read a different part than they meant. Other flags may repeat; the last wins.
  */
 function rejectRepeatedScopeFlags(
   rawArguments: RawArguments<CanvasFlag>,
@@ -117,16 +127,13 @@ function rejectRepeatedScopeFlags(
   return success({ positionals: rawArguments.positionals, values: rawArguments.values });
 }
 
-/** Whether the flag is --section or --object. */
+/** Whether the flag is `--section` or `--object`. */
 function isScopeFlag(flag: CanvasFlag): flag is ScopeFlag {
   return flag === 'section' || flag === 'object';
 }
 
-/**
- * The command the first word names. Fails with `invalid-command` when there is no word, or the
- * word names no command.
- */
-function requireCommandName(firstWord: string | undefined): Result<CommandName> {
+/** The command the first word names. Refuses a word that isn't a command, or no word at all. */
+function requireKnownCommand(firstWord: string | undefined): Result<CommandName> {
   if (!isCommandName(firstWord)) {
     return unknownCommandFailure();
   }

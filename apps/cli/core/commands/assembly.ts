@@ -22,7 +22,8 @@ import type {
   AcceptedWithOperand,
   AcceptedWithoutOperand,
 } from './command-stages.js';
-import type { CommandFlags, WorkspaceText } from './flags.js';
+import type { FilePath } from '../../contract/brands.js';
+import type { CommandFlags } from './flags.js';
 import {
   buildProfileDescribeCommand,
   buildProfileLintCommand,
@@ -91,7 +92,7 @@ const profileCommands: Readonly<Record<ProfileCommandName, ProfileCommandName>> 
  */
 export function assembleCommand(
   accepted: AcceptedCommand,
-  defaultWorkspace: WorkspaceText,
+  defaultWorkspace: FilePath,
 ): Result<ParsedCommand> {
   const scopeModeAndRevision = checkScopeModeAndRevision(accepted.name, accepted.flags);
   if (!scopeModeAndRevision.ok) {
@@ -145,7 +146,7 @@ function checkModeAndRevision(
 function buildCommand(
   accepted: AcceptedCommand,
   scopeModeAndRevision: ScopeModeAndRevision,
-  defaultWorkspace: WorkspaceText,
+  defaultWorkspace: FilePath,
 ): Result<ParsedCommand> {
   switch (accepted.kind) {
     case 'no-operand':
@@ -163,7 +164,7 @@ function buildCommand(
  */
 function buildNoOperandCommand(
   accepted: AcceptedWithoutOperand,
-  defaultWorkspace: WorkspaceText,
+  defaultWorkspace: FilePath,
 ): Result<ParsedCommand> {
   const { name, flags } = accepted;
   if (name === 'help') {
@@ -180,7 +181,7 @@ function buildNoOperandCommand(
 function buildOperandCommand(
   accepted: AcceptedWithOperand,
   scopeModeAndRevision: ScopeModeAndRevision,
-  defaultWorkspace: WorkspaceText,
+  defaultWorkspace: FilePath,
 ): Result<ParsedCommand> {
   const { name, operand, flags } = accepted;
   if (isProfileCommandName(name)) {
@@ -258,7 +259,7 @@ function buildServiceCommand(
 function addServiceOptions(
   serviceCommand: Result<ServiceCommand>,
   flags: CommandFlags,
-  defaultWorkspace: WorkspaceText,
+  defaultWorkspace: FilePath,
 ): Result<ParsedCommand> {
   if (!serviceCommand.ok) {
     return serviceCommand;

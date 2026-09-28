@@ -3,13 +3,10 @@
  * well-formed arguments, an identified command, a counted command, then an accepted command. Every
  * value is still the text as typed; `assembly.ts` checks the values. Pure declarations.
  */
-import type { ArgvReading, CanvasFlag } from '../../contract/records/arguments.js';
+import type { CanvasFlag } from '../../contract/records/arguments.js';
 import type { CommandName } from '../../contract/records/command.js';
 import type { CommandFlags, GivenFlags } from './flags.js';
 import type { NoOperandCommand, OneOperandCommand } from './table.js';
-
-/** A `pnpm canvas` command line as Node's parser read it: its words and flags, or a refused flag. */
-export type CanvasCommandLine = ArgvReading<CanvasFlag>;
 
 /** The words and flag values Node read, with no flag refused and neither scope flag given twice. */
 export interface WellFormedArguments {

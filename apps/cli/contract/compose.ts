@@ -36,13 +36,16 @@ export async function runCli(
   try {
     return await parsedRun(args, defaultWorkspace);
   } catch {
-    return failure({
-      code: 'cli-unavailable',
-      message: 'CLI could not complete',
-      recovery: 'Retain the request ID and inspect its receipt before retrying.',
-    });
+    return failure(cliUnavailable);
   }
 }
+
+/** The CLI could not complete: reading or running the command threw, or it had no workspace. */
+const cliUnavailable: FailureInput = {
+  code: 'cli-unavailable',
+  message: 'CLI could not complete',
+  recovery: 'Retain the request ID and inspect its receipt before retrying.',
+};
 
 /**
  * `pnpm render:png`: Node reads the argv with every `--` dropped (pnpm forwards it), core's render
@@ -64,7 +67,9 @@ function parsedRun(
   args: readonly string[],
   defaultWorkspace: string,
 ): Promise<Result<string>> {
-  const parsed = parseCommand(readArguments(args, canvasFlags), defaultWorkspace);
+  const workspace = filePath.safeParse(defaultWorkspace);
+  if (!workspace.success) return Promise.resolve(failure(cliUnavailable));
+  const parsed = parseCommand(readArguments(args, canvasFlags), workspace.data);
   if (!parsed.ok) return Promise.resolve(parsed);
   return dispatch(parsed.value);
 }
