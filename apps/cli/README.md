@@ -18,7 +18,7 @@ Two executables. The CLI parses argv, binds ports and prints. Capabilities and t
 | `theme admit`, `recipe admit`                          | `core/presets/admit.ts` (`.theme` grammar in `core/themes/`)              | local files, Language, request IDs, resource reader, service reads + resources + authoring, journal              |
 | `recipe instantiate`                                   | `core/commands/dispatch.ts` (one service call)                            | service resources                                                                                                |
 | `profile describe`, `profile scaffold`, `profile lint` | `core/profiles/commands.ts` (lint rules in `core/profiles/lint/`)         | local files, Language. No service.                                                                               |
-| `render:png`                                           | `core/render/render.ts` (argv in `request.ts`)                            | render ports (`contract/ports/render.ts`), resource reader                                                       |
+| `render:png`                                           | `core/render/render.ts` (argv in `request.ts`)                            | render ports (`contract/ports/render*.ts`), resource reader                                                      |
 
 Argv → command: `core/commands/parse.ts` checks words against `table.ts` (one row per command: operands, flags, help lines). Values are minted in `values.ts`, `operands.ts`, `recipe-values.ts`, `profile-operands.ts`. `dispatch.ts` routes and is the one `--out` writer.
 
@@ -46,7 +46,7 @@ Add a command: its member in `contract/records/command.ts` → its row in `table
 | `adapters/argv/`                                | Node `parseArgs` → raw arguments.                                                                                                                                 |
 | `adapters/service-http/`                        | Loopback HTTP transport and the three service-call adapters over it.                                                                                              |
 | `adapters/files/`                               | Source and `--out` files, request journal, confined resource reads.                                                                                               |
-| `adapters/render/`                              | Temp asset store, file I/O, PNG raster start-up; the render environment's parts: capability rules, lowering and documents port, the service's drawing, Export.    |
+| `adapters/render/`                              | Temp asset store, input and section files, PNG raster start-up; environment ports: sources (+ Export's documents), assets, themes, output (drawing, Export).      |
 
 ## Import rules
 

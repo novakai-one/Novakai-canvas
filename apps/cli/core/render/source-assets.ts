@@ -5,7 +5,8 @@
  * records on a stand-in collection. Pure apart from the injected ports; nothing stored is changed.
  * The caller fixes the named declaration and runs render:png again.
  */
-import type { RenderEnvironment } from '../../contract/ports/render.js';
+import type { RenderAssets } from '../../contract/ports/render-assets.js';
+import type { RenderSources } from '../../contract/ports/render-sources.js';
 import type { ResourceReader } from '../../contract/ports/resource-reader.js';
 import type {
   Catalog,
@@ -27,13 +28,14 @@ import { themePins } from './pins.js';
 
 /** What admitting one declaration uses: the resource reader and the render's asset store. */
 export interface AdmissionDependencies {
-  readonly env: Pick<RenderEnvironment, 'stageAsset'>;
+  readonly assets: Pick<RenderAssets, 'stage'>;
   readonly resources: ResourceReader;
 }
 
 /** What a source's asset records use: admission, the parse, the asset reads and Model's check. */
 export interface AssetDependencies extends AdmissionDependencies {
-  readonly env: Pick<RenderEnvironment, 'parse' | 'stageAsset' | 'resolveAsset' | 'validate'>;
+  readonly sources: Pick<RenderSources, 'parse' | 'validate'>;
+  readonly assets: Pick<RenderAssets, 'stage' | 'resolve'>;
 }
 
 /** One asset record before Model checks it. */
@@ -57,7 +59,7 @@ export async function sourceAssets(
   catalog: Catalog,
   dependencies: AssetDependencies,
 ): Promise<Result<Collection['assets'], RenderEvidence>> {
-  const parsed = dependencies.env.parse(source.source);
+  const parsed = dependencies.sources.parse(source.source);
   if (!parsed.ok) return parsed;
   const images = parsed.value.resources.filter(isImage);
   const entries = await Promise.all(
@@ -65,7 +67,7 @@ export async function sourceAssets(
   );
   const checked = combined(entries);
   if (!checked.ok) return checked;
-  return checkedAssets(checked.value, catalog, dependencies.env);
+  return checkedAssets(checked.value, catalog, dependencies.sources);
 }
 
 /**
@@ -81,7 +83,7 @@ export async function admitResource(
 ): Promise<Result<AssetDigest, RenderEvidence>> {
   const resource = await declaredResource(file, request, dependencies.resources);
   if (!resource.ok) return resource;
-  return storedDigest(resource.value, dependencies.env);
+  return storedDigest(resource.value, dependencies.assets);
 }
 
 /** Whether a declaration is an image or font, not the theme reference. */
@@ -92,10 +94,10 @@ function isImage(request: ResourceRequest): boolean {
 /** A pinned declaration's digest as it is; local bytes staged first. Fails with Assets' failure. */
 function storedDigest(
   resource: StagedResource,
-  env: AdmissionDependencies['env'],
+  assets: AdmissionDependencies['assets'],
 ): Promise<Result<AssetDigest, RenderEvidence>> {
   if (resource.kind === 'pinned') return Promise.resolve(success(resource.digest));
-  return env.stageAsset(resource.input);
+  return assets.stage(resource.input);
 }
 
 /**
@@ -109,7 +111,7 @@ async function assetEntry(
 ): Promise<Result<AssetEntry, RenderEvidence>> {
   const digest = await admitResource(file, request, dependencies);
   if (!digest.ok) return digest;
-  return mapped(dependencies.env.resolveAsset(digest.value), (blob) => ({
+  return mapped(dependencies.assets.resolve(digest.value), (blob) => ({
     id: request.alias,
     digest: pinOf(digest.value),
     mediaType: blob.descriptor.mediaType,
@@ -122,9 +124,9 @@ async function assetEntry(
 function checkedAssets(
   entries: readonly AssetEntry[],
   catalog: Catalog,
-  env: AssetDependencies['env'],
+  sources: AssetDependencies['sources'],
 ): Result<Collection['assets'], RenderEvidence> {
-  const standIn = env.validate({
+  const standIn = sources.validate({
     schemaVersion: 1,
     id: 'headless-assets',
     revision: 0,

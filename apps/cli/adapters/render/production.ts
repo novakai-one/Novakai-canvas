@@ -1,5 +1,5 @@
 /*
- * The environment's `produce`: the service's drawing of one collection for the headless render. A
+ * The output port's `produce`: the service's drawing of one collection for the headless render. A
  * render job over the collection, the admitted catalog and an empty headless library, run by the
  * service's diagram producer. Reads only the layout engine's wasm file; nothing stored is changed.
  * Failures are values; core/render/render.ts owns recovery.
@@ -10,7 +10,7 @@ import {
   type LibrarySnapshot,
 } from '@novakai/canvas-library';
 import type { RenderingJob } from '@novakai/canvas-service';
-import type { RenderEnvironment } from '../../contract/ports/render.js';
+import type { RenderOutput } from '../../contract/ports/render-output.js';
 import type { RenderEvidence } from '../../contract/records/render-failure.js';
 import type {
   Catalog,
@@ -27,10 +27,10 @@ export interface Production {
 }
 
 /**
- * The environment's drawing over `production`. Builds nothing and cannot fail; `produce` fails as
+ * The output port's drawing over `production`. Builds nothing and cannot fail; `produce` fails as
  * {@link producedDiagram}.
  */
-export function createProduction(production: Production): Pick<RenderEnvironment, 'produce'> {
+export function createProduction(production: Production): Pick<RenderOutput, 'produce'> {
   return { produce: (collection, catalog) => producedDiagram(production, collection, catalog) };
 }
 

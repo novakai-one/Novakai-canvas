@@ -5,7 +5,7 @@
  * Pure apart from the injected ports. The caller names another collection or theme and runs
  * render:png again.
  */
-import type { RenderEnvironment } from '../../contract/ports/render.js';
+import type { RenderSources } from '../../contract/ports/render-sources.js';
 import type { Collection, ResolvedResources } from '../../contract/records/foreign.js';
 import type { CollectionSelector, ThemeChoice } from '../../contract/records/render.js';
 import type { RenderEvidence } from '../../contract/records/render-failure.js';
@@ -20,10 +20,7 @@ import type { AdmittedThemes } from './themes.js';
 
 /** What drawing a collection uses: source reads, the parse, asset admission, lowering and Model. */
 export interface CollectionDependencies extends SourceDependencies, AssetDependencies {
-  readonly env: Pick<
-    RenderEnvironment,
-    'parse' | 'lower' | 'validate' | 'stageAsset' | 'resolveAsset'
-  >;
+  readonly sources: RenderSources;
 }
 
 /**
@@ -38,7 +35,7 @@ export async function chosenCollection(
 ): Promise<Result<Collection, RenderEvidence>> {
   const original = await collectionSource(selector, themes.catalog, dependencies);
   if (!original.ok) return original;
-  const source = themedSource(original.value, themes.choice, dependencies.env.parse);
+  const source = themedSource(original.value, themes.choice, dependencies.sources.parse);
   if (!source.ok) return source;
   return lowered(source.value, themes, dependencies);
 }
@@ -47,7 +44,7 @@ export async function chosenCollection(
 function themedSource(
   source: SourceFile,
   choice: ThemeChoice | undefined,
-  parse: RenderEnvironment['parse'],
+  parse: RenderSources['parse'],
 ): Result<SourceFile, RenderEvidence> {
   if (choice === undefined) return success(source);
   return withTheme(source, choice, parse);
@@ -65,9 +62,9 @@ async function lowered(
   const assets = await sourceAssets(source, themes.catalog, dependencies);
   if (!assets.ok) return assets;
   const pins = pinResources(themes.catalog, assets.value);
-  const collection = dependencies.env.lower(source.source, pins);
+  const collection = dependencies.sources.lower(source.source, pins);
   if (!collection.ok) return collection;
-  return withChoice(collection.value, pins, themes.choice, dependencies.env);
+  return withChoice(collection.value, pins, themes.choice, dependencies.sources);
 }
 
 /**
@@ -78,10 +75,10 @@ function withChoice(
   collection: Collection,
   pins: ResolvedResources,
   choice: ThemeChoice | undefined,
-  env: Pick<RenderEnvironment, 'validate'>,
+  sources: Pick<RenderSources, 'validate'>,
 ): Result<Collection, RenderEvidence> {
-  if (choice === undefined) return env.validate(collection);
+  if (choice === undefined) return sources.validate(collection);
   const pin = pins.themes[choice];
   if (pin === undefined) return faulted({ code: 'missing-theme', theme: choice });
-  return env.validate({ ...collection, theme: pin });
+  return sources.validate({ ...collection, theme: pin });
 }

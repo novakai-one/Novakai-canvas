@@ -1,11 +1,11 @@
 /*
  * `pnpm render:png` wiring: builds the ports of one read-only render and injects them. The
- * service's headless bindings, the resource reader and the render's file and raster adapters are
- * built once; `open` makes the render's temporary asset store, prepares the installation in it,
- * builds Language, the Design System and Templates over it, and joins the environment port from
- * the adapters in adapters/render/. Not pure: the adapters touch the filesystem. Failures are
- * values, and a failed `open` closes the store it made; a render changes nothing stored, so the
- * caller fixes the input and runs it again.
+ * service's headless bindings, the resource reader and the render's input files, raster engine and
+ * section files are built once; `open` makes the render's temporary asset store, prepares the
+ * installation in it, builds Language, the Design System and Templates over it, and joins the
+ * environment's sources, assets, themes and output ports from the adapters in adapters/render/.
+ * Not pure: the adapters touch the filesystem. Failures are values, and a failed `open` closes the
+ * store it made; a render changes nothing stored, so the caller fixes the input and runs it again.
  */
 import { join } from 'node:path';
 import {
@@ -13,20 +13,24 @@ import {
   prepareInstallation,
   type BuiltinResources,
 } from '@novakai/canvas-service';
-import { composeDesignSystem } from '@novakai/canvas-design-system';
-import { composeTemplates } from '@novakai/canvas-templates';
+import { composeDesignSystem, type DesignSystem } from '@novakai/canvas-design-system';
+import type { LoweredIntent } from '@novakai/canvas-language';
+import { composeTemplates, type Templates } from '@novakai/canvas-templates';
 import { createResourceReader } from '../../adapters/files/resource-reader.js';
-import { createCapabilityRules, type Environment } from '../../adapters/render/capability-rules.js';
-import { createLowering, exportDocuments } from '../../adapters/render/documents.js';
+import { createRenderAssets } from '../../adapters/render/assets.js';
 import { createExporter, type ExportChoices } from '../../adapters/render/exporter.js';
 import { createProduction, type Production } from '../../adapters/render/production.js';
 import { createRaster } from '../../adapters/render/raster.js';
-import { createRenderFiles } from '../../adapters/render/render-files.js';
+import { createInputFiles, createSectionFiles } from '../../adapters/render/render-files.js';
+import { createRenderSources, exportDocuments } from '../../adapters/render/sources.js';
 import { openTempAssets } from '../../adapters/render/temp-assets.js';
-import type { RenderEnvironment, RenderPorts, TempAssetStore } from '../ports/render.js';
+import { createRenderThemes } from '../../adapters/render/themes.js';
+import type { RenderEnvironment, RenderPorts } from '../ports/render.js';
+import type { TempAssetStore } from '../ports/render-assets.js';
+import type { RenderOutput } from '../ports/render-output.js';
 import type { RenderRequest } from '../records/render.js';
 import type { RenderEvidence } from '../records/render-failure.js';
-import type { HeadlessBindings } from '../records/foreign.js';
+import type { HeadlessBindings, Language } from '../records/foreign.js';
 import { faulted, nativeFault, success, type Result } from '../errors.js';
 import { composeLanguage } from './language.js';
 
@@ -38,7 +42,9 @@ export async function renderPorts(request: RenderRequest): Promise<RenderPorts> 
   const service = await createHeadlessBindings();
   return {
     open: () => openEnvironment(request, service),
-    files: { ...createRenderFiles(request), ...createRaster(request.root) },
+    inputFiles: createInputFiles(request.root),
+    raster: createRaster(request.root),
+    sectionFiles: createSectionFiles(request),
     resources: createResourceReader(),
   };
 }
@@ -58,6 +64,15 @@ async function openEnvironment(
   const environment = await environmentIn(request, service, store.value).catch(thrown);
   if (!environment.ok) return closedAfter(store.value, environment.error);
   return environment;
+}
+
+/** The capability values of one render, over its temporary asset store. */
+interface Environment {
+  readonly assets: TempAssetStore['assets'];
+  readonly installation: BuiltinResources;
+  readonly system: Pick<DesignSystem, 'resolve' | 'resolveTheme' | 'projectDiagram'>;
+  readonly language: Language;
+  readonly templates: Pick<Templates<LoweredIntent>, 'read' | 'planAdmission'>;
 }
 
 /** What the environment port is joined from besides the capability values. */
@@ -118,19 +133,35 @@ function capabilities(
 }
 
 /**
- * The environment port over `env`, joined from the render adapters: capability rules, lowering,
- * the service's drawing and Export. Closing it closes the store. Cannot fail.
+ * The environment port over `env`, joined from the render adapters: sources, assets, themes and
+ * output. Closing it closes the store. Cannot fail.
  */
 function environmentPort(
   env: Environment,
   owners: PortOwners,
 ): RenderEnvironment {
   return {
-    ...createCapabilityRules(env, owners.service),
-    ...createLowering(env.language),
+    sources: createRenderSources(env.language),
+    assets: createRenderAssets(env.assets),
+    themes: createRenderThemes({
+      presets: env.installation.presets,
+      assets: env.assets,
+      templates: env.templates,
+      prepareTheme: owners.service.prepareTheme,
+    }),
+    output: renderOutput(env, owners),
+    close: () => owners.store.close(),
+  };
+}
+
+/** The output port: the service's drawing and Export, each from its own adapter. */
+function renderOutput(
+  env: Environment,
+  owners: PortOwners,
+): RenderOutput {
+  return {
     ...createProduction(serviceProduction(env, owners)),
     ...createExporter(exportChoices(env, owners.request)),
-    close: () => owners.store.close(),
   };
 }
 

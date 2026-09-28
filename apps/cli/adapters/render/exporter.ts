@@ -9,9 +9,9 @@ import { createReactBindings } from '@novakai/canvas-presentation';
 import { composeExport, type ExportBindings, type SnapshotReader } from '@novakai/canvas-export';
 import type {
   ExportInput,
-  RenderEnvironment,
+  RenderOutput,
   SectionExporter,
-} from '../../contract/ports/render.js';
+} from '../../contract/ports/render-output.js';
 import type { RenderEvidence } from '../../contract/records/render-failure.js';
 import type { LabelMode, RenderFormat } from '../../contract/records/render.js';
 import type {
@@ -30,8 +30,8 @@ export interface ExportChoices {
   documentsFor(pins: ResolvedResources): Documents;
 }
 
-/** The environment's Export. Builds nothing and cannot fail; `exporter` fails as {@link openExporter}. */
-export function createExporter(choices: ExportChoices): Pick<RenderEnvironment, 'exporter'> {
+/** The output port's Export. Builds nothing and cannot fail; `exporter` fails as {@link openExporter}. */
+export function createExporter(choices: ExportChoices): Pick<RenderOutput, 'exporter'> {
   return { exporter: (input) => openExporter(input, choices) };
 }
 

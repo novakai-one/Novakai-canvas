@@ -5,7 +5,8 @@
  * the service's theme preparation admits it. Pure apart from the injected ports; nothing stored is
  * changed. The caller fixes the named theme file or font and runs render:png again.
  */
-import type { FontBinding, RenderEnvironment, RenderFiles } from '../../contract/ports/render.js';
+import type { InputFiles } from '../../contract/ports/render-files.js';
+import type { FontBinding, RenderThemes } from '../../contract/ports/render-themes.js';
 import type { Catalog } from '../../contract/records/foreign.js';
 import type { RenderChoice, ThemeChoice } from '../../contract/records/render.js';
 import type { RenderEvidence } from '../../contract/records/render-failure.js';
@@ -25,8 +26,8 @@ export interface AdmittedThemes {
 
 /** What theme admission uses: the shipped and given theme files, fonts and the admission rule. */
 export interface ThemeDependencies extends AdmissionDependencies {
-  readonly env: Pick<RenderEnvironment, 'catalog' | 'admitTheme' | 'stageAsset'>;
-  readonly files: Pick<RenderFiles, 'shippedThemes' | 'read'>;
+  readonly themes: RenderThemes;
+  readonly inputFiles: Pick<InputFiles, 'shippedThemes' | 'read'>;
 }
 
 /** One theme file after admission: the grown catalog and the file's `@id`. */
@@ -48,7 +49,7 @@ export async function admitThemes(
   request: Pick<RenderChoice, 'theme' | 'themeFile'>,
   dependencies: ThemeDependencies,
 ): Promise<Result<AdmittedThemes, RenderEvidence>> {
-  const paths = await dependencies.files.shippedThemes();
+  const paths = await dependencies.inputFiles.shippedThemes();
   if (!paths.ok) return paths;
   const shipped = await admitInOrder(paths.value, dependencies);
   if (!shipped.ok) return shipped;
@@ -62,7 +63,7 @@ function admitInOrder(
 ): Promise<CatalogResult> {
   return paths.reduce<Promise<CatalogResult>>(
     async (prior, path) => admitAfter(await prior, path, dependencies),
-    Promise.resolve(success(dependencies.env.catalog)),
+    Promise.resolve(success(dependencies.themes.catalog)),
   );
 }
 
@@ -99,7 +100,7 @@ async function admitThemeFile(
   catalog: Catalog,
   dependencies: ThemeDependencies,
 ): Promise<Result<AdmittedFile, RenderEvidence>> {
-  const file = await dependencies.files.read(path);
+  const file = await dependencies.inputFiles.read(path);
   if (!file.ok) return file;
   const theme = readThemeSource(file.value.source);
   if (!theme.ok) return theme;
@@ -121,7 +122,7 @@ async function admitTheme(
   );
   const fonts = combined(staged);
   if (!fonts.ok) return fonts;
-  const admitted = dependencies.env.admitTheme(catalog, theme.admission, fonts.value);
+  const admitted = dependencies.themes.admit(catalog, theme.admission, fonts.value);
   return mapped(admitted, (grown) => ({ catalog: grown, id: theme.admission.id }));
 }
 

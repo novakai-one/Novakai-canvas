@@ -1,10 +1,11 @@
 /*
- * The headless render's file I/O, bound to one repo root, output directory and format: list the
+ * The headless render's file I/O, as two ports. Input files, bound to the repo root: list the
  * shipped `.theme` and `.canvas` files under resources/, read UTF-8 text, name a recipe family's
- * shipped source, create the output directory and write section files. Read paths and the output
- * directory are resolved against the working directory. Not pure. Every failure is a
- * `provider-failed` value, and nothing throws out of it: a native failure carries the OS path, code
- * and syscall; a path that fails its FilePath check carries only the check's message.
+ * shipped source. Section files, bound to the output directory and format: create the directory
+ * and write section files. Read paths and the output directory are resolved against the working
+ * directory. Not pure. Every failure is a `provider-failed` value, and nothing throws out of it: a
+ * native failure carries the OS path, code and syscall; a path that fails its FilePath check
+ * carries only the check's message.
  */
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -12,25 +13,31 @@ import type { ProviderFault } from '../../contract/records/render-fault.js';
 import type { RenderRequest } from '../../contract/records/render.js';
 import { filePath, type FilePath, type SectionId } from '../../contract/brands.js';
 import type { SourceFile } from '../../contract/records/source-file.js';
-import type { RenderFiles } from '../../contract/ports/render.js';
+import type { InputFiles, SectionFiles } from '../../contract/ports/render-files.js';
 import { faulted, nativeFault, success, type Result } from '../../contract/errors.js';
 
-/** Where one render reads shipped files and writes its sections. */
-export type RenderTarget = Pick<RenderRequest, 'root' | 'out' | 'format'>;
+/** Where one render writes its sections, and in which format. */
+export type SectionTarget = Pick<RenderRequest, 'out' | 'format'>;
 
-/**
- * Build the render file adapter for one render. Touches nothing and cannot fail. Output paths are
- * made absolute, so the report names absolute files. Raster start-up is bound separately.
- */
-export function createRenderFiles(target: RenderTarget): Omit<RenderFiles, 'prepareRaster'> {
-  const resources = join(target.root, 'resources');
+/** Build the input files of one render below `root`. Touches nothing and cannot fail. */
+export function createInputFiles(root: FilePath): InputFiles {
+  const resources = join(root, 'resources');
   return {
     shippedThemes: () => shippedThemes(resources),
     shippedCollections: () => shippedCollections(resources),
     read: (path) => readSource(path),
-    recipeFile: (family) => checkedPath(join(target.root, 'resources/recipes', family + '.canvas')),
-    prepareOutput: () => prepareOutput(target.out),
-    writeSection: (section, bytes) => writeSection(target, section, bytes),
+    recipeFile: (family) => checkedPath(join(root, 'resources/recipes', family + '.canvas')),
+  };
+}
+
+/**
+ * Build the section files of one render. Touches nothing and cannot fail. Output paths are made
+ * absolute, so the report names absolute files.
+ */
+export function createSectionFiles(target: SectionTarget): SectionFiles {
+  return {
+    prepare: () => prepareOutput(target.out),
+    write: (section, bytes) => writeSection(target, section, bytes),
   };
 }
 
@@ -130,7 +137,7 @@ async function createDirectory(path: FilePath): Promise<void> {
  * or the file cannot be written.
  */
 async function writeSection(
-  target: RenderTarget,
+  target: SectionTarget,
   section: SectionId,
   bytes: Uint8Array,
 ): Promise<Result<FilePath, ProviderFault>> {

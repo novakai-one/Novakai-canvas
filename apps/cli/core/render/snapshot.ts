@@ -5,7 +5,7 @@
  * asset store and base64 is decoded by the injected decoder. The caller fixes the named asset and
  * runs render:png again.
  */
-import type { RenderEnvironment } from '../../contract/ports/render.js';
+import type { RenderAssets } from '../../contract/ports/render-assets.js';
 import type {
   Catalog,
   Collection,
@@ -20,7 +20,7 @@ import { assetOfPin } from '../resources/digests.js';
 import { combined, mapped } from '../shared/results.js';
 
 /** What the snapshot reads: the stored asset bytes and the base64 decoder. */
-export type SnapshotEnvironment = Pick<RenderEnvironment, 'resolveAsset' | 'decodeBase64'>;
+export type SnapshotEnvironment = Pick<RenderAssets, 'resolve' | 'decodeBase64'>;
 
 /** One asset record the collection declares. */
 type CollectionAsset = Collection['assets'][number];
@@ -107,7 +107,7 @@ function assetResource(
   const digest = assetOfPin(asset.digest);
   if (digest === undefined)
     return faulted({ code: 'invalid-asset-pin', asset: asset.id, digest: asset.digest });
-  return mapped(env.resolveAsset(digest), (blob) => ({
+  return mapped(env.resolve(digest), (blob) => ({
     kind: 'asset',
     digest: blob.descriptor.digest,
     mediaType: blob.descriptor.mediaType,

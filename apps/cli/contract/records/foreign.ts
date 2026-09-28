@@ -17,6 +17,7 @@ export type { InspectionReport, RenderDocument } from '@novakai/canvas-service';
 export type { Assets, StageInput, StoredBlob, SupportedMedia } from '@novakai/canvas-assets';
 export type { Admission, Catalog, ExpansionRequest, ThemePreset } from '@novakai/canvas-templates';
 export type {
+  Diagnostic as ExportDiagnostic,
   Documents,
   Resource,
   Resources,

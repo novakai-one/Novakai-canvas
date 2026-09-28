@@ -6,7 +6,12 @@
  * failure ends the render as `provider-failed`. Pure apart from the injected ports; no stored
  * collection changes, so the caller fixes the named input and runs render:png again.
  */
-import type { RenderEnvironment, RenderFiles, RenderPorts } from '../../contract/ports/render.js';
+import type { RenderEnvironment, RenderPorts } from '../../contract/ports/render.js';
+import type { RenderAssets } from '../../contract/ports/render-assets.js';
+import type { InputFiles, RasterEngine, SectionFiles } from '../../contract/ports/render-files.js';
+import type { RenderOutput } from '../../contract/ports/render-output.js';
+import type { RenderSources } from '../../contract/ports/render-sources.js';
+import type { RenderThemes } from '../../contract/ports/render-themes.js';
 import type { ResourceReader } from '../../contract/ports/resource-reader.js';
 import type {
   Catalog,
@@ -29,10 +34,15 @@ import { admitThemes } from './themes.js';
 const recovery =
   'Correct the named input or resource and rerun; stored collections were not changed.';
 
-/** What one open render runs with: its environment, its files and confined resource reads. */
+/** What one open render runs with: the environment's ports, the file ports and resource reads. */
 interface Rules {
-  readonly env: RenderEnvironment;
-  readonly files: RenderFiles;
+  readonly sources: RenderSources;
+  readonly assets: RenderAssets;
+  readonly themes: RenderThemes;
+  readonly output: RenderOutput;
+  readonly inputFiles: InputFiles;
+  readonly raster: RasterEngine;
+  readonly sectionFiles: SectionFiles;
   readonly resources: ResourceReader;
 }
 
@@ -62,10 +72,25 @@ export async function renderCollection(
   const opened = await guarded(ports.open());
   if (!opened.ok) return rejected(opened.error);
   const env = opened.value;
-  const rendered = await guarded(
-    renderIn(request, { env, files: ports.files, resources: ports.resources }),
-  );
+  const rendered = await guarded(renderIn(request, openRules(env, ports)));
   return closedAfter(rendered, await guarded(env.close()));
+}
+
+/** The open environment's ports joined with the render's file ports and resource reads. */
+function openRules(
+  env: RenderEnvironment,
+  ports: RenderPorts,
+): Rules {
+  return {
+    sources: env.sources,
+    assets: env.assets,
+    themes: env.themes,
+    output: env.output,
+    inputFiles: ports.inputFiles,
+    raster: ports.raster,
+    sectionFiles: ports.sectionFiles,
+    resources: ports.resources,
+  };
 }
 
 /** `work`'s own outcome; a rejection becomes `provider-failed` with its native evidence. */
@@ -115,9 +140,14 @@ async function drawn(
   rules: Rules,
   drawing: Drawing,
 ): Promise<Result<RenderReport, RenderEvidence>> {
-  const document = await rules.env.produce(drawing.collection, drawing.catalog);
+  const document = await rules.output.produce(drawing.collection, drawing.catalog);
   if (!document.ok) return document;
-  const snapshot = renderSnapshot(drawing.collection, document.value, drawing.catalog, rules.env);
+  const snapshot = renderSnapshot(
+    drawing.collection,
+    document.value,
+    drawing.catalog,
+    rules.assets,
+  );
   if (!snapshot.ok) return snapshot;
   return exported(request, rules, {
     ...drawing,
@@ -135,19 +165,14 @@ async function exported(
   rules: Rules,
   produced: Produced,
 ): Promise<Result<RenderReport, RenderEvidence>> {
-  const exporter = await rules.env.exporter({
+  const exporter = await rules.output.exporter({
     document: produced.document,
     snapshot: produced.snapshot,
     pins: pinResources(produced.catalog, produced.snapshot.collection.assets),
     resources: resourceInspector(produced.snapshot.resources),
   });
   if (!exporter.ok) return exporter;
-  const files = await exportSections(
-    request.format,
-    rules.files,
-    exporter.value,
-    produced.document,
-  );
+  const files = await exportSections(request.format, rules, exporter.value, produced.document);
   return mapped(files, (written) =>
     renderReport(written, produced.collection, produced.document, produced.catalog),
   );

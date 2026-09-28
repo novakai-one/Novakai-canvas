@@ -4,7 +4,8 @@
  * written at once. Pure apart from the injected exporter and files; section files are the only
  * writes. The first failure in scene order wins; the caller fixes the output path and reruns.
  */
-import type { RenderFiles, SectionExporter } from '../../contract/ports/render.js';
+import type { RasterEngine, SectionFiles } from '../../contract/ports/render-files.js';
+import type { SectionExporter } from '../../contract/ports/render-output.js';
 import type { RenderDocument } from '../../contract/records/foreign.js';
 import type { RenderFormat } from '../../contract/records/render.js';
 import type { RenderEvidence } from '../../contract/records/render-failure.js';
@@ -12,8 +13,11 @@ import { sectionId, type FilePath, type SectionId } from '../../contract/brands.
 import { failure, success, type Result } from '../../contract/errors.js';
 import { combined } from '../shared/results.js';
 
-/** The file steps a section export uses. */
-type SectionFiles = Pick<RenderFiles, 'prepareRaster' | 'prepareOutput' | 'writeSection'>;
+/** The file ports a section export uses: the raster engine and the section files. */
+interface SectionPorts {
+  readonly raster: RasterEngine;
+  readonly sectionFiles: SectionFiles;
+}
 
 /**
  * The written files, in scene order. Fails with `invalid-response` when the service's document
@@ -22,15 +26,15 @@ type SectionFiles = Pick<RenderFiles, 'prepareRaster' | 'prepareOutput' | 'write
  */
 export async function exportSections(
   format: RenderFormat,
-  files: SectionFiles,
+  ports: SectionPorts,
   exporter: SectionExporter,
   document: RenderDocument,
 ): Promise<Result<readonly FilePath[], RenderEvidence>> {
   const sections = combined(document.scene.sections.map((section) => checkedSection(section.id)));
   if (!sections.ok) return sections;
-  const ready = await prepared(format, files);
+  const ready = await prepared(format, ports);
   if (!ready.ok) return ready;
-  return written(files, exporter, sections.value);
+  return written(ports.sectionFiles, exporter, sections.value);
 }
 
 /**
@@ -50,20 +54,20 @@ function checkedSection(id: string): Result<SectionId> {
 /** The raster engine when the format is PNG, then the output directory. Fails as either does. */
 async function prepared(
   format: RenderFormat,
-  files: SectionFiles,
+  ports: SectionPorts,
 ): Promise<Result<void, RenderEvidence>> {
-  const raster = await rasterFor(format, files);
+  const raster = await rasterFor(format, ports.raster);
   if (!raster.ok) return raster;
-  return files.prepareOutput();
+  return ports.sectionFiles.prepare();
 }
 
 /** PNG starts the raster engine; SVG needs nothing. */
 function rasterFor(
   format: RenderFormat,
-  files: SectionFiles,
+  raster: RasterEngine,
 ): Promise<Result<void, RenderEvidence>> {
   if (format !== 'png') return Promise.resolve(success(undefined));
-  return files.prepareRaster();
+  return raster.prepare();
 }
 
 /** Every section exported and written; the first failure in scene order wins. */
@@ -86,5 +90,5 @@ async function writtenSection(
 ): Promise<Result<FilePath, RenderEvidence>> {
   const bytes = await exporter.export(section);
   if (!bytes.ok) return bytes;
-  return files.writeSection(section, bytes.value);
+  return files.write(section, bytes.value);
 }

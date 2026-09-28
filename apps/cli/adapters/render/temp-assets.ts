@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { openAssets, type AssetError, type Assets } from '@novakai/canvas-assets';
 import type { ProviderFault } from '../../contract/records/render-fault.js';
 import { filePath, type FilePath } from '../../contract/brands.js';
-import type { TempAssetStore } from '../../contract/ports/render.js';
+import type { TempAssetStore } from '../../contract/ports/render-assets.js';
 import { faulted, nativeFault, success, type Result } from '../../contract/errors.js';
 
 /** What opening or closing the store fails with. */

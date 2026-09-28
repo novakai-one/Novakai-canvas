@@ -4,7 +4,8 @@
  * never trusted. Pure apart from the injected render files and parser. The caller names another
  * collection and runs render:png again.
  */
-import type { RenderEnvironment, RenderFiles } from '../../contract/ports/render.js';
+import type { InputFiles } from '../../contract/ports/render-files.js';
+import type { RenderSources } from '../../contract/ports/render-sources.js';
 import type { Catalog } from '../../contract/records/foreign.js';
 import type { CollectionSelector } from '../../contract/records/render.js';
 import type { RenderEvidence } from '../../contract/records/render-failure.js';
@@ -16,8 +17,8 @@ import { faulted, success } from '../../contract/errors.js';
 
 /** What choosing a source uses: the render's file reads and Language's parse. */
 export interface SourceDependencies {
-  readonly files: Pick<RenderFiles, 'read' | 'recipeFile' | 'shippedCollections'>;
-  readonly env: Pick<RenderEnvironment, 'parse'>;
+  readonly inputFiles: Pick<InputFiles, 'read' | 'recipeFile' | 'shippedCollections'>;
+  readonly sources: Pick<RenderSources, 'parse'>;
 }
 
 /** A recipe in the admitted catalog. */
@@ -33,7 +34,7 @@ export function collectionSource(
   catalog: Catalog,
   dependencies: SourceDependencies,
 ): Promise<Result<SourceFile, RenderEvidence>> {
-  if (selector.kind === 'file') return dependencies.files.read(selector.path);
+  if (selector.kind === 'file') return dependencies.inputFiles.read(selector.path);
   return namedSource(selector.name, catalog, dependencies);
 }
 
@@ -48,7 +49,7 @@ function namedSource(
 ): Promise<Result<SourceFile, RenderEvidence>> {
   const recipe = catalog.find((preset) => isRecipeNamed(preset, name));
   if (recipe === undefined) return shippedSource(name, dependencies);
-  return Promise.resolve(recipeSource(recipe, dependencies.files));
+  return Promise.resolve(recipeSource(recipe, dependencies.inputFiles));
 }
 
 /**
@@ -57,9 +58,9 @@ function namedSource(
  */
 function recipeSource(
   recipe: RecipePreset,
-  files: SourceDependencies['files'],
+  inputFiles: SourceDependencies['inputFiles'],
 ): Result<SourceFile, RenderEvidence> {
-  const file = files.recipeFile(recipe.payload.family);
+  const file = inputFiles.recipeFile(recipe.payload.family);
   if (!file.ok) return file;
   return success({ source: recipe.payload.source, file: file.value });
 }
@@ -72,9 +73,9 @@ async function shippedSource(
   name: CollectionName,
   dependencies: SourceDependencies,
 ): Promise<Result<SourceFile, RenderEvidence>> {
-  const sources = await dependencies.files.shippedCollections();
+  const sources = await dependencies.inputFiles.shippedCollections();
   if (!sources.ok) return sources;
-  const parse = dependencies.env.parse;
+  const parse = dependencies.sources.parse;
   return onlyMatch(
     name,
     sources.value.filter((source) => declares(source, name, parse)),
@@ -104,7 +105,7 @@ function isRecipeNamed(
 function declares(
   source: SourceFile,
   name: CollectionName,
-  parse: RenderEnvironment['parse'],
+  parse: RenderSources['parse'],
 ): boolean {
   const parsed = parse(source.source);
   return parsed.ok && parsed.value.collection === name;

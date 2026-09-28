@@ -1,29 +1,34 @@
 /*
- * DSL to collections and back for one headless render. Language lowers a source as a new
- * collection with no snapshot: the environment's `lower`, and the `parse` of the documents port
- * Export reads, prints and parses collections through. For that port Model validates and Language
- * prints. Only bundle exports call the documents port; render:png writes SVG and PNG sections, so
- * today nothing does. Pure. A refusal is returned, never thrown: `lower` returns Language's
- * diagnostics, the documents port Export's own diagnostic. The caller fixes the source and reruns.
+ * DSL to collections and back for one headless render. The environment's sources port: Language
+ * parses and lowers a source as a new collection with no snapshot, and Model checks a collection.
+ * Export's documents port, which Export reads, prints and parses collections through: Model
+ * validates, Language prints and lowers the same way. Only bundle exports call the documents port;
+ * render:png writes SVG and PNG sections, so today nothing does. Pure. A refusal is returned,
+ * never thrown: the sources port returns the owner's diagnostics, the documents port Export's own
+ * diagnostic. The caller fixes the source and reruns.
  */
 import { validate } from '@novakai/canvas-model';
 import type { Result as LanguageResult } from '@novakai/canvas-language';
-import type { Diagnostic as ExportDiagnostic } from '@novakai/canvas-export';
-import type { RenderEnvironment } from '../../contract/ports/render.js';
+import type { RenderSources } from '../../contract/ports/render-sources.js';
 import type {
   Collection,
   Documents,
+  ExportDiagnostic,
   Language,
   ResolvedResources,
 } from '../../contract/records/foreign.js';
 import { success, type Result } from '../../contract/errors.js';
 
-/** The environment's lowering. */
-export type Lowering = Pick<RenderEnvironment, 'lower'>;
-
-/** Lowering over `language`. Builds nothing and cannot fail; `lower` fails as {@link lowerAsNew}. */
-export function createLowering(language: Pick<Language, 'lower'>): Lowering {
-  return { lower: (source, resources) => lowerAsNew(language, source, resources) };
+/**
+ * The sources port over `language` and Model. Builds nothing and cannot fail; `parse` fails with
+ * Language's diagnostics, `lower` as {@link lowerAsNew}, `validate` with Model's diagnostics.
+ */
+export function createRenderSources(language: Pick<Language, 'parse' | 'lower'>): RenderSources {
+  return {
+    parse: (source) => language.parse(source),
+    lower: (source, resources) => lowerAsNew(language, source, resources),
+    validate: (value) => validate(value),
+  };
 }
 
 /**
