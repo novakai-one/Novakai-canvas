@@ -1,7 +1,12 @@
 /*
- * The pins one render lowers against: every admitted theme preset as a Model theme pin keyed by its
- * ID, and the collection's own asset records keyed by asset ID. Pure; nothing can fail here.
- * Language checks each pin the source names when it lowers, and has Model check the records.
+ * Why this file exists
+ *
+ * A collection names its theme and images by ID, as in `theme=atlas` or `asset=@logo`. To check it,
+ * Language and Model need to know exactly what each name stands for. Model calls that exact record
+ * a pin: for a theme, its ID, version and content hash (`sha256:…`).
+ *
+ * This file builds that lookup from the render's theme catalog and the collection's own font and
+ * image records. It only builds the lookup; Language and Model check it. Nothing here can fail.
  */
 import type {
   Catalog,
@@ -12,7 +17,10 @@ import type {
 } from '../../contract/records/foreign.js';
 import { formatPin } from '../resources/digests.js';
 
-/** Theme pins from the admitted catalog, plus `assets`, the collection's own asset records. */
+/**
+ * Builds the lookup a collection's names are checked against: each theme in `catalog` by its ID,
+ * and each of `assets` (the collection's own font and image records) by its asset ID.
+ */
 export function pinResources(
   catalog: Catalog,
   assets: readonly CollectionAsset[],

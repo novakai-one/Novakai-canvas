@@ -1,11 +1,14 @@
 /*
- * One read-only render, start to finish: open the render's environment, admit the themes, draw the
- * chosen collection, produce its document, snapshot it, export every section to its file, report
- * with the service's inspection.
- * The environment is closed once, last, whatever happened. The first failure wins: a close failure
- * is reported only when the render itself succeeded. An owner that throws instead of returning its
- * failure ends the render as `provider-failed`. Pure apart from the injected ports; no stored
- * collection changes, so the caller fixes the named input and runs render:png again.
+ * Why this file exists
+ *
+ * `pnpm render:png --collection states --out out/` draws a collection into image files, one per
+ * section, without a browser. That takes several parts in turn: the themes, the collection, the
+ * service's layout, then Export. Any of them can fail, and the render's temporary store must be
+ * removed whatever happens.
+ *
+ * This file runs those parts in order and always closes the store last. Each step gives back a
+ * `Result` (see `contract/errors.ts`); the first mistake becomes one `render-failed` record. It
+ * never changes a saved collection.
  */
 import type { RenderEnvironment, RenderPorts } from '../../contract/ports/render.js';
 import type { RenderAssets } from '../../contract/ports/render-assets.js';
@@ -24,12 +27,12 @@ import type {
 import type { RenderReport, RenderRequest } from '../../contract/records/render.js';
 import type { RenderFailureSource, RenderFailure } from '../../contract/records/render-failure.js';
 import { providerFailure, success, type Result } from '../../contract/errors.js';
-import { chosenCollection } from './collection.js';
+import { loadCollection } from './collection.js';
 import { pinResources } from './pins.js';
-import { renderReport } from './report.js';
-import { resourceInspector } from './retained-resources.js';
+import { buildRenderReport } from './report.js';
+import { allowOnlyRetained } from './retained-resources.js';
 import { exportSections } from './sections.js';
-import { renderSnapshot } from './snapshot.js';
+import { buildExportSnapshot } from './snapshot.js';
 import { admitThemes } from './themes.js';
 
 /** What every render failure tells the caller to do: nothing stored changed. */
@@ -65,11 +68,9 @@ interface Produced extends Drawing {
 }
 
 /**
- * Render every section of `request`'s collection to files and report them. Fails with
- * `render-failed` carrying the first failure: the CLI's own fault (`collection-selection`,
- * `missing-theme`, `provider-failed`, …), a CLI failure (resource reads, `invalid-response`), or
- * Language, Model, Assets, Templates (its theme grammar too), service, Presentation or Export
- * evidence kept whole.
+ * Draws the collection `request` names into one image file per section, and reports what it wrote.
+ * The render's temporary store is opened first and closed last, even after a mistake. Any mistake
+ * comes back as `render-failed`, with the first failure kept whole as its `source`.
  */
 export async function renderCollection(
   request: RenderRequest,
@@ -135,7 +136,7 @@ async function renderIn(
 ): Promise<Result<RenderReport, RenderFailureSource>> {
   const themes = await admitThemes(request, ports);
   if (!themes.ok) return themes;
-  const collection = await chosenCollection(request.collection, themes.value, ports);
+  const collection = await loadCollection(request.collection, themes.value, ports);
   if (!collection.ok) return collection;
   return drawn(request, ports, { collection: collection.value, catalog: themes.value.catalog });
 }
@@ -151,7 +152,7 @@ async function drawn(
 ): Promise<Result<RenderReport, RenderFailureSource>> {
   const document = await ports.output.layOut(drawing.collection, drawing.catalog);
   if (!document.ok) return document;
-  const snapshot = renderSnapshot(
+  const snapshot = buildExportSnapshot(
     drawing.collection,
     document.value,
     drawing.catalog,
@@ -179,11 +180,11 @@ async function exported(
     document: produced.document,
     snapshot: produced.snapshot,
     resolvedResources: pinResources(produced.catalog, produced.snapshot.collection.assets),
-    resources: resourceInspector(produced.snapshot.resources),
+    resources: allowOnlyRetained(produced.snapshot.resources),
   });
   if (!exporter.ok) return exporter;
   const files = await exportSections(request.format, ports, exporter.value, produced.document);
   if (!files.ok) return files;
   const inspection = ports.output.inspect(produced.document);
-  return success(renderReport(files.value, produced.collection, inspection, produced.catalog));
+  return success(buildRenderReport(files.value, produced.collection, inspection, produced.catalog));
 }

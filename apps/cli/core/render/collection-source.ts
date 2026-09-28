@@ -1,8 +1,12 @@
 /*
- * Which source render:png draws. A `.canvas` file is read as given. A name selects a recipe ID in
- * the admitted catalog first, then the one shipped collection whose parsed ID it is; file names are
- * never trusted. Pure apart from the injected render files and parser. The caller names another
- * collection and runs render:png again.
+ * Why this file exists
+ *
+ * `--collection` names either a file or an ID. `--collection my.canvas` means that file.
+ * `--collection states` means the recipe with that ID or, if there is none, the one `.canvas`
+ * file under the repo's `resources/` folder whose text declares `collection @states`.
+ *
+ * This file finds that source text. An ID is matched against what each file declares, never
+ * against its file name. Each step gives back a `Result` (see `contract/errors.ts`). It only reads.
  */
 import type { InputFiles } from '../../contract/ports/render-files.js';
 import type { RenderSources } from '../../contract/ports/render-sources.js';
@@ -15,7 +19,7 @@ import { presetId, type RecipeOrCollectionId, type PresetId } from '../../contra
 import type { Result } from '../../contract/errors.js';
 import { renderFaultFailure, success } from '../../contract/errors.js';
 
-/** What choosing a source uses: the render's file reads and Language's parse. */
+/** The parts finding a source uses: the render's file reads and Language's parser. */
 export interface SourceDependencies {
   readonly inputFiles: Pick<InputFiles, 'read' | 'recipeFile' | 'shippedCollections'>;
   readonly sources: Pick<RenderSources, 'parse'>;
@@ -25,11 +29,12 @@ export interface SourceDependencies {
 type RecipePreset = Extract<Catalog[number], { readonly kind: 'recipe' }>;
 
 /**
- * The source `selector` names, with the file its resources resolve against. Fails with
- * `provider-failed` when a file cannot be read or its path fails its check, or
- * `collection-selection` when a name is no recipe and not exactly one shipped collection.
+ * Finds the source text `selector` names, with the file its fonts and images are read relative to.
+ * An ID is looked up as a recipe in `catalog` first.
+ * Mistakes: a file that can't be read (`provider-failed`), or an ID that is no recipe and matches
+ * no `.canvas` file, or more than one (`collection-selection`).
  */
-export function collectionSource(
+export function findCollectionSource(
   selector: CollectionSelector,
   catalog: Catalog,
   dependencies: SourceDependencies,

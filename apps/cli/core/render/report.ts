@@ -1,14 +1,23 @@
 /*
- * The render report: the written files, the collection's theme, the service's inspection of the
- * rendered document and the admitted theme digests. Pure assembly; the service judges the
- * document, nothing is recounted here. Nothing can fail.
+ * Why this file exists
+ *
+ * When a render finishes, render:png prints one JSON report so the agent can see what happened:
+ * the full path of each file it wrote (such as `…/out/intro.png`), the theme it drew with, the
+ * service's inspection of the drawing, and a content hash for every theme the render knew.
+ *
+ * This file puts that report together from what the earlier steps gave back. It judges nothing
+ * itself and cannot fail.
  */
+import type { FilePath } from '../../contract/brands.js';
 import type { Catalog, Collection, InspectionReport } from '../../contract/records/foreign.js';
 import type { RenderReport } from '../../contract/records/render.js';
 
-/** The report of one completed render, with the service's `inspection` as it gave it. */
-export function renderReport(
-  files: RenderReport['files'],
+/**
+ * Puts together the report a finished render prints. `inspection` is passed on exactly as the
+ * service gave it; each theme in `catalog` adds its ID and content hash.
+ */
+export function buildRenderReport(
+  files: readonly FilePath[],
   collection: Collection,
   inspection: InspectionReport,
   catalog: Catalog,

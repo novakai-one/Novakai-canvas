@@ -1,9 +1,12 @@
 /*
- * The collection one render draws: the chosen source with the chosen theme written in, its fonts
- * and images admitted as asset records, lowered against the admitted catalog's pins and checked by
- * Model, with the chosen theme's pin in place of the collection's own. A fresh copy: no stored
- * collection or source file changes. Pure apart from the injected ports. The caller names another
- * collection or theme and runs render:png again.
+ * Why this file exists
+ *
+ * `--collection states --theme atlas` asks to draw the `states` collection with the `atlas`
+ * theme in place of its own. The source text can't be drawn as it is. It needs the theme written
+ * in and its fonts and images stored, then Language and Model turn it into a checked collection.
+ *
+ * This file does those steps, in that order, on a fresh copy of the text. Each step gives back a
+ * `Result` (see `contract/errors.ts`). It never changes a saved collection or a source file.
  */
 import type { RenderSources } from '../../contract/ports/render-sources.js';
 import type { Collection, ResolvedResources } from '../../contract/records/foreign.js';
@@ -12,29 +15,32 @@ import type { RenderFailureSource } from '../../contract/records/render-failure.
 import type { SourceFile } from '../../contract/records/source-file.js';
 import type { Result } from '../../contract/errors.js';
 import { renderFaultFailure, success } from '../../contract/errors.js';
-import { collectionSource, type SourceDependencies } from './collection-source.js';
+import { findCollectionSource, type SourceDependencies } from './collection-source.js';
 import { pinResources } from './pins.js';
-import { sourceAssets, type AssetDependencies } from './source-assets.js';
-import { withTheme } from './source-theme.js';
+import { admitSourceAssets, type AssetDependencies } from './source-assets.js';
+import { setSourceTheme } from './source-theme.js';
 import type { AdmittedThemes } from './themes.js';
 
-/** What drawing a collection uses: source reads, the parse, asset admission, lowering and Model. */
+/**
+ * The parts loading a collection uses: file reads, the render's temporary store, and `sources`
+ * (Language's parser, Language turning text into a collection, and Model's check).
+ */
 export interface CollectionDependencies extends SourceDependencies, AssetDependencies {
   readonly sources: RenderSources;
 }
 
 /**
- * The checked collection `selector` names, drawn with `themes`' choice when there is one. Fails as
- * choosing the source, overriding its theme, admitting its fonts and images, Language's lowering
- * or Model's check does, with `duplicate-asset` when the source declares one asset ID twice, or
- * with `missing-theme` when the choice has no admitted pin.
+ * Loads the collection `selector` names as a checked collection, using the theme `themes` chose,
+ * if any, in place of its own.
+ * Mistakes: the source can't be found or read, the theme can't be written in or isn't known
+ * (`missing-theme`), a font or image can't be stored, or Language or Model find a problem.
  */
-export async function chosenCollection(
+export async function loadCollection(
   selector: CollectionSelector,
   themes: AdmittedThemes,
   dependencies: CollectionDependencies,
 ): Promise<Result<Collection, RenderFailureSource>> {
-  const original = await collectionSource(selector, themes.catalog, dependencies);
+  const original = await findCollectionSource(selector, themes.catalog, dependencies);
   if (!original.ok) return original;
   const source = themedSource(original.value, themes.choice, dependencies.sources.parse);
   if (!source.ok) return source;
@@ -48,7 +54,7 @@ function themedSource(
   parse: RenderSources['parse'],
 ): Result<SourceFile, RenderFailureSource> {
   if (choice === undefined) return success(source);
-  return withTheme(source, choice, parse);
+  return setSourceTheme(source, choice, parse);
 }
 
 /**
@@ -61,7 +67,7 @@ async function lowered(
   themes: AdmittedThemes,
   dependencies: CollectionDependencies,
 ): Promise<Result<Collection, RenderFailureSource>> {
-  const assets = await sourceAssets(source, dependencies);
+  const assets = await admitSourceAssets(source, dependencies);
   if (!assets.ok) return assets;
   const pins = pinResources(themes.catalog, assets.value);
   const collection = dependencies.sources.lower(source.source, pins);

@@ -1,8 +1,12 @@
 /*
- * The render-only theme override: a copy of the collection source whose `theme` field names the
- * chosen theme, written on the spans Language parsed. Pure apart from the injected parser; the
- * source file is never written and nothing trusts its name. Pins are checked when the copy is
- * lowered. The caller picks another source or theme and runs render:png again.
+ * Why this file exists
+ *
+ * `--theme atlas` draws a collection with the `atlas` theme instead of its own. To do that, the
+ * CLI changes a copy of the source text: `collection @shop "Shop" theme=onyx` becomes
+ * `collection @shop "Shop" theme="atlas"`. A collection with no theme gets one after its title.
+ *
+ * This file makes that changed copy, at the places Language found when it parsed the text. It
+ * never writes the file. Whether the theme exists is checked later, in `collection.ts`.
  */
 import type { RenderSources } from '../../contract/ports/render-sources.js';
 import type { ParsedSource, Span } from '../../contract/records/foreign.js';
@@ -15,12 +19,12 @@ import { renderFaultFailure, success } from '../../contract/errors.js';
 import { mapped } from '../shared/results.js';
 
 /**
- * A copy of `source` whose collection names `theme`: the existing theme field is replaced, or one
- * is written after the title. Fails with Language's diagnostics, `collection-required` when the
- * source is not a whole collection, or `collection-title-required` when it has no title to write
- * the theme after.
+ * Gives back a copy of `source` whose collection uses `theme`: its theme is replaced, or written
+ * after its title. `parse` is Language's parser.
+ * Mistakes: Language can't parse the text, the text is a patch rather than a whole collection
+ * (`collection-required`), or the collection has no title (`collection-title-required`).
  */
-export function withTheme(
+export function setSourceTheme(
   source: SourceFile,
   theme: ThemeChoice,
   parse: RenderSources['parse'],

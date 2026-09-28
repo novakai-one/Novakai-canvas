@@ -1,9 +1,12 @@
 /*
- * The immutable export snapshot of one render: identity, collection, scene, paint, and every byte
- * it retains (collection assets, document fonts, catalog presets). Pure; asset bytes resolve
- * through the render's asset store and base64 is decoded by the injected decoder. Export's check
- * that it reads only these bytes lives in retained-resources.ts. The caller fixes the named asset
- * and runs render:png again.
+ * Why this file exists
+ *
+ * Export draws from a snapshot: one fixed record of what to draw. It holds the collection, its
+ * layout and colours, and the bytes Export may use: the collection's images, the drawing's fonts,
+ * and every theme and recipe the render knows. A logo is read back from the temporary store.
+ *
+ * This file builds that snapshot. It only gathers bytes already stored or already in the layout;
+ * it writes nothing. `retained-resources.ts` makes sure Export reads only these bytes.
  */
 import type { RenderAssets } from '../../contract/ports/render-assets.js';
 import type {
@@ -19,7 +22,7 @@ import { renderFaultFailure, success, type Result } from '../../contract/errors.
 import { parseAssetPin } from '../resources/digests.js';
 import { combined, mapped } from '../shared/results.js';
 
-/** What the snapshot reads: the stored asset bytes and the base64 decoder. */
+/** What building a snapshot uses: stored bytes read back by digest, and a base64 decoder. */
 export type SnapshotAssets = Pick<RenderAssets, 'readBack' | 'decodeBase64'>;
 
 /** One font the rendered document embeds. */
@@ -29,10 +32,12 @@ type DocumentFont = RenderDocument['fonts'][number];
 const utf8 = new TextEncoder();
 
 /**
- * The snapshot Export draws every section from. Fails with `invalid-asset-pin` when an asset's
- * digest is not Model's `sha256:` pin, or with Assets' failure to resolve an asset's bytes.
+ * Builds the snapshot Export draws every section from, out of the checked `collection`, the
+ * service's laid-out `document` and the render's `catalog`.
+ * Mistakes: a font or image whose digest isn't a `sha256:…` pin (`invalid-asset-pin`), or bytes the
+ * temporary store can't give back.
  */
-export function renderSnapshot(
+export function buildExportSnapshot(
   collection: Collection,
   document: RenderDocument,
   catalog: Catalog,

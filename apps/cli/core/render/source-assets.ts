@@ -1,11 +1,13 @@
 /*
- * A source's asset records: every font and image it declares, admitted into the render's temporary
- * asset store and described as Model's asset record (ID, pin, stored media type, alt text and
- * credit). Model is not asked here: Language's lowering hands the records to Model inside the
- * collection that declares them, so a bad record is reported at its declaration. Only an asset ID
- * declared twice is refused here, because the pins hold one record per ID. Pure apart from the
- * injected ports; only the temporary store is written. The caller fixes the named declaration and
- * runs render:png again.
+ * Why this file exists
+ *
+ * A source can declare fonts and images, as in `asset @logo image source="./assets/logo.svg"`.
+ * Before the collection is drawn, each file's bytes must be stored for this render, and described
+ * the way Model expects: ID, content hash, file type, alt text and credit.
+ *
+ * This file stores each one and writes that description (Model's asset record). It refuses an
+ * asset ID declared twice. Model checks the records later, when Language turns the source into a
+ * collection. Each step gives back a `Result` (see `contract/errors.ts`).
  */
 import type { RenderAssets } from '../../contract/ports/render-assets.js';
 import type { RenderSources } from '../../contract/ports/render-sources.js';
@@ -25,25 +27,22 @@ import { checked } from '../shared/checks.js';
 import { combined } from '../shared/results.js';
 import { admitResource, type AdmissionDependencies } from './resource-admission.js';
 
-/** What a source's asset records use: Language's parse, admission and the stored bytes. */
+/**
+ * The parts storing a source's fonts and images uses: Language's parser, the file reader and the
+ * render's temporary store.
+ */
 export interface AssetDependencies extends AdmissionDependencies {
   readonly sources: Pick<RenderSources, 'parse'>;
   readonly assets: Pick<RenderAssets, 'stage' | 'readBack'>;
 }
 
 /**
- * The asset record of every font and image `source` declares, in declaration order.
- *
- * Steps; the first failure stops:
- * 1. Language parses the source.
- * 2. Each declaration is admitted and described by its stored bytes.
- * 3. Each asset ID must be declared once.
- *
- * Not done here: Model's check of the records, which Language's lowering runs on the whole
- * collection. Fails with Language's diagnostics, as {@link assetRecord} does, or with
- * `duplicate-asset`.
+ * Stores every font and image `source` declares, and gives back Model's record of each, in the
+ * order they are declared.
+ * Mistakes: Language can't parse the source, a file can't be read or stored, or one asset ID is
+ * declared twice (`duplicate-asset`).
  */
-export async function sourceAssets(
+export async function admitSourceAssets(
   source: SourceFile,
   dependencies: AssetDependencies,
 ): Promise<Result<readonly CollectionAsset[], RenderFailureSource>> {

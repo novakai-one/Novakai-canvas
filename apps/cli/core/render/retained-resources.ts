@@ -1,7 +1,12 @@
 /*
- * What Export may read during one render: only resources equal, byte for byte and in metadata, to
- * the ones the snapshot retained. Pure; nothing is read or written. A refusal is Export's own
- * `resource-rejected` record; the caller rebuilds the snapshot and runs render:png again.
+ * Why this file exists
+ *
+ * Before Export uses a file's bytes (a font, an image, a theme), it asks for them to be checked.
+ * They must be exactly ones the render kept in its snapshot: same kind, hash, type, bytes, details.
+ * A font with the right hash but a different family is refused, so nothing can pass as another.
+ *
+ * This file makes that check for Export, over the snapshot's list. A refusal is Export's own
+ * `resource-rejected` record. It reads and writes nothing.
  */
 import type { ExportDiagnostic, Resource, Resources } from '../../contract/records/foreign.js';
 import { success } from '../../contract/errors.js';
@@ -15,11 +20,10 @@ const unretained: ExportDiagnostic = Object.freeze({
 });
 
 /**
- * Export's resource port over the snapshot's `retained` resources: it admits a batch only when each
- * resource equals a retained one, so no retained identity can be borrowed. Fails with
- * `resource-rejected`.
+ * Makes the check Export runs before using any bytes. It passes a batch only when each one equals
+ * a resource in `retained`, the snapshot's list; otherwise it answers `resource-rejected`.
  */
-export function resourceInspector(retained: readonly Resource[]): Resources {
+export function allowOnlyRetained(retained: readonly Resource[]): Resources {
   return {
     async inspect(items) {
       if (!items.every((item) => isRetained(item, retained)))

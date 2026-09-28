@@ -1,8 +1,13 @@
 /*
- * Every section of a rendered document exported to its file. The PNG raster engine starts first
- * when the format needs it, then the output directory is made, then all sections are exported and
- * written at once. Pure apart from the injected exporter and files; section files are the only
- * writes. The first failure in scene order wins; the caller fixes the output path and reruns.
+ * Why this file exists
+ *
+ * A collection with sections `intro` and `data` becomes two image files in the `--out` folder:
+ * `intro.png` and `data.png`. Before any is written, the PNG engine has to start (for PNG only)
+ * and the folder has to exist.
+ *
+ * This file checks each section ID, starts the PNG engine if needed, makes the folder, then has
+ * Export draw each section and writes its file. Each step gives back a `Result` (see
+ * `contract/errors.ts`). Section files are the only thing it writes.
  */
 import type { RasterEngine, SectionFiles } from '../../contract/ports/render-files.js';
 import type { SectionExporter } from '../../contract/ports/render-output.js';
@@ -13,16 +18,17 @@ import { sectionId, type FilePath, type SectionId } from '../../contract/brands.
 import { failure, success, type Result } from '../../contract/errors.js';
 import { combined } from '../shared/results.js';
 
-/** The file ports a section export uses: the raster engine and the section files. */
+/** The parts writing sections uses: the PNG engine (`raster`) and the section file writer. */
 interface SectionPorts {
   readonly raster: RasterEngine;
   readonly sectionFiles: SectionFiles;
 }
 
 /**
- * The written files, in scene order. Fails with `invalid-response` when the service's document
- * names a section Model would not, `provider-failed` or Export's raster failure, or the first
- * section whose export or write fails.
+ * Writes each section of `document` to its own file in `format` (`svg` or `png`), and gives back
+ * the files' paths in the order the sections are drawn.
+ * Mistakes: a section ID that isn't valid (a broken service answer), the PNG engine or the folder
+ * failing, or Export or the write failing for a section.
  */
 export async function exportSections(
   format: RenderFormat,

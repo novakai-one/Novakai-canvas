@@ -1,8 +1,13 @@
 /*
- * `pnpm render:png` argv → RenderChoice, checked in the base render's order: Node accepted the
- * flags; no operand; --collection; --out; --format; --theme; --theme-file. Pure. Every failure is
- * `invalid-arguments` and comes before any file is read or any temporary store is made: the caller
- * corrects the named flag and runs render:png again.
+ * Why this file exists
+ *
+ * An agent draws a collection by typing `pnpm render:png --collection states --out out/`. Before
+ * anything is drawn, the CLI must check those flags: what to draw, where to write it, and in which
+ * format and theme.
+ *
+ * This file checks them and turns them into one `RenderChoice`. Each check gives back a `Result`
+ * (see `contract/errors.ts`). Every mistake is `invalid-arguments`, followed by the usage line from
+ * `flags.ts`, so the agent can fix the flag and try again. It never reads a file or makes a folder.
  */
 import type { ArgvReading, RawArguments, RenderFlag } from '../../contract/records/arguments.js';
 import type {
@@ -18,7 +23,7 @@ import { failure, success } from '../../contract/errors.js';
 import { checked } from '../shared/checks.js';
 import type { Parser } from '../../contract/schemas.js';
 import { joined, mapped } from '../shared/results.js';
-import { flagName, formatNames, isRenderFormat, renderUsage } from './flags.js';
+import { flagAsTyped, formatNames, isRenderFormat, renderUsage } from './flags.js';
 import type { OptionalFlag, RequiredFlag } from './flags.js';
 
 /** The flags render:png read, as Node gave them. */
@@ -34,15 +39,16 @@ type OptionalTextFlag = Exclude<OptionalFlag, 'labels'>;
 const defaultFormat: RenderFormat = 'png';
 
 /**
- * The render `reading` asks for. --labels cannot fail. Fails with `invalid-arguments`, naming the
- * flag or word: a flag Node refused (unknown, a text flag with no value, a value on --labels), any
- * operand, a missing or empty --collection or --out, a --format other than svg or png, or an empty
- * --theme or --theme-file.
+ * Checks the flags typed after `pnpm render:png`, and gives back what they ask for.
+ *
+ * `--collection` and `--out` must be typed. `--format` is `svg` or `png`, and `png` if not typed.
+ * Mistakes: a flag Node couldn't read, a word that isn't a flag, a missing or empty `--collection`
+ * or `--out`, an unknown `--format`, or an empty `--theme` or `--theme-file`.
  */
-export function parseRenderChoice(reading: ArgvReading<RenderFlag>): Result<RenderChoice> {
-  if (reading.kind === 'malformed')
-    return failure(refusal(`Unknown or malformed flag: ${reading.flag}`));
-  return flagsOnly(reading.arguments);
+export function parseRenderChoice(typedLine: ArgvReading<RenderFlag>): Result<RenderChoice> {
+  if (typedLine.kind === 'malformed')
+    return failure(refusal(`Unknown or malformed flag: ${typedLine.flag}`));
+  return flagsOnly(typedLine.arguments);
 }
 
 /** Every word is refused: render:png takes flags only. Fails with `invalid-arguments`. */
@@ -86,7 +92,7 @@ function outputDirectory(raw: RenderArguments): Result<FilePath> {
 function sectionFormat(raw: RenderArguments): Result<RenderFormat> {
   const text = flagText(raw, 'format') ?? defaultFormat;
   if (!isRenderFormat(text))
-    return failure(refusal(`${flagName('format')} must be ${formatNames.join(' or ')}`));
+    return failure(refusal(`${flagAsTyped('format')} must be ${formatNames.join(' or ')}`));
   return success(text);
 }
 
@@ -148,12 +154,12 @@ function namedCollection(name: RecipeOrCollectionId): CollectionSelector {
 
 /** A flag the render needs is absent or empty. */
 function required(flag: RequiredFlag): FailureInput {
-  return refusal(`${flagName(flag)} is required`);
+  return refusal(`${flagAsTyped(flag)} is required`);
 }
 
 /** An optional flag is given with no text. */
 function empty(flag: OptionalTextFlag): FailureInput {
-  return refusal(`${flagName(flag)} must not be empty`);
+  return refusal(`${flagAsTyped(flag)} must not be empty`);
 }
 
 /** A refused flag, operand or value, followed by the usage line; nothing was read or made. */

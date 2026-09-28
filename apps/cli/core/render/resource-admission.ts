@@ -1,9 +1,13 @@
 /*
- * Admitting one declared font or image into the render's temporary asset store. A declaration
- * pinned by `sha256:` digest is taken as it is; any other is read through the confined resource
- * reader and staged with Assets. Theme fonts and source images both come through here. Pure apart
- * from the injected ports; only the temporary store is written. The caller fixes the named
- * declaration and runs render:png again.
+ * Why this file exists
+ *
+ * A theme or source can name a font or image file, as in `font body source="./fonts/inter.woff2"`.
+ * A render needs those bytes but must not touch the saved workspace, so each file is read and
+ * stored in the render's temporary store. A `source="sha256:…"` names bytes by their hash, so it
+ * is used as it is.
+ *
+ * This file does that for one font or image, and gives back the digest its bytes are stored under.
+ * Theme fonts and source images both come through here. Only the temporary store is written.
  */
 import type { RenderAssets } from '../../contract/ports/render-assets.js';
 import type { ResourceReader } from '../../contract/ports/resource-reader.js';
@@ -14,24 +18,27 @@ import type { AssetDigest, FilePath } from '../../contract/brands.js';
 import { success, type Result } from '../../contract/errors.js';
 import { readDeclaredResource } from '../resources/stage.js';
 
-/** What admitting one declaration uses: the resource reader and the render's asset store. */
+/**
+ * The parts storing one font or image uses: `resources` reads the file, and `assets` is the
+ * render's temporary store.
+ */
 export interface AdmissionDependencies {
   readonly assets: Pick<RenderAssets, 'stage'>;
   readonly resources: ResourceReader;
 }
 
 /**
- * The digest of one declaration's bytes, read relative to `file`: its pin, or the digest Assets
- * stored the file's bytes under. Fails with `invalid-response` (the declaration has no alias), as
- * the resource read does (`absolute-path`, `path-escape`, `source-unavailable`, `unsupported-media`,
- * `resource-mismatch`, `resource-too-large`, each with its `location`), or with Assets' failure.
+ * Stores the font or image `declaration` names, and gives back the digest of its bytes. Its file is
+ * read relative to `declaringFile`, the theme or source file that names it.
+ * Mistakes: the file can't be read, is outside the declaring file's folder, is the wrong type or
+ * too large, or Assets refuses the bytes.
  */
 export async function admitResource(
-  file: FilePath,
-  request: ResourceRequest,
+  declaringFile: FilePath,
+  declaration: ResourceRequest,
   dependencies: AdmissionDependencies,
 ): Promise<Result<AssetDigest, RenderFailureSource>> {
-  const resource = await readDeclaredResource(file, request, dependencies.resources);
+  const resource = await readDeclaredResource(declaringFile, declaration, dependencies.resources);
   if (!resource.ok) return resource;
   return storedDigest(resource.value, dependencies.assets);
 }

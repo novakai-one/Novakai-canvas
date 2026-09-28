@@ -1,10 +1,13 @@
 /*
- * The theme catalog one render lowers against, and the theme it draws with. The installation's
- * presets come first, then every shipped `.theme` file in name order, then the --theme-file; each
- * file is read once and parsed once by Templates' theme grammar, its fonts are staged in the
- * render's temporary asset store, and the service's theme preparation admits it. Pure apart from
- * the injected ports; nothing stored is changed. The caller fixes the named theme file or font and
- * runs render:png again.
+ * Why this file exists
+ *
+ * A render can only draw with themes it knows: those the service comes with, every `.theme` file in
+ * the repo's `resources/` folder, and the one `--theme-file brand.theme` names. Each file's fonts
+ * must be stored before Templates accepts the theme. Templates calls accepting it "admitting" it.
+ *
+ * This file reads each theme file, stores its fonts, admits the theme into this render's list of
+ * themes (the catalog), and picks the theme to draw with. Each step gives back a `Result` (see
+ * `contract/errors.ts`). Nothing saved changes; the catalog lasts for this render only.
  */
 import type { InputFiles } from '../../contract/ports/render-files.js';
 import type { ThemeFont, RenderThemes } from '../../contract/ports/render-themes.js';
@@ -18,15 +21,18 @@ import { success } from '../../contract/errors.js';
 import { combined, mapped } from '../shared/results.js';
 import { admitResource, type AdmissionDependencies } from './resource-admission.js';
 
-/** The admitted catalog and, when one is asked for, the theme drawn in place of the collection's. */
+/**
+ * The themes this render knows (`catalog`), and the theme to draw with in place of the
+ * collection's own (`choice`). `choice` is left out when no theme was asked for.
+ */
 export interface AdmittedThemes {
   readonly catalog: Catalog;
   readonly choice?: ThemeChoice;
 }
 
 /**
- * What theme admission uses: the shipped and given theme files, the theme reader, fonts and the
- * admission rule.
+ * The parts admitting themes uses: theme file reads, the `.theme` reader, the font store, and
+ * `themes` (the catalog the service comes with, and the admission step).
  */
 export interface ThemeDependencies extends AdmissionDependencies {
   readonly themes: RenderThemes;
@@ -44,20 +50,20 @@ interface AdmittedFile {
 type CatalogResult = Result<Catalog, RenderFailureSource>;
 
 /**
- * Every shipped theme, then the --theme-file, admitted into the installation's catalog; the choice
- * is --theme, else the --theme-file's `@id`, else none. Fails with `provider-failed` when a file
- * cannot be read, `invalid-theme` or `duplicate-token` from the theme grammar, a font's resource
- * or Assets failure, or the service's or Templates' admission failure.
+ * Admits every repo theme and the `--theme-file`, if typed, then picks the theme to draw with.
+ * The pick is `--theme`, else the `--theme-file`'s `@id`, else none (the collection keeps its own).
+ * Mistakes: a theme file that can't be read or parsed, a font that can't be stored, or the service
+ * or Templates refusing a theme.
  */
 export async function admitThemes(
-  request: Pick<RenderChoice, 'theme' | 'themeFile'>,
+  themeFlags: Pick<RenderChoice, 'theme' | 'themeFile'>,
   dependencies: ThemeDependencies,
 ): Promise<Result<AdmittedThemes, RenderFailureSource>> {
   const paths = await dependencies.inputFiles.shippedThemes();
   if (!paths.ok) return paths;
   const shipped = await admitInOrder(paths.value, dependencies);
   if (!shipped.ok) return shipped;
-  return withThemeFile(request, shipped.value, dependencies);
+  return withThemeFile(themeFlags, shipped.value, dependencies);
 }
 
 /** The shipped theme files admitted one after another, each into the catalog before it. */
