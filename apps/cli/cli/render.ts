@@ -15,24 +15,43 @@ import { formatFailure, runRender } from '../contract/index.js';
 /** The checkout this file ships in; every shipped theme, collection and wasm file is below it. */
 const root = fileURLToPath(new URL('../../../', import.meta.url));
 
-/** Run one render, print its outcome and set the exit code. */
+/** Everything a render can come back with: its report, or why it failed. */
+type RenderOutcome = Result<RenderReport, RenderFailure | CliFailure>;
+
+/** Runs the typed render, prints what came back, and sets the exit code to 1 on a failure. */
 async function main(): Promise<void> {
-  const result = await runRender(process.argv.slice(2), root);
-  if (!result.ok) process.exitCode = 1;
-  print(result);
+  const argv = process.argv.slice(2);
+  const outcome = await runRender(argv, root);
+  if (!outcome.ok) {
+    process.exitCode = 1;
+  }
+  printOutcome(outcome);
 }
 
-/** An argument failure as lines on stderr; any other outcome as JSON on stdout. */
-function print(result: Result<RenderReport, RenderFailure | CliFailure>): void {
-  if (!result.ok && result.error.code === 'invalid-arguments') {
-    process.stderr.write(`${formatFailure(result.error).join('\n')}\n`);
+/** Prints a typing mistake as lines on stderr, and anything else as JSON on stdout. */
+function printOutcome(outcome: RenderOutcome): void {
+  if (!outcome.ok && isTypingMistake(outcome.error)) {
+    printFailure(outcome.error);
     return;
   }
-  process.stdout.write(`${JSON.stringify(result)}\n`);
+  process.stdout.write(`${JSON.stringify(outcome)}\n`);
 }
 
-/** runRender returns every failure as a value; a rejection is a bug: print it and exit 1. */
-await main().catch((error: unknown) => {
-  process.stderr.write(`${String(error)}\n`);
+/** Whether the render failed because its flags were typed wrong (`invalid-arguments`). */
+function isTypingMistake(failure: RenderFailure | CliFailure): failure is CliFailure {
+  return failure.code === 'invalid-arguments';
+}
+
+/** Prints the failure as lines on stderr, the same way `pnpm canvas` does. */
+function printFailure(failure: CliFailure): void {
+  const lines = formatFailure(failure);
+  process.stderr.write(`${lines.join('\n')}\n`);
+}
+
+/** Prints what went wrong and sets the exit code to 1. Only a bug gets here: failures are values. */
+function reportCrash(thrown: unknown): void {
+  process.stderr.write(`${String(thrown)}\n`);
   process.exitCode = 1;
-});
+}
+
+await main().catch(reportCrash);

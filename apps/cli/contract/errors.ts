@@ -128,6 +128,7 @@ export type Result<T, E = CliFailure> = Success<T> | Failure<E>;
 /** A mistake to hand to `failure`: a `LocalFailure` whose `recovery` may be left out. */
 export type FailureInput = Omit<LocalFailure, 'recovery'> & { readonly recovery?: string };
 
+/** The advice a mistake gets when it names no `recovery` of its own. */
 const correctAndRetry = 'Correct the named input and retry.';
 
 /** Wraps a value as a step that worked. */
@@ -140,8 +141,8 @@ export function success<T>(value: T): Result<T, never> {
  * "Correct the named input and retry."
  */
 export function failure(input: FailureInput): Result<never, LocalFailure> {
-  const { code, message, recovery = correctAndRetry, ...context } = input;
-  return { ok: false, error: { code, message, recovery, ...context } };
+  const mistake = withRecovery(input);
+  return { ok: false, error: mistake };
 }
 
 /**
@@ -189,7 +190,8 @@ export function foreignFailure(
   code: ForeignCode,
   foreign: ServiceFailureRecord,
 ): Result<never, ForeignFailure> {
-  return { ok: false, error: { code, foreign } };
+  const kept: ForeignFailure = { code, foreign };
+  return { ok: false, error: kept };
 }
 
 /** Makes a failed step from one of render:png's own faults. It keeps the fault's exact type. */
@@ -204,55 +206,92 @@ export function renderFaultFailure<F extends RenderFault>(fault: F): Result<neve
 export function providerFailure(thrown: unknown): Result<never, ProviderFault> {
   const fault: ProviderFault = {
     code: 'provider-failed',
-    message: nativeMessage(thrown),
-    detail: nativeDetail(thrown),
+    message: thrownMessage(thrown),
+    detail: thrownDetail(thrown),
   };
   return renderFaultFailure(fault);
 }
 
-/** The error's message as human context; no machine-readable field is invented. */
-function nativeMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return String(error);
+/** The path, OS code and syscall an error may carry, not checked yet. Any of them may be missing. */
+type UncheckedDetail = { readonly [Field in keyof NativeDetail]?: unknown };
+
+/** The detail kept when the error carries none, or carries one that isn't well formed. */
+const noDetail: NativeDetail = Object.freeze({});
+
+/**
+ * Fills in the mistake's `recovery` when it has none. The fields keep their order: code, message,
+ * recovery, then the rest.
+ */
+function withRecovery(input: FailureInput): LocalFailure {
+  const { code, message, recovery = correctAndRetry, ...context } = input;
+  return { code, message, recovery, ...context };
+}
+
+/** Gives the thrown error's message, or the thrown thing as text when it isn't an `Error`. */
+function thrownMessage(thrown: unknown): string {
+  if (thrown instanceof Error) {
+    return thrown.message;
+  }
+  return String(thrown);
 }
 
 /**
- * The error's path, OS code and syscall, present ones only. When any present field is malformed
- * (not text, or an empty path) none is kept, so checked and unchecked evidence never mix.
+ * Gives the thrown error's path, OS code and syscall, only the ones it has. If any of them isn't
+ * well formed, it keeps none, so checked and unchecked details never mix.
  */
-function nativeDetail(error: unknown): NativeDetail {
-  const present = Object.fromEntries(
-    Object.entries(nativeFields(error)).filter((field) => field[1] !== undefined),
-  );
-  if (!isNativeDetail(present)) return {};
+function thrownDetail(thrown: unknown): NativeDetail {
+  const fields = detailFields(thrown);
+  const present = withoutMissingFields(fields);
+  if (!isNativeDetail(present)) {
+    return noDetail;
+  }
   return present;
 }
 
-/** The three data fields of an object error under their detail names, unchecked; none otherwise. */
-function nativeFields(error: unknown): { readonly [K in keyof NativeDetail]?: unknown } {
-  if (typeof error !== 'object' || error === null) return {};
+/** Reads the path, OS code and syscall from an error object, under their detail names. */
+function detailFields(thrown: unknown): UncheckedDetail {
+  if (!isObject(thrown)) {
+    return noDetail;
+  }
   return {
-    path: Reflect.get(error, 'path'),
-    systemCode: Reflect.get(error, 'code'),
-    syscall: Reflect.get(error, 'syscall'),
+    path: Reflect.get(thrown, 'path'),
+    systemCode: Reflect.get(thrown, 'code'),
+    syscall: Reflect.get(thrown, 'syscall'),
   };
 }
 
-/** Whether every present field has its type: a non-empty path, a text code and a text syscall. */
-function isNativeDetail(fields: object): fields is NativeDetail {
+/** Drops the fields the error didn't have (the ones read as `undefined`). */
+function withoutMissingFields(fields: UncheckedDetail): UncheckedDetail {
+  const entries = Object.entries(fields);
+  const present = entries.filter(isPresentField);
+  return Object.fromEntries(present);
+}
+
+/** Whether a field read from the error holds something. */
+function isPresentField([, content]: readonly [string, unknown]): boolean {
+  return content !== undefined;
+}
+
+/** Whether the thrown thing is an object, so it may carry fields. */
+function isObject(thrown: unknown): thrown is object {
+  return typeof thrown === 'object' && thrown !== null;
+}
+
+/** Whether each field it has is well formed: a path that isn't empty, a text code, a text syscall. */
+function isNativeDetail(fields: UncheckedDetail): fields is NativeDetail {
   return (
-    isOptionalPath(Reflect.get(fields, 'path')) &&
-    isOptionalText(Reflect.get(fields, 'systemCode')) &&
-    isOptionalText(Reflect.get(fields, 'syscall'))
+    isOptionalPath(fields.path) &&
+    isOptionalText(fields.systemCode) &&
+    isOptionalText(fields.syscall)
   );
 }
 
-/** Whether `value` is absent or a non-empty path. */
-function isOptionalPath(value: unknown): value is FilePath | undefined {
-  return value === undefined || filePath.safeParse(value).success;
+/** Whether the field is missing, or is a path that isn't empty. */
+function isOptionalPath(field: unknown): field is FilePath | undefined {
+  return field === undefined || filePath.safeParse(field).success;
 }
 
-/** Whether `value` is absent or text. */
-function isOptionalText(value: unknown): value is string | undefined {
-  return value === undefined || typeof value === 'string';
+/** Whether the field is missing, or is text. */
+function isOptionalText(field: unknown): field is string | undefined {
+  return field === undefined || typeof field === 'string';
 }

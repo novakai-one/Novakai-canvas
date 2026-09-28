@@ -22,7 +22,7 @@ import { createServiceAuthoring } from '../../adapters/service-http/authoring.js
 import { createServiceResources } from '../../adapters/service-http/resources.js';
 import { runServiceCommand } from '../api.js';
 import type { ServiceCommandDependencies } from '../api.js';
-import type { FailureInput, Result } from '../errors.js';
+import type { LocalFailure, Result } from '../errors.js';
 import { failure, foreignFailure, success } from '../errors.js';
 import type { ServiceCommand, ServerAndWorkspace } from '../records/command.js';
 import {
@@ -45,25 +45,41 @@ export async function runService(
   serverAndWorkspace: ServerAndWorkspace,
 ): Promise<Result<string>> {
   const token = await readToken(serverAndWorkspace.workspace);
-  if (!token.ok) return token;
-  return runServiceCommand(command, servicePorts(serverAndWorkspace, token.value));
+  if (!token.ok) {
+    return token;
+  }
+  const dependencies = createServiceDependencies(serverAndWorkspace, token.value);
+  return runServiceCommand(command, dependencies);
 }
 
 /**
- * The agent token from the workspace credential. Fails with `credential-unavailable` (the
- * service's reader failed; its record is kept whole) or `invalid-response` (it returned no token).
+ * Reads the agent's token from the workspace's credential file. Fails with
+ * `credential-unavailable` (the service's reader failed; its record is kept whole), or
+ * `invalid-response` when the file holds no token.
  */
 async function readToken(workspace: FilePath): Promise<Result<AgentToken>> {
-  const credential = await readAgentCredential(resolve(workspace, 'agent-credential.json'));
-  if (!credential.ok) return foreignFailure('credential-unavailable', credential.error);
-  const token = agentToken.safeParse(credential.value);
-  if (!token.success)
-    return failure({ code: 'invalid-response', message: 'Agent credential holds no token' });
+  const credentialFile = resolve(workspace, 'agent-credential.json');
+  const credential = await readAgentCredential(credentialFile);
+  if (!credential.ok) {
+    return foreignFailure('credential-unavailable', credential.error);
+  }
+  return checkToken(credential.value);
+}
+
+/**
+ * Checks the token text read from the credential file isn't empty. Fails with `invalid-response`
+ * when it is.
+ */
+function checkToken(tokenText: string): Result<AgentToken> {
+  const token = agentToken.safeParse(tokenText);
+  if (!token.success) {
+    return missingTokenFailure();
+  }
   return success(token.data);
 }
 
-/** Every service port, each bound once: three service-call adapters share one transport. */
-function servicePorts(
+/** Builds every part a service command uses. The three service-call parts share one connection. */
+function createServiceDependencies(
   serverAndWorkspace: ServerAndWorkspace,
   token: AgentToken,
 ): ServiceCommandDependencies {
@@ -80,23 +96,33 @@ function servicePorts(
     collections: { validate },
     language: createLanguageWithModel(),
     themeReader: createThemeReader(),
-    requestIds: { next: nextRequestId },
+    requestIds: { next: mintRequestId },
   };
 }
 
-/** Why a fresh request ID could not be minted. Nothing was sent. */
-const unmintedRequestId: FailureInput = Object.freeze({
-  code: 'cli-unavailable',
-  message: "A fresh request ID did not match Authoring's request ID grammar",
-  recovery: 'Rerun the command with --request and a valid request ID.',
-});
-
 /**
- * A fresh request ID. A UUID always matches Authoring's request ID grammar; if one did not, fails
- * with `cli-unavailable` before any Authoring request is sent.
+ * Makes a fresh request ID from a random UUID. A UUID always fits Authoring's request ID rules;
+ * if one ever didn't, it fails with `cli-unavailable` before anything is sent.
  */
-function nextRequestId(): Result<RequestId> {
-  const minted = requestId.safeParse(randomUUID());
-  if (!minted.success) return failure(unmintedRequestId);
+function mintRequestId(): Result<RequestId> {
+  const uuid = randomUUID();
+  const minted = requestId.safeParse(uuid);
+  if (!minted.success) {
+    return unmintedRequestIdFailure();
+  }
   return success(minted.data);
+}
+
+/** Makes the failure for a credential file that holds no token (`invalid-response`). */
+function missingTokenFailure(): Result<never, LocalFailure> {
+  return failure({ code: 'invalid-response', message: 'Agent credential holds no token' });
+}
+
+/** Makes the failure for a fresh request ID that didn't fit Authoring's rules (`cli-unavailable`). */
+function unmintedRequestIdFailure(): Result<never, LocalFailure> {
+  return failure({
+    code: 'cli-unavailable',
+    message: "A fresh request ID did not match Authoring's request ID grammar",
+    recovery: 'Rerun the command with --request and a valid request ID.',
+  });
 }

@@ -23,15 +23,12 @@ import { createLanguageWithModel } from './language.js';
  */
 export async function runProfile(command: ProfileCommand): Promise<Result<string>> {
   const files = createLocalFiles();
-  return runProfileCommand(command, {
-    files,
-    writer: files,
-    language: createLanguageWithModel(),
-    profiles: languageProfiles(),
-  });
+  const language = createLanguageWithModel();
+  const profiles = languageProfiles();
+  return runProfileCommand(command, { files, writer: files, language, profiles });
 }
 
-/** Language's profiles, in the shape core asks for. Never fails. */
+/** Gives Language's describe, scaffold and lint tools, in the shape core asks for. Never fails. */
 function languageProfiles(): CollectionProfiles {
   return { describe: describeProfile, scaffold: scaffoldProfile, lint: lintProfile };
 }
