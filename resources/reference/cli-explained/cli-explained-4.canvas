@@ -1,0 +1,460 @@
+canvas 1
+collection @cli-explained-level-4 "CLI explained · Level 4.1–4.3 — learn the language, look at what exists, change a diagram" {
+
+  node @a-agent participant "Agent (terminal)" {}
+  node @a-canvas participant "cli/canvas.ts" {}
+  node @a-dispatch participant "core/commands/dispatch.ts" {}
+  node @a-queries participant "core/reads/queries.ts" {}
+  node @a-collections participant "core/reads/collections.ts" {}
+  node @a-source participant "core/reads/source.ts" {}
+  node @a-reads participant "adapters/service-http/ reads.ts" {}
+  node @a-transport participant "adapters/service-http/ transport.ts" {}
+  node @a-service participant "apps/service" {}
+  node @a-back note "Failures" { text @d "A failed Result passes back up unchanged, along the same return arrows." role=caption }
+
+  node @legend note "Lines" { text @d "Solid line: a real import. Dashed line: a call at runtime, no import." role=caption }
+
+  node @m-dispatch module "core/commands/dispatch.ts" { text @d "Picks the purpose by command name" }
+  node @m-queries module "core/reads/queries.ts" role=primary { text @d "describe: asks for the vocabulary" }
+  node @m-results module "core/shared/results.ts" { text @d "mapped: changes the value, keeps a failure" }
+  node @m-reads module "adapters/service-http/reads.ts" size=large { text @d "language: GET /api/v1/language" }
+  node @m-transport module "adapters/service-http/transport.ts" size=large { text @d "get: fetch with the token, then check the envelope" }
+  node @m-pkg-service module "@novakai/canvas-service" role=supporting { text @d "responseEnvelope: the envelope schema" }
+
+  wire @i-dispatch-queries @m-dispatch -> @m-queries "describe" kind=imports
+  wire @i-queries-results @m-queries -> @m-results "mapped" kind=imports
+  wire @r-queries-reads @m-queries -> @m-reads "reads.language()" kind=reference style=dashed
+  wire @r-reads-transport @m-reads -> @m-transport "transport.get()" kind=reference style=dashed
+  wire @i-transport-pkg @m-transport -> @m-pkg-service "responseEnvelope" kind=imports
+
+  node @w-runsvc module "contract/compose/service.ts" role=primary { text @d "servicePorts(): builds each adapter once per run" }
+  node @w-cred module "@novakai/canvas-service" role=supporting { text @d "readAgentCredential: reads agent-credential.json" }
+  node @w-transport module "adapters/service-http/transport.ts" size=large { text @d "createTransport: the server address and the token" }
+  node @w-reads module "adapters/service-http/reads.ts" size=large { text @d "createServiceReads: fills the ServiceReads port" }
+  node @w-files module "adapters/files/local-files.ts" { text @d "createLocalFiles: writes the --out file" }
+  node @w-port module "contract/ports/service-reads.ts" size=large { text @d "ServiceReads: the port type core calls" }
+  node @w-queries module "core/reads/queries.ts" { text @d "Calls deps.reads, never reads.ts itself" }
+
+  wire @k-cred @w-runsvc -> @w-cred "readAgentCredential" kind=imports
+  wire @k-transport @w-runsvc -> @w-transport "createTransport" kind=imports
+  wire @k-reads @w-runsvc -> @w-reads "createServiceReads" kind=imports
+  wire @k-files @w-runsvc -> @w-files "createLocalFiles" kind=imports
+  wire @k-port-core @w-queries -> @w-port "ServiceReads (type)" kind=imports
+  wire @k-port-adapter @w-reads -> @w-port "ServiceReads (type)" kind=imports
+
+  node @g-queries module "core/reads/queries.ts" role=primary { text @d "list, read, inspect" }
+  node @g-collections module "core/reads/collections.ts" { text @d "collectionLines: one line per live collection" }
+  node @g-source module "core/reads/source.ts" { text @d "sourceText: header lines, then the DSL" }
+  node @g-reads module "adapters/service-http/reads.ts" size=large { text @d "workspace, source, inspect: one GET each" }
+  node @g-model module "@novakai/canvas-model" role=supporting { text @d "validate: checks each stored collection" }
+  node @g-note note "Note" { text @d "compose/service.ts plugs Model's validate in as deps.collections." role=caption }
+
+  wire @i-queries-collections @g-queries -> @g-collections "collectionLines" kind=imports
+  wire @i-queries-source @g-queries -> @g-source "sourceText" kind=imports
+  wire @r-queries-reads2 @g-queries -> @g-reads "reads.workspace(), .source(), .inspect()" kind=reference style=dashed
+  wire @r-collections-model @g-collections -> @g-model "reader.validate()" kind=reference style=dashed
+
+  node @h-reads module "adapters/service-http/reads.ts" size=large role=primary { text @d "Checks the workspace and source answers. language and inspect answers are not checked." }
+  node @h-answers module "contract/records/service-answers.ts" size=large { text @d "readoutAnswer: the source answer's schema" }
+  node @h-schemas module "contract/schemas.ts" { text @d "snapshotSchema: passed on from Authoring" }
+  node @h-authoring module "@novakai/canvas-authoring" role=supporting { text @d "snapshotSchema: the workspace snapshot's schema" }
+  node @h-transport module "adapters/service-http/transport.ts" size=large { text @d "get: the envelope check (4.1)" }
+
+  wire @i-reads-answers @h-reads -> @h-answers "readoutAnswer" kind=imports
+  wire @i-reads-schemas @h-reads -> @h-schemas "snapshotSchema" kind=imports
+  wire @i-schemas-pkg @h-schemas -> @h-authoring "snapshotSchema" kind=imports
+  wire @r-reads-transport2 @h-reads -> @h-transport "transport.get()" kind=reference style=dashed
+
+  section @s4-1-seq "4.1 · Learn the diagram language — what describe adds after the Level 3 route" mode=sequence direction=down gap=compact order=0 {
+    show @a-agent @a-canvas @a-dispatch @a-queries @a-reads @a-transport @a-service @a-back
+    event @d1 @a-agent -> @a-canvas "pnpm canvas describe" kind=call activate=true
+    event @d2 @a-canvas -> @a-dispatch "Level 3 route to executeService" kind=call activate=true
+    event @d3 @a-dispatch -> @a-queries "describe(deps)" kind=call activate=true
+    event @d4 @a-queries -> @a-reads "deps.reads.language()" kind=call activate=true
+    event @d5 @a-reads -> @a-transport "transport.get('/api/v1/language')" kind=call activate=true
+    event @d6 @a-transport -> @a-service "GET /api/v1/language + the agent token" kind=call activate=true
+    event @d7 @a-service -> @a-service "Language lists its vocabulary" kind=call
+    event @d8 @a-service -> @a-transport "envelope {generation, outcome}" kind=return activate=false
+    event @d9 @a-transport -> @a-transport "answer(): checks the envelope with responseEnvelope. outcome not ok: service-rejected." kind=call
+    event @d10 @a-transport -> @a-reads "Observed {generation, value}" kind=return activate=false
+    event @d11 @a-reads -> @a-queries "value(): drops generation. No schema check." kind=return activate=false
+    event @d12 @a-queries -> @a-dispatch "mapped(result, json): pretty JSON text" kind=return activate=false
+    event @d13 @a-dispatch -> @a-dispatch "output(): with --out, writes the file and answers Written: FILE" kind=call
+    event @d14 @a-dispatch -> @a-canvas "Result<string>" kind=return activate=false
+    fragment @d-end alt "cli/canvas.ts checks result.ok" {
+      branch @d-ok "ok" {
+        event @d15 @a-canvas -> @a-agent "stdout: the vocabulary {constructs, operations, patchForms, defaults, examples ...}" kind=return activate=false
+      }
+      branch @d-fail "not ok" {
+        event @d16 @a-canvas -> @a-agent "stderr: for example connection-uncertain (server not running), exit code 1" kind=return activate=false
+      }
+    }
+  }
+
+  section @s4-1-mod "4.1 · Learn the diagram language — the files describe adds" mode=flow direction=right gap=roomy order=1 {
+    show @m-dispatch @m-queries @m-results @m-reads @m-transport @m-pkg-service @legend
+    connect @i-dispatch-queries @r-queries-reads @r-reads-transport @i-transport-pkg
+    connect @i-queries-results source-side=bottom target-side=left
+    below @m-results @m-reads
+  }
+
+  section @s4-1-wiring "4.1 · Learn the diagram language — compose plugs the adapters in (4.2 and 4.3 show only new ones)" mode=flow direction=right gap=roomy order=2 {
+    show @legend @w-runsvc @w-cred @w-transport @w-reads @w-files @w-queries @w-port
+    connect @k-cred @k-transport @k-reads @k-files @k-port-core @k-port-adapter
+    below @w-reads @w-cred
+    below @w-transport @w-reads
+    below @w-files @w-transport
+    below @w-runsvc @legend
+  }
+
+  section @s4-2-list "4.2 · Look at what exists — pnpm canvas list" mode=sequence direction=down gap=compact order=3 {
+    show @a-agent @a-canvas @a-dispatch @a-queries @a-collections @a-reads @a-transport @a-service @a-back
+    event @l1 @a-agent -> @a-canvas "pnpm canvas list" kind=call activate=true
+    event @l2 @a-canvas -> @a-dispatch "Level 3 route to executeService" kind=call activate=true
+    event @l3 @a-dispatch -> @a-queries "list(deps)" kind=call activate=true
+    event @l4 @a-queries -> @a-reads "deps.reads.workspace()" kind=call activate=true
+    event @l5 @a-reads -> @a-transport "transport.get('/api/v1/workspace')" kind=call activate=true
+    event @l6 @a-transport -> @a-service "GET /api/v1/workspace" kind=call activate=true
+    event @l7 @a-service -> @a-transport "envelope: the whole workspace snapshot, every stored record" kind=return activate=false
+    event @l8 @a-transport -> @a-reads "Observed {generation, value}" kind=return activate=false
+    event @l9 @a-reads -> @a-reads "observed(): checks it with snapshotSchema. Bad shape: invalid-response." kind=call
+    event @l10 @a-reads -> @a-queries "Observed<Snapshot>" kind=return activate=false
+    event @l11 @a-queries -> @a-collections "collectionLines(observed.value, deps.collections)" kind=call activate=true
+    event @l12 @a-collections -> @a-collections "keeps live collections, runs reader.validate (Model) on each" kind=call
+    event @l13 @a-collections -> @a-queries "one line each: ID, rN, title, N sections" kind=return activate=false
+    event @l14 @a-queries -> @a-dispatch "Result<string>" kind=return activate=false
+    event @l15 @a-dispatch -> @a-canvas "Result<string>" kind=return activate=false
+    fragment @l-end alt "cli/canvas.ts checks result.ok" {
+      branch @l-ok "ok" {
+        event @l16 @a-canvas -> @a-agent "stdout: the lines, or: No collections yet. Use canvas create diagram.canvas." kind=return activate=false
+      }
+      branch @l-fail "not ok" {
+        event @l17 @a-canvas -> @a-agent "stderr: for example invalid-response (bad snapshot), exit code 1" kind=return activate=false
+      }
+    }
+  }
+
+  section @s4-2-read "4.2 · Look at what exists — pnpm canvas read ID" mode=sequence direction=down gap=compact order=4 {
+    show @a-agent @a-canvas @a-dispatch @a-queries @a-source @a-reads @a-transport @a-service @a-back
+    event @rd1 @a-agent -> @a-canvas "pnpm canvas read ID [--section S or --object O, not both]" kind=call activate=true
+    event @rd3 @a-canvas -> @a-dispatch "Level 3 route to executeService" kind=call activate=true
+    event @rd4 @a-dispatch -> @a-queries "read(command.collection, command.scope, deps)" kind=call activate=true
+    event @rd5 @a-queries -> @a-reads "deps.reads.source(collection, scope)" kind=call activate=true
+    event @rd6 @a-reads -> @a-transport "transport.get('/api/v1/source', sourceQuery(...))" kind=call activate=true
+    event @rd7 @a-transport -> @a-service "GET /api/v1/source?id=ID and &section=S or &object=O" kind=call activate=true
+    event @rd8 @a-service -> @a-service "finds the live collection and prints its DSL. Missing: the server refuses (agent sees service-rejected)." kind=call
+    event @rd9 @a-service -> @a-transport "envelope: Readout {source, collection, revision, scope, manual}" kind=return activate=false
+    event @rd10 @a-transport -> @a-reads "Observed {generation, value}" kind=return activate=false
+    event @rd11 @a-reads -> @a-queries "checked with readoutAnswer, generation dropped: Readout" kind=return activate=false
+    event @rd12 @a-queries -> @a-source "mapped(result, sourceText)" kind=call activate=true
+    event @rd13 @a-source -> @a-queries "partial-read notice (only with --section or --object), # ID revision=N, manual-geometry line (if any), then the DSL" kind=return activate=false
+    event @rd14 @a-queries -> @a-dispatch "Result<string>" kind=return activate=false
+    event @rd15 @a-dispatch -> @a-canvas "Result<string>; with --out, Written: FILE" kind=return activate=false
+    event @rd16 @a-canvas -> @a-agent "stdout: that text, in that order" kind=return activate=false
+  }
+
+  section @s4-2-inspect "4.2 · Look at what exists — pnpm canvas inspect ID" mode=sequence direction=down gap=compact order=5 {
+    show @a-agent @a-canvas @a-dispatch @a-queries @a-reads @a-transport @a-service @a-back
+    event @n1 @a-agent -> @a-canvas "pnpm canvas inspect ID" kind=call activate=true
+    event @n2 @a-canvas -> @a-dispatch "Level 3 route to executeService" kind=call activate=true
+    event @n3 @a-dispatch -> @a-queries "inspect(command.collection, deps)" kind=call activate=true
+    event @n4 @a-queries -> @a-reads "deps.reads.inspect(collection)" kind=call activate=true
+    event @n5 @a-reads -> @a-transport "transport.get('/api/v1/inspect', {id})" kind=call activate=true
+    event @n6 @a-transport -> @a-service "GET /api/v1/inspect?id=ID" kind=call activate=true
+    event @n7 @a-service -> @a-service "lays the diagram out, then reports on it" kind=call
+    fragment @n-alt alt "What the service found" {
+      branch @n-drawn "the collection exists" {
+        event @n8 @a-service -> @a-transport "InspectionReport {valid, diagnostics, warnings, crossings, relaxed, sections, engineVersions}" kind=return activate=false
+        event @n9 @a-transport -> @a-reads "Observed {generation, value}" kind=return activate=false
+        event @n9b @a-reads -> @a-queries "value(): the report. No schema check." kind=return activate=false
+        event @n10 @a-queries -> @a-dispatch "mapped(result, json): pretty JSON" kind=return activate=false
+        event @n10b @a-dispatch -> @a-canvas "Result<string>" kind=return activate=false
+        event @n11 @a-canvas -> @a-agent "stdout: the whole report. valid:false if it cannot be laid out." kind=return activate=false
+      }
+      branch @n-missing "missing collection, or the service failed" {
+        event @n12 @a-service -> @a-transport "ok:false with the service's own error" kind=return activate=false
+        event @n13 @a-transport -> @a-canvas "service-rejected, passed back up unchanged through reads, queries and dispatch" kind=return activate=false
+        event @n14 @a-canvas -> @a-agent "stderr: the service's code and message, exit code 1" kind=return activate=false
+      }
+    }
+  }
+
+  section @s4-2-mod "4.2 · Look at what exists — files that turn the answer into text" mode=flow direction=down gap=roomy order=6 {
+    show @g-queries @g-collections @g-source @g-reads @g-model @legend @g-note
+    connect @i-queries-collections @i-queries-source @r-queries-reads2 @r-collections-model
+  }
+
+  section @s4-2-checks "4.2 · Look at what exists — files that check the answer" mode=flow direction=right gap=roomy order=7 {
+    show @h-reads @h-answers @h-schemas @h-authoring @h-transport @legend
+    connect @i-reads-answers @i-reads-schemas @i-schemas-pkg @r-reads-transport2
+    below @h-schemas @h-answers
+    below @h-transport @h-schemas
+  }
+
+  node @f-start start "Agent has a .canvas file" size=small {}
+  node @f-check decision "Check before saving?" role=decision size=small {}
+  node @f-direct step "create, replace or patch FILE" { text @d "replace and patch need --revision N" }
+  node @f-preview step "preview FILE --mode MODE" { text @d "--mode is create, replace or patch. Default: create." }
+  node @f-prepare step "prepare: build the request" { text @d "Reads the file and the workspace (GET /api/v1/workspace). Parses. Checks the revision. Uploads fonts and images to the server, if any (not yet to Authoring). Freezes the request (POST /api/v1/resources/freeze)." }
+  node @f-save step "journal.save: keep a copy" role=primary { text @d "Writes WORKSPACE/requests/ID.json before the change is sent to Authoring. The file is never deleted." }
+  node @f-restore step "restoreResources" { text @d "Re-sends the font and image bytes, if any, so a retry after a server restart still finds them." }
+  node @f-mode decision "Which send?" role=decision size=small {}
+  node @f-post-apply step "POST /api/v1/authoring/apply" {}
+  node @f-post-preview step "POST /api/v1/authoring/preview" { text @d "Prints the preview and 'Apply with: canvas apply ID'. Nothing is saved yet." }
+  node @f-answer decision "Did an answer come back?" role=decision size=small {}
+  node @f-saved end "Saved" role=success { text @d "Prints 'committed: REQUEST-ID', then 'Workspace sequence: N'" }
+  node @f-refused end "Refused: service-rejected" role=warning { text @d "For example the collection changed since preview. Read it again, then send a new request." }
+  node @f-lost step "Answer lost" role=warning { text @d "connection-uncertain or invalid-response" }
+  node @f-recover end "Recover: receipt, then retry (Level 4.4)" role=warning {}
+  node @f-apply step "canvas apply ID" { text @d "retry runs the same code (Level 4.4)" }
+  node @f-read step "journal.read" { text @d "Loads the exact request kept earlier. Nothing is rebuilt." }
+  node @f-receipt decision "Receipt already on the server?" role=decision { text @d "GET /api/v1/receipt?id=ID" }
+  node @f-done end "Already saved" role=success { text @d "Prints that receipt. Sends nothing." }
+
+  wire @fw1 @f-start -> @f-check "start" kind=flow
+  wire @fw2 @f-check -> @f-direct "no, save now" kind=flow
+  wire @fw3 @f-check -> @f-preview "yes, preview first" kind=flow
+  wire @fw4 @f-direct -> @f-prepare "author()" kind=flow
+  wire @fw5 @f-preview -> @f-prepare "author()" kind=flow
+  wire @fw6 @f-prepare -> @f-save "RetainedRequest" kind=flow
+  wire @fw7 @f-save -> @f-restore "kept" kind=flow
+  wire @fw8 @f-restore -> @f-mode "send" kind=flow
+  wire @fw9 @f-mode -> @f-post-apply "create, replace, patch or apply" kind=flow
+  wire @fw10 @f-mode -> @f-post-preview "preview" kind=flow
+  wire @fw12 @f-post-preview -> @f-apply "later, if it looks right" kind=flow style=dashed
+  wire @fw13 @f-post-apply -> @f-answer "wait up to 35 s" kind=flow
+  wire @fw14 @f-answer -> @f-saved "yes, saved" kind=flow
+  wire @fw15 @f-answer -> @f-refused "yes, refused" kind=flow
+  wire @fw16 @f-answer -> @f-lost "no" kind=flow
+  wire @fw17 @f-lost -> @f-recover "the request stays in the journal" kind=flow
+  wire @fw18 @f-apply -> @f-read "retry(request)" kind=flow
+  wire @fw19 @f-read -> @f-receipt "reads.receipt(request)" kind=flow
+  wire @fw20 @f-receipt -> @f-done "yes" kind=flow
+  wire @fw21 @f-receipt -> @f-save "no: send the same request again (its journal file already exists and is not rewritten)" kind=flow style=dashed
+
+  node @b-agent participant "Agent (terminal)" {}
+  node @b-canvas participant "cli/canvas.ts" {}
+  node @b-dispatch participant "core/commands/dispatch.ts" {}
+  node @b-reconcile participant "core/authoring/reconcile.ts" {}
+  node @b-submit participant "core/authoring/submit.ts" {}
+  node @b-prepare participant "core/authoring/prepare.ts" {}
+  node @b-stage participant "core/resources/stage.ts" {}
+  node @b-files participant "adapters/files/ local-files.ts, resource-reader.ts" {}
+  node @b-journal participant "adapters/files/ request-journal.ts" {}
+  node @b-http participant "adapters/service-http/ reads, resources, authoring" {}
+  node @b-service participant "apps/service" {}
+
+  section @s4-3-flow "4.3 · Change a diagram — save now, or preview first, and where the request is kept" mode=flow direction=down order=8 {
+    show @f-start @f-check @f-direct @f-preview @f-prepare @f-save @f-restore @f-mode
+    show @f-post-apply @f-post-preview @f-answer @f-saved @f-refused @f-lost @f-recover @f-apply @f-read @f-receipt @f-done
+    connect @fw1 @fw2 @fw3 @fw4 @fw5 @fw6 @fw7 @fw8 @fw9 @fw10 @fw12 @fw13 @fw14 @fw15 @fw16 @fw17 @fw18 @fw19 @fw20 @fw21
+  }
+
+  section @s4-3-save "4.3 · Change a diagram — the calls behind pnpm canvas create (replace and patch are the same)" mode=sequence direction=down gap=compact order=9 {
+    show @b-agent @b-canvas @b-dispatch @b-submit @b-prepare @b-stage @b-files @b-journal @b-http @b-service @a-back
+    event @c1 @b-agent -> @b-canvas "pnpm canvas create my.canvas" kind=call activate=true
+    event @c2 @b-canvas -> @b-dispatch "Level 3 route to executeService" kind=call activate=true
+    event @c3 @b-dispatch -> @b-submit "author(command, deps)" kind=call activate=true
+    event @c4 @b-submit -> @b-prepare "prepare(command, deps)" kind=call activate=true
+    event @c5 @b-prepare -> @b-files "files.readSource(command.file)" kind=call
+    event @c6 @b-files -> @b-prepare "the DSL text" kind=return activate=false
+    event @c7 @b-prepare -> @b-http "reads.workspace()" kind=call activate=true
+    event @c8 @b-http -> @b-service "GET /api/v1/workspace" kind=call
+    event @c9 @b-service -> @b-http "the workspace snapshot and its generation" kind=return activate=false
+    event @c9b @b-http -> @b-prepare "Observed<Snapshot>, checked with snapshotSchema" kind=return activate=false
+    event @c10 @b-prepare -> @b-prepare "parseSource: language.parse (Language). Bad DSL: invalid-source." kind=call
+    event @c11 @b-prepare -> @b-prepare "requestIdFor: --request ID, or a new random UUID" kind=call
+    event @c12 @b-prepare -> @b-prepare "changeRequest: create: no collection with this ID may exist yet; replace and patch: --revision must match (Model validate)" kind=call
+    event @c13 @b-prepare -> @b-stage "prepareResources(file, resources, retained)" kind=call activate=true
+    fragment @c-fonts opt "only when the file declares fonts or images" {
+      event @c14 @b-stage -> @b-files "reader.read(file, request) for each one" kind=call
+      event @c15 @b-stage -> @b-http "resources.stage(input), then resources.blob(digest)" kind=call
+      event @c16 @b-http -> @b-service "POST /api/v1/resources/stage, then /blob" kind=call
+    }
+    event @c17 @b-stage -> @b-http "resources.freeze(request, bindings)" kind=call
+    event @c18 @b-http -> @b-service "POST /api/v1/resources/freeze" kind=call
+    event @c19 @b-stage -> @b-prepare "RetainedRequest {generation, request, backups}" kind=return activate=false
+    event @c19b @b-prepare -> @b-submit "RetainedRequest" kind=return activate=false
+    event @c20 @b-submit -> @b-journal "journal.save(retained)" kind=call activate=true
+    event @c21 @b-journal -> @b-journal "writes requests/<id>.json (owner-only), before the Authoring request is sent" kind=call
+    event @c22 @b-journal -> @b-submit "kept. A failure here stops the command: the Authoring request is not sent." kind=return activate=false
+    fragment @c-bytes opt "only when there are byte backups" {
+      event @c23 @b-submit -> @b-http "restoreResources: resources.restore(backup)" kind=call
+      event @c24 @b-http -> @b-service "POST /api/v1/resources/restore" kind=call
+    }
+    event @c25 @b-submit -> @b-http "authoring.apply(retained)" kind=call activate=true
+    event @c26 @b-http -> @b-service "POST /api/v1/authoring/apply {version, generation, request, preview: false}" kind=call activate=true
+    fragment @c-answer alt "What comes back" {
+      branch @c-ok "a receipt" {
+        event @c27 @b-service -> @b-http "the receipt" kind=return activate=false
+        event @c28 @b-http -> @b-submit "Receipt, checked with appliedAnswer and receiptSchema" kind=return activate=false
+        event @c29 @b-submit -> @b-dispatch "appliedReceipt: 'committed: REQUEST-ID', then 'Workspace sequence: N'" kind=return activate=false
+        event @c29b @b-dispatch -> @b-canvas "Result<string>" kind=return activate=false
+        event @c30 @b-canvas -> @b-agent "stdout" kind=return activate=false
+      }
+      branch @c-no "a refusal" {
+        event @c31 @b-service -> @b-http "ok:false with the service's own error" kind=return activate=false
+        event @c32 @b-http -> @b-canvas "service-rejected, passed back up unchanged through submit and dispatch" kind=return activate=false
+        event @c33 @b-canvas -> @b-agent "stderr, exit code 1" kind=return activate=false
+      }
+      branch @c-lost "no answer, or an unreadable one" {
+        event @c34 @b-http -> @b-canvas "connection-uncertain or invalid-response, passed back up unchanged. Its recovery: canvas receipt ID, then canvas retry ID." kind=return activate=false
+        event @c35 @b-canvas -> @b-agent "stderr, exit code 1. The request stays in the journal." kind=return activate=false
+      }
+    }
+  }
+
+  section @s4-3-apply "4.3 · Change a diagram — preview first, then apply (two separate runs)" mode=sequence direction=down gap=compact order=10 {
+    show @b-agent @b-canvas @b-dispatch @b-reconcile @b-submit @b-prepare @b-journal @b-http @b-service @a-back
+    event @v1 @b-agent -> @b-canvas "Run 1: pnpm canvas preview my.canvas --mode replace --revision 3" kind=call activate=true
+    event @v2 @b-canvas -> @b-dispatch "Level 3 route to executeService" kind=call activate=true
+    event @v3 @b-dispatch -> @b-submit "author(command, deps)" kind=call activate=true
+    event @v4 @b-submit -> @b-prepare "prepare: the same steps as a direct save" kind=call activate=true
+    event @v5 @b-prepare -> @b-submit "RetainedRequest" kind=return activate=false
+    event @v6 @b-submit -> @b-journal "journal.save(retained): requests/<id>.json" kind=call
+    event @v7 @b-submit -> @b-http "restoreResources, then authoring.preview(retained)" kind=call activate=true
+    event @v8 @b-http -> @b-service "POST /api/v1/authoring/preview {version, generation, request, preview: true}" kind=call activate=true
+    event @v9 @b-service -> @b-http "the preview answer. Nothing is saved." kind=return activate=false
+    event @v10 @b-http -> @b-submit "the answer, unchecked" kind=return activate=false
+    event @v11 @b-submit -> @b-dispatch "'Preview request ID', the JSON, 'Apply with: canvas apply ID'" kind=return activate=false
+    event @v11b @b-dispatch -> @b-canvas "Result<string>" kind=return activate=false
+    event @v12 @b-canvas -> @b-agent "stdout. Run 1 ends." kind=return activate=false
+    fragment @v-run2 opt "Run 2: later, only if the preview looks right" {
+      event @v13 @b-agent -> @b-canvas "pnpm canvas apply ID" kind=call activate=true
+      event @v14 @b-canvas -> @b-dispatch "Level 3 route to executeService" kind=call activate=true
+      event @v15 @b-dispatch -> @b-reconcile "retry(command.request, deps). apply and retry run the same code." kind=call activate=true
+      event @v16 @b-reconcile -> @b-journal "journal.read(request)" kind=call
+      event @v17 @b-journal -> @b-reconcile "the exact request kept at preview time. Missing: request-unavailable." kind=return activate=false
+      event @v18 @b-reconcile -> @b-http "reads.receipt(request)" kind=call activate=true
+      event @v19 @b-http -> @b-service "GET /api/v1/receipt?id=ID" kind=call activate=true
+      event @v20 @b-service -> @b-http "a receipt, or none, with the current generation" kind=return activate=false
+      event @v20b @b-http -> @b-reconcile "Observed<Receipt or null>" kind=return activate=false
+      fragment @v-alt alt "Is there a receipt?" {
+        branch @v-yes "yes: it was already saved" {
+          event @v21 @b-reconcile -> @b-dispatch "matchedReceipt: prints it. Sends nothing." kind=return activate=false
+        }
+        branch @v-no "no" {
+          event @v22 @b-reconcile -> @b-submit "submit(the kept request with the new generation, 'apply')" kind=call activate=true
+          event @v23 @b-submit -> @b-journal "journal.save: same request, file not rewritten" kind=call
+          event @v24 @b-submit -> @b-http "restoreResources, then authoring.apply(retained)" kind=call activate=true
+          event @v25 @b-http -> @b-service "POST /api/v1/authoring/apply" kind=call activate=true
+          event @v26 @b-service -> @b-http "a receipt, or a refusal if the collection changed" kind=return activate=false
+          event @v27 @b-http -> @b-submit "Receipt, or service-rejected" kind=return activate=false
+          event @v28 @b-submit -> @b-reconcile "'committed: REQUEST-ID', then 'Workspace sequence: N'" kind=return activate=false
+          event @v28b @b-reconcile -> @b-dispatch "Result<string>" kind=return activate=false
+        }
+      }
+      event @v29 @b-dispatch -> @b-canvas "Result<string>" kind=return activate=false
+      event @v30 @b-canvas -> @b-agent "stdout, or stderr with exit code 1" kind=return activate=false
+    }
+  }
+
+  node @x-dispatch module "core/commands/dispatch.ts" { text @d "Picks the purpose by command name" }
+  node @x-submit module "core/authoring/submit.ts" role=primary { text @d "author, submit: keep, restore, send" }
+  node @x-reconcile module "core/authoring/reconcile.ts" { text @d "retry: used by apply and retry" }
+  node @x-prepare module "core/authoring/prepare.ts" role=primary { text @d "prepare: builds the request" }
+  node @x-restore module "core/resources/restore.ts" { text @d "restoreResources: re-sends byte backups" }
+  node @x-parse module "core/shared/parse-source.ts" { text @d "parseSource: calls the Language parser" }
+  node @x-change module "core/authoring/change-request.ts" size=large { text @d "collectionRecordId, changeRequest: revision checks, the request body" }
+  node @x-envelope module "core/authoring/envelope.ts" { text @d "requestIdFor: --request, or a new ID" }
+  node @x-stage module "core/resources/stage.ts" { text @d "prepareResources: uploads fonts and images, then freezes" }
+  node @x-note note "Not drawn" { text @d "receipt.ts (the printed receipt), results.ts, checks.ts, and type imports from contract/." role=caption }
+
+  wire @j-dispatch-submit @x-dispatch -> @x-submit "author" kind=imports
+  wire @j-dispatch-reconcile @x-dispatch -> @x-reconcile "retry" kind=imports
+  wire @j-reconcile-submit @x-reconcile -> @x-submit "submit" kind=imports
+  wire @j-submit-prepare @x-submit -> @x-prepare "prepare" kind=imports
+  wire @j-submit-restore @x-submit -> @x-restore "restoreResources" kind=imports
+  wire @j-prepare-parse @x-prepare -> @x-parse "parseSource" kind=imports
+  wire @j-prepare-change @x-prepare -> @x-change "collectionRecordId, changeRequest" kind=imports
+  wire @j-prepare-envelope @x-prepare -> @x-envelope "requestIdFor" kind=imports
+  wire @j-prepare-stage @x-prepare -> @x-stage "prepareResources" kind=imports
+
+  node @y-prepare module "core/authoring/prepare.ts" role=primary { text @d "reads the file and the workspace" }
+  node @y-parse module "core/shared/parse-source.ts" { text @d "parses the DSL" }
+  node @y-change module "core/authoring/change-request.ts" size=large { text @d "checks the stored revision" }
+  node @y-stage module "core/resources/stage.ts" { text @d "uploads fonts and images, then freezes" }
+  node @y-files module "adapters/files/local-files.ts" { text @d "readSource" }
+  node @y-reads module "adapters/service-http/reads.ts" size=large { text @d "workspace: GET /api/v1/workspace" }
+  node @y-lang module "@novakai/canvas-language" role=supporting { text @d "parse (built by compose/language.ts)" }
+  node @y-model module "@novakai/canvas-model" role=supporting { text @d "validate" }
+  node @y-reader module "adapters/files/resource-reader.ts" size=large { text @d "read: font and image files" }
+  node @y-resources module "adapters/service-http/resources.ts" size=large { text @d "stage, blob, freeze: POST /api/v1/resources/..." }
+
+  wire @p-prepare-files @y-prepare -> @y-files "files.readSource()" kind=reference style=dashed
+  wire @p-prepare-reads @y-prepare -> @y-reads "reads.workspace()" kind=reference style=dashed
+  wire @p-parse-language @y-parse -> @y-lang "language.parse()" kind=reference style=dashed
+  wire @p-change-model @y-change -> @y-model "reader.validate()" kind=reference style=dashed
+  wire @p-stage-reader @y-stage -> @y-reader "reader.read()" kind=reference style=dashed
+  wire @p-stage-resources @y-stage -> @y-resources "resources.stage(), .blob(), .freeze()" kind=reference style=dashed
+
+  node @z-submit module "core/authoring/submit.ts" role=primary { text @d "keeps, then sends" }
+  node @z-reconcile module "core/authoring/reconcile.ts" { text @d "apply: reads the kept request, checks the receipt" }
+  node @z-restore module "core/resources/restore.ts" { text @d "re-sends byte backups" }
+  node @z-authoring module "adapters/service-http/authoring.ts" size=large { text @d "preview, apply: POST /api/v1/authoring/..." }
+  node @z-journal module "adapters/files/request-journal.ts" size=large role=primary { text @d "save, read: WORKSPACE/requests/ID.json" }
+  node @z-reads module "adapters/service-http/reads.ts" size=large { text @d "receipt: GET /api/v1/receipt" }
+  node @z-resources module "adapters/service-http/resources.ts" size=large { text @d "restore: POST /api/v1/resources/restore" }
+
+  wire @p-submit-authoring @z-submit -> @z-authoring "authoring.preview(), .apply()" kind=reference style=dashed
+  wire @p-submit-journal @z-submit -> @z-journal "journal.save()" kind=reference style=dashed
+  wire @p-reconcile-journal @z-reconcile -> @z-journal "journal.read()" kind=reference style=dashed
+  wire @p-reconcile-reads @z-reconcile -> @z-reads "reads.receipt()" kind=reference style=dashed
+  wire @p-restore-resources @z-restore -> @z-resources "resources.restore()" kind=reference style=dashed
+
+  node @q-runsvc module "contract/compose/service.ts" role=primary { text @d "servicePorts(): the adapters 4.3 adds" }
+  node @q-journal module "adapters/files/request-journal.ts" size=large { text @d "createRequestJournal" }
+  node @q-reader module "adapters/files/resource-reader.ts" size=large { text @d "createResourceReader" }
+  node @q-authoring module "adapters/service-http/authoring.ts" size=large { text @d "createServiceAuthoring" }
+  node @q-resources module "adapters/service-http/resources.ts" size=large { text @d "createServiceResources" }
+  node @q-note note "Note" { text @d "createTransport, createServiceReads, createLocalFiles: see 4.1. compose/service.ts also plugs in composeLanguage() from compose/language.ts (the Language parser) and nextRequestId() (a new UUID)." role=caption }
+
+  wire @k-runsvc-journal @q-runsvc -> @q-journal "createRequestJournal" kind=imports
+  wire @k-runsvc-reader @q-runsvc -> @q-reader "createResourceReader" kind=imports
+  wire @k-runsvc-authoring @q-runsvc -> @q-authoring "createServiceAuthoring" kind=imports
+  wire @k-runsvc-resources @q-runsvc -> @q-resources "createServiceResources" kind=imports
+
+  node @t-reads module "adapters/service-http/reads.ts" size=large { text @d "GET routes" }
+  node @t-resources module "adapters/service-http/resources.ts" size=large { text @d "POST /api/v1/resources/..." }
+  node @t-authoring module "adapters/service-http/authoring.ts" size=large { text @d "POST preview and apply" }
+  node @t-transport module "adapters/service-http/transport.ts" size=large role=primary { text @d "get, post: fetch with the token" }
+  node @t-note note "Note" { text @d "No import: compose hands each adapter the transport. Adapters never import each other." role=caption }
+
+  wire @k-reads-transport @t-reads -> @t-transport "transport.get()" kind=reference style=dashed
+  wire @k-resources-transport @t-resources -> @t-transport "transport.post()" kind=reference style=dashed
+  wire @k-authoring-transport @t-authoring -> @t-transport "transport.post()" kind=reference style=dashed
+
+  section @s4-3-core "4.3 · Change a diagram — the core files it uses (imports only)" mode=flow direction=right gap=roomy order=11 {
+    show @x-dispatch @x-submit @x-reconcile @x-prepare @x-restore @x-parse @x-change @x-envelope @x-stage @legend @x-note
+    connect @j-dispatch-submit @j-dispatch-reconcile @j-reconcile-submit @j-submit-prepare @j-submit-restore
+    connect @j-prepare-parse @j-prepare-change @j-prepare-envelope @j-prepare-stage
+  }
+
+  section @s4-3-calls-build "4.3 · Change a diagram — who answers the calls that build the request" mode=flow direction=right gap=roomy order=12 {
+    show @y-prepare @y-parse @y-change @y-stage @y-files @y-reads @y-lang @y-model @y-reader @y-resources @legend
+    connect @p-prepare-files @p-prepare-reads @p-parse-language @p-change-model @p-stage-reader @p-stage-resources
+  }
+
+  section @s4-3-calls-send "4.3 · Change a diagram — who answers the calls that keep and send" mode=flow direction=right gap=roomy order=13 {
+    show @z-submit @z-reconcile @z-restore @z-authoring @z-journal @z-reads @z-resources @legend
+    connect @p-submit-authoring @p-submit-journal @p-reconcile-journal @p-reconcile-reads @p-restore-resources
+    below @z-reconcile @z-submit
+    below @z-restore @z-reconcile
+    below @z-journal @z-authoring
+    below @z-reads @z-journal
+    below @z-resources @z-reads
+  }
+
+  section @s4-3-wiring "4.3 · Change a diagram — the adapters compose adds for it" mode=flow direction=right gap=roomy order=14 {
+    show @q-runsvc @q-journal @q-reader @q-authoring @q-resources @legend @q-note
+    connect @k-runsvc-journal @k-runsvc-reader @k-runsvc-authoring @k-runsvc-resources
+    below @q-resources @q-authoring
+    below @q-journal @q-resources
+    below @q-reader @q-journal
+  }
+
+  section @s4-3-transport "4.3 · Change a diagram — the three HTTP adapters share one transport" mode=flow direction=right gap=roomy order=15 {
+    show @t-reads @t-resources @t-authoring @t-transport @legend @t-note
+    connect @k-reads-transport @k-resources-transport @k-authoring-transport
+  }
+}
