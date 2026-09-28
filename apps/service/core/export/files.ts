@@ -1,7 +1,7 @@
 /*
  * Export files: a finished artifact, Markdown text or canonical DSL becomes one download named
  * <collection>-<revision>[-<scope>].<extension> and stamped with the exported revision; an
- * artifact also carries its digest. A failed artifact becomes the route failure.
+ * artifact also carries its digest. A failed artifact becomes the route failure. Pure.
  */
 import { success, type Result } from '../../contract/errors.js';
 import type { StaticFile } from '../../contract/records/transport/server.js';
@@ -15,32 +15,41 @@ export function artifactOutcome(artifact: ExportResult<Artifact>): Result<Static
   return success(artifactFile(artifact.value));
 }
 
-/** Markdown as a UTF-8 download named by collection, revision and scope. */
+/** Markdown as a UTF-8 download named by collection, revision and scope. Never fails. */
 export function markdownFile(
   request: Pick<ExportRequest, 'identity' | 'scope'>,
   source: string,
 ): StaticFile {
   const scope = request.scope.kind === 'all' ? 'all' : request.scope.id;
   return {
-    bytes: Buffer.from(source, 'utf8'),
+    bytes: UTF8.encode(source),
     mediaType: 'text/markdown; charset=utf-8',
     filename: `${request.identity.collectionId}-${request.identity.revision}-${scope}.md`,
-    headers: { 'X-Novakai-Export-Revision': String(request.identity.revision) },
+    headers: revisionHeaders(request.identity),
   };
 }
 
-/** Canonical DSL as a UTF-8 `.canvas` download named by collection and revision. */
+/** Canonical DSL as a UTF-8 `.canvas` download named by collection and revision. Never fails. */
 export function dslFile(
   identity: ExportRequest['identity'],
   source: string,
 ): StaticFile {
   return {
-    bytes: Buffer.from(source, 'utf8'),
+    bytes: UTF8.encode(source),
     mediaType: 'text/plain; charset=utf-8',
     filename: `${identity.collectionId}-${identity.revision}.canvas`,
-    headers: { 'X-Novakai-Export-Revision': String(identity.revision) },
+    headers: revisionHeaders(identity),
   };
 }
+
+/** Encodes text downloads as UTF-8. */
+const UTF8 = new TextEncoder();
+
+/** The header naming the exported revision; every export file carries it. */
+const REVISION_HEADER = 'X-Novakai-Export-Revision';
+
+/** The header naming an artifact's digest. */
+const DIGEST_HEADER = 'X-Novakai-Export-Digest';
 
 /** The artifact's bytes, named by identity, scope and extension, with revision and digest. */
 function artifactFile(artifact: Artifact): StaticFile {
@@ -49,9 +58,13 @@ function artifactFile(artifact: Artifact): StaticFile {
     bytes: artifact.bytes,
     mediaType: artifact.mediaType,
     filename: name,
-    headers: {
-      'X-Novakai-Export-Revision': String(artifact.identity.revision),
-      'X-Novakai-Export-Digest': artifact.digest,
-    },
+    headers: { ...revisionHeaders(artifact.identity), [DIGEST_HEADER]: artifact.digest },
   };
+}
+
+/** The headers stamping a download with its exported revision. Never fails. */
+function revisionHeaders(
+  identity: Pick<ExportRequest['identity'], 'revision'>,
+): Readonly<Record<string, string>> {
+  return { [REVISION_HEADER]: String(identity.revision) };
 }

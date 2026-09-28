@@ -1,7 +1,8 @@
 /*
  * The Authoring store bridge: Persistence's conditional storage behind Authoring's snapshot,
  * receipt and commit roles. Storage failures keep their Persistence evidence under an Authoring
- * code. Authoring owns admission and uncertain-commit recovery; trusted compose alone binds it.
+ * code. Each store keeps its own cache of snapshot views (in memory, no I/O of its own). Authoring
+ * owns admission and uncertain-commit recovery; trusted compose alone binds it.
  */
 import { receiptSchema, failure } from '@novakai/canvas-authoring';
 import type {
@@ -18,44 +19,28 @@ import type {
   WorkspaceState,
 } from '@novakai/canvas-persistence';
 import type { AuthoringStore, ConditionalStorage } from '../../contract/ports/storage.js';
-/** The Authoring code of each Persistence failure code. Every storage code has a row (checked by the type). */
-const storageCodes: Readonly<Record<StorageError['code'], ErrorCode>> = Object.freeze({
-  'invalid-input': 'invalid-input',
-  'unsupported-version': 'unsupported-version',
-  'revision-conflict': 'revision-conflict',
-  'request-reused': 'request-reused',
-  'storage-unavailable': 'storage-unavailable',
-  'corrupt-record': 'corrupt-record',
-  'missing-resource': 'missing-asset',
-  'destination-not-empty': 'revision-conflict',
-});
-/** Preserve distinguishable physical failures so Authoring chooses receipt reconciliation, never blind retry. */
-function translate<T>(result: StorageResult<T>): Result<T> {
-  if (result.ok) return result;
-  const mapped = failure<never>(
-    storageCodes[result.error.code],
-    result.error.path,
-    result.error.message,
-    [],
-    result.error,
-  );
-  return mapped;
+
+/**
+ * Binds Authoring's snapshot, receipt and commit roles to one conditional storage, with a view
+ * cache owned by this store. Each role fails as described on `rawSnapshot`, `receipt` and
+ * `commit`; nothing rejects.
+ */
+export function createAuthoringStore(storage: ConditionalStorage): AuthoringStore {
+  const bridge: StoreBridge = { storage, views: new WeakMap() };
+  return {
+    snapshots: { read: async (workspace) => rawSnapshot(bridge, workspace) },
+    receipts: { find: async (workspace, request) => receipt(bridge, workspace, request) },
+    commits: { commit: async (request) => commit(bridge, request) },
+  };
 }
-/** Map physical storage without interpreting Authoring's shape; the consumer admits this raw snapshot. */
-function rawSnapshot(
-  storage: ConditionalStorage,
-  workspace: WorkspaceId,
-): Result<SnapshotView> {
-  const current = translate(storage.readSnapshot());
-  if (!current.ok) return current;
-  if (String(current.value.workspace) !== workspace)
-    return failure(
-      'permission-denied',
-      'workspace',
-      'Workspace does not belong to this service session',
-    );
-  return { ok: true, value: view(current.value) };
+
+/** One store's storage and its view cache. */
+interface StoreBridge {
+  readonly storage: ConditionalStorage;
+  /** Same stored slots → same frozen view, so Authoring's parse caches hit. */
+  readonly views: WeakMap<WorkspaceState['slots'], SnapshotView>;
 }
+
 /**
  * The raw snapshot Authoring parses: the stored workspace, its commit sequence and its record
  * slots, unchecked. Authoring alone checks the shape.
@@ -65,10 +50,97 @@ interface SnapshotView {
   readonly sequence: WorkspaceState['sequence'];
   readonly records: WorkspaceState['slots'];
 }
-/** Same stored state → same frozen view, so Authoring's parse caches hit. */
-const views = new WeakMap<WorkspaceState['slots'], SnapshotView>();
+
+/** The Authoring code of each Persistence failure code. Every storage code has a row (checked by the type). */
+const STORAGE_CODES: Readonly<Record<StorageError['code'], ErrorCode>> = Object.freeze({
+  'invalid-input': 'invalid-input',
+  'unsupported-version': 'unsupported-version',
+  'revision-conflict': 'revision-conflict',
+  'request-reused': 'request-reused',
+  'storage-unavailable': 'storage-unavailable',
+  'corrupt-record': 'corrupt-record',
+  'missing-resource': 'missing-asset',
+  'destination-not-empty': 'revision-conflict',
+});
+
+/**
+ * The stored snapshot as Authoring reads it, unchecked. Fails with `permission-denied` at
+ * `workspace` when the stored workspace is not `workspace`, and as `translated` when storage
+ * cannot read it.
+ */
+function rawSnapshot(
+  bridge: StoreBridge,
+  workspace: WorkspaceId,
+): Result<SnapshotView> {
+  const current = translated(bridge.storage.readSnapshot());
+  if (!current.ok) return current;
+  if (String(current.value.workspace) !== workspace)
+    return failure(
+      'permission-denied',
+      'workspace',
+      'Workspace does not belong to this service session',
+    );
+  return { ok: true, value: cachedView(bridge.views, current.value) };
+}
+
+/**
+ * The committed receipt of `request`, or `null` when none is stored; absence is never a failure.
+ * Fails as `rawSnapshot` for the workspace check, as `translated` when storage cannot read the
+ * receipt, and as `checkedReceipt` when the stored receipt cannot be decoded.
+ */
+function receipt(
+  bridge: StoreBridge,
+  workspace: WorkspaceId,
+  request: RequestId,
+): Result<Receipt | null> {
+  const current = rawSnapshot(bridge, workspace);
+  if (!current.ok) return current;
+  const stored = translated(bridge.storage.receipt(request));
+  return foundReceipt(stored);
+}
+
+/**
+ * The stored receipt, checked, or `null` when none is stored. A storage failure passes through
+ * unchanged; fails as `checkedReceipt` when the receipt cannot be decoded.
+ */
+function foundReceipt(stored: Result<unknown>): Result<Receipt | null> {
+  if (!stored.ok) return stored;
+  if (stored.value === null) return { ok: true, value: null };
+  return checkedReceipt(stored.value);
+}
+
+/**
+ * Commits the request in one conditional storage transaction; expected versions and the receipt
+ * fingerprint cross unchanged. Fails as `rawSnapshot` for the workspace check, as `translated`
+ * when storage refuses the commit, and as `checkedReceipt` when the written receipt cannot be
+ * decoded.
+ */
+function commit(
+  bridge: StoreBridge,
+  request: CommitRequest,
+): Result<Receipt> {
+  const current = rawSnapshot(bridge, request.workspace);
+  if (!current.ok) return current;
+  const written = translated(bridge.storage.commit(request));
+  if (!written.ok) return written;
+  return checkedReceipt(written.value);
+}
+
+/**
+ * The storage outcome under Authoring's code (see `STORAGE_CODES`), the Persistence failure kept
+ * as source, so Authoring reconciles receipts rather than retrying blindly. Success passes through.
+ */
+function translated<T>(stored: StorageResult<T>): Result<T> {
+  if (stored.ok) return stored;
+  const error = stored.error;
+  return failure(STORAGE_CODES[error.code], error.path, error.message, [], error);
+}
+
 /** The frozen view of the stored state; the cached one while the slots, workspace and sequence are unchanged. */
-function view(state: WorkspaceState): SnapshotView {
+function cachedView(
+  views: StoreBridge['views'],
+  state: WorkspaceState,
+): SnapshotView {
   const known = views.get(state.slots);
   if (
     known !== undefined &&
@@ -76,53 +148,22 @@ function view(state: WorkspaceState): SnapshotView {
     known.sequence === state.sequence
   )
     return known;
-  const made = Object.freeze({
+  const view = Object.freeze({
     workspace: state.workspace,
     sequence: state.sequence,
     records: state.slots,
   });
-  views.set(state.slots, made);
-  return made;
+  views.set(state.slots, view);
+  return view;
 }
-/** Successful physical receipts must also satisfy the Authoring outcome contract before reaching clients. */
-function checkedReceipt(input: unknown): Result<Receipt> {
-  const parsed = receiptSchema.safeParse(input);
+
+/**
+ * The stored receipt, checked against Authoring's receipt schema before it reaches clients.
+ * Fails with `corrupt-record` at `receipt` when it cannot be decoded.
+ */
+function checkedReceipt(stored: unknown): Result<Receipt> {
+  const parsed = receiptSchema.safeParse(stored);
   if (!parsed.success)
     return failure('corrupt-record', 'receipt', 'Stored receipt cannot be decoded');
   return { ok: true, value: parsed.data };
-}
-/** Null means no committed receipt; failures remain distinguishable from absence. */
-function receipt(
-  storage: ConditionalStorage,
-  workspace: WorkspaceId,
-  request: RequestId,
-): Result<Receipt | null> {
-  const current = rawSnapshot(storage, workspace);
-  if (!current.ok) return current;
-  return foundReceipt(translate(storage.receipt(request)));
-}
-/** Receipt lookup retains the exact persisted transaction identity after a lost acknowledgement. */
-function foundReceipt(result: Result<unknown>): Result<Receipt | null> {
-  if (!result.ok) return result;
-  if (result.value === null) return { ok: true, value: null };
-  return checkedReceipt(result.value);
-}
-/** Conditional expected versions and receipt fingerprint cross unchanged into one physical transaction. */
-function commit(
-  storage: ConditionalStorage,
-  request: CommitRequest,
-): Result<Receipt> {
-  const current = rawSnapshot(storage, request.workspace);
-  if (!current.ok) return current;
-  const written = translate(storage.commit(request));
-  if (!written.ok) return written;
-  return checkedReceipt(written.value);
-}
-/** Trusted service composition alone binds this bridge; Authoring owns admission and uncertain-commit recovery. */
-export function createAuthoringStore(storage: ConditionalStorage): AuthoringStore {
-  return {
-    snapshots: { read: async (workspace) => rawSnapshot(storage, workspace) },
-    receipts: { find: async (workspace, request) => receipt(storage, workspace, request) },
-    commits: { commit: async (request) => commit(storage, request) },
-  };
 }

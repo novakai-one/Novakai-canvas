@@ -12,11 +12,17 @@ import type {
 } from '../../../contract/records/capabilities.js';
 import type { Installation } from '../../../contract/records/workspace/startup.js';
 import { initializeCommand } from '../../../contract/records/planning/commands.js';
-import { plannerId, requestSchema } from '../../../contract/schemas.js';
+import { actorId, plannerId, requestSchema } from '../../../contract/schemas.js';
 import { andThen, authoringFailure, success } from '../../../contract/errors.js';
 import { MAIN_CATALOG_ID, METADATA_RECORD_ID, presetRecordId } from '../../workspace/records.js';
 import { presetResources } from '../../presets/resources.js';
 import { changePayload, checkedProposal } from './change-payload.js';
+
+/** The actor that signs the installation request. Parsed once at module load; the ID is valid. */
+const INSTALLATION_ACTOR: Request['actor'] = Object.freeze({
+  id: actorId.parse('system:installation'),
+  kind: 'human',
+});
 
 /**
  * Binds the private `bootstrap` planner to trusted installation data; HTTP never exposes it.
@@ -47,23 +53,23 @@ function requestFor(
   planned: Proposal,
 ): AuthoringResult<Request> {
   const writes = planned.writes;
-  const result = requestSchema.safeParse({
+  const parsed = requestSchema.safeParse({
     workspace: installation.workspace,
     request: 'initialize-workspace',
     version: 1,
-    actor: { id: 'system:installation', kind: 'human' },
+    actor: INSTALLATION_ACTOR,
     assets: [],
     scope: writes.map((item) => item.key),
     expected: writes.map((item) => ({ key: item.key, version: 'absent' })),
     intent: { kind: 'change', planner: 'bootstrap', payload: { action: 'initialize' } },
   });
-  if (!result.success)
+  if (!parsed.success)
     return authoringFailure(
       'invalid-input',
       'bootstrap',
       'Installation request could not be constructed',
     );
-  return success(result.data);
+  return success(parsed.data);
 }
 
 /**

@@ -9,7 +9,6 @@ import type { BuiltinResources } from '../records/presets/builtins.js';
 import type { ExportHandler } from '../ports/export.js';
 import type { ChangeChannel } from '../ports/notifications.js';
 import type { WorkspaceSession } from '../types.js';
-import { authoringFailure } from '../errors.js';
 import { createWorkspaceSession } from '../../core/session/facade.js';
 import { createSessionLifetime } from '../../core/session/lifetime.js';
 import type { WorkspaceRoles } from './workspace.js';
@@ -25,9 +24,8 @@ export interface SessionInputs {
 }
 
 /**
- * Binds the session facade; `authoring` is bound to one request's cancellation. Once the session
- * is closing, Authoring calls answer `storage-unavailable` at `session`; see
- * `createWorkspaceSession` for the other answers. Never fails.
+ * Binds the session facade; `authoring` is bound to one request's cancellation. See
+ * `createWorkspaceSession` for the answers once the session is closing. Never fails.
  */
 export function wireSession(
   inputs: SessionInputs,
@@ -47,8 +45,6 @@ export function wireSession(
     changes,
     lifetime,
     readSignal: UNCANCELLED,
-    unavailable: () =>
-      authoringFailure('storage-unavailable', 'session', 'Workspace is closing or closed'),
     authoring,
     renderer: roles.renderer,
     exporter: exporter.invoke,
