@@ -13,8 +13,14 @@ import type { DiagramProducer } from '../../contract/ports/rendering.js';
 import type { RenderingJob, RenderDocument } from '../../contract/records/rendering/job.js';
 import type { Result } from '../../contract/errors.js';
 
-/** Recent renders kept; enough for the check render during apply plus the reads after it. */
-const KEEP = 8;
+/** The most drawings kept; enough for the check drawing while saving plus the reads after it. */
+const MOST_KEPT = 8;
+
+/**
+ * The drawings that worked, each under its job's key (see `jobKey`), oldest first. Only successes
+ * are ever kept.
+ */
+type KeptDrawings = Map<string, Result<RenderDocument, never>>;
 
 /**
  * Wraps `producer` so it answers a repeated render job from memory.
@@ -22,19 +28,30 @@ const KEEP = 8;
  * `producer`, and its mistakes pass through unchanged.
  */
 export function cacheRenders(producer: DiagramProducer): DiagramProducer {
-  const kept = new Map<string, Result<RenderDocument>>();
+  const kept: KeptDrawings = new Map();
   return {
-    async produce(job, signal) {
-      const key = inputKey(job);
-      const known = kept.get(key);
-      if (known !== undefined) return known;
-      return remember(kept, key, await producer.produce(job, signal));
-    },
+    produce: (job, signal) => recallOrProduce(job, signal, producer, kept),
   };
 }
 
-/** Everything that shapes the output except the job id. */
-function inputKey(job: RenderingJob): string {
+/** Answers a repeated job with its kept drawing, or draws the job and keeps it if it worked. */
+async function recallOrProduce(
+  job: RenderingJob,
+  signal: AbortSignal,
+  producer: DiagramProducer,
+  kept: KeptDrawings,
+): Promise<Result<RenderDocument>> {
+  const key = jobKey(job);
+  const known = kept.get(key);
+  if (known !== undefined) {
+    return known;
+  }
+  const produced = await producer.produce(job, signal);
+  return keepIfDrawn(kept, key, produced);
+}
+
+/** Writes everything that shapes the drawing, except the job's ID, as one text key. */
+function jobKey(job: RenderingJob): string {
   return JSON.stringify([
     job.collection,
     job.style,
@@ -45,21 +62,33 @@ function inputKey(job: RenderingJob): string {
   ]);
 }
 
-/** Only successful renders are kept; the oldest entry is evicted past KEEP. */
-function remember(
-  kept: Map<string, Result<RenderDocument>>,
+/** Keeps the drawing if it worked; either way, answers with what the producer gave back. */
+function keepIfDrawn(
+  kept: KeptDrawings,
   key: string,
-  result: Result<RenderDocument>,
+  produced: Result<RenderDocument>,
 ): Result<RenderDocument> {
-  if (!result.ok) return result;
-  kept.set(key, result);
-  evictOldest(kept);
-  return result;
+  if (!produced.ok) {
+    return produced;
+  }
+  kept.set(key, produced);
+  forgetOldestPastLimit(kept);
+  return produced;
 }
 
-/** Bounded memory: the oldest render is evicted once past KEEP. */
-function evictOldest(kept: Map<string, Result<RenderDocument>>): void {
-  if (kept.size <= KEEP) return;
-  const oldest = kept.keys().next();
-  if (oldest.done !== true) kept.delete(oldest.value);
+/** Forgets the oldest drawing once more than `MOST_KEPT` are kept. */
+function forgetOldestPastLimit(kept: KeptDrawings): void {
+  if (kept.size <= MOST_KEPT) {
+    return;
+  }
+  forgetOldest(kept);
+}
+
+/** Forgets the drawing kept longest ago; a Map lists its keys in the order they were added. */
+function forgetOldest(kept: KeptDrawings): void {
+  const [oldestKey] = kept.keys();
+  if (oldestKey === undefined) {
+    return;
+  }
+  kept.delete(oldestKey);
 }

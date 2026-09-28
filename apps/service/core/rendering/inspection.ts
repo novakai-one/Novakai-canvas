@@ -28,22 +28,39 @@ export async function inspectCollection(
   dependencies: WorkspaceRenderDependencies,
 ): Promise<Result<InspectionReport>> {
   const rendered = await renderCollection(id, signal, dependencies);
-  if (!rendered.ok) return refusedRender(rendered.error);
-  return success(validReport(rendered.value));
+  if (!rendered.ok) {
+    return reportRefusedRender(rendered.error);
+  }
+  const report = validReport(rendered.value);
+  return success(report);
 }
 
 /**
- * The answer for a refused render: the invalid report for `invalid-input`, otherwise the same
- * failure (code, path, message and source), because a missing collection or an infrastructure
- * failure is a routing error, not a quality verdict.
+ * Turns a refused drawing into the invalid report, or passes on a refusal that says nothing about
+ * the diagram's quality.
  */
-function refusedRender(refusal: Diagnostic): Result<InspectionReport> {
-  if (refusal.code !== 'invalid-input')
-    return failure(refusal.code, refusal.path, refusal.message, refusal.source);
-  return success(invalidReport(refusal));
+function reportRefusedRender(refusal: Diagnostic): Result<InspectionReport> {
+  if (saysNothingAboutQuality(refusal)) {
+    return unchangedFailure(refusal);
+  }
+  const report = invalidReport(refusal);
+  return success(report);
 }
 
-/** The invalid report: the refusal as its one diagnostic (source kept typed), every count 0. */
+/**
+ * Whether the refusal is anything but `invalid-input`: a missing collection, or a workspace or
+ * worker that can't answer, is not a verdict on the diagram.
+ */
+function saysNothingAboutQuality(refusal: Diagnostic): boolean {
+  return refusal.code !== 'invalid-input';
+}
+
+/** The same mistake again: its code, path, message and source. */
+function unchangedFailure(refusal: Diagnostic): Result<never> {
+  return failure(refusal.code, refusal.path, refusal.message, refusal.source);
+}
+
+/** Builds the invalid report: the refusal is its one diagnostic, and every count is 0. */
 function invalidReport(refusal: Diagnostic): InspectionReport {
   return {
     valid: false,
@@ -57,9 +74,8 @@ function invalidReport(refusal: Diagnostic): InspectionReport {
 }
 
 /**
- * The valid report: the scene passed the independent inspector during derivation, so the report
- * is its own warning record, the crossing and relaxed-constraint counts, the section count and the
- * engine versions.
+ * Builds the valid report from the drawn scene: its warnings, how many wires cross, how many
+ * layout rules were relaxed, how many sections it has, and the engine versions.
  */
 function validReport(document: RenderDocument): InspectionReport {
   const scene = document.scene;
@@ -74,7 +90,7 @@ function validReport(document: RenderDocument): InspectionReport {
   };
 }
 
-/** How many scene warnings carry `code`, one of Layout's warning codes. */
+/** Counts the scene warnings that carry `code`, one of Layout's warning codes. */
 function countWarnings(
   warnings: readonly SceneWarning[],
   code: SceneWarning['code'],

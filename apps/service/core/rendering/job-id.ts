@@ -27,13 +27,17 @@ export function buildRenderJobId(
   purpose: RenderPurpose,
   collection: CollectionAtRevision,
 ): AuthoringResult<RenderJobId> {
-  const id = renderJobId.safeParse(JOB_TEXT[purpose](collection));
-  if (!id.success) return malformedResourceFailure();
+  const writeIdText = ID_TEXT[purpose];
+  const idText = writeIdText(collection);
+  const id = renderJobId.safeParse(idText);
+  if (!id.success) {
+    return malformedResourceFailure();
+  }
   return success(id.data);
 }
 
-/** The ID text for each purpose. Every purpose has a row (checked by the type). */
-const JOB_TEXT: Readonly<Record<RenderPurpose, (collection: CollectionAtRevision) => string>> =
+/** Writes a job ID's text for each purpose. Every purpose has a row (checked by the type). */
+const ID_TEXT: Readonly<Record<RenderPurpose, (collection: CollectionAtRevision) => string>> =
   Object.freeze({
     read: (collection) => `read:${collection.id}:${collection.revision}`,
     'change-check': (collection) => `change-check:${collection.id}:${collection.revision}`,
