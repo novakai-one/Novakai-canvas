@@ -9,7 +9,7 @@
  * from lease.ts. Every answer is a `Result` (contract/errors.ts); Export's own mistakes are kept as
  * the source. An export only reads; it never changes the workspace.
  */
-import { success, type Result } from '../../contract/errors.js';
+import { failure, success, type Result } from '../../contract/errors.js';
 import type { SentFile } from '../../contract/records/transport/server.js';
 import type { PresentationBindings } from '../../contract/records/capability-types.js';
 import type { ExportRules } from '../../contract/ports/capabilities.js';
@@ -67,8 +67,11 @@ async function exportByFormat(
       return exportDsl(request, dependencies, signal);
     case 'markdown':
       return exportMarkdown(request, dependencies, signal);
-    default:
+    case 'svg':
+    case 'png':
       return exportPicture(request, dependencies, signal);
+    default:
+      return unsupported(request.format);
   }
 }
 
@@ -96,6 +99,9 @@ async function startEncoderFor(
   return success(undefined);
 }
 
+/** The service never exports HTML, so Export's HTML reader needs no stylesheet. */
+const NO_READER_CSS = '';
+
 /** Builds Export for this request, has it draw the file, and wraps the file as the download. */
 async function drawWithExport(
   request: ExportRequest,
@@ -104,11 +110,20 @@ async function drawWithExport(
 ): Promise<Result<SentFile>> {
   const exporter = dependencies.export.compose({
     presentation: dependencies.presentation,
-    readerCss: '',
+    readerCss: NO_READER_CSS,
     snapshots: { acquire: (identity) => acquireSnapshot(identity, dependencies, signal) },
     documents: createDocumentsForExport(dependencies),
     resources: createPassThroughResources(),
   });
   const artifact = await exporter.service.exportArtifact(request, signal);
   return buildArtifactFile(artifact);
+}
+
+/**
+ * Answers a format the switch doesn't know with `invalid-input` at `export`. It never runs:
+ * request.ts lets only the four formats through.
+ */
+function unsupported(format: never): Result<SentFile> {
+  void format;
+  return failure('invalid-input', 'export', 'Unsupported export format');
 }

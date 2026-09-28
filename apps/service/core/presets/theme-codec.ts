@@ -41,7 +41,7 @@ export interface ThemeCodecContext {
  * Design System refuses the theme, or an ID, version or digest fails Templates' check.
  */
 export function createThemeCodec(context: ThemeCodecContext): PresetCodecs['theme'] {
-  return { resolve: (raw, available) => resolveTheme(raw, available, context) };
+  return { resolve: (raw, available) => resolveThemeInput(raw, available, context) };
 }
 
 /** A theme's base: the app's own interface tokens (`ui`), or a saved theme named by exact pin. */
@@ -57,6 +57,17 @@ interface BaseFont {
   readonly approved: boolean;
 }
 
+/** A saved base as Design System reads it: its pin, the saved payload and the saved fonts. */
+interface SavedBaseForDesignSystem {
+  readonly kind: 'preset';
+  readonly pin: SavedBase['pin'];
+  readonly payload: ThemePayload;
+  readonly fonts: readonly BaseFont[];
+}
+
+/** The base Design System works from: the app's own interface tokens, or a saved base. */
+type DesignSystemBase = Extract<ThemeBase, { readonly kind: 'ui' }> | SavedBaseForDesignSystem;
+
 /** One token of a theme payload, with a font's digest in Templates' checked form. */
 type ThemeToken = ThemePayload['tokens'][string];
 
@@ -66,8 +77,11 @@ type FontToken = Extract<ThemeToken, { readonly type: 'font' }>;
 /** One token under its ID. */
 type TokenEntry = readonly [string, ThemeToken];
 
+/** One token under its ID, as Design System worked it out. */
+type PortableTokenEntry = readonly [string, PortableToken];
+
 /** Checks the input is a theme in exact form, then works out its full values. */
-function resolveTheme(
+function resolveThemeInput(
   raw: unknown,
   available: readonly ThemePreset[],
   context: ThemeCodecContext,
@@ -103,7 +117,7 @@ function resolveExactTheme(
 function selectBase(
   base: ThemeBase,
   available: readonly ThemePreset[],
-): TemplatesResult<unknown> {
+): TemplatesResult<DesignSystemBase> {
   if (base.kind === 'ui') {
     return success(base);
   }
@@ -114,12 +128,12 @@ function selectBase(
 function findSavedBase(
   base: SavedBase,
   available: readonly ThemePreset[],
-): TemplatesResult<unknown> {
+): TemplatesResult<DesignSystemBase> {
   const saved = available.find((theme) => isPinnedTheme(theme, base.pin));
   if (saved === undefined) {
     return missingBaseFailure();
   }
-  const savedBase = {
+  const savedBase: SavedBaseForDesignSystem = {
     kind: 'preset',
     pin: base.pin,
     payload: saved.payload,
@@ -163,11 +177,11 @@ function checkThemePayload(resolved: PortableTheme): TemplatesResult<ThemePayloa
   if (!fonts.ok) {
     return fonts;
   }
-  return withCheckedBase(resolved, tokens.value, fonts.value);
+  return buildPayloadWithCheckedBase(resolved, tokens.value, fonts.value);
 }
 
 /** Checks the base pin, then builds the payload from the checked tokens, fonts and base. */
-function withCheckedBase(
+function buildPayloadWithCheckedBase(
   resolved: PortableTheme,
   tokens: ThemePayload['tokens'],
   fonts: readonly PresetDigest[],
@@ -203,16 +217,14 @@ function checkFontDigests(fonts: PortableTheme['fonts']): TemplatesResult<readon
 }
 
 /** Checks one token, and keeps it under its ID. */
-function checkTokenEntry([id, token]: readonly [
-  string,
-  PortableToken,
-]): TemplatesResult<TokenEntry> {
+function checkTokenEntry(entry: PortableTokenEntry): TemplatesResult<TokenEntry> {
+  const [tokenId, token] = entry;
   const checked = checkToken(token);
   if (!checked.ok) {
     return checked;
   }
-  const entry: TokenEntry = [id, checked.value];
-  return success(entry);
+  const checkedEntry: TokenEntry = [tokenId, checked.value];
+  return success(checkedEntry);
 }
 
 /** Checks a font token's digest with Templates; any other token comes back as it is. */

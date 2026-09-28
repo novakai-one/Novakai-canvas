@@ -107,9 +107,9 @@ function addTheme(
   sources: ThemeSources,
   dependencies: BuiltinPresetDependencies,
 ): Result<Catalog> {
-  const raw = themeRaw(sources, scheme, dependencies);
-  if (!raw.ok) {
-    return raw;
+  const settings = buildThemeSettings(sources, scheme, dependencies);
+  if (!settings.ok) {
+    return settings;
   }
   const theme = bundledThemes[scheme];
   const templates = dependencies.templates(EMPTY_RESOURCES);
@@ -120,7 +120,7 @@ function addTheme(
     version: '1.1.0',
     title: theme.title,
     description: 'Bundled diagram theme with pinned fonts.',
-    raw: raw.value,
+    raw: settings.value,
   });
   if (!planned.ok) {
     return ownerRefusedFailure(planned.error);
@@ -128,34 +128,47 @@ function addTheme(
   return success(planned.value.candidate);
 }
 
+/** A bundled theme's settings (the preset's `raw` field): base, three fonts and no overrides. */
+interface BundledThemeSettings {
+  /** The scheme's interface tokens, pinned as Design System reported them (`provenance.ui`). */
+  readonly base: { readonly kind: 'ui'; readonly pin: unknown };
+  readonly fonts: Readonly<Record<keyof BuiltinFonts, FontPin>>;
+  readonly overrides: Readonly<Record<string, never>>;
+}
+
+/** Default preferences, so a person's own settings never become part of a saved theme. */
+const DEFAULT_PREFERENCES = Object.freeze({
+  schemaVersion: 1,
+  theme: { mode: 'system' },
+  textSize: 14,
+  density: 'comfortable',
+  motion: 'system',
+});
+
 /**
  * Builds a theme's settings: the scheme's interface tokens from Design System, the three shipped
  * fonts and no overrides.
  */
-function themeRaw(
+function buildThemeSettings(
   sources: ThemeSources,
   scheme: Scheme,
   dependencies: BuiltinPresetDependencies,
-): Result<unknown> {
-  // Default preferences, so a person's own settings never become part of a saved theme.
+): Result<BundledThemeSettings> {
   const resolved = dependencies.system.resolve({
     scope: 'ui',
     sources: sources.tokens,
-    preferences: {
-      schemaVersion: 1,
-      theme: { mode: 'system' },
-      textSize: 14,
-      density: 'comfortable',
-      motion: 'system',
-    },
+    preferences: DEFAULT_PREFERENCES,
     environment: { scheme, pointer: 'fine', reducedMotion: false, forcedColors: false },
   });
   if (!resolved.ok) {
     return ownerRefusedFailure(resolved.error);
   }
-  const base = { kind: 'ui', pin: resolved.value.provenance.ui };
-  const raw = { base, fonts: fontPins(sources.fonts), overrides: {} };
-  return success(raw);
+  const settings: BundledThemeSettings = {
+    base: { kind: 'ui', pin: resolved.value.provenance.ui },
+    fonts: fontPins(sources.fonts),
+    overrides: {},
+  };
+  return success(settings);
 }
 
 /** One theme font pin: the family Assets verified and its digest, approved. */

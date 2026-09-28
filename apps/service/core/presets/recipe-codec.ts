@@ -55,6 +55,9 @@ type RecipeDiagram = LoweredIntent['collection'];
 /** One image a recipe's diagram shows, with its digest as Model writes it (`sha256:` first). */
 type ImageBinding = RecipeDiagram['assets'][number];
 
+/** The DSL version Language reads recipes as. */
+const RECIPE_LANGUAGE_VERSION = 1;
+
 /** Has Language read and print the recipe's DSL, then lists the theme and images it uses. */
 function inspectRecipe(
   source: string,
@@ -69,7 +72,7 @@ function inspectRecipe(
   if (!printed.ok) {
     return printed;
   }
-  return recipePayload(lowered.value.collection, printed.value, family);
+  return buildRecipePayload(lowered.value.collection, printed.value, family);
 }
 
 /** Has Language expand a saved recipe into diagram content under `namespace`. */
@@ -79,7 +82,7 @@ function expandRecipe(
   context: RecipeCodecContext,
 ): TemplatesResult<LoweredIntent> {
   const expanded = context.language.expand({ source, namespace, resources: context.resources });
-  return fromLanguage(expanded);
+  return checkLanguageAnswer(expanded);
 }
 
 /** Has Language read the recipe's DSL as a new diagram. */
@@ -93,7 +96,7 @@ function lowerRecipe(
     snapshot: null,
     resources: context.resources,
   });
-  return fromLanguage(lowered);
+  return checkLanguageAnswer(lowered);
 }
 
 /** Has Language print the recipe's diagram as standard DSL. */
@@ -109,15 +112,18 @@ function printRecipe(
 }
 
 /** Gives back Language's answer, or turns its refusal into the codec's mistake. */
-function fromLanguage<Answer>(answer: LanguageResult<Answer>): TemplatesResult<Answer> {
+function checkLanguageAnswer<Answer>(answer: LanguageResult<Answer>): TemplatesResult<Answer> {
   if (!answer.ok) {
     return languageRefusedFailure(answer.error);
   }
   return answer;
 }
 
-/** Builds what Templates saves for a recipe: the printed DSL, its images and its one theme. */
-function recipePayload(
+/**
+ * Checks the image digests and the theme pin with Templates, then builds what Templates saves for
+ * a recipe: the printed DSL, its images and its one theme.
+ */
+function buildRecipePayload(
   diagram: RecipeDiagram,
   source: string,
   family: RecipePayload['family'],
@@ -131,7 +137,7 @@ function recipePayload(
     return theme;
   }
   const payload: RecipePayload = {
-    languageVersion: 1,
+    languageVersion: RECIPE_LANGUAGE_VERSION,
     source,
     family,
     assets: assets.value,

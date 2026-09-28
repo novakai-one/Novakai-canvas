@@ -50,27 +50,50 @@ export function prepareTheme(
   fontBindings: readonly FontBinding[],
   inputs: ThemeSavingInputs,
 ): AuthoringResult<Json> {
-  const theme = sourceTheme.safeParse(preset);
-  if (!theme.success) {
+  const theme = readThemeForPeople(preset);
+  // Any other preset is saved as it is.
+  if (theme === undefined) {
     return success(preset);
   }
-  const base = findBaseTheme(theme.data.raw.base, catalog, inputs);
+  const base = findBaseTheme(theme.raw.base, catalog, inputs);
   if (!base.ok) {
     return base;
   }
-  return rewriteTheme(preset, theme.data.raw, base.value, fontBindings, inputs.assets);
+  return rewriteTheme(preset, theme.raw, base.value, fontBindings, inputs.assets);
 }
 
 /** The theme's settings as written for people, such as `base=ink` and `"#72dbe8"`. */
-type SourceRaw = SourceTheme['raw'];
+type SourceSettings = SourceTheme['raw'];
+
+/** What Templates reads to pick a theme: an ID alone (its latest version), or an exact version. */
+type TemplatesThemeSelection =
+  | { readonly kind: 'theme'; readonly id: string }
+  | {
+      readonly kind: 'theme';
+      readonly id: string;
+      readonly version: string;
+      readonly digest: string;
+    };
 
 /** The chrome field of the rewritten settings; left out when the theme names no chrome. */
 interface ChromeField {
   readonly chrome?: ChromeName;
 }
 
+/** One override as written for people, under its token ID. */
+type SourceOverrideEntry = readonly [string, ThemeOverride];
+
 /** One override under its token ID, in exact form. */
 type OverrideEntry = readonly [string, Json];
+
+/** Reads the preset as a theme written for people; any other preset gives `undefined`. */
+function readThemeForPeople(preset: Json): SourceTheme | undefined {
+  const parsed = sourceTheme.safeParse(preset);
+  if (!parsed.success) {
+    return undefined;
+  }
+  return parsed.data;
+}
 
 /** Finds the saved theme the base names, with Templates. */
 function findBaseTheme(
@@ -78,7 +101,7 @@ function findBaseTheme(
   catalog: Catalog,
   inputs: ThemeSavingInputs,
 ): AuthoringResult<Preset> {
-  const selection = templatesSelection(baseText);
+  const selection = writeTemplatesSelection(baseText);
   const base = inputs.templates.read(catalog, selection);
   if (!base.ok) {
     return baseNotFoundFailure(base.error);
@@ -90,7 +113,7 @@ function findBaseTheme(
  * Writes the base as the selection Templates reads (grammar in theme-pin.ts): an exact pin
  * selects that version and bare digest; any other text is an ID, meaning its latest version.
  */
-function templatesSelection(baseText: string): unknown {
+function writeTemplatesSelection(baseText: string): TemplatesThemeSelection {
   const selection = parseThemeSelection(baseText);
   if (selection.kind === 'latest') {
     return { kind: 'theme', id: selection.id };
@@ -98,10 +121,13 @@ function templatesSelection(baseText: string): unknown {
   return { kind: 'theme', id: selection.id, version: selection.version, digest: selection.digest };
 }
 
-/** Checks each font with Assets, rewrites the settings, and puts them back into the preset. */
+/**
+ * Checks each font with Assets, rewrites the preset's `raw` field (its settings) in exact form, and
+ * puts the settings back into the preset.
+ */
 function rewriteTheme(
   preset: Json,
-  raw: SourceRaw,
+  settings: SourceSettings,
   base: Preset,
   fontBindings: readonly FontBinding[],
   assets: Pick<Assets, 'resolve'>,
@@ -110,11 +136,11 @@ function rewriteTheme(
   if (!fonts.ok) {
     return fonts;
   }
-  const exactRaw = rewriteRaw(raw, base, fonts.value);
-  if (!exactRaw.ok) {
-    return exactRaw;
+  const exactSettings = rewriteSettings(settings, base, fonts.value);
+  if (!exactSettings.ok) {
+    return exactSettings;
   }
-  return replaceRaw(preset, exactRaw.value);
+  return replaceSettings(preset, exactSettings.value);
 }
 
 /** Checks one font file with Assets, and pins it under its name with the family Assets found. */
@@ -142,44 +168,31 @@ function verifiedFontFamily(descriptor: StoredBlob['descriptor']): string | null
   return descriptor.fontFamily;
 }
 
-/** Puts the rewritten settings back into the preset, in place of `raw`. */
-function replaceRaw(
-  preset: Json,
-  raw: Json,
-): AuthoringResult<Json> {
-  const fields = presetFields.safeParse(preset);
-  if (!fields.success) {
-    return malformedThemeFailure();
-  }
-  const rewritten = { ...fields.data, raw };
-  return success(rewritten);
-}
-
 /**
  * Rewrites the settings in exact form: the chrome kept, the base as an exact pin, each font
  * pinned and each colour as numbers.
  */
-function rewriteRaw(
-  raw: SourceRaw,
+function rewriteSettings(
+  settings: SourceSettings,
   base: Preset,
   fonts: readonly FontEntry[],
 ): AuthoringResult<Json> {
-  const chrome = checkChrome(raw.chrome);
+  const chrome = checkChrome(settings.chrome);
   if (!chrome.ok) {
     return chrome;
   }
-  const overrides = collect(Object.entries(raw.overrides), exactOverride);
+  const overrides = collect(Object.entries(settings.overrides), rewriteOverride);
   if (!overrides.ok) {
     return overrides;
   }
   const pin = { kind: base.kind, id: base.id, version: base.version, digest: base.digest };
-  const exactRaw: Json = {
+  const exactSettings: Json = {
     ...chrome.value,
     base: { kind: 'preset', pin },
     fonts: Object.fromEntries(fonts),
     overrides: Object.fromEntries(overrides.value),
   };
-  return success(exactRaw);
+  return success(exactSettings);
 }
 
 /** Checks the chrome is a Design System chrome name; no chrome written means no field. */
@@ -195,16 +208,14 @@ function checkChrome(chrome: unknown): AuthoringResult<ChromeField> {
 }
 
 /** Rewrites one override in exact form, and keeps it under its token ID. */
-function exactOverride([id, override]: readonly [
-  string,
-  ThemeOverride,
-]): AuthoringResult<OverrideEntry> {
+function rewriteOverride(entry: SourceOverrideEntry): AuthoringResult<OverrideEntry> {
+  const [tokenId, override] = entry;
   const exact = exactOverrideValue(override);
   if (!exact.ok) {
     return exact;
   }
-  const entry: OverrideEntry = [id, exact.value];
-  return success(entry);
+  const rewritten: OverrideEntry = [tokenId, exact.value];
+  return success(rewritten);
 }
 
 /** Keeps a number or pixel size as it is, and turns hex colour text into numbers. */
@@ -247,6 +258,22 @@ function hexAlpha(hex: string): number {
     return 1;
   }
   return hexChannel(hex, 7);
+}
+
+/**
+ * Puts the rewritten settings back into the preset, in place of `raw`. Refuses a preset whose
+ * fields aren't a JSON record: `invalid-input` at `theme`.
+ */
+function replaceSettings(
+  preset: Json,
+  settings: Json,
+): AuthoringResult<Json> {
+  const fields = presetFields.safeParse(preset);
+  if (!fields.success) {
+    return malformedThemeFailure();
+  }
+  const rewritten = { ...fields.data, raw: settings };
+  return success(rewritten);
 }
 
 /** Makes the mistake for a base Templates can't find: `invalid-input`, Templates' kept. */

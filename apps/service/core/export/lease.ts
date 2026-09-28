@@ -137,6 +137,7 @@ async function prepareSnapshot(
   signal: AbortSignal,
 ): Promise<ExportResult<ExportSnapshot>> {
   try {
+    // `await` keeps a rejected render inside this try, so it becomes one mistake.
     return await renderSnapshot(selected, dependencies, lease, signal);
   } catch {
     return unpreparedSnapshotFailure();
