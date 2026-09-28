@@ -26,21 +26,29 @@ type Slot = ProfileDescriptor['slots'][number];
  * the parts a source must have, its rules and its notes.
  */
 export function formatDescriptor(descriptor: ProfileDescriptor): string {
-  return [
-    `${descriptor.id} — ${descriptor.description}`,
+  const titleLine = `${descriptor.id} — ${descriptor.description}`;
+  const commandLines = profileCommands(descriptor.id).map(indentedLine);
+  const slotLines = descriptor.slots.map(slotLine);
+  const appendixRule = appendixLine(descriptor.appendix);
+  const conventionLines = descriptor.conventions.map(indentedLine);
+  const noteLines = descriptor.notes.map(noteLine);
+  // Each '' is a blank line between two parts.
+  const lines = [
+    titleLine,
     '',
     'Commands:',
-    ...profileCommands(descriptor.id).map((command) => `  ${command}`),
+    ...commandLines,
     '',
     'Required logical documents:',
-    ...descriptor.slots.map(slotLine),
-    appendixLine(descriptor.appendix),
+    ...slotLines,
+    appendixRule,
     '',
     'Structural conventions:',
-    ...descriptor.conventions.map((convention) => `  ${convention}`),
+    ...conventionLines,
     '',
-    ...descriptor.notes.map((note) => `Note: ${note}`),
-  ].join('\n');
+    ...noteLines,
+  ];
+  return lines.join('\n');
 }
 
 /**
@@ -59,7 +67,7 @@ export function formatLintSummary(
     case 'unsupported-source':
       return `${profile} requires a full canvas 1 document.`;
     default:
-      return unsupportedStatus(profile, outcome);
+      return unsupportedStatusSummary(profile, outcome);
   }
 }
 
@@ -72,23 +80,12 @@ export function formatLintReport(
   profile: ProfileId,
   outcome: FailedLint,
 ): string {
-  const findings = outcome.status === 'failed' ? outcome.findings : [];
-  return `${formatLintSummary(profile, outcome)}\n${findings.map(findingLine).join('\n')}`;
+  const summaryLine = formatLintSummary(profile, outcome);
+  const findingsText = findingLines(outcome).join('\n');
+  return `${summaryLine}\n${findingsText}`;
 }
 
-/**
- * The summary for a lint status of no known kind. Language's closed `ProfileLintResult` makes this
- * unreachable; the `never` type proves every status above is handled.
- */
-function unsupportedStatus(
-  profile: ProfileId,
-  result: never,
-): string {
-  void result;
-  return `${profile} structural lint returned an unsupported status.`;
-}
-
-/** The describe, scaffold and lint command lines for one profile, as `profile describe` lists them. */
+/** Writes the describe, scaffold and lint command lines for one profile. */
 function profileCommands(profile: ProfileId): readonly string[] {
   return [
     `canvas profile describe ${profile}`,
@@ -97,17 +94,50 @@ function profileCommands(profile: ProfileId): readonly string[] {
   ];
 }
 
-/** One required slot as `<number>. @<section> (<mode>) — <description>`. */
+/** Writes a line indented by two spaces, as the command and convention lists show them. */
+function indentedLine(line: string): string {
+  return `  ${line}`;
+}
+
+/** Writes one required slot as `<number>. @<section> (<mode>) — <description>`. */
 function slotLine(slot: Slot): string {
   return `  ${slot.number}. @${slot.id} (${slot.mode}) — ${slot.description}`;
 }
 
-/** The appendix rule as `<number>.N appendix (<modes>) — <description>`. */
+/** Writes the appendix rule as `<number>.N appendix (<modes>) — <description>`. */
 function appendixLine(appendix: ProfileDescriptor['appendix']): string {
-  return `  ${appendix.number}.N appendix (${appendix.modes.join('|')}) — ${appendix.description}`;
+  const modes = appendix.modes.join('|');
+  return `  ${appendix.number}.N appendix (${modes}) — ${appendix.description}`;
 }
 
-/** One finding as `PROFILE <path> <line>:<column> <message>`. */
+/** Writes one note as `Note: <note>`. */
+function noteLine(note: string): string {
+  return `Note: ${note}`;
+}
+
+/**
+ * Writes the summary for a lint status Language never sends. Its `never` parameter makes the
+ * compiler prove `formatLintSummary` handles every status.
+ */
+function unsupportedStatusSummary(
+  profile: ProfileId,
+  outcome: never,
+): string {
+  void outcome;
+  return `${profile} structural lint returned an unsupported status.`;
+}
+
+/** Writes one line per broken rule. A patch broke no rules, so it gets none. */
+function findingLines(outcome: FailedLint): readonly string[] {
+  if (outcome.status === 'unsupported-source') {
+    return [];
+  }
+  return outcome.findings.map(findingLine);
+}
+
+/** Writes one broken rule as `PROFILE <path> <line>:<column> <message>`. */
 function findingLine(finding: ProfileFinding): string {
-  return `PROFILE ${finding.path} ${finding.span.start.line}:${finding.span.start.column} ${finding.message}`;
+  const start = finding.span.start;
+  const position = `${start.line}:${start.column}`;
+  return `PROFILE ${finding.path} ${position} ${finding.message}`;
 }

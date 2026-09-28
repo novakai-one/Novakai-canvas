@@ -16,7 +16,7 @@ import type { CollectionProfiles } from '../../contract/ports/collection-profile
 import type { LocalFiles } from '../../contract/ports/local-files.js';
 import type { SourceParser } from '../../contract/ports/source-parser.js';
 import type { ProfileId } from '../../contract/brands.js';
-import type { Result } from '../../contract/errors.js';
+import type { LocalFailure, Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 import { parseSource } from '../shared/parse-source.js';
 import { unsupported } from '../shared/results.js';
@@ -37,6 +37,9 @@ type ScaffoldCommand = Extract<ProfileCommand, { readonly name: 'profile-scaffol
 /** `profile lint`: the one profile command that reads a file. */
 type LintCommand = Extract<ProfileCommand, { readonly name: 'profile-lint' }>;
 
+/** What to do next after a lint that did not pass. */
+const profileStructureRecovery = 'Fix the reported structural findings and rerun profile lint.';
+
 /**
  * Runs one profile command and gives back the text to print: the profile's rules (`describe`),
  * a starter source (`scaffold`), or the one-line lint summary (`lint`).
@@ -47,12 +50,11 @@ export function answerProfileCommand(
   command: ProfileCommand,
   dependencies: ProfileDependencies,
 ): Promise<Result<string>> {
-  const profiles = dependencies.profiles;
   switch (command.name) {
     case 'profile-describe':
-      return Promise.resolve(success(formatDescriptor(profiles.describe(command.profile))));
+      return Promise.resolve(describeProfile(command.profile, dependencies.profiles));
     case 'profile-scaffold':
-      return Promise.resolve(success(scaffoldStarter(command, profiles)));
+      return Promise.resolve(scaffoldStarter(command, dependencies.profiles));
     case 'profile-lint':
       return lintFile(command, dependencies);
     default:
@@ -60,41 +62,71 @@ export function answerProfileCommand(
   }
 }
 
-/** The profile's starter source, named with the command's collection ID and title. */
+/**
+ * Writes the profile's rules as `profile describe` prints them. It can't fail; it answers with a
+ * `Result` so all three profile commands answer the same way.
+ */
+function describeProfile(
+  profile: ProfileId,
+  profiles: CollectionProfiles,
+): Result<string> {
+  const descriptor = profiles.describe(profile);
+  const description = formatDescriptor(descriptor);
+  return success(description);
+}
+
+/**
+ * Writes the profile's starter source, named with the typed collection ID and title. It can't
+ * fail; it answers with a `Result` like the other profile commands.
+ */
 function scaffoldStarter(
   command: ScaffoldCommand,
   profiles: CollectionProfiles,
-): string {
+): Result<string> {
   const starter = { collection: command.collection, title: command.title };
-  return profiles.scaffold(command.profile, starter);
+  const starterSource = profiles.scaffold(command.profile, starter);
+  return success(starterSource);
 }
 
-/** Read, parse and lint one file. */
+/** Reads the file, parses it with Language, then checks it against the profile. */
 async function lintFile(
   command: LintCommand,
   dependencies: ProfileDependencies,
 ): Promise<Result<string>> {
-  const source = await dependencies.files.readSource(command.file);
-  if (!source.ok) return source;
-  const parsed = parseSource(dependencies.language, source.value);
-  if (!parsed.ok) return parsed;
-  return lintParsedProfile(command.profile, parsed.value, dependencies.profiles);
+  const sourceText = await dependencies.files.readSource(command.file);
+  if (!sourceText.ok) {
+    return sourceText;
+  }
+  const parsedSource = parseSource(dependencies.language, sourceText.value);
+  if (!parsedSource.ok) {
+    return parsedSource;
+  }
+  return lintParsedSource(command.profile, parsedSource.value, dependencies.profiles);
 }
 
 /**
- * The passed summary, or `profile-structure` with the summary and every finding. A patch source
- * is `profile-structure` with no findings.
+ * Checks the parsed source against the profile, and gives back the summary line when it passes.
+ * A source that breaks a rule, or is only a patch, is a `profile-structure` mistake.
  */
-function lintParsedProfile(
+function lintParsedSource(
   profile: ProfileId,
   source: ParsedSource,
   profiles: CollectionProfiles,
 ): Result<string> {
-  const result = profiles.lint(profile, source);
-  if (result.status === 'passed') return success(formatLintSummary(profile, result));
+  const lintOutcome = profiles.lint(profile, source);
+  if (lintOutcome.status !== 'passed') {
+    const lintReport = formatLintReport(profile, lintOutcome);
+    return profileStructureFailure(lintReport);
+  }
+  const summary = formatLintSummary(profile, lintOutcome);
+  return success(summary);
+}
+
+/** Makes the mistake for a lint that did not pass, with the report as its message. */
+function profileStructureFailure(lintReport: string): Result<never, LocalFailure> {
   return failure({
     code: 'profile-structure',
-    message: formatLintReport(profile, result),
-    recovery: 'Fix the reported structural findings and rerun profile lint.',
+    message: lintReport,
+    recovery: profileStructureRecovery,
   });
 }
