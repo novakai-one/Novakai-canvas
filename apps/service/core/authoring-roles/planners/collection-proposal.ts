@@ -24,6 +24,7 @@ import type {
   WorkspaceReader,
 } from '../../../contract/ports/workspace.js';
 import { success } from '../../../contract/errors.js';
+import type { RecordKind } from '../../workspace/records.js';
 import { checkProposal, capabilityRefusalFailure } from './change-payload.js';
 
 /** What planning a collection's save needs. */
@@ -50,6 +51,14 @@ export function createCollectionPlanner(
   };
 }
 
+/** One record the save puts: its key, its value, and the stored files it keeps (as digests). */
+interface PlannedWrite {
+  readonly kind: 'put';
+  readonly key: { readonly kind: RecordKind; readonly id: string };
+  readonly value: unknown;
+  readonly resources: readonly string[];
+}
+
 /** Plans the collection's write, keeping the stored files it needs, plus its catalog entry if new. */
 function proposeCollectionSave(
   snapshot: Snapshot,
@@ -65,13 +74,13 @@ function proposeCollectionSave(
     return fileDigests;
   }
   const collectionWrite = plannedCollectionWrite(collection, fileDigests.value);
-  return proposeWrites(collection, collectionWrite, contents.value, dependencies);
+  return proposeStoredOrNewCollection(collection, collectionWrite, contents.value, dependencies);
 }
 
-/** Plans the collection's write alone when it is already stored, and adds its catalog entry if not. */
-function proposeWrites(
+/** A stored collection gets its write alone; a new one also gets its catalog entry. */
+function proposeStoredOrNewCollection(
   collection: Collection,
-  collectionWrite: unknown,
+  collectionWrite: PlannedWrite,
   contents: WorkspaceContents,
   dependencies: CollectionPlannerDependencies,
 ): AuthoringResult<Proposal> {
@@ -84,7 +93,7 @@ function proposeWrites(
 /** Asks Library to add the new collection to the catalog, and plans both writes. */
 function proposeNewCollection(
   collection: Collection,
-  collectionWrite: unknown,
+  collectionWrite: PlannedWrite,
   contents: WorkspaceContents,
   dependencies: CollectionPlannerDependencies,
 ): AuthoringResult<Proposal> {
@@ -128,7 +137,7 @@ function isStoredCollection(
 function plannedCollectionWrite(
   collection: Collection,
   fileDigests: readonly AuthoringDigest[],
-): unknown {
+): PlannedWrite {
   return {
     kind: 'put',
     key: { kind: 'collection', id: collection.id },
@@ -138,7 +147,7 @@ function plannedCollectionWrite(
 }
 
 /** Plans the write of the catalog Library planned. */
-function plannedCatalogWrite(organisation: Organisation): unknown {
+function plannedCatalogWrite(organisation: Organisation): PlannedWrite {
   return {
     kind: 'put',
     key: { kind: 'catalog', id: organisation.id },
@@ -149,7 +158,7 @@ function plannedCatalogWrite(organisation: Organisation): unknown {
 
 /** Checks the writes fit Authoring's limits, with no reads and the collection's ID as the diff. */
 function checkCollectionProposal(
-  writes: readonly unknown[],
+  writes: readonly PlannedWrite[],
   collectionId: string,
 ): AuthoringResult<Proposal> {
   const planned = { writes, reads: [], diff: { collection: collectionId }, warnings: [] };

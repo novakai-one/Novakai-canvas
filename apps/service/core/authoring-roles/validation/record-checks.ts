@@ -64,11 +64,10 @@ export function requireExactFiles(
   record: StoredRecord,
   expectedDigests: readonly string[],
 ): AuthoringResult<void> {
-  const keepsExactly = retainsExactly(record, expectedDigests);
-  return requireFact(
-    keepsExactly,
-    `Resource retention differs for ${record.key.kind}:${record.key.id}`,
-  );
+  if (!retainsExactly(record, expectedDigests)) {
+    return retentionDiffersFailure(record);
+  }
+  return success(undefined);
 }
 
 /**
@@ -111,4 +110,11 @@ function missingRecordFailure(
   id: string,
 ): AuthoringResult<never> {
   return invariantViolationFailure(`Missing canonical record ${kind}:${id}`);
+}
+
+/** Makes the mistake for a record that doesn't keep exactly the stored files it should. */
+function retentionDiffersFailure(record: StoredRecord): AuthoringResult<never> {
+  return invariantViolationFailure(
+    `Resource retention differs for ${record.key.kind}:${record.key.id}`,
+  );
 }

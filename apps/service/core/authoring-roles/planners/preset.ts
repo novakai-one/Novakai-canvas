@@ -14,6 +14,7 @@ import type {
   AuthoringResult,
   IntentPlanner,
   Proposal,
+  RecordKey,
   Request,
   Snapshot,
 } from '../../../contract/records/capability-types.js';
@@ -46,6 +47,14 @@ export function createPresetPlanner(
     id: plannerId.parse('preset'),
     plan: async (request, snapshot) => planPresetChange(request, snapshot, resourceCommands),
   };
+}
+
+/** One record the save puts: its key, its value, and the stored files it keeps (as digests). */
+interface PlannedWrite {
+  readonly kind: 'put';
+  readonly key: RecordKey;
+  readonly value: unknown;
+  readonly resources: readonly string[];
 }
 
 /** The fields of a record key the comparison reads. */
@@ -174,11 +183,11 @@ function proposeInsertion(
   prepared: PresetPreparation,
   snapshot: Snapshot,
 ): AuthoringResult<Proposal> {
-  const metadataWrite = raisePresetRevision(snapshot);
+  const metadataWrite = planRaisedMetadataWrite(snapshot);
   if (!metadataWrite.ok) {
     return metadataWrite;
   }
-  const presetWrite = {
+  const presetWrite: PlannedWrite = {
     kind: 'put',
     key: prepared.key,
     value: prepared.record,
@@ -194,7 +203,7 @@ function proposeInsertion(
 }
 
 /** Plans the write of the workspace's details with `presetRevision` raised by one. */
-function raisePresetRevision(snapshot: Snapshot): AuthoringResult<unknown> {
+function planRaisedMetadataWrite(snapshot: Snapshot): AuthoringResult<PlannedWrite> {
   const record = findLiveRecord(snapshot, 'workspace', METADATA_RECORD_ID);
   if (record === undefined) {
     return missingMetadataFailure();
@@ -204,8 +213,13 @@ function raisePresetRevision(snapshot: Snapshot): AuthoringResult<unknown> {
     return invalidMetadataFailure();
   }
   const presetRevision = metadata.data.presetRevision + 1;
-  const raised = { ...metadata.data, presetRevision };
-  const metadataWrite = { kind: 'put', key: record.key, value: raised, resources: [] };
+  const raisedMetadata = { ...metadata.data, presetRevision };
+  const metadataWrite: PlannedWrite = {
+    kind: 'put',
+    key: record.key,
+    value: raisedMetadata,
+    resources: [],
+  };
   return success(metadataWrite);
 }
 
@@ -266,10 +280,8 @@ function malformedPresetCommandFailure(): AuthoringResult<never> {
  */
 function preparationFailure(preparationMistake: ResourceDiagnostic): AuthoringResult<never> {
   const code = AUTHORING_CODE[preparationMistake.code];
-  return {
-    ok: false,
-    error: { ...preparationMistake, code, targets: [], traceId: null },
-  };
+  const authoringMistake = { ...preparationMistake, code, targets: [], traceId: null };
+  return { ok: false, error: authoringMistake };
 }
 
 /** Makes the mistake for a preset whose second preparation came out different. */

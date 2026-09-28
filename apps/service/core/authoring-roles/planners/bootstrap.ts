@@ -15,13 +15,20 @@ import type {
   Json,
   Preset,
   Proposal,
+  RecordKey,
   Request,
 } from '../../../contract/records/capability-types.js';
+import type { WorkspaceId } from '../../../contract/brands.js';
 import type { NewWorkspaceSeed } from '../../../contract/records/workspace/startup.js';
 import { initializeCommand } from '../../../contract/records/planning/commands.js';
 import { actorId, plannerId, requestSchema } from '../../../contract/schemas.js';
 import { authoringFailure, success } from '../../../contract/errors.js';
-import { MAIN_CATALOG_ID, METADATA_RECORD_ID, presetRecordId } from '../../workspace/records.js';
+import {
+  MAIN_CATALOG_ID,
+  METADATA_RECORD_ID,
+  presetRecordId,
+  type RecordKind,
+} from '../../workspace/records.js';
 import { listPresetFileDigests } from '../../presets/resources.js';
 import { readChangePayload, checkProposal } from './change-payload.js';
 
@@ -59,6 +66,29 @@ export function buildSeedRequest(seed: NewWorkspaceSeed): AuthoringResult<Reques
 
 /** One of the seed's planned writes, after Authoring's proposal check. */
 type SeedWrite = Proposal['writes'][number];
+
+/** One record the seed puts: its key, its value, and the stored files it keeps (as digests). */
+interface PlannedWrite {
+  readonly kind: 'put';
+  readonly key: { readonly kind: RecordKind; readonly id: string };
+  readonly value: unknown;
+  readonly resources: readonly string[];
+}
+
+/**
+ * The installation request before Authoring's request check. Its request ID and planner name are
+ * still plain text; the check turns them into checked IDs.
+ */
+interface InstallationEnvelope {
+  readonly workspace: WorkspaceId;
+  readonly request: string;
+  readonly version: 1;
+  readonly actor: Request['actor'];
+  readonly assets: readonly [];
+  readonly scope: readonly RecordKey[];
+  readonly expected: readonly { readonly key: RecordKey; readonly version: 'absent' }[];
+  readonly intent: { readonly kind: 'change'; readonly planner: string; readonly payload: Json };
+}
 
 /** Checks the request is the initialize change, then plans the seed's first records. */
 function planBootstrap(
@@ -102,7 +132,7 @@ function buildInstallationRequest(
 function installationEnvelope(
   seed: NewWorkspaceSeed,
   writes: readonly SeedWrite[],
-): unknown {
+): InstallationEnvelope {
   return {
     workspace: seed.workspace,
     request: 'initialize-workspace',
@@ -123,7 +153,7 @@ function proposeSeedRecords(seed: NewWorkspaceSeed): AuthoringResult<Proposal> {
 }
 
 /** Plans the write of the workspace's details record. */
-function metadataWrite(seed: NewWorkspaceSeed): unknown {
+function metadataWrite(seed: NewWorkspaceSeed): PlannedWrite {
   const details = {
     schemaVersion: 1,
     id: seed.workspace,
@@ -139,7 +169,7 @@ function metadataWrite(seed: NewWorkspaceSeed): unknown {
 }
 
 /** Plans the write of the empty `main` catalog. */
-function emptyCatalogWrite(): unknown {
+function emptyCatalogWrite(): PlannedWrite {
   const emptyCatalog = {
     schemaVersion: 1,
     id: MAIN_CATALOG_ID,
@@ -156,7 +186,7 @@ function emptyCatalogWrite(): unknown {
 }
 
 /** Plans one preset's write at `preset:<digest>`, keeping a theme's fonts or a recipe's files. */
-function presetWrite(preset: Preset): unknown {
+function presetWrite(preset: Preset): PlannedWrite {
   return {
     kind: 'put',
     key: { kind: 'preset', id: presetRecordId(preset.digest) },
