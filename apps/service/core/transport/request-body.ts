@@ -8,8 +8,7 @@
  * stops reading once the body is too big, but leaves the socket open so the refusal can be sent.
  * It never parses the text; each route does that.
  *
- * The one mistake it can make is `invalid-input` at `body`, meaning the body was wrong (see
- * `contract/errors.ts`).
+ * The one mistake it can make is `invalid-input` at `body`, meaning the body was wrong.
  */
 import { httpBodyLimit } from '../../contract/records/transport/http.js';
 import { andThen, failure, success, type Result } from '../../contract/errors.js';

@@ -5,8 +5,7 @@
  * bodies. For example, a body sent as `text/plain`, or `{"version": 1` cut off, is refused.
  *
  * This file checks that `Content-Type` is `application/json`, then parses the text as JSON. It
- * never checks the JSON's shape; each route does that. The size and UTF-8 were already checked
- * when the body was read (request-body.ts).
+ * never checks the JSON's shape; each route does that.
  *
  * A refusal is `invalid-input` at `content-type` or at `body`: the part of the request that was
  * wrong (see `contract/errors.ts`).

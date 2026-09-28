@@ -8,8 +8,7 @@
  * two capabilities use the same name, the type is renamed after its owner. For example, Authoring's
  * `Result` is `AuthoringResult` and Export's `Snapshot` is `ExportSnapshot`.
  *
- * Declarations only. Each capability keeps its own mistakes; Authoring decides whether a change is
- * saved.
+ * Each capability keeps its own mistakes; Authoring decides whether a change is saved.
  */
 export type {
   Authoring,

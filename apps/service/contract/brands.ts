@@ -8,10 +8,7 @@
  * A brand fixes that: a type only a check can make. `hostPath.parse('/tmp/ws')` gives a `HostPath`;
  * a plain string is not one. This file declares the service's own brands, each with the one place
  * that makes it, and passes on the capabilities' ID types. It also adds and removes the `sha256:`
- * prefix Model puts on digests (file fingerprints), which Assets, Templates and Authoring leave
- * off.
- *
- * It never reads or writes anything.
+ * prefix on digests (file fingerprints). It never reads or writes anything.
  */
 import { z } from 'zod';
 import type { collectionId } from '@novakai/canvas-model';

@@ -8,8 +8,7 @@
  * called `local`), serves it at `http://127.0.0.1:<port>` and prints that address. On Ctrl-C or
  * SIGTERM it closes the server, then the workspace.
  *
- * It never prints a secret or a request body. On a failure it prints the code, message and what to
- * do next, and exits with code 1.
+ * It never prints a secret or a request body.
  */
 import { once } from 'node:events';
 import { parseArgs } from 'node:util';

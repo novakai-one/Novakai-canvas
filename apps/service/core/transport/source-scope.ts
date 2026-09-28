@@ -5,12 +5,10 @@
  * which. For example, `?section=m-review-map` asks for one section, and `?section=a&object=b` is
  * refused because it asks for two things at once.
  *
- * This file reads that choice from the query and checks each ID's format (the ID rules in
- * `contract/schemas.ts`). It never reads the collection, so it can't tell whether the section
- * exists.
+ * This file reads that choice from the query and checks each ID's format. It never reads the
+ * collection, so it can't tell whether the section exists.
  *
- * Each step answers a `Result` (see `contract/errors.ts`). Every mistake is `invalid-input` at
- * `scope`, the part of the request that was wrong.
+ * Every mistake is `invalid-input` at `scope`, the part of the request that was wrong.
  */
 import type { Scope } from '../../contract/records/capability-types.js';
 import type { ApiQuery } from '../../contract/records/transport/protocol.js';

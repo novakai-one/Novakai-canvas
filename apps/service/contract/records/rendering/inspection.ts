@@ -8,8 +8,6 @@
  * This file holds the check for that report, `inspectionReport`, and its type. A report is either
  * valid (the layout's warnings and counts) or invalid (why the render was refused, and every count
  * 0). core/rendering/inspection.ts builds it.
- *
- * Declarations only.
  */
 import { z } from 'zod';
 import { failureSource } from '../transport/failure-source.js';

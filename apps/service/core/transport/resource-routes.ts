@@ -7,9 +7,8 @@
  * exact versions), `prepare` (check a theme or recipe before it is saved) and `instantiate` (turn
  * a recipe into DSL).
  *
- * This file is those six routes. Each reads a JSON body and passes it to the resource commands;
- * `freeze`, `prepare` and `instantiate` also get the workspace as saved now (the snapshot). The
- * resource commands do any storing; no diagram changes until a change is applied through Authoring.
+ * This file is those six routes. Each reads a JSON body and passes it to the resource commands; no
+ * diagram changes until a change is applied through Authoring.
  */
 import type { ApiCall, RouteKey } from '../../contract/records/transport/protocol.js';
 import type { HttpOutcome } from '../../contract/records/transport/http-codes.js';

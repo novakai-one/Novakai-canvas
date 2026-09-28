@@ -7,12 +7,8 @@
  *
  * This file decides who gets in: the browser with its session cookie, the CLI with its token, and
  * only at this server's own address (the `Host` header). It also checks a change request: its
- * author must be the caller, and it must be a kind of change the caller may send (the CLI may send
- * a DSL change, but not a raw Model change). It never keeps or compares the secrets itself
- * (`HttpSecurity` does), and never runs a change.
- *
- * Each check answers a `Result` (see `contract/errors.ts`). A mistake names the part of the request
- * it is about: `unauthorized` at `host` means the `Host` header was wrong.
+ * author must be the caller, and it must be a kind of change the caller may send. It never keeps or
+ * compares the secrets itself, and never runs a change.
  */
 import type { Caller, HeaderValue, HttpMetadata } from '../../contract/records/transport/http.js';
 import type { HttpAdmission, HttpSecurity } from '../../contract/ports/transport.js';

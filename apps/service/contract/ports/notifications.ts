@@ -6,10 +6,8 @@
  * passes it on to the browsers.
  *
  * This file declares the channel between them: `CommittedChange` (what was saved) and
- * `ChangeChannel` (announce, listen, close). adapters/notifications builds it.
- *
- * Declarations only. A change is only a hint: a listener reads the workspace again to see what
- * changed, and keeps its own unsaved drafts.
+ * `ChangeChannel` (announce, listen, close). A change is only a hint: a listener reads the
+ * workspace again to see what changed, and keeps its own unsaved drafts.
  */
 import type { Notifications, Receipt } from '../records/capability-types.js';
 import type { WorkspaceId } from '../brands.js';

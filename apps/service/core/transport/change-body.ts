@@ -8,9 +8,6 @@
  * This file checks the body in that order and gives back the change, ready for Authoring (which
  * saves changes) to run. It never runs the change. A body made before a restart is refused
  * (`conflict`); the caller must check whether the change already landed before sending it again.
- *
- * Each step answers a `Result` (see `contract/errors.ts`). A mistake names the part of the body it
- * is about: `invalid-input` at `body` means the body itself was wrong.
  */
 import type { AdmittedChange } from '../../contract/records/transport/protocol.js';
 import type { BodyCheckContext } from '../../contract/ports/transport.js';

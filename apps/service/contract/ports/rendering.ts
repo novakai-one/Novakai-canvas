@@ -8,8 +8,7 @@
  *
  * This file declares each step of that trip: build the job (`RenderJobs`), send it
  * (`RenderTransport`), check the reply (`RenderReader`), send and check (`DiagramProducer`), and
- * all three for a saved collection (`CollectionRenderer`). core/rendering builds most of them. A
- * failed render leaves the caller's last good picture in place.
+ * all three for a saved collection (`CollectionRenderer`).
  */
 import type { Result } from '../errors.js';
 import type { AuthoringResult, Collection } from '../records/capability-types.js';

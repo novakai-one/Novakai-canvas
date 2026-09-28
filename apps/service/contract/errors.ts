@@ -7,12 +7,7 @@
  *
  * This file gives the service one way to answer: a `Result`, either `{ ok: true, value }` (it
  * worked) or `{ ok: false, error }` (the mistake it found, a `Diagnostic`). It lists the six
- * failure codes and the helpers that build and chain Results. Parts that Authoring calls, such as
- * the planners and render-job building, answer Authoring's `Result` instead. Every code an HTTP
- * answer can carry is in records/transport/http-codes.ts.
- *
- * It never throws. Every failure advises: keep your draft and request ID, fix the cause, and check
- * the receipt before trying again.
+ * failure codes and the helpers that build and chain Results. It never throws.
  */
 import type { FailureSource } from './records/transport/failure-source.js';
 

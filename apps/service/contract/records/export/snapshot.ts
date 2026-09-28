@@ -3,13 +3,12 @@
  *
  * To make an SVG or PNG, Export (the capability) asks the service's exporter for one collection at
  * one revision, for example `my-diagram` at revision 3. The exporter finds that collection and
- * holds it while Export builds the file. Several core/export files pass the same values between
- * them.
+ * holds it while Export builds the file.
  *
  * This file names those values: what Export asks for (`SnapshotIdentity`), the collection found
  * (`SelectedCollection`), and how Export says it found a mistake (`ExportFailure`).
  *
- * Declarations only. core/export has the rules, and Export keeps its own mistakes.
+ * core/export has the rules, and Export keeps its own mistakes.
  */
 import type { Collection, ExportDiagnostic, ExportSnapshotReader } from '../capability-types.js';
 import type { WorkspaceContents } from '../workspace/contents.js';
