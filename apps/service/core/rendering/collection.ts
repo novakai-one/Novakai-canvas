@@ -13,7 +13,7 @@ import type { CollectionId, WorkspaceId } from '../../contract/brands.js';
 /** The reads rendering needs; the session facade passes its owners, which satisfy this bag. */
 export interface CollectionReads {
   readonly workspace: WorkspaceId;
-  readonly views: Pick<WorkspaceReader, 'read'>;
+  readonly reader: Pick<WorkspaceReader, 'read'>;
   readonly renderer: CollectionRenderer;
   authoring(signal: AbortSignal): Pick<Authoring, 'read'>;
 }
@@ -30,7 +30,7 @@ export async function renderCollection(
   const snapshot = await reads.authoring(signal).read(reads.workspace);
   if (!snapshot.ok)
     return failure('unavailable', snapshot.error.path, snapshot.error.message, snapshot.error);
-  const view = reads.views.read(snapshot.value);
+  const view = reads.reader.read(snapshot.value);
   if (!view.ok) return failure('unavailable', view.error.path, view.error.message, view.error);
   return renderSelected(id, signal, view.value, reads);
 }

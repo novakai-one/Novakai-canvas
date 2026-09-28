@@ -22,8 +22,8 @@ import { stripHistoryContents } from './history-versions.js';
 /**
  * Saves `change` through Authoring, then reads the workspace back without its history contents.
  * `change` is the Authoring request to save (not the HTTP request); `options` are the apply
- * options as sent. Authoring checks both. A refused change answers Authoring's failure. A failed
- * read-back answers `storage-unavailable` at `snapshot`, yet the change stays saved.
+ * options as sent. Authoring checks both. A refused change answers Authoring's failure. If only the
+ * read-back fails, it answers `storage-unavailable`, but the change stays saved.
  */
 export async function commitThenRead(
   authoring: Authoring,

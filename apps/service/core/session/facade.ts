@@ -33,8 +33,8 @@ export interface SessionDependencies {
   readonly builtins: PreparedBuiltins;
   /** The commands behind `/api/v1/resources/…`, handed on as they are. */
   readonly resources: ResourceCommands;
-  /** Checks a snapshot's collections, catalog and presets; render and inspect use it. */
-  readonly views: WorkspaceReader;
+  /** Reads the saved workspace's checked collections, catalog and presets (workspace/reader.ts). */
+  readonly reader: WorkspaceReader;
   /** Renders one checked collection. */
   readonly renderer: CollectionRenderer;
   /** Makes one export file (see `Exporter`). */

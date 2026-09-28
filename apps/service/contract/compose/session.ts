@@ -46,7 +46,7 @@ export function buildSession(
     workspace: inputs.options.workspace,
     builtins: inputs.builtins,
     resources: shared.commands,
-    views: shared.reader,
+    reader: shared.reader,
     changes,
     lifetime,
     readSignal: UNCANCELLED,
