@@ -16,6 +16,7 @@ import type {
   HttpOutcome,
 } from '../../contract/records/transport/http-codes.js';
 import type { Generation } from '../../contract/brands.js';
+import { success } from '../../contract/errors.js';
 
 /** A status for a refused outcome. */
 type FailureStatus = Exclude<HttpStatus, 200>;
@@ -25,7 +26,9 @@ type FailureStatus = Exclude<HttpStatus, 200>;
  * code, such as 422 for `invalid-input` or 409 for `conflict`. Never fails.
  */
 export function chooseHttpStatus(outcome: HttpOutcome): HttpStatus {
-  if (outcome.ok) return 200;
+  if (outcome.ok) {
+    return 200;
+  }
   return FAILURE_STATUS[outcome.error.code];
 }
 
@@ -37,13 +40,17 @@ export function buildTransportResponse(
   outcome: HttpOutcome,
   generation: Generation,
 ): TransportResponse {
-  return { version: 1, generation, outcome: wireValue(outcome) };
+  const sentOutcome = outcomeAsSent(outcome);
+  return { version: 1, generation, outcome: sentOutcome };
 }
 
-/** The outcome as sent: a failure unchanged, a success with `undefined` replaced by `null`. */
-function wireValue(outcome: HttpOutcome): HttpOutcome {
-  if (!outcome.ok) return outcome;
-  return { ok: true, value: outcome.value ?? null };
+/** Readies the outcome to send: a failure unchanged, a success with `undefined` replaced by `null`. */
+function outcomeAsSent(outcome: HttpOutcome): HttpOutcome {
+  if (!outcome.ok) {
+    return outcome;
+  }
+  const sentValue = outcome.value ?? null;
+  return success(sentValue);
 }
 
 /**

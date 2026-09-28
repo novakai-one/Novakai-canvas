@@ -29,8 +29,8 @@ export interface ResourceRouteDependencies {
   readonly resources: ResourceCommands;
 }
 
-/** One resource command run on the admitted body. */
-type ResourceHandler = (input: unknown) => Promise<HttpOutcome>;
+/** One resource command, run on the body read as JSON. */
+type BodyCommand = (json: unknown) => Promise<HttpOutcome>;
 /** The resource commands that bind the current snapshot. */
 type SnapshotCommand = 'freeze' | 'preparePreset' | 'instantiate';
 
@@ -44,44 +44,53 @@ export function resourceRoutes(
 ): Readonly<Record<ResourceRouteKey, RouteHandler>> {
   const { resources } = dependencies;
   return Object.freeze({
-    'POST /api/v1/resources/stage': resourceRoute((input) => resources.storeUpload(input)),
-    'POST /api/v1/resources/restore': resourceRoute((input) => resources.restore(input)),
-    'POST /api/v1/resources/blob': resourceRoute(async (input) => resources.readFile(input)),
-    'POST /api/v1/resources/freeze': resourceRoute(onSnapshot(dependencies, 'freeze')),
-    'POST /api/v1/resources/prepare': resourceRoute(onSnapshot(dependencies, 'preparePreset')),
-    'POST /api/v1/resources/instantiate': resourceRoute(onSnapshot(dependencies, 'instantiate')),
+    'POST /api/v1/resources/stage': resourceRoute((json) => resources.storeUpload(json)),
+    'POST /api/v1/resources/restore': resourceRoute((json) => resources.restore(json)),
+    'POST /api/v1/resources/blob': resourceRoute(async (json) => resources.readFile(json)),
+    'POST /api/v1/resources/freeze': resourceRoute((json) =>
+      runOnSnapshot(json, dependencies, 'freeze'),
+    ),
+    'POST /api/v1/resources/prepare': resourceRoute((json) =>
+      runOnSnapshot(json, dependencies, 'preparePreset'),
+    ),
+    'POST /api/v1/resources/instantiate': resourceRoute((json) =>
+      runOnSnapshot(json, dependencies, 'instantiate'),
+    ),
   });
 }
 
-/** The route that runs `handler` on the body read as JSON (`runOnJsonBody`). */
-function resourceRoute(handler: ResourceHandler): RouteHandler {
-  return jsonRoute((call) => runOnJsonBody(call, handler));
+/** Makes the route that reads the body as JSON, then runs `command` on it. */
+function resourceRoute(command: BodyCommand): RouteHandler {
+  return jsonRoute((call) => runOnJsonBody(call, command));
 }
 
 /**
- * Runs `handler` on the body read as JSON. Fails with `invalid-input` at `content-type` or `body`
- * as `readJsonBody` (json-body.ts). The server authenticates before reading the body.
+ * Reads the body as JSON, then runs `command` on it. Fails with `invalid-input` at `content-type`
+ * or `body` as `readJsonBody` (json-body.ts). The server authenticates before reading the body.
  */
 async function runOnJsonBody(
   call: ApiCall,
-  handler: ResourceHandler,
+  command: BodyCommand,
 ): Promise<HttpOutcome> {
-  const input = readJsonBody(call.body, call.metadata.contentType, 'resource');
-  if (!input.ok) return input;
-  return handler(input.value);
+  const json = readJsonBody(call.body, call.metadata.contentType, 'resource');
+  if (!json.ok) {
+    return json;
+  }
+  return command(json.value);
 }
 
 /**
- * A handler that reads the current snapshot, then runs `command` on it. The command stays
- * mutation-free until an Authoring apply. Authoring's read failures pass through.
+ * Reads the current snapshot, then runs `command` on the body and that snapshot. The command
+ * changes no diagram until an Authoring apply. Authoring's read failures pass through.
  */
-function onSnapshot(
+async function runOnSnapshot(
+  json: unknown,
   dependencies: ResourceRouteDependencies,
   command: SnapshotCommand,
-): ResourceHandler {
-  return async (input) => {
-    const snapshot = await dependencies.session.read();
-    if (!snapshot.ok) return snapshot;
-    return dependencies.resources[command](input, snapshot.value);
-  };
+): Promise<HttpOutcome> {
+  const snapshot = await dependencies.session.read();
+  if (!snapshot.ok) {
+    return snapshot;
+  }
+  return dependencies.resources[command](json, snapshot.value);
 }

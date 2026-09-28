@@ -24,7 +24,12 @@ export function classifyRequest(
   method: string,
   path: string,
 ): RequestKind {
-  if (`${method} ${path}` === EVENTS_ROUTE) return 'events';
-  if (path.startsWith(API_PREFIX)) return 'api';
+  const route = `${method} ${path}`;
+  if (route === EVENTS_ROUTE) {
+    return 'events';
+  }
+  if (path.startsWith(API_PREFIX)) {
+    return 'api';
+  }
   return 'browser';
 }

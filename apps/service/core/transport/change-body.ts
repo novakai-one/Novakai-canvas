@@ -12,12 +12,13 @@
 import type { AdmittedChange } from '../../contract/records/transport/protocol.js';
 import type { BodyCheckContext } from '../../contract/ports/transport.js';
 import type { PrepareMode } from '../../contract/records/workspace/session.js';
+import type { Generation } from '../../contract/brands.js';
 import { changeRequestBody } from '../../contract/records/transport/protocol.js';
 import { failure, success, type Result } from '../../contract/errors.js';
 import { readJsonBody } from './json-body.js';
 
-/** A body that passed the version 1 envelope schema. */
-type MutationEnvelope = ReturnType<typeof changeRequestBody.parse>;
+/** A body that passed the version 1 change envelope schema. */
+type ChangeEnvelope = ReturnType<typeof changeRequestBody.parse>;
 
 /**
  * Reads the body text, as sent, into a change Authoring may run. `context` is who sent it, the
@@ -29,51 +30,67 @@ export function readChangeBody(
   body: string,
   context: BodyCheckContext,
 ): Result<AdmittedChange> {
-  const decoded = readJsonBody(body, context.metadata.contentType, 'change');
-  if (!decoded.ok) return decoded;
-  return admitEnvelope(decoded.value, context);
+  const json = readJsonBody(body, context.metadata.contentType, 'change');
+  if (!json.ok) {
+    return json;
+  }
+  const envelope = readCurrentEnvelope(json.value, context.generation);
+  if (!envelope.ok) {
+    return envelope;
+  }
+  return admitEnvelope(envelope.value, context);
 }
 
-/**
- * Fails with `invalid-input` at `body` unless the value is a version 1 mutation envelope;
- * otherwise as `admitCurrent`.
- */
+/** Checks the JSON is a version 1 change envelope made for this server run. */
+function readCurrentEnvelope(
+  json: unknown,
+  generation: Generation,
+): Result<ChangeEnvelope> {
+  const envelope = changeRequestBody.safeParse(json);
+  if (!envelope.success) {
+    return malformedEnvelopeFailure();
+  }
+  if (envelope.data.generation !== generation) {
+    return otherServerRunFailure();
+  }
+  return success(envelope.data);
+}
+
+/** Checks the caller may send the envelope's request, then gives back the change to run. */
 function admitEnvelope(
-  input: unknown,
+  envelope: ChangeEnvelope,
   context: BodyCheckContext,
 ): Result<AdmittedChange> {
-  const parsed = changeRequestBody.safeParse(input);
-  if (!parsed.success)
-    return failure('invalid-input', 'body', 'Expected a version 1 mutation envelope');
-  return admitCurrent(parsed.data, context);
-}
-
-/**
- * Fails with `conflict` at `generation` when the envelope names another transport generation;
- * otherwise as the ingress admission: `invalid-input` at `request`, `unauthorized` at `actor` or
- * `intent.planner`. The envelope's `preview` flag becomes the prepare mode.
- */
-function admitCurrent(
-  envelope: MutationEnvelope,
-  context: BodyCheckContext,
-): Result<AdmittedChange> {
-  if (envelope.generation !== context.generation)
-    return failure(
-      'conflict',
-      'generation',
-      'Workspace session changed; reconcile the request receipt',
-    );
   const request = context.admission.admitChange(envelope.request, context.caller);
-  if (!request.ok) return request;
-  return success({
+  if (!request.ok) {
+    return request;
+  }
+  const change: AdmittedChange = {
     request: request.value,
     mode: prepareMode(envelope),
     options: envelope.options,
-  });
+  };
+  return success(change);
 }
 
-/** `with-preview` when the envelope asks for preview images, `without-preview` otherwise. */
-function prepareMode(envelope: MutationEnvelope): PrepareMode {
-  if (envelope.preview) return 'with-preview';
+/** Chooses `with-preview` when the envelope asks for preview images, `without-preview` otherwise. */
+function prepareMode(envelope: ChangeEnvelope): PrepareMode {
+  if (envelope.preview) {
+    return 'with-preview';
+  }
   return 'without-preview';
+}
+
+/** Makes the mistake for JSON that isn't a version 1 change envelope. */
+function malformedEnvelopeFailure(): Result<never> {
+  return failure('invalid-input', 'body', 'Expected a version 1 mutation envelope');
+}
+
+/** Makes the mistake for a body made for another server run, such as one sent before a restart. */
+function otherServerRunFailure(): Result<never> {
+  return failure(
+    'conflict',
+    'generation',
+    'Workspace session changed; reconcile the request receipt',
+  );
 }

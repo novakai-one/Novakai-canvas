@@ -26,23 +26,26 @@ export const eventFrames: EventFrames = Object.freeze({
   keepalive: ': keepalive\n\n',
 });
 
-/** The first frame on every connection. */
+/** Writes the first frame on every connection. */
 function connected(generation: Generation): string {
-  return frame('connected', { version: 1, generation });
+  const message = { version: 1, generation };
+  return frame('connected', message);
 }
 
-/** The frame sent after each commit, carrying the committed change. */
+/** Writes the frame sent after each commit, carrying the committed change. */
 function committed(
   generation: Generation,
   change: CommittedChange,
 ): string {
-  return frame('committed', { version: 1, generation, change });
+  const message = { version: 1, generation, change };
+  return frame('committed', message);
 }
 
-/** One event: its name line, its JSON data line and the blank line that ends it. */
+/** Writes one frame: its name line, the message as one JSON line, and the blank line that ends it. */
 function frame(
   name: EventName,
-  data: unknown,
+  message: object,
 ): string {
-  return `event: ${name}\ndata: ${JSON.stringify(data)}\n\n`;
+  const json = JSON.stringify(message);
+  return `event: ${name}\ndata: ${json}\n\n`;
 }

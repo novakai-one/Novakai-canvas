@@ -25,7 +25,10 @@ export type JsonHandler = (call: ApiCall) => Promise<HttpOutcome>;
  * the route.
  */
 export function jsonRoute(handler: JsonHandler): RouteHandler {
-  return async (call) => answerJson(await handler(call));
+  return async (call) => {
+    const outcome = await handler(call);
+    return answerJson(outcome);
+  };
 }
 
 /** Marks the outcome to be sent as JSON. Never fails. */
@@ -38,6 +41,8 @@ export function answerJson(outcome: HttpOutcome): RouteOutcome {
  * be sent as JSON instead. Never fails.
  */
 export function answerFile(file: Result<SentFile>): RouteOutcome {
-  if (!file.ok) return answerJson(file);
+  if (!file.ok) {
+    return answerJson(file);
+  }
   return { kind: 'bytes', file: file.value };
 }
