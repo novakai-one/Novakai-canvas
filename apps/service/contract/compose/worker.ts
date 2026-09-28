@@ -14,52 +14,86 @@ import { prepareNativePresentation } from '@novakai/canvas-presentation';
 import type { Result } from '../errors.js';
 import { failure, success } from '../errors.js';
 import type { CapabilityFailure } from '../records/transport/failure-source.js';
+import type * as WorkerEntry from '../../adapters/render-worker/entry.js';
+import type * as JobReader from '../../adapters/render-worker/job-reader.js';
+import type * as CompiledLayout from '../../adapters/render-worker/derive.js';
 
 /**
  * Starts this worker thread taking render jobs.
  *
- * 1. Load the worker's code.
- * 2. Prepare the compiled text and layout code; if that fails, tell the server why.
- * 3. Tell the server it is ready, and take jobs.
+ * 1. Load the worker's code and prepare the compiled text and layout code; if that fails, tell the
+ *    server why.
+ * 2. Tell the server it is ready, and take jobs.
  *
  * Fails with `unavailable` at `worker` when the compiled or worker code can't load, or with
  * `invalid-input` at `worker` if called outside a worker thread (a bug).
  */
 export async function runRenderWorker(): Promise<Result<void>> {
+  const workerCode = await prepareWorkerCode();
+  if (!workerCode.ok) {
+    return workerCode;
+  }
+  return serveJobs(workerCode.value);
+}
+
+/** The worker's loaded code: its entry, its job check, and the layout code that draws a job. */
+interface WorkerCode {
+  readonly entry: typeof WorkerEntry;
+  readonly jobReader: typeof JobReader;
+  readonly layout: typeof CompiledLayout;
+}
+
+/** Loads the worker's code and prepares the compiled code; a throw becomes `unavailable`. */
+async function prepareWorkerCode(): Promise<Result<WorkerCode>> {
   try {
-    const [workerEntry, jobReader, derive] = await Promise.all([
-      import('../../adapters/render-worker/entry.js'),
-      import('../../adapters/render-worker/job-reader.js'),
-      import('../../adapters/render-worker/derive.js'),
-    ]);
-    const prepared = await prepareNativeRuntimes();
-    if (!prepared.ok) {
-      workerEntry.reportStartupFailure(prepared.error);
-      return prepared;
-    }
-    return workerEntry.serveRenderWorker({
-      producer: { produce: derive.produceDiagram },
-      readJob: jobReader.readRenderingJob,
-    });
+    return await importThenPrepareRuntimes();
   } catch {
-    return failure('unavailable', 'worker', 'Rendering worker could not initialize');
+    return workerUnavailableFailure();
   }
 }
 
-/**
- * Prepares native measurement, then the layout runtime. Fails with `unavailable` at `worker`
- * carrying the first owner failure as source; the layout runtime is not prepared after a
- * presentation failure.
- */
+/** Imports the worker's code, then prepares the compiled code, telling the server if that fails. */
+async function importThenPrepareRuntimes(): Promise<Result<WorkerCode>> {
+  const [entry, jobReader, layout] = await Promise.all([
+    import('../../adapters/render-worker/entry.js'),
+    import('../../adapters/render-worker/job-reader.js'),
+    import('../../adapters/render-worker/derive.js'),
+  ]);
+  const prepared = await prepareNativeRuntimes();
+  if (!prepared.ok) {
+    entry.reportStartupFailure(prepared.error);
+    return prepared;
+  }
+  return success({ entry, jobReader, layout });
+}
+
+/** Tells the server this worker is ready, then answers every job it sends. */
+function serveJobs(workerCode: WorkerCode): Promise<Result<void>> {
+  return workerCode.entry.serveRenderWorker({
+    producer: { produce: workerCode.layout.produceDiagram },
+    readJob: workerCode.jobReader.readRenderingJob,
+  });
+}
+
+/** Prepares native text measurement, then the layout runtime, stopping at the first failure. */
 async function prepareNativeRuntimes(): Promise<Result<void>> {
   const presentation = await prepareNativePresentation();
-  if (!presentation.ok) return runtimeNotPrepared(presentation.error);
+  if (!presentation.ok) {
+    return runtimeNotPreparedFailure(presentation.error);
+  }
   const layout = await prepareLayoutRuntime();
-  if (!layout.ok) return runtimeNotPrepared(layout.error);
+  if (!layout.ok) {
+    return runtimeNotPreparedFailure(layout.error);
+  }
   return success(undefined);
 }
 
-/** `unavailable` at `worker` with the runtime owner's message, and its failure kept as source. */
-function runtimeNotPrepared(error: CapabilityFailure): Result<void> {
-  return failure('unavailable', 'worker', error.message, error);
+/** The `unavailable` failure at `worker` for worker code that threw while loading or preparing. */
+function workerUnavailableFailure(): Result<never> {
+  return failure('unavailable', 'worker', 'Rendering worker could not initialize');
+}
+
+/** The `unavailable` failure at `worker`, keeping the compiled code's own reason it can't start. */
+function runtimeNotPreparedFailure(runtimeFailure: CapabilityFailure): Result<never> {
+  return failure('unavailable', 'worker', runtimeFailure.message, runtimeFailure);
 }

@@ -17,11 +17,11 @@ import { createPresetCodecs } from './capabilities.js';
  * can't load; the CLI reports that as `render-unavailable`.
  */
 export async function createHeadlessBindings(): Promise<HeadlessBindings> {
-  const rendering = await import('../../adapters/render-worker/derive.js');
+  const compiledLayout = await import('../../adapters/render-worker/derive.js');
   return {
     createPresetCodecs,
     prepareTheme,
     createRenderJobs,
-    produceDiagram: rendering.produceDiagram,
+    produceDiagram: compiledLayout.produceDiagram,
   };
 }

@@ -18,6 +18,6 @@ import type { AgentToken } from '../brands.js';
  * too large or malformed. Throws only if the file-reading code can't load.
  */
 export async function readAgentCredential(credentialFile: string): Promise<Result<AgentToken>> {
-  const credentials = await import('../../adapters/credentials/local-credentials.js');
-  return credentials.readAgentCredential(credentialFile);
+  const localCredentials = await import('../../adapters/credentials/local-credentials.js');
+  return localCredentials.readAgentCredential(credentialFile);
 }

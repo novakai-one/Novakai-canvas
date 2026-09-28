@@ -15,113 +15,157 @@ import { parseArgs } from 'node:util';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openWorkspace, serveWorkspace } from '../contract/compose.js';
-import type { Result } from '../contract/errors.js';
-import type { LocalServer } from '../contract/records/transport/server.js';
+import type { Diagnostic, Result } from '../contract/errors.js';
+import type { LocalServer, ServerOptions } from '../contract/records/transport/server.js';
+import type { WorkspaceOptions } from '../contract/records/workspace/startup.js';
 import type { WorkspaceSession } from '../contract/types.js';
 import { hostPath, loopbackPort, type HostPath, type LoopbackPort } from '../contract/brands.js';
 import { timestamp, workspaceId } from '../contract/schemas.js';
 
-void main().catch(() => {
-  process.stderr.write('Canvas startup failed. Check the arguments and workspace permissions.\n');
-  process.exitCode = 1;
-});
+void main().catch(reportStartupCrash);
 
-/**
- * Startup arguments choose filesystem locations; diagram requests can never change them. A port
- * outside 1024–65535 prints "Port must be an integer from 1024 through 65535." and exits 1.
- */
-async function main(): Promise<void> {
-  const root = fileURLToPath(new URL('../../../', import.meta.url));
-  const args = parseArgs({
-    options: {
-      port: { type: 'string', default: '5174' },
-      workspace: { type: 'string', default: resolve(root, '.local/workspace') },
-      web: { type: 'string', default: resolve(root, 'apps/web/dist') },
-    },
-  });
-  const port = loopbackPort.safeParse(Number(args.values.port));
-  if (!port.success) {
-    process.stderr.write('Port must be an integer from 1024 through 65535.\n');
-    process.exitCode = 1;
-    return;
-  }
-  return start(root, hostPathAt(args.values.workspace), hostPathAt(args.values.web), port.data);
+/** The three start-up flags as typed, with the usual value filled in for any left out. */
+interface StartupFlags {
+  /** The port as typed; `main` checks it. */
+  readonly port: string;
+  /** The workspace folder as typed. */
+  readonly workspace: string;
+  /** The folder of the built web app, as typed. */
+  readonly web: string;
 }
 
-/**
- * Real workspace initialization completes before the socket opens; failed socket startup closes
- * the workspace. The workspace is `local`, created now when it is new.
- */
+/** Checks the start-up flags, then starts the service; only these flags ever choose folders. */
+async function main(): Promise<void> {
+  const repositoryRoot = fileURLToPath(new URL('../../../', import.meta.url));
+  const flags = readStartupFlags(repositoryRoot);
+  const port = loopbackPort.safeParse(Number(flags.port));
+  if (!port.success) {
+    reportInvalidPort();
+    return;
+  }
+  const workspaceFolder = hostPathAt(flags.workspace);
+  const webRoot = hostPathAt(flags.web);
+  return start(repositoryRoot, workspaceFolder, webRoot, port.data);
+}
+
+/** Reads `--port`, `--workspace` and `--web` from the command line; an unknown flag throws. */
+function readStartupFlags(repositoryRoot: string): StartupFlags {
+  const commandLine = parseArgs({
+    options: {
+      port: { type: 'string', default: '5174' },
+      workspace: { type: 'string', default: resolve(repositoryRoot, '.local/workspace') },
+      web: { type: 'string', default: resolve(repositoryRoot, 'apps/web/dist') },
+    },
+  });
+  return commandLine.values;
+}
+
+/** Opens the `local` workspace in `directory` (creating it when new), then serves it. */
 async function start(
-  root: string,
+  repositoryRoot: string,
   directory: HostPath,
   webRoot: HostPath,
   port: LoopbackPort,
 ): Promise<void> {
-  const workspace = await openWorkspace({
+  const workspaceOptions = localWorkspaceOptions(repositoryRoot, directory);
+  const workspace = await openWorkspace(workspaceOptions);
+  if (!workspace.ok) {
+    printDiagnostic(workspace.error);
+    return;
+  }
+  const serverOptions = localServerOptions(directory, webRoot, port);
+  return serve(workspace.value, serverOptions);
+}
+
+/** Builds the options that open the workspace in `directory` as `local`. */
+function localWorkspaceOptions(
+  repositoryRoot: string,
+  directory: HostPath,
+): WorkspaceOptions {
+  return {
     directory,
     workspace: workspaceId.parse('local'),
     title: 'Canvas workspace',
-    resourceRoot: hostPathAt(root, 'resources'),
-    tokenRoot: hostPathAt(root, 'capability/design-system'),
+    resourceRoot: hostPathAt(repositoryRoot, 'resources'),
+    tokenRoot: hostPathAt(repositoryRoot, 'capability/design-system'),
     createdAt: timestamp.parse(Date.now()),
-  });
-  if (!workspace.ok) {
-    report(workspace);
-    return;
-  }
-  const server = await serveWorkspace(workspace.value, {
-    port,
-    webRoot,
-    credentialFile: hostPathAt(directory, 'agent-credential.json'),
-  });
-  return started(server, workspace.value);
+  };
 }
 
-/** Only the loopback URL and credential path are public startup information; the secret remains in its owner-only file. */
-async function started(
-  server: Result<LocalServer>,
+/** Builds the server's options; the CLI's token file sits in the workspace folder. */
+function localServerOptions(
+  directory: HostPath,
+  webRoot: HostPath,
+  port: LoopbackPort,
+): ServerOptions {
+  const credentialFile = hostPathAt(directory, 'agent-credential.json');
+  return { port, webRoot, credentialFile };
+}
+
+/** Serves the open workspace and prints its address, or reports the failure and closes it. */
+async function serve(
   workspace: WorkspaceSession,
+  serverOptions: ServerOptions,
 ): Promise<void> {
+  const server = await serveWorkspace(workspace, serverOptions);
   if (!server.ok) {
-    report(server);
-    report(await workspace.close());
+    printDiagnostic(server.error);
+    const closed = await workspace.close();
+    reportIfFailed(closed);
     return;
   }
+  // Only the address is printed; the secret stays in its owner-only file.
   process.stdout.write(`Canvas: ${server.value.url}\n`);
-  shutdown(server.value, workspace);
+  stopOnSignal(server.value, workspace);
 }
 
-/**
- * Node owns process signals. The first SIGINT or SIGTERM stops the server and workspace once; the
- * other signal is then ignored, and a repeated signal gets Node's default (the process ends).
- */
-function shutdown(
+/** Stops the server and the workspace once, on the first Ctrl-C (SIGINT) or SIGTERM. */
+function stopOnSignal(
   server: LocalServer,
   workspace: WorkspaceSession,
 ): void {
-  void Promise.race([once(process, 'SIGINT'), once(process, 'SIGTERM')]).then(() =>
-    stop(server, workspace),
-  );
+  // After the first signal the other one is ignored; a repeated signal gets Node's default (exit).
+  const firstSignal = Promise.race([once(process, 'SIGINT'), once(process, 'SIGTERM')]);
+  void firstSignal.then(() => stop(server, workspace));
 }
 
-/** Drain the listener, then the workspace; callers reconcile outstanding receipt IDs on restart. */
+/** Closes the server, then the workspace, reporting either failure. */
 async function stop(
   server: LocalServer,
   workspace: WorkspaceSession,
 ): Promise<void> {
-  report(await server.close());
-  report(await workspace.close());
+  const serverClosed = await server.close();
+  reportIfFailed(serverClosed);
+  const workspaceClosed = await workspace.close();
+  reportIfFailed(workspaceClosed);
 }
 
-/** Print stable diagnostic fields only. Credential values and raw request bodies are never logged. */
-function report(result: Result<unknown>): void {
-  if (result.ok) return;
-  process.stderr.write(`${result.error.code}: ${result.error.message}\n${result.error.recovery}\n`);
+/** Prints the mistake when `outcome` failed; does nothing when it worked. */
+function reportIfFailed(outcome: Result<unknown>): void {
+  if (!outcome.ok) {
+    printDiagnostic(outcome.error);
+  }
+}
+
+/** Prints a mistake's code, message and advice, and marks the process as failed. */
+function printDiagnostic(diagnostic: Diagnostic): void {
+  process.stderr.write(`${diagnostic.code}: ${diagnostic.message}\n${diagnostic.recovery}\n`);
   process.exitCode = 1;
 }
 
-/** The absolute host path of `segments`, resolved from the working directory. Never fails. */
+/** Prints the port mistake, and marks the process as failed. */
+function reportInvalidPort(): void {
+  process.stderr.write('Port must be an integer from 1024 through 65535.\n');
+  process.exitCode = 1;
+}
+
+/** Prints the one line shown when start-up throws, and marks the process as failed. */
+function reportStartupCrash(): void {
+  process.stderr.write('Canvas startup failed. Check the arguments and workspace permissions.\n');
+  process.exitCode = 1;
+}
+
+/** Joins `segments` into an absolute host path, resolved from the working directory. */
 function hostPathAt(...segments: readonly string[]): HostPath {
   return hostPath.parse(resolve(...segments));
 }

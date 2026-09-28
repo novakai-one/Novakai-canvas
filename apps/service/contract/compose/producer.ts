@@ -9,7 +9,7 @@
  * names the worker's start file, the 30-second time limit, and where libavoid (the library that
  * routes wires) keeps its WebAssembly file.
  */
-import type { DiagramProducer } from '../ports/rendering.js';
+import type { DiagramProducer, RenderReader, RenderTransport } from '../ports/rendering.js';
 import type { Result } from '../errors.js';
 import { failure, success } from '../errors.js';
 import { hostPath, type HostPath } from '../brands.js';
@@ -31,19 +31,9 @@ const LIBAVOID_WASM = 'vendor/layout/libavoid.wasm';
  */
 export async function startRenderWorkers(): Promise<Result<DiagramProducer>> {
   try {
-    const [worker, output] = await Promise.all([
-      import('../../adapters/render-worker/pool.js'),
-      import('../../adapters/render-worker/reply-reader.js'),
-    ]);
-    const transport = worker.startRenderWorkerPool(WORKER_ENTRY, RENDER_TIMEOUT_MS);
-    const ready = await transport.ready;
-    if (!ready.ok) return notInitialized();
-    return success({
-      produce: (job, signal) =>
-        runRenderJob(job, signal, transport, { read: output.readRenderDocument }),
-    });
+    return await startWorkerPool();
   } catch {
-    return notInitialized();
+    return renderWorkersUnavailableFailure();
   }
 }
 
@@ -54,7 +44,31 @@ export function libavoidWasmPath(resourceRoot: HostPath): HostPath {
   return hostPath.parse(`${resourceRoot}/${LIBAVOID_WASM}`);
 }
 
-/** `unavailable` at `render`: the pool or reader could not load, or the first worker did not start. */
-function notInitialized(): Result<DiagramProducer> {
+/** Loads the worker code, starts the pool, and waits until its first worker is ready. */
+async function startWorkerPool(): Promise<Result<DiagramProducer>> {
+  const [workerPool, replyReader] = await Promise.all([
+    import('../../adapters/render-worker/pool.js'),
+    import('../../adapters/render-worker/reply-reader.js'),
+  ]);
+  const transport = workerPool.startRenderWorkerPool(WORKER_ENTRY, RENDER_TIMEOUT_MS);
+  const ready = await transport.ready;
+  if (!ready.ok) {
+    return renderWorkersUnavailableFailure();
+  }
+  const reader: RenderReader = { read: replyReader.readRenderDocument };
+  const producer = checkedProducer(transport, reader);
+  return success(producer);
+}
+
+/** Joins the pool to the reply check, so every reply is checked before it is used. */
+function checkedProducer(
+  transport: RenderTransport,
+  reader: RenderReader,
+): DiagramProducer {
+  return { produce: (job, signal) => runRenderJob(job, signal, transport, reader) };
+}
+
+/** The `unavailable` failure at `render` for worker code or a first worker that can't start. */
+function renderWorkersUnavailableFailure(): Result<never> {
   return failure('unavailable', 'render', 'Rendering bindings could not initialize');
 }

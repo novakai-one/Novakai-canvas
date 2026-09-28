@@ -13,6 +13,7 @@ import { composeAuthoring } from '@novakai/canvas-authoring';
 import type { Assets } from '@novakai/canvas-assets';
 import type {
   Authoring,
+  Cancellation,
   CandidateValidator,
   HistoryStatus,
   IntentPlanner,
@@ -86,20 +87,20 @@ export interface BuiltAuthoring {
  * load.
  */
 export async function buildAuthoring(inputs: AuthoringInputs): Promise<BuiltAuthoring> {
-  const storeModule = await import('../../adapters/storage/authoring-store.js');
+  const storageCode = await import('../../adapters/storage/authoring-store.js');
   const seed = newWorkspaceSeed(inputs);
-  const store = storeModule.createAuthoringStore(inputs.stores.storage);
-  const runtime = admissionRuntime(inputs, seed, store);
-  const startup = requestAuthoring(runtime, UNCANCELLED);
+  const store = storageCode.createAuthoringStore(inputs.stores.storage);
+  const roles = bindAuthoringRoles(inputs, seed, store);
+  const startupAuthoring = requestAuthoring(roles, UNCANCELLED);
   return {
-    authoring: (signal) => requestAuthoring(runtime, signal),
-    candidateCheck: runtime.validation,
+    authoring: (signal) => requestAuthoring(roles, signal),
+    candidateCheck: roles.validation,
     seedRequest: buildSeedRequest(seed),
-    startHistory: () => startup.initializeHistory(inputs.options.workspace),
+    startHistory: () => startupAuthoring.initializeHistory(inputs.options.workspace),
   };
 }
 
-/** What a brand-new workspace starts with: its ID, title, creation time and built-in presets. */
+/** Builds what a brand-new workspace starts with: its ID, title, creation time and presets. */
 function newWorkspaceSeed(inputs: AuthoringInputs): NewWorkspaceSeed {
   return {
     workspace: inputs.options.workspace,
@@ -109,37 +110,43 @@ function newWorkspaceSeed(inputs: AuthoringInputs): NewWorkspaceSeed {
   };
 }
 
-/** The Authoring roles bound once per workspace; each request composes Authoring over them. */
-interface AdmissionRuntime {
+/** The helpers Authoring is given, built once per workspace and shared by every request. */
+interface AuthoringRoles {
   readonly store: AuthoringStore;
   readonly planners: readonly IntentPlanner[];
   readonly validation: CandidateValidator;
+  /** Holds the files a change uses while it is saved. */
   readonly resources: ResourceAdmission;
   readonly changes: Notifications;
   /** What the layout check needs; each request adds its own signal. */
   readonly feasibility: Omit<FeasibilityDependencies, 'signal'>;
 }
 
-/** Binds the store, planners, validator, leases, notifications and feasibility. Never fails. */
-function admissionRuntime(
+/** Builds the helpers Authoring is given: store, planners, checks, file holds and announcements. */
+function bindAuthoringRoles(
   inputs: AuthoringInputs,
   seed: NewWorkspaceSeed,
   store: AuthoringStore,
-): AdmissionRuntime {
-  const { reader, resources, jobs, producer } = inputs.shared;
+): AuthoringRoles {
+  const { reader, jobs, producer } = inputs.shared;
+  const selector = inputs.shared.resources;
   const assets = inputs.stores.assets;
+  const planners = createPlanners(inputs, seed);
+  const validation = createCandidateValidator({ workspace: reader, resources: selector, assets });
+  const resourceAdmission = createResourceAdmission(selector, assets);
+  const feasibility = { workspace: reader, jobs, producer };
   return {
     store,
-    planners: planners(inputs, seed),
-    validation: createCandidateValidator({ workspace: reader, resources, assets }),
-    resources: createResourceAdmission(resources, assets),
+    planners,
+    validation,
+    resources: resourceAdmission,
     changes: inputs.changes,
-    feasibility: { workspace: reader, jobs, producer },
+    feasibility,
   };
 }
 
-/** The service planners, bootstrap first. Never fails. */
-function planners(
+/** Builds the service's planners, bootstrap first. */
+function createPlanners(
   inputs: AuthoringInputs,
   seed: NewWorkspaceSeed,
 ): readonly IntentPlanner[] {
@@ -156,20 +163,22 @@ function planners(
 }
 
 /**
- * Composes Authoring for one request; its feasibility renders run under that request's signal.
- * Throws only when a planner's `id` getter throws (see `composeAuthoring`).
+ * Makes Authoring for one request, whose layout-check renders stop when `signal` aborts; throws
+ * only when a planner's `id` getter throws (see `composeAuthoring`).
  */
 function requestAuthoring(
-  runtime: AdmissionRuntime,
+  roles: AuthoringRoles,
   signal: AbortSignal,
 ): Authoring {
+  const cancellation: Cancellation = { cancelled: () => signal.aborted };
+  const feasibility = createFeasibility({ ...roles.feasibility, signal });
   return composeAuthoring({
-    ...runtime.store,
-    planners: runtime.planners,
-    validation: runtime.validation,
-    resources: runtime.resources,
-    notifications: runtime.changes,
-    cancellation: { cancelled: () => signal.aborted },
-    feasibility: createFeasibility({ ...runtime.feasibility, signal }),
+    ...roles.store,
+    planners: roles.planners,
+    validation: roles.validation,
+    resources: roles.resources,
+    notifications: roles.changes,
+    cancellation,
+    feasibility,
   });
 }

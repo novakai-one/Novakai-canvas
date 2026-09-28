@@ -10,7 +10,15 @@
  */
 import type { WorkspaceSession } from '../types.js';
 import type { LocalServer, ServerOptions } from '../records/transport/server.js';
-import type { HttpAdmission, HttpSecurity, TransportPolicy } from '../ports/transport.js';
+import type {
+  ApiRouter,
+  HttpAdmission,
+  HttpSecurity,
+  ServerBindings,
+  StaticFiles,
+  TransportPolicy,
+} from '../ports/transport.js';
+import type { Generation } from '../brands.js';
 import type { Result } from '../errors.js';
 import { failure } from '../errors.js';
 import { createAdmission } from '../../core/transport/admission.js';
@@ -38,48 +46,59 @@ export async function serveWorkspace(
   try {
     return await startServer(session, options);
   } catch {
-    return failure(
-      'unavailable',
-      'server',
-      'HTTP bindings could not initialize; retain the existing workspace',
-    );
+    return serverUnavailableFailure();
   }
 }
 
-/**
- * Loads the adapters, creates this server's security and starts the socket. Fails as
- * `serveWorkspace` names; throws when an adapter cannot load.
- */
+/** Loads the server code, makes this run's secrets and the CLI's token file, then listens. */
 async function startServer(
   session: WorkspaceSession,
   options: ServerOptions,
 ): Promise<Result<LocalServer>> {
-  const [credentials, files, server] = await Promise.all([
+  const [localCredentials, staticFiles, httpServer] = await Promise.all([
     import('../../adapters/credentials/local-credentials.js'),
     import('../../adapters/http/static-files.js'),
     import('../../adapters/http/server.js'),
   ]);
-  const security = await credentials.createLocalSecurity(options.port, options.credentialFile);
-  if (!security.ok) return security;
-  const admission = createAdmission(security.value);
-  return server.startHttpServer(options, {
-    security: security.value,
+  const security = await localCredentials.createLocalSecurity(options.port, options.credentialFile);
+  if (!security.ok) {
+    return security;
+  }
+  const webAppFiles = staticFiles.createStaticFiles(options.webRoot);
+  const bindings = serverBindings(session, security.value, webAppFiles);
+  return httpServer.startHttpServer(options, bindings);
+}
+
+/** Builds everything the server answers with: who may come in, the routes and the web app files. */
+function serverBindings(
+  session: WorkspaceSession,
+  security: HttpSecurity,
+  files: StaticFiles,
+): ServerBindings {
+  const admission = createAdmission(security);
+  const policy = transportPolicy(admission, security);
+  const router = apiRouter(session, security.generation, admission);
+  return { security, admission, changes: session, policy, files, router };
+}
+
+/** Builds the router that answers every API call on the open workspace. */
+function apiRouter(
+  session: WorkspaceSession,
+  generation: Generation,
+  admission: HttpAdmission,
+): ApiRouter {
+  const printer = createSourcePrinter(createServiceLanguage());
+  return createApiRouter({
+    session,
+    resources: session.resources,
+    generation,
     admission,
-    changes: session,
-    policy: transportPolicy(admission, security.value),
-    files: files.createStaticFiles(options.webRoot),
-    router: createApiRouter({
-      session,
-      resources: session.resources,
-      generation: security.value.generation,
-      admission,
-      bodyReader: { read: readChangeBody },
-      printer: createSourcePrinter(createServiceLanguage()),
-    }),
+    bodyReader: { read: readChangeBody },
+    printer,
   });
 }
 
-/** The core transport policy, with browser access bound to this server's admission and secret. */
+/** Builds the core transport policy, with browser access bound to this server's secrets. */
 function transportPolicy(
   admission: HttpAdmission,
   security: HttpSecurity,
@@ -94,4 +113,13 @@ function transportPolicy(
     browserAccess: createWebAppFileCheck({ admission, security }),
     frames: eventFrames,
   };
+}
+
+/** The `unavailable` failure at `server` for server code that threw while loading or starting. */
+function serverUnavailableFailure(): Result<never> {
+  return failure(
+    'unavailable',
+    'server',
+    'HTTP bindings could not initialize; retain the existing workspace',
+  );
 }

@@ -11,10 +11,15 @@
  */
 import { composeDesignSystem } from '@novakai/canvas-design-system';
 import { composeExport, formatMarkdown } from '@novakai/canvas-export';
-import { createLanguage, type Language } from '@novakai/canvas-language';
+import {
+  createLanguage,
+  type Language,
+  type LoweredIntent,
+  type ResolvedResources,
+} from '@novakai/canvas-language';
 import { planMembership, planOrganisation, validateLibrarySnapshot } from '@novakai/canvas-library';
 import { plan, stage, validate } from '@novakai/canvas-model';
-import { composeTemplates } from '@novakai/canvas-templates';
+import { composeTemplates, type Templates } from '@novakai/canvas-templates';
 import type {
   ExportRules,
   LibraryRules,
@@ -32,14 +37,14 @@ import { createThemeCodec } from '../../core/presets/theme-codec.js';
 export function createServiceCapabilities(tokenSources: unknown): ServiceCapabilities {
   const language = createServiceLanguage();
   const system = composeDesignSystem();
+  const sharedCodecParts: SharedCodecParts = { system, language, sources: tokenSources };
   return {
     model: MODEL_RULES,
     library: LIBRARY_RULES,
     export: EXPORT_RULES,
     language,
     system,
-    templates: (resources) =>
-      composeTemplates(createPresetCodecs({ system, language, sources: tokenSources, resources })),
+    templates: (resources) => composeRequestTemplates(sharedCodecParts, resources),
   };
 }
 
@@ -55,6 +60,18 @@ export function createServiceLanguage(): Language {
     planner: { plan: MODEL_RULES.plan },
     stage: { stage: MODEL_RULES.stage },
   });
+}
+
+/** What every request's preset codecs share: Design System, Language and the token sources. */
+type SharedCodecParts = Omit<PresetContext, 'resources'>;
+
+/** Makes a fresh Templates that knows only the themes and files one request uses. */
+function composeRequestTemplates(
+  sharedCodecParts: SharedCodecParts,
+  resources: ResolvedResources,
+): Templates<LoweredIntent> {
+  const codecs = createPresetCodecs({ ...sharedCodecParts, resources });
+  return composeTemplates(codecs);
 }
 
 /** Model's collection rules. Frozen. */

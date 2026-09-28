@@ -8,7 +8,10 @@
  * This file builds the exporter for one workspace. The PNG encoder starts only on the first PNG
  * request. An export only reads the workspace; it never changes it.
  */
-import { createReactBindings } from '@novakai/canvas-presentation';
+import {
+  createReactBindings,
+  type ReactBindings as PresentationBindings,
+} from '@novakai/canvas-presentation';
 import type { Assets } from '@novakai/canvas-assets';
 import type { Authoring } from '@novakai/canvas-authoring';
 import type { WorkspaceOptions } from '../records/workspace/startup.js';
@@ -17,7 +20,7 @@ import type { Exporter } from '../ports/export.js';
 import type { ServiceCapabilities } from '../ports/capabilities.js';
 import type { Result } from '../errors.js';
 import { failure, success } from '../errors.js';
-import { createExporter } from '../../core/export/route.js';
+import { createExporter, type ExporterDependencies } from '../../core/export/route.js';
 import { createPngEncoder } from '../../adapters/raster/png-runtime.js';
 import type { SharedParts } from './shared-parts.js';
 
@@ -41,23 +44,37 @@ export async function buildExporter(
 ): Promise<Result<Exporter>> {
   const presentation = await createReactBindings(inputs.builtins.fonts);
   if (!presentation.ok) {
-    return failure('unavailable', 'startup', 'Workspace composition failed');
+    return fontsUnavailableFailure();
   }
+  const dependencies = exporterDependencies(inputs, presentation.value, authoring);
+  const exporter = createExporter(dependencies);
+  return success(exporter);
+}
+
+/** Gathers what the exporter reads and draws with; the PNG encoder waits for the first PNG. */
+function exporterDependencies(
+  inputs: ExportInputs,
+  presentation: PresentationBindings,
+  authoring: (signal: AbortSignal) => Authoring,
+): ExporterDependencies {
   const { model, language } = inputs.capabilities;
   const { reader, resources, renderer } = inputs.shared;
-  return success(
-    createExporter({
-      workspace: inputs.options.workspace,
-      model,
-      language,
-      export: inputs.capabilities.export,
-      presentation: presentation.value,
-      assets: inputs.stores.assets,
-      reader,
-      resources,
-      renderer,
-      pngEncoder: createPngEncoder(),
-      authoring,
-    }),
-  );
+  return {
+    workspace: inputs.options.workspace,
+    model,
+    language,
+    export: inputs.capabilities.export,
+    presentation,
+    assets: inputs.stores.assets,
+    reader,
+    resources,
+    renderer,
+    pngEncoder: createPngEncoder(),
+    authoring,
+  };
+}
+
+/** The `unavailable` failure at `startup` for shipped fonts Presentation could not load. */
+function fontsUnavailableFailure(): Result<never> {
+  return failure('unavailable', 'startup', 'Workspace composition failed');
 }
