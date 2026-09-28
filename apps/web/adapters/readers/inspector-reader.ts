@@ -12,7 +12,7 @@ import {
   validate,
 } from '@novakai/canvas-model';
 import { snapshotSchema } from '@novakai/canvas-authoring';
-import { transportGeneration } from '@novakai/canvas-service';
+import { generation as transportGeneration } from '@novakai/canvas-service';
 import type { ObjectDraft, ObjectEdit } from '../../contract/records/inspector.js';
 import type {
   CapturedCollectionBase,

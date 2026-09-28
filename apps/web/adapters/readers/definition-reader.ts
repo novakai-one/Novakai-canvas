@@ -7,7 +7,7 @@
 import { z } from 'zod';
 import { collectionId, definitionSchema, validate, type Collection } from '@novakai/canvas-model';
 import { requestSchema } from '@novakai/canvas-authoring';
-import { transportGeneration } from '@novakai/canvas-service';
+import { generation as transportGeneration } from '@novakai/canvas-service';
 import { capturedCollectionBaseSchema } from '../../contract/schemas/editor-recovery.js';
 import type { DefinitionDraft } from '../../contract/records/definitions.js';
 import type { Result } from '../../contract/errors.js';

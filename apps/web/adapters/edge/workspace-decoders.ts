@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { snapshotSchema } from '@novakai/canvas-authoring';
 import type { Snapshot } from '@novakai/canvas-authoring';
 import { collectionId, validate } from '@novakai/canvas-model';
-import { transportGeneration } from '@novakai/canvas-service';
+import { generation as transportGeneration } from '@novakai/canvas-service';
 import type { Collection } from '@novakai/canvas-model';
 import type { CollectionId } from '../../contract/brands.js';
 import { sourceEdit } from '../../contract/brands.js';

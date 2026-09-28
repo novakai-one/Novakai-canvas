@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { requestSchema, receiptSchema } from '@novakai/canvas-authoring';
-import { transportGeneration } from '@novakai/canvas-service';
+import { generation as transportGeneration } from '@novakai/canvas-service';
 import { gestureId } from '@novakai/canvas-canvas';
 import { sourceEdit } from '../../contract/brands.js';
 import type { AppliedCommit, SubmissionReaders } from '../../contract/records/submission.js';

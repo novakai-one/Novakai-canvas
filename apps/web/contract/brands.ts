@@ -27,7 +27,7 @@ export type {
   DescendantId,
 } from '@novakai/canvas-model';
 export type { FolderId } from '@novakai/canvas-library';
-export type { TransportGeneration } from '@novakai/canvas-service';
+export type { Generation as TransportGeneration } from '@novakai/canvas-service';
 export type { GestureId } from '@novakai/canvas-canvas';
 
 /** A workspace's commit count (Authoring). An alias, so a later Authoring brand arrives unchanged. */

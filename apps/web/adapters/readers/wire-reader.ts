@@ -14,7 +14,7 @@ import {
   validate,
 } from '@novakai/canvas-model';
 import { snapshotSchema } from '@novakai/canvas-authoring';
-import { transportGeneration } from '@novakai/canvas-service';
+import { generation as transportGeneration } from '@novakai/canvas-service';
 import type { WireDraft, WireEdit } from '../../contract/records/wire-editor.js';
 import type {
   CapturedCollectionBase,
