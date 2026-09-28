@@ -12,6 +12,8 @@ import type { PresetDigest } from '../../contract/brands.js';
 
 /** Lists the digests of the stored files a preset uses: a theme's fonts, a recipe's images. */
 export function listPresetFileDigests(preset: Preset): readonly PresetDigest[] {
-  if (preset.kind === 'theme') return preset.payload.fonts;
+  if (preset.kind === 'theme') {
+    return preset.payload.fonts;
+  }
   return preset.payload.assets;
 }

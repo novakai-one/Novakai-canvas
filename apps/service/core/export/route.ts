@@ -9,7 +9,7 @@
  * from lease.ts. Every answer is a `Result` (contract/errors.ts); Export's own mistakes are kept as
  * the source. An export only reads; it never changes the workspace.
  */
-import type { Result } from '../../contract/errors.js';
+import { success, type Result } from '../../contract/errors.js';
 import type { SentFile } from '../../contract/records/transport/server.js';
 import type { PresentationBindings } from '../../contract/records/capability-types.js';
 import type { ExportRules } from '../../contract/ports/capabilities.js';
@@ -40,84 +40,75 @@ export interface ExporterDependencies extends TextExportDependencies, DocumentDe
  * and `cancelled` when the export was stopped. Export's own mistake is kept as the source.
  */
 export function createExporter(dependencies: ExporterDependencies): Exporter {
-  return { exportFile: (input, signal) => invokeExport(input, signal, dependencies) };
+  return { exportFile: (body, signal) => exportOneFile(body, signal, dependencies) };
 }
 
-/**
- * A checked request is dispatched by format; a refused one never reaches an owner. Fails as
- * `readExportRequest` (`invalid-input` at `export` or `export.scale`), or as `dispatchExport`.
- */
-async function invokeExport(
-  input: unknown,
+/** Checks the request as sent, then makes the file in the format it asks for. */
+async function exportOneFile(
+  body: unknown,
   signal: AbortSignal,
-  owners: ExporterDependencies,
+  dependencies: ExporterDependencies,
 ): Promise<Result<SentFile>> {
-  const request = readExportRequest(input);
-  if (!request.ok) return request;
-  return dispatchExport(request.value, owners, signal);
+  const request = readExportRequest(body);
+  if (!request.ok) {
+    return request;
+  }
+  return exportByFormat(request.value, dependencies, signal);
 }
 
-/**
- * DSL and Markdown are printed from a leased snapshot; SVG and PNG are encoded by Export. Fails as
- * `exportDsl`, `exportMarkdown` or `nativeExport`.
- */
-async function dispatchExport(
+/** Sends DSL and Markdown to the text exports, and SVG and PNG to Export. */
+async function exportByFormat(
   request: ExportRequest,
-  owners: ExporterDependencies,
+  dependencies: ExporterDependencies,
   signal: AbortSignal,
 ): Promise<Result<SentFile>> {
   switch (request.format) {
     case 'dsl':
-      return exportDsl(request, owners, signal);
+      return exportDsl(request, dependencies, signal);
     case 'markdown':
-      return exportMarkdown(request, owners, signal);
+      return exportMarkdown(request, dependencies, signal);
     default:
-      return nativeExport(request, owners, signal);
+      return exportPicture(request, dependencies, signal);
   }
 }
 
-/**
- * PNG first needs the PNG encoder; an unavailable encoder refuses before any owner is read.
- * Fails with `unavailable` at `export.png` (see `prepareFormat`), or as `encodeNative`.
- */
-async function nativeExport(
+/** Starts the PNG encoder for a PNG, then has Export draw the SVG or PNG file. */
+async function exportPicture(
   request: ExportRequest,
-  owners: ExporterDependencies,
+  dependencies: ExporterDependencies,
   signal: AbortSignal,
 ): Promise<Result<SentFile>> {
-  const prepared = await prepareFormat(request.format, owners);
-  if (!prepared.ok) return prepared;
-  return encodeNative(request, owners, signal);
+  const encoder = await startEncoderFor(request.format, dependencies);
+  if (!encoder.ok) {
+    return encoder;
+  }
+  return drawWithExport(request, dependencies, signal);
 }
 
-/**
- * The PNG encoder for PNG; every other format needs nothing. Fails with `unavailable` at
- * `export.png` when the PNG encoder cannot start.
- */
-async function prepareFormat(
+/** Starts the PNG encoder when the format is PNG; any other format needs nothing started. */
+async function startEncoderFor(
   format: ExportRequest['format'],
-  owners: ExporterDependencies,
+  dependencies: ExporterDependencies,
 ): Promise<Result<void>> {
-  return format === 'png' ? owners.pngEncoder.prepare() : { ok: true, value: undefined };
+  if (format === 'png') {
+    return dependencies.pngEncoder.prepare();
+  }
+  return success(undefined);
 }
 
-/**
- * Export encodes the artifact from a snapshot it acquires through this route. Fails as
- * `exportRouteFailure` of Export's diagnostic (including `acquireSnapshot`'s refusals):
- * `cancelled` stays `cancelled`, an input refusal is `invalid-input`, and `encoding-failed`
- * (also a provider throw), `cleanup-failed` or `resource-rejected` is `unavailable`.
- */
-async function encodeNative(
+/** Builds Export for this request, has it draw the file, and wraps the file as the download. */
+async function drawWithExport(
   request: ExportRequest,
-  owners: ExporterDependencies,
+  dependencies: ExporterDependencies,
   signal: AbortSignal,
 ): Promise<Result<SentFile>> {
-  const exporter = owners.export.compose({
-    presentation: owners.presentation,
+  const exporter = dependencies.export.compose({
+    presentation: dependencies.presentation,
     readerCss: '',
-    snapshots: { acquire: (identity) => acquireSnapshot(identity, owners, signal) },
-    documents: createDocumentsForExport(owners),
+    snapshots: { acquire: (identity) => acquireSnapshot(identity, dependencies, signal) },
+    documents: createDocumentsForExport(dependencies),
     resources: createPassThroughResources(),
   });
-  return buildArtifactFile(await exporter.service.exportArtifact(request, signal));
+  const artifact = await exporter.service.exportArtifact(request, signal);
+  return buildArtifactFile(artifact);
 }

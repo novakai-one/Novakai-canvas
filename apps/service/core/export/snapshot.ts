@@ -9,12 +9,13 @@
  * and builds the final export snapshot. It never reads the workspace or renders: lease.ts does
  * both, and hands in the one file reader this file uses (`readHeldFile`).
  */
-import type { Result } from '../../contract/errors.js';
+import { success, type Result } from '../../contract/errors.js';
 import type {
   AuthoringResult,
   Collection,
   ExportResult,
   ExportSnapshot,
+  Resource,
   Snapshot,
 } from '../../contract/records/capability-types.js';
 import type { WorkspaceContents } from '../../contract/records/workspace/contents.js';
@@ -36,8 +37,13 @@ export function checkWorkspaceRead(
   current: AuthoringResult<Snapshot>,
   signal: AbortSignal,
 ): ExportResult<Snapshot> {
-  if (!current.ok) return readOrRenderFailure(current.error, 'workspace');
-  return signal.aborted ? cancelledFailure() : current;
+  if (!current.ok) {
+    return readOrRenderFailure(current.error, 'workspace');
+  }
+  if (signal.aborted) {
+    return cancelledFailure();
+  }
+  return current;
 }
 
 /**
@@ -50,11 +56,14 @@ export function selectCollection(
   contents: AuthoringResult<WorkspaceContents>,
   identity: SnapshotIdentity,
 ): ExportResult<SelectedCollection> {
-  if (!contents.ok) return exportFailure('encoding-failed', 'workspace', contents.error.message);
-  const collection = contents.value.collections.find((item) => item.id === identity.collectionId);
-  if (collection === undefined)
-    return exportFailure('invalid-input', 'identity.collectionId', 'Collection does not exist');
-  return matchingRevision(collection, identity.revision, contents.value);
+  if (!contents.ok) {
+    return unreadableContentsFailure(contents.error.message);
+  }
+  const collection = findCollection(contents.value, identity);
+  if (collection === undefined) {
+    return missingCollectionFailure();
+  }
+  return checkRevision(collection, identity.revision, contents.value);
 }
 
 /**
@@ -64,7 +73,10 @@ export function selectCollection(
 export function checkRenderedDocument(
   rendered: Result<RenderDocument>,
 ): ExportResult<RenderDocument> {
-  return rendered.ok ? rendered : readOrRenderFailure(rendered.error, 'render');
+  if (!rendered.ok) {
+    return readOrRenderFailure(rendered.error, 'render');
+  }
+  return rendered;
 }
 
 /**
@@ -78,46 +90,78 @@ export function buildExportSnapshot(
   readHeldFile: LeaseRead,
   signal: AbortSignal,
 ): ExportResult<ExportSnapshot> {
-  if (signal.aborted) return cancelledFailure();
+  if (signal.aborted) {
+    return cancelledFailure();
+  }
   const resources = gatherExportResources(
     readHeldFile,
     selected.collection,
     document,
     selected.contents.presets,
   );
-  if (!resources.ok) return resources;
-  return {
-    ok: true,
-    value: {
-      identity: {
-        collectionId: selected.collection.id,
-        revision: selected.collection.revision,
-        inputKey: document.scene.inputKey,
-        title: selected.collection.title,
-      },
-      collection: selected.collection,
-      scene: document.scene,
-      resources: resources.value,
-      paint: {
-        fill: document.style.surface,
-        stroke: document.style.border,
-        text: document.style.text,
-      },
-    },
-  };
+  if (!resources.ok) {
+    return resources;
+  }
+  const snapshot = exportSnapshot(selected.collection, document, resources.value);
+  return success(snapshot);
 }
 
-/** The selection, when the collection is still at the requested revision. */
-function matchingRevision(
+/** Finds the collection with the asked-for ID, or nothing when there is none. */
+function findCollection(
+  contents: WorkspaceContents,
+  identity: SnapshotIdentity,
+): Collection | undefined {
+  return contents.collections.find((collection) => collection.id === identity.collectionId);
+}
+
+/** Checks the collection is at the asked-for revision, and pairs it with the workspace contents. */
+function checkRevision(
   collection: Collection,
   revision: number,
-  view: WorkspaceContents,
+  contents: WorkspaceContents,
 ): ExportResult<SelectedCollection> {
-  if (collection.revision !== revision)
-    return exportFailure(
-      'snapshot-mismatch',
-      'identity.revision',
-      'Requested revision is no longer available',
-    );
-  return { ok: true, value: { collection, contents: view } };
+  if (collection.revision !== revision) {
+    return revisionMismatchFailure();
+  }
+  const selected: SelectedCollection = { collection, contents };
+  return success(selected);
+}
+
+/** Puts the collection, its drawing, its held files and its colours together for Export. */
+function exportSnapshot(
+  collection: Collection,
+  document: RenderDocument,
+  resources: readonly Resource[],
+): ExportSnapshot {
+  const identity = {
+    collectionId: collection.id,
+    revision: collection.revision,
+    inputKey: document.scene.inputKey,
+    title: collection.title,
+  };
+  const paint = {
+    fill: document.style.surface,
+    stroke: document.style.border,
+    text: document.style.text,
+  };
+  return { identity, collection, scene: document.scene, resources, paint };
+}
+
+/** Makes the mistake for workspace contents that couldn't be read: `encoding-failed`. */
+function unreadableContentsFailure(message: string): ExportResult<never> {
+  return exportFailure('encoding-failed', 'workspace', message);
+}
+
+/** Makes the mistake for a collection that doesn't exist: `invalid-input` at its ID. */
+function missingCollectionFailure(): ExportResult<never> {
+  return exportFailure('invalid-input', 'identity.collectionId', 'Collection does not exist');
+}
+
+/** Makes the mistake for an old revision: `snapshot-mismatch` at `identity.revision`. */
+function revisionMismatchFailure(): ExportResult<never> {
+  return exportFailure(
+    'snapshot-mismatch',
+    'identity.revision',
+    'Requested revision is no longer available',
+  );
 }

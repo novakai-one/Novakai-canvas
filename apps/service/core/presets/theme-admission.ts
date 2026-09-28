@@ -16,7 +16,9 @@ import type {
   ChromeName,
   Json,
   Preset,
+  StoredBlob,
 } from '../../contract/records/capability-types.js';
+import type { CapabilityFailure } from '../../contract/records/transport/failure-source.js';
 import {
   hexColour,
   sourceTheme,
@@ -48,151 +50,221 @@ export function prepareTheme(
   fontBindings: readonly FontBinding[],
   inputs: ThemeSavingInputs,
 ): AuthoringResult<Json> {
-  const parsed = sourceTheme.safeParse(preset);
-  if (!parsed.success) return success(preset);
-  const base = inputs.templates.read(catalog, selection(parsed.data.raw.base));
-  if (!base.ok)
-    return authoringFailure('invalid-input', base.error.path, base.error.message, [], base.error);
-  return withFonts(preset, parsed.data.raw, base.value, fontBindings, inputs.assets);
+  const theme = sourceTheme.safeParse(preset);
+  if (!theme.success) {
+    return success(preset);
+  }
+  const base = findBaseTheme(theme.data.raw.base, catalog, inputs);
+  if (!base.ok) {
+    return base;
+  }
+  return rewriteTheme(preset, theme.data.raw, base.value, fontBindings, inputs.assets);
+}
+
+/** The theme's settings as written for people, such as `base=ink` and `"#72dbe8"`. */
+type SourceRaw = SourceTheme['raw'];
+
+/** The chrome field of the rewritten settings; left out when the theme names no chrome. */
+interface ChromeField {
+  readonly chrome?: ChromeName;
+}
+
+/** One override under its token ID, in exact form. */
+type OverrideEntry = readonly [string, Json];
+
+/** Finds the saved theme the base names, with Templates. */
+function findBaseTheme(
+  baseText: string,
+  catalog: Catalog,
+  inputs: ThemeSavingInputs,
+): AuthoringResult<Preset> {
+  const selection = templatesSelection(baseText);
+  const base = inputs.templates.read(catalog, selection);
+  if (!base.ok) {
+    return baseNotFoundFailure(base.error);
+  }
+  return success(base.value);
 }
 
 /**
- * The Templates selection for a base (grammar in theme-pin.ts): an exact pin selects that version
- * and bare digest, any other text is an ID Templates resolves to its latest version. Templates
- * parses the selection and refuses what it does not store.
+ * Writes the base as the selection Templates reads (grammar in theme-pin.ts): an exact pin
+ * selects that version and bare digest; any other text is an ID, meaning its latest version.
  */
-function selection(base: string): unknown {
-  const pin = parseThemeSelection(base);
-  if (pin.kind === 'latest') return { kind: 'theme', id: pin.id };
-  return { kind: 'theme', id: pin.id, version: pin.version, digest: pin.digest };
+function templatesSelection(baseText: string): unknown {
+  const selection = parseThemeSelection(baseText);
+  if (selection.kind === 'latest') {
+    return { kind: 'theme', id: selection.id };
+  }
+  return { kind: 'theme', id: selection.id, version: selection.version, digest: selection.digest };
 }
 
-/**
- * The admission with its raw block rewritten (see `rawBlock`); other admission keys stay. Fails
- * with the first font's failure (see `font`), as `rawBlock` fails, or as `withRaw` fails.
- */
-function withFonts(
-  admission: Json,
-  raw: SourceTheme['raw'],
+/** Checks each font with Assets, rewrites the settings, and puts them back into the preset. */
+function rewriteTheme(
+  preset: Json,
+  raw: SourceRaw,
   base: Preset,
-  bindings: readonly FontBinding[],
+  fontBindings: readonly FontBinding[],
   assets: Pick<Assets, 'resolve'>,
 ): AuthoringResult<Json> {
-  const fonts = collect(bindings, (binding) => font(binding, assets));
-  if (!fonts.ok) return fonts;
-  const block = rawBlock(raw, base, fonts.value);
-  if (!block.ok) return block;
-  return withRaw(admission, block.value);
+  const fonts = collect(fontBindings, (binding) => checkFont(binding, assets));
+  if (!fonts.ok) {
+    return fonts;
+  }
+  const exactRaw = rewriteRaw(raw, base, fonts.value);
+  if (!exactRaw.ok) {
+    return exactRaw;
+  }
+  return replaceRaw(preset, exactRaw.value);
 }
 
-/**
- * The approved font pin for one alias, with the family from the Assets descriptor (never a
- * caller-supplied name or an OS fallback). Fails with `missing-asset` at Assets' path for any
- * failure of Assets to resolve the digest, such as bytes not stored or a malformed digest (Assets'
- * failure kept as source), and `invalid-input` at the alias when the bytes are not a font with a
- * verified family.
- */
-function font(
-  input: FontBinding,
+/** Checks one font file with Assets, and pins it under its name with the family Assets found. */
+function checkFont(
+  binding: FontBinding,
   assets: Pick<Assets, 'resolve'>,
 ): AuthoringResult<FontEntry> {
-  const blob = assets.resolve(input.digest);
-  if (!blob.ok)
-    return authoringFailure('missing-asset', blob.error.path, blob.error.message, [], blob.error);
-  if (blob.value.descriptor.kind !== 'font' || blob.value.descriptor.fontFamily === null)
-    return authoringFailure(
-      'invalid-input',
-      input.alias,
-      'Theme input must identify a verified font',
-    );
-  return {
-    ok: true,
-    value: [
-      input.alias,
-      { family: blob.value.descriptor.fontFamily, digest: input.digest, approved: true },
-    ],
-  };
+  const blob = assets.resolve(binding.digest);
+  if (!blob.ok) {
+    return missingFontFailure(blob.error);
+  }
+  const family = verifiedFontFamily(blob.value.descriptor);
+  if (family === null) {
+    return unverifiedFontFailure(binding.alias);
+  }
+  const entry: FontEntry = [binding.alias, { family, digest: binding.digest, approved: true }];
+  return success(entry);
 }
 
-/**
- * The admission's fields with `raw` replaced by the rewritten block. Fails with `invalid-input` at
- * `theme` when the admission is not a record of JSON fields.
- */
-function withRaw(
-  admission: Json,
+/** Gives the font family Assets verified for a stored file, or `null` when it isn't a font. */
+function verifiedFontFamily(descriptor: StoredBlob['descriptor']): string | null {
+  if (descriptor.kind !== 'font') {
+    return null;
+  }
+  return descriptor.fontFamily;
+}
+
+/** Puts the rewritten settings back into the preset, in place of `raw`. */
+function replaceRaw(
+  preset: Json,
   raw: Json,
 ): AuthoringResult<Json> {
-  const header = presetFields.safeParse(admission);
-  if (!header.success) return preparationFailed();
-  return { ok: true, value: { ...header.data, raw } };
+  const fields = presetFields.safeParse(preset);
+  if (!fields.success) {
+    return malformedThemeFailure();
+  }
+  const rewritten = { ...fields.data, raw };
+  return success(rewritten);
 }
 
 /**
- * The rewritten raw block: the authored chrome kept, the base as an exact preset pin, each font
- * alias bound to its verified family and each override translated. Fails with `invalid-input` at
- * `theme` when the chrome is not a Design System chrome name or an override is not a hex colour.
+ * Rewrites the settings in exact form: the chrome kept, the base as an exact pin, each font
+ * pinned and each colour as numbers.
  */
-function rawBlock(
-  raw: SourceTheme['raw'],
+function rewriteRaw(
+  raw: SourceRaw,
   base: Preset,
   fonts: readonly FontEntry[],
 ): AuthoringResult<Json> {
-  const chrome = chromeField(raw.chrome);
-  if (!chrome.ok) return chrome;
-  const overrides = collect(Object.entries(raw.overrides), tokenEntry);
-  if (!overrides.ok) return overrides;
+  const chrome = checkChrome(raw.chrome);
+  if (!chrome.ok) {
+    return chrome;
+  }
+  const overrides = collect(Object.entries(raw.overrides), exactOverride);
+  if (!overrides.ok) {
+    return overrides;
+  }
   const pin = { kind: base.kind, id: base.id, version: base.version, digest: base.digest };
-  return {
-    ok: true,
-    value: {
-      ...chrome.value,
-      base: { kind: 'preset', pin },
-      fonts: Object.fromEntries(fonts),
-      overrides: Object.fromEntries(overrides.value),
-    },
+  const exactRaw: Json = {
+    ...chrome.value,
+    base: { kind: 'preset', pin },
+    fonts: Object.fromEntries(fonts),
+    overrides: Object.fromEntries(overrides.value),
   };
+  return success(exactRaw);
 }
 
-/**
- * The authored chrome selector as its own field, or no field when none was authored. Fails with
- * `invalid-input` at `theme` when it is not a Design System chrome name.
- */
-function chromeField(chrome: unknown): AuthoringResult<{ readonly chrome?: ChromeName }> {
-  if (chrome === undefined) return { ok: true, value: {} };
+/** Checks the chrome is a Design System chrome name; no chrome written means no field. */
+function checkChrome(chrome: unknown): AuthoringResult<ChromeField> {
+  if (chrome === undefined) {
+    return success({});
+  }
   const name = chromeName.safeParse(chrome);
-  if (!name.success) return preparationFailed();
-  return { ok: true, value: { chrome: name.data } };
+  if (!name.success) {
+    return malformedThemeFailure();
+  }
+  return success({ chrome: name.data });
 }
 
-/**
- * One override: numbers and pixel dimensions unchanged, a hex colour as an sRGB record. Fails
- * with `invalid-input` at `theme` when a string is not `#rrggbb` or `#rrggbbaa`.
- */
-function tokenEntry([id, value]: readonly [string, ThemeOverride]): AuthoringResult<
-  readonly [string, Json]
-> {
-  if (typeof value !== 'string') return { ok: true, value: [id, value] };
-  const hex = hexColour.safeParse(value);
-  if (!hex.success) return preparationFailed();
-  return { ok: true, value: [id, color(hex.data)] };
+/** Rewrites one override in exact form, and keeps it under its token ID. */
+function exactOverride([id, override]: readonly [
+  string,
+  ThemeOverride,
+]): AuthoringResult<OverrideEntry> {
+  const exact = exactOverrideValue(override);
+  if (!exact.ok) {
+    return exact;
+  }
+  const entry: OverrideEntry = [id, exact.value];
+  return success(entry);
 }
 
-/** The Design System sRGB record for checked `#rrggbb` or `#rrggbbaa` text. Never fails. */
-function color(hex: string): Json {
-  return {
-    colorSpace: 'srgb',
-    components: [1, 3, 5].map((offset) => Number.parseInt(hex.slice(offset, offset + 2), 16) / 255),
-    alpha: colorAlpha(hex),
-  };
+/** Keeps a number or pixel size as it is, and turns hex colour text into numbers. */
+function exactOverrideValue(override: ThemeOverride): AuthoringResult<Json> {
+  if (typeof override !== 'string') {
+    return success(override);
+  }
+  return colourFromHex(override);
 }
 
-/** Opaque (1) for six digits; the final byte over 255 for eight. */
-function colorAlpha(hex: string): number {
-  if (hex.length !== 9) return 1;
-  return Number.parseInt(hex.slice(7, 9), 16) / 255;
+/** Checks hex colour text is `#rrggbb` or `#rrggbbaa`, and turns it into an sRGB colour. */
+function colourFromHex(text: string): AuthoringResult<Json> {
+  const hex = hexColour.safeParse(text);
+  if (!hex.success) {
+    return malformedThemeFailure();
+  }
+  const colour = srgbColour(hex.data);
+  return success(colour);
 }
 
-/** The refusal for a malformed theme: `invalid-input` at `theme`. */
-function preparationFailed(): AuthoringResult<never> {
+/** Builds Design System's sRGB record from checked hex text, each part from 0 to 1. */
+function srgbColour(hex: string): Json {
+  const components = [hexChannel(hex, 1), hexChannel(hex, 3), hexChannel(hex, 5)];
+  const alpha = hexAlpha(hex);
+  return { colorSpace: 'srgb', components, alpha };
+}
+
+/** Reads the two hex digits at `offset` as a fraction from 0 to 1: `ff` is 1. */
+function hexChannel(
+  hex: string,
+  offset: number,
+): number {
+  const byte = Number.parseInt(hex.slice(offset, offset + 2), 16);
+  return byte / 255;
+}
+
+/** Reads the alpha: 1 (opaque) for six digits, or the last two digits as a fraction for eight. */
+function hexAlpha(hex: string): number {
+  if (hex.length !== 9) {
+    return 1;
+  }
+  return hexChannel(hex, 7);
+}
+
+/** Makes the mistake for a base Templates can't find: `invalid-input`, Templates' kept. */
+function baseNotFoundFailure(source: CapabilityFailure): AuthoringResult<never> {
+  return authoringFailure('invalid-input', source.path, source.message, [], source);
+}
+
+/** Makes the mistake for a font file Assets can't find: `missing-asset`, Assets' kept. */
+function missingFontFailure(source: CapabilityFailure): AuthoringResult<never> {
+  return authoringFailure('missing-asset', source.path, source.message, [], source);
+}
+
+/** Makes the mistake for a file that isn't a verified font: `invalid-input` at its name. */
+function unverifiedFontFailure(alias: string): AuthoringResult<never> {
+  return authoringFailure('invalid-input', alias, 'Theme input must identify a verified font');
+}
+
+/** Makes the mistake for a malformed theme: `invalid-input` at `theme`. */
+function malformedThemeFailure(): AuthoringResult<never> {
   return authoringFailure('invalid-input', 'theme', 'Theme preparation failed');
 }

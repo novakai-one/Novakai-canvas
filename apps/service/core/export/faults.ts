@@ -30,16 +30,11 @@ export function exportFailure(
   path: string,
   message: string,
 ): ExportResult<never> {
-  return {
-    ok: false,
-    error: {
-      code,
-      path,
-      message,
-      recovery: 'Correct the input or repair the provider, then retry the read.',
-    },
-  };
+  return { ok: false, error: { code, path, message, recovery: EXPORT_RECOVERY } };
 }
+
+/** The advice every export mistake carries. */
+const EXPORT_RECOVERY = 'Correct the input or repair the provider, then retry the read.';
 
 /** Makes the mistake for an export that was stopped: `cancelled` at `export`. */
 export function cancelledFailure(): ExportResult<never> {
@@ -60,7 +55,9 @@ export function readOrRenderFailure(
   error: ReadOrRenderError,
   path: string,
 ): ExportResult<never> {
-  if (error.code === 'cancelled') return exportFailure('cancelled', path, error.message);
+  if (error.code === 'cancelled') {
+    return exportFailure('cancelled', path, error.message);
+  }
   return exportFailure('encoding-failed', path, error.message);
 }
 
@@ -69,8 +66,10 @@ export function readOrRenderFailure(
  * `cleanup-failed` at `export.release`.
  */
 export function translateRelease(release: AssetResult<void>): ExportResult<void> {
-  if (release.ok) return release;
-  return exportFailure('cleanup-failed', 'export.release', release.error.message);
+  if (!release.ok) {
+    return releaseRefusedFailure(release.error.message);
+  }
+  return release;
 }
 
 /**
@@ -83,9 +82,13 @@ export function combineWithCleanup<T>(
   primary: ExportResult<T>,
   cleanup: ExportResult<void>,
 ): ExportResult<T> {
-  if (cleanup.ok) return primary;
-  if (primary.ok) return cleanup;
-  return { ok: false, error: { ...primary.error, cleanup: cleanup.error } };
+  if (cleanup.ok) {
+    return primary;
+  }
+  if (primary.ok) {
+    return cleanup;
+  }
+  return primaryWithCleanupFailure(primary, cleanup);
 }
 
 /**
@@ -94,8 +97,10 @@ export function combineWithCleanup<T>(
  * clean-up fault is `unavailable`.
  */
 export function exportRouteFailure(refusal: ExportFailure): Result<never> {
-  const { code, path, message } = refusal.error;
-  return failure(ROUTE_CODE[code], path, message, exportSource(refusal.error));
+  const diagnostic = refusal.error;
+  const routeCode = ROUTE_CODE[diagnostic.code];
+  const source = exportSource(diagnostic);
+  return failure(routeCode, diagnostic.path, diagnostic.message, source);
 }
 
 /** The service codes an Export refusal becomes. */
@@ -120,7 +125,21 @@ const ROUTE_CODE: Readonly<Record<ExportErrorCode, RouteCode>> = Object.freeze({
   'resource-rejected': 'unavailable',
 });
 
-/** The diagnostic as source evidence; an absent cleanup stays an explicit undefined key. */
+/** Makes the mistake for Assets refusing to let go: `cleanup-failed` at `export.release`. */
+function releaseRefusedFailure(message: string): ExportResult<never> {
+  return exportFailure('cleanup-failed', 'export.release', message);
+}
+
+/** Keeps the export's own mistake, with the mistake from letting go attached under `cleanup`. */
+function primaryWithCleanupFailure(
+  primary: ExportFailure,
+  cleanup: ExportFailure,
+): ExportFailure {
+  const diagnostic = { ...primary.error, cleanup: cleanup.error };
+  return { ok: false, error: diagnostic };
+}
+
+/** Copies Export's mistake into a failure source; `cleanup` is always a key, undefined if none. */
 function exportSource(diagnostic: ExportDiagnostic): CapabilityFailure {
   return {
     code: diagnostic.code,
@@ -131,8 +150,10 @@ function exportSource(diagnostic: ExportDiagnostic): CapabilityFailure {
   };
 }
 
-/** A nested cleanup failure as source evidence; undefined when the cleanup succeeded. */
+/** Copies the attached clean-up mistake into a failure source, or undefined when there is none. */
 function cleanupSource(cleanup: ExportDiagnostic | undefined): CapabilityFailure | undefined {
-  if (cleanup === undefined) return undefined;
+  if (cleanup === undefined) {
+    return undefined;
+  }
   return exportSource(cleanup);
 }

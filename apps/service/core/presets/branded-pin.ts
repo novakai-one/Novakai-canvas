@@ -27,8 +27,16 @@ export function checkThemePin(pin: {
   const id = presetId.safeParse(pin.id);
   const version = presetVersion.safeParse(pin.version);
   const digest = presetDigest.safeParse(pin.digest);
-  if (!id.success || !version.success || !digest.success) return invalidIdentityFailure();
-  return success({ kind: 'theme', id: id.data, version: version.data, digest: digest.data });
+  if (!id.success || !version.success || !digest.success) {
+    return invalidIdentityFailure();
+  }
+  const checked: PresetPin = {
+    kind: 'theme',
+    id: id.data,
+    version: version.data,
+    digest: digest.data,
+  };
+  return success(checked);
 }
 
 /**
@@ -37,6 +45,8 @@ export function checkThemePin(pin: {
  */
 export function checkPresetDigest(text: string): TemplatesResult<PresetDigest> {
   const digest = presetDigest.safeParse(text);
-  if (!digest.success) return invalidIdentityFailure();
+  if (!digest.success) {
+    return invalidIdentityFailure();
+  }
   return success(digest.data);
 }

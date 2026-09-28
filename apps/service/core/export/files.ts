@@ -20,8 +20,11 @@ import { exportRouteFailure } from './faults.js';
  * When Export found a mistake instead, answers it as the service's failure (`exportRouteFailure`).
  */
 export function buildArtifactFile(artifact: ExportResult<Artifact>): Result<SentFile> {
-  if (!artifact.ok) return exportRouteFailure(artifact);
-  return success(artifactFile(artifact.value));
+  if (!artifact.ok) {
+    return exportRouteFailure(artifact);
+  }
+  const file = artifactFile(artifact.value);
+  return success(file);
 }
 
 /**
@@ -32,13 +35,10 @@ export function buildMarkdownFile(
   request: Pick<ExportRequest, 'identity' | 'scope'>,
   markdown: string,
 ): SentFile {
-  const scope = request.scope.kind === 'all' ? 'all' : request.scope.id;
-  return {
-    bytes: UTF8.encode(markdown),
-    mediaType: 'text/markdown; charset=utf-8',
-    filename: `${request.identity.collectionId}-${request.identity.revision}-${scope}.md`,
-    headers: revisionHeaders(request.identity),
-  };
+  const bytes = UTF8.encode(markdown);
+  const filename = markdownFilename(request);
+  const headers = revisionHeaders(request.identity);
+  return { bytes, mediaType: 'text/markdown; charset=utf-8', filename, headers };
 }
 
 /** Builds the UTF-8 download for DSL text, such as `my-diagram-3.canvas`. Never fails. */
@@ -46,12 +46,10 @@ export function buildDslFile(
   identity: ExportRequest['identity'],
   dsl: string,
 ): SentFile {
-  return {
-    bytes: UTF8.encode(dsl),
-    mediaType: 'text/plain; charset=utf-8',
-    filename: `${identity.collectionId}-${identity.revision}.canvas`,
-    headers: revisionHeaders(identity),
-  };
+  const bytes = UTF8.encode(dsl);
+  const filename = `${identity.collectionId}-${identity.revision}.canvas`;
+  const headers = revisionHeaders(identity);
+  return { bytes, mediaType: 'text/plain; charset=utf-8', filename, headers };
 }
 
 /** Encodes text downloads as UTF-8. */
@@ -63,18 +61,35 @@ const REVISION_HEADER = 'X-Novakai-Export-Revision';
 /** The header naming an artifact's digest. */
 const DIGEST_HEADER = 'X-Novakai-Export-Digest';
 
-/** The artifact's bytes, named by identity, scope and extension, with revision and digest. */
-function artifactFile(artifact: Artifact): SentFile {
-  const name = `${artifact.identity.collectionId}-${artifact.identity.revision}-${artifact.scope.kind}.${artifact.extension}`;
-  return {
-    bytes: artifact.bytes,
-    mediaType: artifact.mediaType,
-    filename: name,
-    headers: { ...revisionHeaders(artifact.identity), [DIGEST_HEADER]: artifact.digest },
-  };
+/** Names a Markdown download, such as `my-diagram-3-all.md` or `my-diagram-3-intro.md`. */
+function markdownFilename(request: Pick<ExportRequest, 'identity' | 'scope'>): string {
+  const { collectionId, revision } = request.identity;
+  const part = partName(request.scope);
+  return `${collectionId}-${revision}-${part}.md`;
 }
 
-/** The headers stamping a download with its exported revision. Never fails. */
+/** Names the part a Markdown export holds: `all`, or the section's ID, such as `intro`. */
+function partName(scope: ExportRequest['scope']): string {
+  if (scope.kind === 'all') {
+    return 'all';
+  }
+  return scope.id;
+}
+
+/** Wraps Export's finished file as the download, stamped with its revision and digest. */
+function artifactFile(artifact: Artifact): SentFile {
+  const filename = artifactFilename(artifact);
+  const headers = { ...revisionHeaders(artifact.identity), [DIGEST_HEADER]: artifact.digest };
+  return { bytes: artifact.bytes, mediaType: artifact.mediaType, filename, headers };
+}
+
+/** Names Export's finished file, such as `my-diagram-3-all.svg`. */
+function artifactFilename(artifact: Artifact): string {
+  const { collectionId, revision } = artifact.identity;
+  return `${collectionId}-${revision}-${artifact.scope.kind}.${artifact.extension}`;
+}
+
+/** Makes the header that stamps a download with its exported revision. */
 function revisionHeaders(
   identity: Pick<ExportRequest['identity'], 'revision'>,
 ): Readonly<Record<string, string>> {
