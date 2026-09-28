@@ -1,15 +1,21 @@
 /*
- * The export request the service boundary parses: identity, format, scope and scale. The
- * collection and section IDs use Model's ID schemas. Declarations only; core/export/request.ts
- * reads it, and a refused request is the caller's to correct and resend.
+ * Why this file exists
+ *
+ * An export request arrives as JSON, for example `{ identity: { collectionId: 'my-diagram',
+ * revision: 3 }, format: 'png', scope: { kind: 'all' } }`. Before anything is exported, its shape
+ * must be checked: a known format, a whole revision number, a scale from 1 to 4.
+ *
+ * This file holds the schemas that check it, using Model's own ID checks for the collection and
+ * section. core/export runs the check. A refused request comes back as `invalid-input`; the caller
+ * fixes it and sends it again.
  */
 import { z } from 'zod';
 import { collectionId, sectionId } from '../../schemas.js';
 
 /**
- * What to export: identity, format and scope. A failure here is an unsupported request.
- * Revision is any non-negative integer; `.int()` is avoided because it also caps at safe
- * integers, which the boundary has never done. Extra keys are ignored, never rejected.
+ * Checks what to export: which collection at which revision, the format, and the whole collection
+ * or one section. A revision is any whole number from 0 up. (`.int()` is not used: it also refuses
+ * numbers above 2^53 − 1, which this check has never done.) Extra keys are ignored.
  */
 export const exportSelection = z.object({
   identity: z.object({
@@ -23,10 +29,13 @@ export const exportSelection = z.object({
   ]),
 });
 
-/** A complete export request; scale defaults to 1 and is judged only after the selection. */
+/**
+ * Checks a whole export request: what to export, plus the scale (1 to 4; 1 when left out). The
+ * scale is checked only after what to export.
+ */
 export const exportRequest = exportSelection.extend({
   scale: z.number().min(1).max(4).default(1),
 });
 
-/** One checked export request. */
+/** One export request that passed {@link exportRequest}. */
 export type ExportRequest = z.infer<typeof exportRequest>;

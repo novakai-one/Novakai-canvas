@@ -1,7 +1,13 @@
 /*
- * The render job and the document it produces. Declarations only; core/rendering builds jobs, the
- * render worker produces documents, and the browser admits a document before opening Canvas. A
- * failed job keeps the caller's last accepted scene; Authoring owns admission and retry.
+ * Why this file exists
+ *
+ * To draw a collection, the render worker needs everything up front, because it can't read the
+ * workspace. For example, to draw `my-diagram` it needs the collection, its theme's fonts and
+ * style, its images and the layout options. That bundle is a `RenderingJob`.
+ *
+ * The worker answers with a `RenderDocument`: the laid-out scene plus the inputs it was made from,
+ * so the browser can check the scene before showing it. This file declares both, and why a job
+ * runs (`RenderPurpose`). Declarations only.
  */
 import type { Collection } from '@novakai/canvas-model';
 import type { FontSet, Projection, ResolvedStyle, VisualAsset } from '@novakai/canvas-presentation';
@@ -9,23 +15,31 @@ import type { Scene, LayoutOptions, SupplementalMeasurements } from '@novakai/ca
 import type { HostPath, RenderJobId } from '../../brands.js';
 
 /**
- * Why a job runs, which names it: `read` renders a committed collection, `admission` renders a
- * candidate for Authoring's feasibility check, and `headless` renders for the CLI.
+ * Why a job runs; its ID starts with this. `read` draws a saved collection, `admission` a change
+ * not yet saved (to check it can be laid out), `headless` a diagram for the CLI with no service.
  */
 export type RenderPurpose = 'read' | 'admission' | 'headless';
 
-/** Admitted resources are detached into a worker request; the renderer has no persistence or Authoring authority. */
+/**
+ * Everything the render worker needs to draw one collection. The worker can't read or save the
+ * workspace; it gets only this.
+ */
 export interface RenderingJob {
   readonly id: RenderJobId;
   readonly collection: Collection;
   readonly fonts: FontSet;
   readonly style: ResolvedStyle;
+  /** The collection's images. */
   readonly assets: readonly VisualAsset[];
   readonly options: LayoutOptions;
+  /** The path of the wire router's WebAssembly file (libavoid). */
   readonly wasmResource: HostPath;
 }
 
-/** Browser receives enough owner input to independently admit serialized geometry before opening Canvas. */
+/**
+ * A drawn collection: the laid-out scene, and the inputs it was made from, so the browser can check
+ * the scene itself before it shows it.
+ */
 export interface RenderDocument {
   readonly collection: Collection;
   readonly projection: Projection;

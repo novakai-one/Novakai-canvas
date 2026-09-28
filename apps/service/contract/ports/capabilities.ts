@@ -1,11 +1,13 @@
 /*
- * The capability seam: the capability behaviour service rules may call. Core cannot import a
- * capability package, so compose/capabilities.ts builds ServiceCapabilities and compose passes
- * slices of it on. Today builtin preset preparation, the workspace reader, resource selection,
- * the Authoring planners and the export route take slices; core modules in later PRs take
- * `Pick<ServiceCapabilities, …>` of what they use.
- * Declarations only, plus the frozen empty resource set; the capabilities own their failures and
- * recovery.
+ * Why this file exists
+ *
+ * Service rules lean on the capabilities. For example, before a collection is saved, Model checks
+ * it is valid and Library plans its place in the catalog. But service core may not import a
+ * capability package.
+ *
+ * So compose builds the capabilities once and hands each part of core only the ones it uses, such
+ * as `Pick<ServiceCapabilities, 'model' | 'library'>`. This file declares that bundle, and
+ * `EMPTY_RESOURCES` for calls that use no themes or files. Each capability keeps its own mistakes.
  */
 import type { DesignSystem } from '@novakai/canvas-design-system';
 import type { composeExport, formatMarkdown } from '@novakai/canvas-export';
@@ -18,42 +20,50 @@ import type {
 import type { plan, stage, validate } from '@novakai/canvas-model';
 import type { Templates } from '@novakai/canvas-templates';
 
-/** Model's collection rules: validate a collection, plan a checked transition, stage one unchecked. */
+/**
+ * Model's collection rules: check a collection, plan a checked change, and stage an unchecked one.
+ */
 export interface ModelRules {
   readonly validate: typeof validate;
   readonly plan: typeof plan;
   readonly stage: typeof stage;
 }
 
-/** Library's catalog rules: plan membership, plan organisation changes, validate a snapshot. */
+/**
+ * Library's catalog rules: plan adding or removing collections, plan catalog changes (folders,
+ * order), and check a whole catalog.
+ */
 export interface LibraryRules {
   readonly planMembership: typeof planMembership;
   readonly planOrganisation: typeof planOrganisation;
   readonly validateSnapshot: typeof validateLibrarySnapshot;
 }
 
-/** Export's bindings factory and its Markdown text formatter. */
+/**
+ * Export's builder (`compose`, which makes the SVG and PNG exporter) and its Markdown formatter.
+ */
 export interface ExportRules {
   readonly compose: typeof composeExport;
   readonly formatMarkdown: typeof formatMarkdown;
 }
 
-/** Every capability behaviour the service uses. Built by compose/capabilities.ts. */
+/** Every capability the service uses. Built once by compose/capabilities.ts. */
 export interface ServiceCapabilities {
   readonly model: ModelRules;
   readonly library: LibraryRules;
   readonly export: ExportRules;
   /** Language bound to Model as its reader, planner and stage. */
   readonly language: Language;
+  /** Design System: resolves themes and design tokens. */
   readonly system: DesignSystem;
   /**
-   * Templates bound to one call's resolved resources and the installation's token sources. Each
-   * call returns a new binding, so no alias registry is shared between requests.
+   * Makes a Templates (the theme and recipe store) that knows the themes and files one request
+   * uses. Each call makes a new one, so what one request looked up is never seen by another.
    */
   templates(resources: ResolvedResources): Templates<LoweredIntent>;
 }
 
-/** No themes and no assets: the resources for catalog reads and theme admission. Frozen. */
+/** No themes and no files: for catalog reads and theme saving, which use none. Frozen. */
 export const EMPTY_RESOURCES: ResolvedResources = Object.freeze({
   themes: Object.freeze({}),
   assets: Object.freeze({}),

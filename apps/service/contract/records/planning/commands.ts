@@ -1,10 +1,20 @@
 /*
- * Planner payload schemas: the envelopes the service's planners and resource selection decode,
- * including the private bootstrap command.
- * Declarations only; Model, Language, Library and Templates own the contents and their failures.
+ * Why this file exists
+ *
+ * A change request names the Authoring planner that turns it into a write, and carries that
+ * planner's payload (its "command"). For example, a DSL change carries
+ * `{ source: 'collection my-diagram …', mode: 'replace' }`.
+ *
+ * This file holds each planner's check of its payload's outer shape: DSL, Model, Library, the
+ * preset header, and the private installation command only start-up sends. What is inside (DSL
+ * text, Model or Library changes, the preset) is checked by its own capability.
  */
 import { z } from 'zod';
-/** Human and DSL envelopes select different public planners; Model/Language own the contained change vocabulary. */
+/**
+ * Checks a DSL planner payload: the DSL text (at most 16 MiB), whether it creates, replaces or
+ * patches a collection, and optionally the exact theme each theme name stands for (see
+ * `ResourceCommands.freeze`). Language checks the DSL text.
+ */
 export const dslCommand = z
   .strictObject({
     source: z.string().max(16 * 1024 * 1024),
@@ -12,22 +22,39 @@ export const dslCommand = z
     themePins: z.record(z.string(), z.string()).optional(),
   })
   .readonly();
+/** A DSL planner payload that passed {@link dslCommand}. */
 export type DslCommand = z.infer<typeof dslCommand>;
+/**
+ * Checks a Model planner payload: the collection ID as text (1–128 characters) and up to 1000
+ * Model changes, which Model checks.
+ */
 export const modelCommand = z
   .strictObject({ collection: z.string().min(1).max(128), changes: z.array(z.unknown()).max(1000) })
   .readonly();
+/** A Model planner payload that passed {@link modelCommand}. */
 export type ModelCommand = z.infer<typeof modelCommand>;
-/** A preset admission's header: the kind it admits and, for a recipe, its DSL source. Templates checks the rest. */
+/**
+ * Checks the header of a preset (a theme or a recipe) being saved: which kind it is and, for a
+ * recipe, its DSL text. Templates checks the rest.
+ */
 export const presetAdmission = z.looseObject({
   kind: z.enum(['theme', 'recipe']),
   source: z.string().optional(),
 });
+/** A preset header that passed {@link presetAdmission}. */
 export type PresetAdmission = z.infer<typeof presetAdmission>;
-/** A preset change names its admission; resource selection reads only the admission header. */
+/**
+ * Checks a preset planner payload far enough to find its header; resource selection reads only
+ * that.
+ */
 export const presetChange = z.looseObject({ admission: presetAdmission });
-/** The private bootstrap planner's only command; HTTP never reaches that planner. */
+/**
+ * Checks the one command of the private installation planner. HTTP can never reach that planner.
+ */
 export const initializeCommand = z.strictObject({ action: z.literal('initialize') });
-/** Library owns the inner catalog operation schema and validates the complete batch. */
+/**
+ * Checks a Library planner payload: up to 1000 catalog changes, which Library checks as one batch.
+ */
 export const libraryCommand = z
   .strictObject({ changes: z.array(z.unknown()).max(1000) })
   .readonly();

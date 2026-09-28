@@ -10,7 +10,7 @@ import type { BuiltinResources } from '../../contract/records/presets/builtins.j
 import type { ResourceCommands, WorkspaceReader } from '../../contract/ports/workspace.js';
 import type { CollectionRenderer } from '../../contract/ports/rendering.js';
 import type { ChangeChannel } from '../../contract/ports/notifications.js';
-import type { ExportHandler } from '../../contract/ports/export.js';
+import type { ExportRoute } from '../../contract/ports/export.js';
 import type { PrepareMode } from '../../contract/records/workspace/session.js';
 import type { WorkspaceId } from '../../contract/brands.js';
 import { authoringFailure, failure, type Result } from '../../contract/errors.js';
@@ -26,7 +26,7 @@ export interface SessionOwners {
   readonly resources: ResourceCommands;
   readonly views: WorkspaceReader;
   readonly renderer: CollectionRenderer;
-  readonly exporter: ExportHandler['invoke'];
+  readonly exporter: ExportRoute['invoke'];
   readonly changes: Pick<ChangeChannel, 'subscribe'>;
   readonly lifetime: SessionLifetime;
   readonly readSignal: AbortSignal;

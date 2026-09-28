@@ -10,7 +10,7 @@ import type {
   Request,
   Snapshot,
 } from '../../contract/records/capabilities.js';
-import type { WorkspaceState } from '../../contract/records/workspace/startup.js';
+import type { StartupKind } from '../../contract/records/workspace/startup.js';
 import type { WorkspaceSession } from '../../contract/types.js';
 import type { Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
@@ -47,14 +47,14 @@ export async function startWorkspace(owners: StartupOwners): Promise<Result<void
 const NO_APPLY_OPTIONS = Object.freeze({});
 
 /** `existing` when the snapshot holds a live workspace record, otherwise `new`. Never fails. */
-function workspaceState(snapshot: Snapshot): WorkspaceState {
+function workspaceState(snapshot: Snapshot): StartupKind {
   if (liveRecords(snapshot, 'workspace').length > 0) return 'existing';
   return 'new';
 }
 
 /** Validates an existing workspace or initializes a new one. Fails as `startWorkspace` names. */
 function prepare(
-  state: WorkspaceState,
+  state: StartupKind,
   snapshot: Snapshot,
   owners: StartupOwners,
 ): Promise<Result<void>> {
@@ -99,7 +99,7 @@ function started(result: AuthoringResult<unknown>): Result<void> {
   return success(undefined);
 }
 
-/** Unreachable: `WorkspaceState` has two members. Answers `unavailable` at `startup`. */
+/** Unreachable: `StartupKind` has two members. Answers `unavailable` at `startup`. */
 async function unsupported(state: never): Promise<Result<void>> {
   void state;
   return failure('unavailable', 'startup', 'Unsupported workspace state');

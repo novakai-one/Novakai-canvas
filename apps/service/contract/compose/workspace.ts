@@ -1,8 +1,12 @@
 /*
- * The workspace roles every request shares: the checked-contents reader, resource selection,
- * resource commands, render jobs, the render cache and the collection renderer. Bound once per
- * workspace over one Templates binding with no resolved resources. Construction starts no I/O;
- * each role owns its own failures, and Authoring owns commit and recovery.
+ * Why this file exists
+ *
+ * Authoring, the session and the export route all need the same workspace helpers: read a snapshot
+ * into checked contents, pick a request's themes and files, run resource commands, build render
+ * jobs, and render a saved collection. They should share one of each, and one render cache.
+ *
+ * This file builds those shared helpers ("roles") once per workspace. Building them reads no files
+ * and starts nothing. Each role keeps its own mistakes.
  */
 import type { Assets } from '@novakai/canvas-assets';
 import type { BuiltinResources } from '../records/presets/builtins.js';
@@ -18,9 +22,12 @@ import { prepareTheme } from '../../core/presets/theme-admission.js';
 import { cacheRenders } from '../../core/rendering/cache.js';
 import { createRenderJobs } from '../../core/rendering/jobs.js';
 import { createCollectionRenderer } from '../../core/rendering/renderer.js';
-import { libavoidWasm } from './producer.js';
+import { libavoidWasmPath } from './producer.js';
 
-/** What the shared roles are built from: the open assets, the installation and the capabilities. */
+/**
+ * What the shared roles are built from: the open files store, the installation and the
+ * capabilities.
+ */
 export interface WorkspaceRoleInputs {
   readonly assets: Pick<Assets, 'stage' | 'resolve' | 'reserve' | 'acquire'>;
   readonly installation: Pick<BuiltinResources, 'presets' | 'tokens'>;
@@ -29,13 +36,15 @@ export interface WorkspaceRoleInputs {
     ServiceCapabilities,
     'model' | 'library' | 'language' | 'system' | 'templates'
   >;
-  /** The worker-backed producer; the roles render through a cache over it. */
+  /** The render worker pool; the roles render through a cache in front of it. */
   readonly worker: DiagramProducer;
 }
 
 /** The roles one workspace shares between Authoring, the session and the export route. */
 export interface WorkspaceRoles {
+  /** Reads a snapshot into checked contents. */
   readonly views: WorkspaceReader;
+  /** Picks the themes and files a request or collection uses. */
   readonly resources: ResourceSelector;
   readonly commands: ResourceCommands;
   readonly jobs: RenderJobs;
@@ -44,7 +53,7 @@ export interface WorkspaceRoles {
   readonly renderer: CollectionRenderer;
 }
 
-/** Binds the shared roles to one workspace. Never fails; starts no I/O. */
+/** Builds the shared roles for one workspace. Never fails; reads no files. */
 export function wireWorkspaceRoles(inputs: WorkspaceRoleInputs): WorkspaceRoles {
   const { assets, installation, capabilities } = inputs;
   const { model, library, language, system } = capabilities;
@@ -63,7 +72,7 @@ export function wireWorkspaceRoles(inputs: WorkspaceRoleInputs): WorkspaceRoles 
     system,
     sources: installation.tokens,
     templates,
-    wasmResource: libavoidWasm(inputs.resourceRoot),
+    wasmResource: libavoidWasmPath(inputs.resourceRoot),
   });
   const commands = createResourceCommands({
     assets,

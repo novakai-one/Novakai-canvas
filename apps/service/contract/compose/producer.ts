@@ -1,8 +1,13 @@
 /*
- * The parent realm's diagram producer: one render worker pool and the reply reader, bound once.
- * The worker entry, the render time limit and the libavoid wasm location are named here. The pool
- * and reader adapters load lazily. The parent owns worker failure and retry; the service keeps
- * the prior scene on any failed job.
+ * Why this file exists
+ *
+ * Drawing a diagram runs on render worker threads, so a slow layout never blocks the server. The
+ * service needs one pool of those workers, started before the first request, and a way to check
+ * what they send back.
+ *
+ * This file starts that pool and joins it to the reply checker, as one `DiagramProducer`. It also
+ * names the worker's start file, the 30-second time limit, and where libavoid (the library that
+ * routes wires) keeps its WebAssembly file. A failed job leaves the last good picture in place.
  */
 import type { DiagramProducer } from '../ports/rendering.js';
 import type { Result } from '../errors.js';
@@ -20,9 +25,8 @@ const WORKER_ENTRY = new URL('../../cli/render-worker.mjs', import.meta.url);
 const LIBAVOID_WASM = 'vendor/layout/libavoid.wasm';
 
 /**
- * Starts the render worker pool and waits for its first worker. Fails with `unavailable` at
- * `render` ("Rendering bindings could not initialize") when an adapter cannot load or the first
- * worker does not start.
+ * Starts the render worker pool and waits until its first worker is ready. Fails with
+ * `unavailable` at `render` when the worker code can't load or the first worker doesn't start.
  */
 export async function createDiagramProducer(): Promise<Result<DiagramProducer>> {
   try {
@@ -42,8 +46,10 @@ export async function createDiagramProducer(): Promise<Result<DiagramProducer>> 
   }
 }
 
-/** The libavoid wasm path every render job carries, under `resourceRoot`. Never fails. */
-export function libavoidWasm(resourceRoot: HostPath): HostPath {
+/**
+ * The path of libavoid's WebAssembly file inside the resource folder. Every render job carries it.
+ */
+export function libavoidWasmPath(resourceRoot: HostPath): HostPath {
   return hostPath.parse(`${resourceRoot}/${LIBAVOID_WASM}`);
 }
 

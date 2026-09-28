@@ -55,7 +55,7 @@ function admitCurrent(
       'generation',
       'Workspace session changed; reconcile the request receipt',
     );
-  const request = context.ingress.mutation(envelope.request, context.caller);
+  const request = context.admission.admitMutation(envelope.request, context.caller);
   if (!request.ok) return request;
   return success({
     request: request.value,

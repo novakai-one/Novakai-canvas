@@ -1,9 +1,15 @@
 /*
- * `pnpm dev`: the service process entry. Parses the startup arguments into typed values at this
- * host edge (port, host paths, workspace ID, creation time), opens the workspace, serves it on
- * loopback and stops both on SIGINT or SIGTERM. Impure (process, signals, stdio). Every failure is
- * printed as its code, message and recovery with exit code 1; credential values and request
- * bodies are never printed. The user corrects the arguments or the workspace and starts again.
+ * Why this file exists
+ *
+ * Someone starts the service by typing `pnpm dev --port 5174 --workspace ./my-workspace`. Those
+ * words have to become a running service that stops cleanly on Ctrl-C.
+ *
+ * This file checks the port (1024 to 65535) and the folder paths, opens the workspace (always
+ * called `local`), serves it at `http://127.0.0.1:<port>` and prints that address. On Ctrl-C or
+ * SIGTERM it closes the server, then the workspace.
+ *
+ * It never prints a secret or a request body. On a failure it prints the code, message and what to
+ * do next, and exits with code 1.
  */
 import { once } from 'node:events';
 import { parseArgs } from 'node:util';

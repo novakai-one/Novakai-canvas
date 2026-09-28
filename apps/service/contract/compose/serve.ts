@@ -1,8 +1,12 @@
 /*
- * HTTP serving: expose one already-open workspace through authenticated loopback transport. The
- * socket, static-file and credential adapters load lazily; admission, the router and the transport
- * policy bind to the server's security. Every failure is a value; the caller keeps the workspace,
- * closes transport before draining it, and retries startup.
+ * Why this file exists
+ *
+ * An open workspace is no use until the browser and the CLI can reach it. That needs a web server
+ * on `127.0.0.1:<port>`, fresh secrets for this run, the CLI's token file, and the rules for who
+ * may call what.
+ *
+ * This file starts that server for one open workspace. It never opens or closes the workspace:
+ * if the server fails, the caller still has it. Every answer is a `Result` (see `errors.ts`).
  */
 import type { WorkspaceSession } from '../types.js';
 import type { LocalServer, ServerOptions } from '../records/transport/server.js';
@@ -23,11 +27,9 @@ import { httpStatus, transportResponse } from '../../core/transport/status.js';
 import { createServiceLanguage } from './capabilities.js';
 
 /**
- * Serves one already-open workspace on the configured loopback port. Fails with `unavailable` at
- * `credential` when the credential file cannot be created, is unsafe or is malformed,
- * `unavailable` at `server` when the port cannot be opened, and `unavailable` at `server` ("HTTP
- * bindings could not initialize") when an adapter cannot load or anything else throws. The
- * workspace stays open for the caller.
+ * Serves one open workspace at `127.0.0.1:<port>`. Fails with `unavailable` at `credential` when
+ * the CLI's token file can't be made or read safely, and `unavailable` at `server` when the port
+ * can't be opened or the server code can't load. The workspace stays open either way.
  */
 export async function serveWorkspace(
   session: WorkspaceSession,

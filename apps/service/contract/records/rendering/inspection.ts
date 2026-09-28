@@ -1,13 +1,22 @@
 /*
- * The quality report of one committed collection: a valid report with the scene's warnings and
- * counted budgets, or an invalid report with the render refusal. Schemas and their types;
- * core/rendering/inspection.ts builds the report. The JSON is unchanged: the union only removes
- * shapes the service never sent (a valid report with diagnostics, an invalid one with counts).
+ * Why this file exists
+ *
+ * An agent that writes a diagram wants to know if it came out well, without looking at it.
+ * `pnpm canvas inspect my-diagram` answers with a quality report. For example, it may say the
+ * layout is valid with 2 wire crossings, or that the diagram could not be laid out, and why.
+ *
+ * This file holds the check for that report, `inspectionReport`, and its type. A report is either
+ * valid (the layout's warnings and counts) or invalid (why the render was refused, and every count
+ * 0). core/rendering/inspection.ts builds it.
+ *
+ * Declarations only.
  */
 import { z } from 'zod';
 import { failureSource } from '../transport/failure-source.js';
 
-/** Scene warnings arrive owner-defined; consumers retain codes without reinterpreting message text. */
+/**
+ * One layout warning, as Layout wrote it. Callers keep its code and never branch on its message.
+ */
 const warning = z
   .strictObject({
     code: z.string(),
@@ -20,9 +29,9 @@ const warning = z
 const count = z.number().int().nonnegative();
 
 /**
- * A freshly arranged scene is inspection-valid by construction (arrange runs the independent
- * inspector and rejects mismatches), so a valid report is the scene's own warning record plus
- * counted budgets an agent can gate on. It carries no diagnostics.
+ * A layout that worked. Layout checks every layout it makes, so a new one is always valid. The
+ * report is its warnings plus counts an agent can test: wire crossings, layout rules it had to
+ * relax, sections. It carries no diagnostics.
  */
 const validReport = z.strictObject({
   valid: z.literal(true),
@@ -35,8 +44,8 @@ const validReport = z.strictObject({
 });
 
 /**
- * A render refused as `invalid-input`: at least one diagnostic (the refusal, its source kept
- * typed), no warnings and every count 0.
+ * A render refused as `invalid-input`: at least one diagnostic (why it was refused), no warnings,
+ * and every count 0.
  */
 const invalidReport = z.strictObject({
   valid: z.literal(false),
@@ -48,8 +57,9 @@ const invalidReport = z.strictObject({
   engineVersions: z.tuple([]).readonly(),
 });
 
-/** The quality report of one committed collection, told apart by `valid`. */
+/** Checks the quality report of one saved collection. `valid` says which kind it is. */
 export const inspectionReport = z
   .discriminatedUnion('valid', [validReport, invalidReport])
   .readonly();
+/** A quality report that passed {@link inspectionReport}. */
 export type InspectionReport = z.infer<typeof inspectionReport>;

@@ -1,9 +1,13 @@
 /*
- * Authoring for one workspace. The roles the service plugs into Authoring (store, planners,
- * candidate validation, resource leases, change notifications, feasibility) are bound once; one
- * Authoring is composed per request, so a request's cancellation reaches its own feasibility
- * renders without a global current-request variable. The store adapter loads lazily. Authoring
- * owns commit, receipts and recovery.
+ * Why this file exists
+ *
+ * Authoring decides whether a change is saved, but it needs the service's help: storage, planners
+ * that turn DSL or Model changes into writes, checks, file holds, change announcements, and a
+ * check that the result can be laid out. If a request is cancelled, only that request's renders
+ * should stop.
+ *
+ * This file builds those helpers once per workspace, and makes a fresh Authoring for each request
+ * with that request's signal. Authoring itself saves the change and writes the receipt.
  */
 import { composeAuthoring } from '@novakai/canvas-authoring';
 import type { Assets } from '@novakai/canvas-assets';
@@ -38,10 +42,12 @@ import { createLibraryPlanner } from '../../core/authoring-roles/planners/librar
 import { createPresetPlanner } from '../../core/authoring-roles/planners/preset.js';
 import type { WorkspaceRoles } from './workspace.js';
 
-/** A signal that never aborts. Reads, history adoption and the startup apply run under it. */
+/** A signal that never aborts. Reads, history set-up and the start-up apply run under it. */
 export const UNCANCELLED: AbortSignal = new AbortController().signal;
 
-/** What Authoring is bound over: the open workspace, its installation and the shared roles. */
+/**
+ * What Authoring's helpers are built from: the open stores, the installation and the shared roles.
+ */
 export interface AuthoringInputs {
   readonly native: {
     readonly storage: ConditionalStorage;
@@ -55,23 +61,22 @@ export interface AuthoringInputs {
   readonly changes: Notifications;
 }
 
-/** One workspace's Authoring, plus what startup validates, applies and adopts. */
+/** One workspace's Authoring, and what start-up needs from it. */
 export interface WiredAuthoring {
-  /** Authoring bound to one request's cancellation. */
+  /** Makes Authoring for one request; its renders stop when `signal` aborts. */
   readonly authoring: (signal: AbortSignal) => Authoring;
+  /** The check start-up runs on an existing workspace. */
   readonly validation: CandidateValidator;
-  /** The installation request a new workspace applies once. */
-  readonly initialize: AuthoringResult<Request>;
-  /** Adopts the stored history, under `UNCANCELLED`. */
+  /** The request that fills a new workspace with its installation, applied once. */
+  readonly installationRequest: AuthoringResult<Request>;
+  /** Adds undo history to a workspace that has none, or checks the history it has. */
   readonly adopt: () => Promise<AuthoringResult<HistoryStatus>>;
 }
 
 /**
- * Loads the store adapter and binds the workspace's Authoring roles. Rejects when the adapter
- * cannot load; compose startup answers `unavailable` and closes the native handles. An
- * installation over Authoring's proposal limits does not reject: it is carried as `initialize`'s
- * failure (`invalid-input` at `bootstrap.proposal`, see `installationRequest`), which startup
- * answers only for a new workspace.
+ * Builds Authoring's helpers for one workspace. Never fails: an installation too big for Authoring
+ * becomes `installationRequest`'s failure, which only a new workspace sees. Rejects only if the
+ * storage code can't load.
  */
 export async function wireAuthoring(inputs: AuthoringInputs): Promise<WiredAuthoring> {
   const storeModule = await import('../../adapters/storage/authoring-store.js');
@@ -82,7 +87,7 @@ export async function wireAuthoring(inputs: AuthoringInputs): Promise<WiredAutho
   return {
     authoring: (signal) => requestAuthoring(runtime, signal),
     validation: runtime.validation,
-    initialize: installationRequest(installation),
+    installationRequest: installationRequest(installation),
     adopt: () => startup.initializeHistory(inputs.options.workspace),
   };
 }

@@ -1,13 +1,20 @@
 /*
- * The two records the service stores beside diagrams: the workspace metadata record and one asset
- * discovery record per admitted upload. Declarations only, on the owners' ID schemas (Authoring's
- * workspace ID and timestamp, Assets' digest). A record these schemas refuse is corrupt; candidate
- * validation refuses it and Authoring owns recovery.
+ * Why this file exists
+ *
+ * Besides diagrams, the service stores two records of its own. One describes the workspace: its
+ * ID, title and creation time. One describes each uploaded file: for example, a logo's digest,
+ * its alt text and where it came from.
+ *
+ * This file holds the checks for both. A stored record that fails them is corrupt: the check
+ * before saving refuses it. Declarations only.
  */
 import { z } from 'zod';
 import { assetDigest, timestamp, workspaceId } from '../../schemas.js';
 
-/** Service-owned workspace metadata has no diagram content or personal UI preference fields. */
+/**
+ * Checks the workspace record: its ID, title, creation time, and a count that goes up each time a
+ * preset is saved. It holds no diagram content and no personal settings.
+ */
 export const workspaceMetadata = z
   .strictObject({
     schemaVersion: z.literal(1),
@@ -17,7 +24,10 @@ export const workspaceMetadata = z
     presetRevision: z.number().int().nonnegative().default(0),
   })
   .readonly();
-/** Asset discovery metadata references admitted bytes; Model creates collection-local bindings independently. */
+/**
+ * Checks one uploaded file's record: its digest, alt text, source, and optional license and
+ * credit. A collection that uses the file names it separately.
+ */
 export const assetMetadata = z
   .strictObject({
     schemaVersion: z.literal(1),

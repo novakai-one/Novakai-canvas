@@ -16,7 +16,7 @@ import { headerMatches } from './request-head.js';
 
 /** The ingress checks and the session secret browser access relies on. */
 export interface BrowserAccessOwners {
-  readonly admission: Pick<HttpAdmission, 'bootstrap' | 'authenticate' | 'cookieName'>;
+  readonly admission: Pick<HttpAdmission, 'checkNavigation' | 'authenticate' | 'cookieName'>;
   readonly security: Pick<HttpSecurity, 'browserSession'>;
 }
 
@@ -25,9 +25,9 @@ const SESSION_EXISTS: BrowserGrant = Object.freeze({ kind: 'session-exists' });
 
 /**
  * Binds browser access to one server. A navigation (`Sec-Fetch-Mode: navigate`) is granted the
- * session cookie or fails with `unauthorized` at `host` or `navigation` (admission `bootstrap`).
- * Any other request is granted the existing session or fails with `unauthorized` at `host`,
- * `session` or `credential` (admission `authenticate`).
+ * session cookie or fails with `unauthorized` at `host` or `navigation` (admission
+ * `checkNavigation`). Any other request is granted the existing session or fails with
+ * `unauthorized` at `host`, `session` or `credential` (admission `authenticate`).
  */
 export function createBrowserAccess(owners: BrowserAccessOwners): TransportPolicy['browserAccess'] {
   return (metadata) => browserAccess(metadata, owners);
@@ -56,14 +56,14 @@ function existingSession(
 }
 
 /**
- * Only a navigation may receive the session cookie. Fails as admission `bootstrap`:
+ * Only a navigation may receive the session cookie. Fails as admission `checkNavigation`:
  * `unauthorized` at `host` or `navigation`.
  */
 function issuedSession(
   metadata: HttpMetadata,
   owners: BrowserAccessOwners,
 ): Result<BrowserGrant> {
-  const navigation = owners.admission.bootstrap(metadata);
+  const navigation = owners.admission.checkNavigation(metadata);
   if (!navigation.ok) return navigation;
   return success({ kind: 'session-issued', setCookie: sessionCookie(owners) });
 }

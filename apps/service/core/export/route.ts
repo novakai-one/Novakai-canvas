@@ -9,7 +9,7 @@ import type { Result } from '../../contract/errors.js';
 import type { StaticFile } from '../../contract/records/transport/server.js';
 import type { PresentationBindings } from '../../contract/records/capabilities.js';
 import type { ExportRules } from '../../contract/ports/capabilities.js';
-import type { ExportHandler, Rasterizer } from '../../contract/ports/export.js';
+import type { ExportRoute, Rasterizer } from '../../contract/ports/export.js';
 import type { ExportRequest } from '../../contract/records/export/request.js';
 import { readExportRequest } from './request.js';
 import { resourceInspector } from './resources.js';
@@ -33,7 +33,7 @@ export interface ExportRouteOwners extends TextOwners, DocumentOwners {
  * `unavailable`, with Export's diagnostic kept as source. Every export only reads; the caller
  * owns the retry.
  */
-export function createExportRoute(owners: ExportRouteOwners): ExportHandler {
+export function createExportRoute(owners: ExportRouteOwners): ExportRoute {
   return { invoke: (input, signal) => invokeExport(input, signal, owners) };
 }
 

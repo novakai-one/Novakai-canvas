@@ -1,19 +1,26 @@
 /*
- * The closed list of top-level codes an HTTP answer can carry, the wire failure and outcome built
- * on it, and every HTTP status the service answers with. Declarations, the code list and the
- * failure schema. A code is the service's own or one Authoring, Assets or Templates passes
- * through; nested `source` evidence keeps its owner's code. Clients branch on the code and status,
- * keep their draft and request ID, and reconcile the receipt before retrying.
+ * Why this file exists
+ *
+ * A failed HTTP answer carries one code the caller can branch on. For example, saving over a newer
+ * version answers `revision-conflict` with status 409. The code is the service's own, or one that
+ * Authoring, Assets or Templates passed through, so callers need the full list.
+ *
+ * This file holds that closed list (`wireErrorCodes`, 26 codes), the failure and answer built on
+ * it, and every HTTP status the service uses. The build fails if a code is missing from the list.
+ * Evidence under a failure keeps each capability's own codes (failure-source.ts).
  */
 import { z } from 'zod';
 import { errorCodes, type ErrorCode, type Result } from '../../errors.js';
 import type { AssetErrorCode, AuthoringErrorCode, TemplatesErrorCode } from '../capabilities.js';
 import { operationFields, type OperationSource } from './failure-source.js';
 
-/** Every top-level wire code: the service's own and those Authoring, Assets, Templates pass on. */
+/**
+ * One code a failed HTTP answer can carry: the service's own, or one Authoring, Assets or Templates
+ * passed on.
+ */
 export type WireErrorCode = ErrorCode | AuthoringErrorCode | AssetErrorCode | TemplatesErrorCode;
 
-/** The 26 wire codes, each once. The build fails when a WireErrorCode is missing (`everyCode`). */
+/** All 26 codes a failed HTTP answer can carry, each once. The build fails if one is missing. */
 export const wireErrorCodes = everyCode([
   ...errorCodes,
   'unsupported-version',
@@ -38,18 +45,18 @@ export const wireErrorCodes = everyCode([
   'provider-failed',
 ] as const);
 
-/** A top-level wire failure: an operational failure whose code is a wire code. */
+/** The failure in an HTTP answer: a code from the list, with where, what and what to do next. */
 export interface WireFailure extends Omit<OperationSource, 'code'> {
   readonly code: WireErrorCode;
 }
 
-/** The wire failure as the response envelope checks it: a closed code over the operation fields. */
+/** Checks the failure in an HTTP answer: a code from the list, and the other failure fields. */
 export const wireFailure: z.ZodType<WireFailure> = z.strictObject({
   code: z.enum(wireErrorCodes),
   ...operationFields,
 });
 
-/** A route's JSON outcome: any value, or a wire failure. */
+/** A route's JSON answer: any value, or a failure with a code from the list. */
 export type WireOutcome = Result<unknown, WireFailure>;
 
 /** Every HTTP status the service answers with. */

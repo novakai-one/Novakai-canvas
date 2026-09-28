@@ -1,11 +1,14 @@
 /*
- * Composition root for the service. Every cross-adapter binding lives in the compose/ folder, one
- * module per concern: capabilities (the one capability construction site), installation (shipped
- * resources), producer (the parent realm's render worker pool), workspace, authoring, export and
- * session (the roles one workspace binds), wiring (their order), startup (open and start), serve
- * (HTTP), agent-credential (CLI credential read), headless (headless export). worker.ts is the
- * render worker realm's root; cli/render-worker.mjs loads it directly, not through this barrel.
- * Adapters never import siblings or reach another capability's private implementation.
+ * Why this file exists
+ *
+ * Starting the service means building every part and plugging them together: capabilities,
+ * workspace files, the render worker, Authoring, the export route and the web server. That work
+ * lives in `compose/`, one file per part.
+ *
+ * This file lists the five entry points used from outside `compose/`. `openWorkspace` and
+ * `serveWorkspace` start `pnpm dev`. The CLI reuses `prepareInstallation`, `readAgentCredential`
+ * and `createHeadlessBindings`. The render worker's start file is not listed: a worker thread loads
+ * it directly, so it never loads the web server.
  */
 export { prepareInstallation } from './compose/installation.js';
 export { openWorkspace } from './compose/startup.js';

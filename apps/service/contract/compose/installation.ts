@@ -1,7 +1,12 @@
 /*
- * Shipped resource preparation: builtin sources, token files and preset preparation through their
- * real owners. Startup failures leave the existing workspace untouched; the caller repairs the
- * installation and retries.
+ * Why this file exists
+ *
+ * Every workspace starts with the shipped fonts, design tokens and recipe starters from
+ * `resources/`. Before start-up can use them, they have to be read from disk, and the built-in
+ * themes and recipes made from them.
+ *
+ * This file does that, through the real capabilities. It saves nothing. If it fails, the workspace
+ * is left as it was; the person fixes the install and starts again.
  */
 import { createTokenFileBindings } from '@novakai/canvas-design-system';
 import type { Assets } from '@novakai/canvas-assets';
@@ -12,7 +17,11 @@ import type { HostPath } from '../brands.js';
 import { prepareBuiltinPresets } from '../../core/presets/builtin.js';
 import { createServiceCapabilities } from './capabilities.js';
 
-/** Resource/provider startup failures leave the existing workspace untouched; caller repairs the installation and retries. */
+/**
+ * Reads the shipped resources and makes the built-in preset catalog from them. Fails with
+ * `unavailable` when the token files or shipped resources can't be read, and `invalid-input` at
+ * `builtins` when a built-in theme or recipe can't be made.
+ */
 export async function prepareInstallation(
   resourceRoot: HostPath,
   tokenRoot: HostPath,

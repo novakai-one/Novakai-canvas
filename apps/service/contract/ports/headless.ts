@@ -1,8 +1,13 @@
 /*
- * The headless seam: the service functions a read-only headless export (the CLI) shares with the
- * running service, and the owner bags the CLI passes to them. The bags live here, not beside their
- * core consumers, because this declaration cannot import core. Declarations only;
- * compose/headless.ts binds the functions, and the CLI owns retry once dependencies are restored.
+ * Why this file exists
+ *
+ * The CLI can draw a diagram file as a PNG with no service running ("headless"), for example
+ * `pnpm render:png --collection my-diagram.canvas --out my-diagram.png`. The picture must still
+ * match the service's, so the CLI must use the service's own theme, render-job and layout code.
+ *
+ * This file declares what the service shares for that (`HeadlessBindings`), and the bundles of
+ * capabilities ("owners") the CLI passes in, each naming the few capability calls one step uses.
+ * They live here because the CLI may not import service core. Declarations only.
  */
 import type {
   Assets,
@@ -17,35 +22,49 @@ import type { PresetCodecs, PresetContext } from '../records/presets/codecs.js';
 import type { HostPath } from '../brands.js';
 import type { DiagramProducer, RenderJobs } from './rendering.js';
 
-/** Installed source location and admitted owners are explicit; no worker consults ambient cwd or personal preferences. */
+/**
+ * What building a render job reads from: stored files, Design System, the token sources, Templates
+ * and libavoid's file. Never the working folder or personal settings.
+ */
 export interface RenderResourceOwners {
+  /** Finds the stored bytes of each font and image. */
   readonly assets: Pick<Assets, 'resolve'>;
+  /** Resolves the theme's tokens and the diagram's style. */
   readonly system: Pick<DesignSystem, 'resolve' | 'projectDiagram'>;
+  /** The installation's design token sources, as read from disk; Design System checks them. */
   readonly sources: unknown;
+  /** Reads the pinned theme. */
   readonly templates: Pick<Templates<LoweredIntent>, 'read'>;
+  /** The path of the wire router's WebAssembly file (libavoid). */
   readonly wasmResource: HostPath;
 }
 
-/** What theme admission uses: Assets to verify fonts, Templates to select the base theme. */
+/** What saving a theme reads from: Assets to check its fonts, Templates to find its base theme. */
 export interface ThemeAdmissionOwners {
   readonly assets: Pick<Assets, 'resolve'>;
   readonly templates: Pick<Templates<LoweredIntent>, 'read'>;
 }
 
-/** One font alias the theme names and the digest of the uploaded font bytes it binds. */
+/**
+ * One font name a theme uses, and the uploaded font file it stands for. Both are text as sent;
+ * theme admission checks the digest with Assets.
+ */
 export interface FontBinding {
+  /** The font name the theme uses, for example `body` in `font body source="…"`. */
   readonly alias: string;
+  /** The digest of the uploaded font file. */
   readonly digest: string;
 }
 
-/** What headless export binds (compose/headless.ts). */
+/** The service code a headless render shares with the running service (compose/headless.ts). */
 export interface HeadlessBindings {
-  /** Binds the recipe and theme codecs to one preset context. Never fails. */
+  /** Makes the recipe and theme codecs for one set of themes and files. Never fails. */
   readonly createPresetCodecs: (context: PresetContext) => PresetCodecs;
   /**
-   * core/presets/theme-admission.ts `prepareTheme`: a source-syntax theme admission with its fonts
-   * verified. Fails with `invalid-input` when the base theme cannot be selected, a font is not a
-   * verified font or the theme is malformed, and `missing-asset` when Assets cannot resolve a font.
+   * Turns a theme written in source syntax into the theme Templates saves, with its fonts checked
+   * (core/presets/theme-admission.ts). Fails with `invalid-input` when the base theme can't be
+   * found, a font is not a checked upload, or the theme is malformed, and `missing-asset` when
+   * Assets can't find a font.
    */
   readonly prepareTheme: (
     admission: Json,
@@ -53,11 +72,12 @@ export interface HeadlessBindings {
     bindings: readonly FontBinding[],
     owners: ThemeAdmissionOwners,
   ) => AuthoringResult<Json>;
-  /** Binds render-job building to the given owners (see `RenderJobs.create`). Never fails. */
+  /** Makes the render-job builder for the given owners (see `RenderJobs.create`). Never fails. */
   readonly createRenderJobs: (owners: RenderResourceOwners) => RenderJobs;
   /**
-   * Measures, lays out and routes one job in this realm. Fails with `invalid-input` at `render`
-   * when an owner rejects the input, or `unavailable` at `render` when the native runtime fails.
+   * Measures, lays out and routes one job right here, without a worker. Fails with `invalid-input`
+   * at `render` when a capability refuses the input, or `unavailable` at `render` when the native
+   * code fails.
    */
   readonly produceDiagram: DiagramProducer['produce'];
 }

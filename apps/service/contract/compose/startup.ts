@@ -1,9 +1,13 @@
 /*
- * Workspace startup, in order: open the workspace files → prepare the installation → start the
- * render worker → wire the workspace → run core startup (core/session/startup.ts decides between
- * validating an existing workspace and initializing a new one). Every canonical write passes
- * through Authoring. A failed startup releases only the native handles; committed records and
- * staged bytes stay where they are, and the caller retries.
+ * Why this file exists
+ *
+ * `pnpm dev` must turn a workspace folder into a running session. For example, an empty folder
+ * becomes a new workspace called `local` with the shipped themes, while an existing one is checked
+ * as it is. Several things must happen in order, and a failure part-way must not leave files open.
+ *
+ * This file runs that order: open the files, prepare the shipped resources, start the render
+ * worker, build the session, then start it (core/session/startup.ts). If a step fails, it closes
+ * the files and returns the mistake. It never deletes or rewrites what is already stored.
  */
 import { openAssets } from '@novakai/canvas-assets';
 import { openSqlite } from '@novakai/canvas-persistence';
@@ -19,11 +23,9 @@ import { createDiagramProducer } from './producer.js';
 import { wireWorkspace } from './wiring.js';
 
 /**
- * Opens a persistent workspace and starts its session. Fails with `unavailable` at `startup`
- * ("Workspace could not open; retain its existing files") when the files adapter cannot load or
- * throws; otherwise as the files adapter, `prepareInstallation`, `createDiagramProducer`,
- * `wireWorkspace` and `startWorkspace` answer, or `unavailable` at `startup` ("Workspace
- * composition failed") when a later step throws. The caller owns startup recovery.
+ * Opens the workspace folder and starts its session. Fails with the first step's mistake:
+ * `unavailable` when the files, the render worker or a later step can't start, or the mistake
+ * `prepareInstallation` or core start-up found. The files are closed on any failure.
  */
 export async function openWorkspace(options: WorkspaceOptions): Promise<Result<WorkspaceSession>> {
   try {

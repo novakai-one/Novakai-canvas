@@ -1,7 +1,15 @@
 /*
- * The capability vocabulary service core reads through the contract: type-only aliases of each
- * capability's public types, so core never imports a capability package. Declarations only; each
- * capability owns its own failures, and Authoring owns commit and recovery.
+ * Why this file exists
+ *
+ * Service core uses capability types everywhere: Authoring's `Request` and `Receipt`, Model's
+ * `Collection`, Templates' `Catalog`, and more. But core may not import a capability package.
+ *
+ * So this file passes those types through, as types only, and core imports them from here. Where
+ * two capabilities use the same name, the type is renamed after its owner. For example, Authoring's
+ * `Result` is `AuthoringResult` and Export's `Snapshot` is `ExportSnapshot`.
+ *
+ * Declarations only. Each capability keeps its own mistakes; Authoring decides whether a change is
+ * saved.
  */
 export type {
   Authoring,
@@ -71,7 +79,13 @@ export type {
   ReactBindings as PresentationBindings,
 } from '@novakai/canvas-presentation';
 export type { Scene, Warning as SceneWarning } from '@novakai/canvas-layout';
-export type { Organisation, LibrarySnapshot } from '@novakai/canvas-library';
+export type {
+  Organisation,
+  LibrarySnapshot,
+  CollectionProjection,
+  SectionProjection,
+  ObjectProjection,
+} from '@novakai/canvas-library';
 export type {
   Artifact,
   Diagnostic as ExportDiagnostic,

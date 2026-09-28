@@ -33,17 +33,17 @@ const NAVIGATION_SITES: readonly string[] = Object.freeze(['none', 'same-origin'
 /**
  * Binds the ingress policy to one server's security. Every refusal is safe to correct and resend.
  * - `cookieName`: the browser session cookie name for this host.
- * - `bootstrap`: success for a direct navigation; `unauthorized` at `host` or `navigation`.
+ * - `checkNavigation`: success for a direct navigation; `unauthorized` at `host` or `navigation`.
  * - `authenticate`: the caller; `unauthorized` at `host`, `session` or `credential`.
- * - `mutation`: the admitted request; `invalid-input` at `request`, or `unauthorized` at `actor`
- *   or `intent.planner`.
+ * - `admitMutation`: the admitted request; `invalid-input` at `request`, or `unauthorized` at
+ *   `actor` or `intent.planner`.
  */
 export function createAdmission(security: HttpSecurity): HttpAdmission {
   return {
     cookieName: sessionCookieName(security.address.host),
-    bootstrap: (metadata) => bootstrap(metadata, security),
+    checkNavigation: (metadata) => bootstrap(metadata, security),
     authenticate: (metadata) => authenticate(metadata, security),
-    mutation: admitMutation,
+    admitMutation,
   };
 }
 

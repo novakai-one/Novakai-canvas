@@ -1,11 +1,13 @@
 /*
- * The one construction site for Language, Design System, the Templates factory and the Model,
- * Library and Export rule tables. Templates is composed from the core recipe and theme codecs,
- * bound here (headless.ts shares the binding). installation.ts and wiring.ts each call
- * `createServiceCapabilities` once; serve.ts builds only Language here. Core reaches these only
- * through ServiceCapabilities; adapters import capability schemas and runtimes (render worker, PNG
- * runtime, shipped resources) directly. Constructing starts no I/O; each capability owns its own
- * failures and recovery.
+ * Why this file exists
+ *
+ * Service core needs capability rules, like Model's collection check or Library's catalog planner,
+ * but it may not import a capability package. Something outside core must build them, in one place,
+ * so every part uses the same ones.
+ *
+ * This file is that place. It builds Language, Design System, Templates (with the service's own
+ * recipe and theme codecs) and Model's, Library's and Export's rules, and hands them over as one
+ * `ServiceCapabilities`. Building them reads no files and starts nothing.
  */
 import { composeDesignSystem } from '@novakai/canvas-design-system';
 import { composeExport, formatMarkdown } from '@novakai/canvas-export';
@@ -24,11 +26,10 @@ import { createRecipeCodec } from '../../core/presets/recipe-codec.js';
 import { createThemeCodec } from '../../core/presets/theme-codec.js';
 
 /**
- * Binds every capability the service uses. `sources` is the installation's raw token source
- * envelope; Design System revalidates it on every call. Each `templates(resources)` call composes
- * Templates from new preset codecs bound to those resources. Never fails.
+ * Builds every capability the service uses. `tokenSources` are the design token sources as read
+ * from disk; Design System checks them on every call. Never fails.
  */
-export function createServiceCapabilities(sources: unknown): ServiceCapabilities {
+export function createServiceCapabilities(tokenSources: unknown): ServiceCapabilities {
   const language = createServiceLanguage();
   const system = composeDesignSystem();
   return {
@@ -38,16 +39,16 @@ export function createServiceCapabilities(sources: unknown): ServiceCapabilities
     language,
     system,
     templates: (resources) =>
-      composeTemplates(createPresetCodecs({ system, language, sources, resources })),
+      composeTemplates(createPresetCodecs({ system, language, sources: tokenSources, resources })),
   };
 }
 
-/** Binds the recipe and theme codecs to one preset context. Never fails. */
+/** Makes the recipe and theme codecs for one request's themes and files. Never fails. */
 export function createPresetCodecs(context: PresetContext): PresetCodecs {
   return { recipe: createRecipeCodec(context), theme: createThemeCodec(context) };
 }
 
-/** Binds Language to Model as its reader, planner and stage. Never fails. */
+/** Makes Language, using Model's rules to check, plan and stage collections. Never fails. */
 export function createServiceLanguage(): Language {
   return createLanguage({
     reader: { validate: MODEL_RULES.validate },

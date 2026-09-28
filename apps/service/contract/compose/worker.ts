@@ -1,8 +1,12 @@
 /*
- * The render worker realm's composition root: prepare the native measurement and layout runtimes,
- * then serve render jobs over the worker port. `cli/render-worker.mjs` loads this file only, so the
- * worker realm never loads the HTTP, storage or Authoring wiring. The parent (compose/producer.ts)
- * owns worker failure and retry and keeps the prior scene when the worker cannot start.
+ * Why this file exists
+ *
+ * A render worker thread starts empty. Before it can take a job, it must load the native code that
+ * measures text and lays out diagrams, then tell the server it is ready, or why it can't start.
+ *
+ * This file does that start-up for one worker thread. The worker's start file loads only this file,
+ * so a worker never loads the web server, storage or Authoring. The server decides what to do when
+ * a worker fails (compose/producer.ts).
  */
 import { prepareLayoutRuntime } from '@novakai/canvas-layout';
 import { prepareNativePresentation } from '@novakai/canvas-presentation';
@@ -11,17 +15,14 @@ import { failure, success } from '../errors.js';
 import type { OperationSource } from '../records/transport/failure-source.js';
 
 /**
- * Starts serving render jobs in this worker realm.
+ * Starts this worker thread taking render jobs.
  *
- * Steps:
- * 1. Load the worker entry, the job reader and the diagram derivation.
- * 2. Prepare the native runtimes; on failure, report it to the parent before returning it.
- * 3. Serve jobs; the entry posts the ready handshake.
+ * 1. Load the worker's code.
+ * 2. Prepare the native text and layout code; if that fails, tell the server why.
+ * 3. Tell the server it is ready, and take jobs.
  *
- * Fails with `unavailable` at `worker` when a native runtime cannot prepare (that owner's failure
- * kept as source) or an adapter cannot load ("Rendering worker could not initialize"; nothing is
- * reported, so the parent sees the realm exit), and with `invalid-input` at `worker` when this is
- * not a worker realm.
+ * Fails with `unavailable` at `worker` when the native or worker code can't load, and
+ * `invalid-input` at `worker` when this is not a worker thread.
  */
 export async function runRenderWorker(): Promise<Result<void>> {
   try {

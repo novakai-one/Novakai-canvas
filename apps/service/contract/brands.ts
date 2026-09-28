@@ -1,9 +1,17 @@
 /*
- * The service's typed identities. The capability brands the service reads are re-exported as
- * types (their schemas are in schemas.ts); the brands only the service mints are declared here,
- * each with the one boundary that mints or parses it. Also the one conversion between Model's
- * pinned digest text and the bare digests Assets, Templates and Authoring check. Pure. Text a
- * schema rejects is its boundary's refusal to report.
+ * Why this file exists
+ *
+ * The service passes around many values that are plain text or numbers underneath: a port, a folder
+ * path, a render job ID, a secret token. As plain `string`s, one could be passed where another
+ * belongs and nothing would notice.
+ *
+ * A brand fixes that: a type only a check can make. `hostPath.parse('/tmp/ws')` gives a `HostPath`;
+ * a plain string is not one. This file declares the service's own brands, each with the one place
+ * that makes it, and passes on the capabilities' ID types. It also adds and removes the `sha256:`
+ * prefix Model puts on digests (file fingerprints), which Assets, Templates and Authoring leave
+ * off.
+ *
+ * It never reads or writes anything.
  */
 import { z } from 'zod';
 import type { collectionId } from '@novakai/canvas-model';
@@ -15,47 +23,53 @@ export type { WorkspaceId, PlannerId, ActorId, Timestamp } from '@novakai/canvas
 export type { SectionId, ObjectId } from '@novakai/canvas-model';
 export type { AssetDigest, AuthoringDigest };
 
-/** 64 lowercase hex characters: the grammar of both service secrets. */
+/** 64 lowercase hex characters: what both service secrets look like. */
 const HEX_64 = /^[a-f0-9]{64}$/;
 
-/** A Model collection ID. Model exports the schema, not the type, so the type is derived here. */
+/**
+ * A checked Model collection ID. Model exports only the check, so the type is taken from it here.
+ */
 export type CollectionId = z.infer<typeof collectionId>;
 
 /**
- * Checks a transport generation: 1–128 characters. Minted by adapters/credentials when the server
- * starts; parsed from the mutation and response envelopes.
+ * Checks a generation: 1–128 characters. A generation is a random label made each time the server
+ * starts (adapters/credentials). Every change request carries it, so a request made before a
+ * restart is refused (`conflict`) instead of landing on the restarted workspace. Also checked in
+ * every HTTP answer.
  */
 export const generation = z.string().min(1).max(128).brand<'TransportGeneration'>();
 
 /**
- * Checks the browser session secret: 64 lowercase hex characters. Minted by adapters/credentials
- * when the server starts. Cookie text is only compared with it, never branded.
+ * Checks the browser's session secret: 64 lowercase hex characters. Made by adapters/credentials
+ * each time the server starts, and sent to the browser as a cookie. A cookie that arrives is only
+ * compared with it, never checked into this type.
  */
 export const sessionToken = z.string().regex(HEX_64).brand<'BrowserSessionToken'>();
 
 /**
- * Checks the agent credential: 64 lowercase hex characters. Minted into the credential file and
- * parsed back from it by adapters/credentials only.
+ * Checks the agent's secret token: 64 lowercase hex characters. The CLI sends it with every
+ * request. adapters/credentials makes it once, writes it to the workspace's credential file, and is
+ * the only code that reads it back.
  */
 export const agentToken = z.string().regex(HEX_64).brand<'AgentToken'>();
 
 /**
- * Checks a port the server may listen on: a whole number from 1024 through 65535. Parsed by
- * cli/serve.ts.
+ * Checks a port the server may listen on: a whole number from 1024 through 65535. Checked by
+ * cli/serve.ts from `--port`.
  */
 export const loopbackPort = z.number().int().min(1024).max(65535).brand<'LoopbackPort'>();
 
 /**
- * Checks a host filesystem path chosen at startup: any non-empty text. Parsed by cli/serve.ts and
- * by the CLI for its installation and wasm paths. compose/producer.ts derives the libavoid wasm
- * path from the resource root; the render worker re-parses it from the job envelope. A request
- * never supplies one.
+ * Checks a path on this computer chosen at start-up: any non-empty text. cli/serve.ts checks the
+ * workspace, web app and resource folders; the CLI checks the paths it renders with. A request
+ * never supplies one. (compose/producer.ts builds the wire router's file path from the resource
+ * folder; the render worker checks it again when a job arrives.)
  */
 export const hostPath = z.string().min(1).brand<'HostPath'>();
 
 /**
- * Checks a render job ID: 1–256 characters. Minted by core/rendering/job-id.ts; parsed from the
- * worker's job envelope.
+ * Checks a render job ID: 1–256 characters. Made by core/rendering/job-id.ts; checked again when
+ * the render worker receives the job.
  */
 export const renderJobId = z.string().min(1).max(256).brand<'RenderJobId'>();
 
@@ -65,7 +79,7 @@ export type Generation = z.infer<typeof generation>;
 /** A browser session secret that passed {@link sessionToken}. */
 export type SessionToken = z.infer<typeof sessionToken>;
 
-/** An agent credential that passed {@link agentToken}. */
+/** An agent token that passed {@link agentToken}. */
 export type AgentToken = z.infer<typeof agentToken>;
 
 /** A port that passed {@link loopbackPort}. */
@@ -77,26 +91,28 @@ export type HostPath = z.infer<typeof hostPath>;
 /** A render job ID that passed {@link renderJobId}. */
 export type RenderJobId = z.infer<typeof renderJobId>;
 
-/** Model's pinned digest text: `sha256:` then the bare digest. */
+/** A digest as Model writes it: `sha256:` and then the bare digest. */
 export type PinnedDigest = `sha256:${string}`;
 
-/** The prefix Model's digests carry and the bare digests of Assets, Templates and Authoring lack. */
+/**
+ * The prefix Model's digests have and the bare digests of Assets, Templates and Authoring don't.
+ */
 const PIN_PREFIX = 'sha256:';
 
-/** Model's pinned form of a bare digest. The one place the prefix is added. Never fails. */
+/** Adds `sha256:` to a bare digest, as Model writes it. The one place the prefix is added. */
 export function pinnedDigest(bare: AssetDigest | PresetDigest | AuthoringDigest): PinnedDigest {
   return `${PIN_PREFIX}${bare}`;
 }
 
-/** Whether text is in Model's pinned form (starts with `sha256:`). Never fails. */
+/** Whether the text starts with `sha256:`, as Model's digests do. */
 export function isPinnedDigest(text: string): text is PinnedDigest {
   return text.startsWith(PIN_PREFIX);
 }
 
 /**
- * The bare digest of Model's pinned digest text: the first 7 characters (`sha256:`) removed. The
- * one place the prefix is removed. Never fails; the caller parses the result with its owner's
- * digest schema, which refuses text that was not pinned.
+ * Removes the first 7 characters (`sha256:`) from a digest Model wrote. The one place the prefix is
+ * removed. It checks nothing, so it answers plain text: the caller checks it with the owning
+ * capability's digest check, which refuses text that had no prefix.
  */
 export function bareDigest(pinned: string): string {
   return pinned.slice(PIN_PREFIX.length);

@@ -22,7 +22,7 @@ export type MutationRouteKey = Extract<RouteKey, `POST /api/v1/authoring/${strin
 export interface MutationRouteOwners {
   readonly session: Pick<WorkspaceSession, 'prepare' | 'apply'>;
   readonly generation: Generation;
-  readonly admission: Pick<HttpAdmission, 'mutation'>;
+  readonly admission: Pick<HttpAdmission, 'admitMutation'>;
   readonly decoder: CommandDecoder;
 }
 
@@ -56,7 +56,7 @@ async function runMutation(
     caller: call.caller,
     metadata: call.metadata,
     generation: owners.generation,
-    ingress: owners.admission,
+    admission: owners.admission,
   });
   if (!mutation.ok) return mutation;
   return MUTATION_STEPS[route](mutation.value, call.signal, owners.session);

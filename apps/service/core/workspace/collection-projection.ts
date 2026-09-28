@@ -3,12 +3,12 @@
  * sections and where each object is visible. Pure and total; Library checks the result and owns
  * any rejection. Shared with apps/web through the public index.
  */
-import type { Collection } from '../../contract/records/capabilities.js';
 import type {
-  CollectionProjectionInput,
-  ObjectProjectionInput,
-  SectionProjectionInput,
-} from '../../contract/records/workspace/contents.js';
+  Collection,
+  CollectionProjection,
+  ObjectProjection,
+  SectionProjection,
+} from '../../contract/records/capabilities.js';
 import type { ObjectId } from '../../contract/brands.js';
 
 /** One Model section. */
@@ -22,7 +22,7 @@ type ModelObject = Collection['objects'][number];
  * (empty text when it has none), each section's ID and title, and each object's projection (see
  * `projectObject`). Never fails.
  */
-export function projectCollection(collection: Collection): CollectionProjectionInput {
+export function projectCollection(collection: Collection): CollectionProjection {
   return {
     id: collection.id,
     revision: collection.revision,
@@ -34,7 +34,7 @@ export function projectCollection(collection: Collection): CollectionProjectionI
 }
 
 /** A section's ID and title. */
-function projectSection(section: ModelSection): SectionProjectionInput {
+function projectSection(section: ModelSection): SectionProjection {
   return { id: section.id, title: section.title };
 }
 
@@ -45,7 +45,7 @@ function projectSection(section: ModelSection): SectionProjectionInput {
 function projectObject(
   object: ModelObject,
   sections: readonly ModelSection[],
-): ObjectProjectionInput {
+): ObjectProjection {
   const showing = sections.filter((section) => showsObject(section, object.id));
   return {
     id: object.id,
