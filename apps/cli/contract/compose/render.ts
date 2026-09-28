@@ -178,12 +178,16 @@ function serviceLayoutTools(
   environment: Environment,
   owners: PortOwners,
 ): ServiceLayoutTools {
-  const jobs = owners.service.createRenderJobs({
+  const renderJobs = owners.service.createRenderJobs({
     ...environment,
     sources: environment.installation.tokens,
     wasmResource: join(owners.request.root, 'resources/vendor/layout/libavoid.wasm'),
   });
-  return { jobs, produceDiagram: owners.service.produceDiagram, inspectDocument: validReport };
+  return {
+    renderJobs,
+    produceDiagram: owners.service.produceDiagram,
+    inspectDocument: validReport,
+  };
 }
 
 /** The request's format and label mode, and Export's documents port over Language. */

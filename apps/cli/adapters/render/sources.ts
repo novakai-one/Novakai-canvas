@@ -5,8 +5,8 @@
  * text into a collection, and Model checks it. Export asks for the same jobs, plus printing a
  * collection back to text, through its own `Documents` shape and its own kind of mistake.
  *
- * This file answers both from Language and Model. A source is always read as a new collection,
- * never as a change to a saved one. Mistakes come back as values; nothing is read from disk.
+ * This file answers core and Export from Language and Model. A source is always read as a new
+ * collection, never as a change to a saved one. Mistakes come back as values. Nothing touches disk.
  */
 import { validate } from '@novakai/canvas-model';
 import type { Result as LanguageResult } from '@novakai/canvas-language';
@@ -33,9 +33,10 @@ export function createRenderSources(language: Pick<Language, 'parse' | 'lower'>)
 }
 
 /**
- * Gives Export its way to read, print and parse collections, using `resolvedResources` for the
- * source's font, image and theme names. Export needs it to start, though render:png never uses it.
- * A mistake becomes Export's `invalid-input` (read, print) or `invalid-import` (parse).
+ * Gives Export its way to check a collection (read), print it as text, and parse text into a new
+ * collection, using `resolvedResources` for font, image and theme names. Export needs it to start,
+ * though render:png never uses it. A mistake becomes Export's `invalid-input` (read, print) or
+ * `invalid-import` (parse).
  */
 export function createExportDocuments(
   language: Pick<Language, 'lower' | 'print'>,

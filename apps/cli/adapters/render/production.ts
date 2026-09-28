@@ -25,10 +25,10 @@ import type {
 } from '../../contract/records/foreign.js';
 import type { Result } from '../../contract/errors.js';
 
-/** The service's layout code, already set up with this render's parts and layout engine. */
+/** The service's layout code, set up with this render's assets, themes and layout engine. */
 export interface ServiceLayoutTools {
-  /** Makes a render job for one collection. */
-  readonly jobs: ReturnType<HeadlessTools['createRenderJobs']>;
+  /** The service's render jobs; `renderJobs.create` makes the job for one collection. */
+  readonly renderJobs: ReturnType<HeadlessTools['createRenderJobs']>;
   /** Lays a render job out as a document. */
   readonly produceDiagram: HeadlessTools['produceDiagram'];
   /** The service's report on a laid-out document, such as how many wires cross. */
@@ -58,21 +58,21 @@ async function producedDiagram(
   collection: Collection,
   catalog: Catalog,
 ): Promise<Result<RenderDocument, RenderFailureSource>> {
-  const job = renderJob(tools.jobs, collection, catalog);
+  const job = renderJob(tools.renderJobs, collection, catalog);
   if (!job.ok) return job;
   return tools.produceDiagram(job.value, new AbortController().signal);
 }
 
 /** The job over one collection, the catalog and the headless library. Fails as either does. */
 function renderJob(
-  jobs: ServiceLayoutTools['jobs'],
+  renderJobs: ServiceLayoutTools['renderJobs'],
   collection: Collection,
   catalog: Catalog,
 ): Result<RenderingJob, RenderFailureSource> {
   const library = headlessLibrary();
   if (!library.ok) return library;
   const view = { collections: [collection], presets: catalog, library: library.value };
-  return jobs.create(collection, view, null, 'headless');
+  return renderJobs.create(collection, view, null, 'headless');
 }
 
 /** The empty library snapshot headless renders run against. Fails with Library's diagnostics. */

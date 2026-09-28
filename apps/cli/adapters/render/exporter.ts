@@ -5,7 +5,7 @@
  * `--format svg` makes one SVG per section. Export does that, and it draws each box and wire with
  * Presentation, which must load the drawing's fonts first.
  *
- * This file sets Export up for one render: its format, its `--labels` choice and its one
+ * This file sets Export up for one render: its format, its `--labels` choice, then the laid-out
  * collection. It writes no file; `core/render/sections.ts` does. Mistakes come back as values.
  */
 import { createReactBindings } from '@novakai/canvas-presentation';

@@ -1,7 +1,7 @@
 /*
  * Why this file exists
  *
- * Both programs start from the words Node hands over (argv), such as
+ * `pnpm canvas` and `pnpm render:png` both start from the words Node hands over (argv), such as
  * `['read', 'my-diagram', '--section', 'intro']`. Those must be split into plain words and flags,
  * and a flag that can't be read, such as `--nope` or `--out` with nothing after it, must be caught.
  *
@@ -40,7 +40,7 @@ const valueFits: Readonly<Record<FlagShape['type'], ValueCheck>> = Object.freeze
 
 /**
  * Splits argv into its plain words, the text after each flag, and the flags typed more than once.
- * `knownFlags` lists the program's flags and whether each takes text.
+ * `knownFlags` lists the program's flags and whether each takes text or is a switch (takes none).
  * Gives back `malformed`, naming the first bad flag as typed: a flag the program doesn't have, a
  * flag missing its text (a next word starting with `-` isn't text), or a switch given text.
  */

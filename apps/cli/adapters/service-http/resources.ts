@@ -33,8 +33,8 @@ type Check<T> = (value: unknown) => Result<T>;
 
 /**
  * Gives core its font, image, theme and recipe steps, made over `transport`. Each fails as the
- * transport does, or with `invalid-response` when the answer isn't the expected shape
- * (`invalid-input` for `freeze`).
+ * transport does, or with `invalid-response` when the answer isn't the expected shape. `freeze`,
+ * which writes the stored bytes' digests into a request, fails with `invalid-input` instead.
  */
 export function createServiceResources(transport: TransportPost): ServiceResources {
   return {
