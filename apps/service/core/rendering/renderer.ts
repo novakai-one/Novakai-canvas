@@ -27,15 +27,16 @@ export interface CollectionRendererDependencies {
   readonly jobs: RenderJobs;
   /** Runs a job on a render worker and checks the reply (produce.ts, behind cache.ts). */
   readonly producer: DiagramProducer;
-  /** Lists the digests of the stored files a collection uses. */
+  /** Lists the stored files a collection uses, by their content hashes. */
   readonly resources: Pick<ResourceSelector, 'digestsForCollection'>;
 }
 
 /**
  * Makes the renderer for saved collections. Its `render` draws one collection, holding its files
  * until the drawing is done.
- * Mistakes: `unavailable` when the files can't be found or held, or the job can't be built. The
- * producer's own mistakes pass through.
+ * Mistakes: `unavailable` when the files can't be found or held, or the job can't be built. So the
+ * job builder's `missing-asset` or `invalid-input` comes back as `unavailable`, kept as its source.
+ * The producer's own mistakes pass through.
  */
 export function createCollectionRenderer(
   dependencies: CollectionRendererDependencies,
