@@ -21,15 +21,15 @@ import type * as CompiledLayout from '../../adapters/render-worker/derive.js';
 /**
  * Starts this worker thread taking render jobs.
  *
- * 1. Load the worker's code.
- * 2. Prepare the compiled text and layout code; if that fails, tell the server why.
- * 3. Tell the server it is ready, and take jobs.
+ * 1. Load the worker's code and prepare the compiled text and layout code; if that fails, tell the
+ *    server why.
+ * 2. Tell the server it is ready, and take jobs.
  *
  * Fails with `unavailable` at `worker` when the compiled or worker code can't load, or with
  * `invalid-input` at `worker` if called outside a worker thread (a bug).
  */
 export async function runRenderWorker(): Promise<Result<void>> {
-  const workerCode = await loadWorkerCode();
+  const workerCode = await prepareWorkerCode();
   if (!workerCode.ok) {
     return workerCode;
   }
@@ -44,16 +44,16 @@ interface WorkerCode {
 }
 
 /** Loads the worker's code and prepares the compiled code; a throw becomes `unavailable`. */
-async function loadWorkerCode(): Promise<Result<WorkerCode>> {
+async function prepareWorkerCode(): Promise<Result<WorkerCode>> {
   try {
-    return await loadAndPrepare();
+    return await importThenPrepareRuntimes();
   } catch {
     return workerUnavailableFailure();
   }
 }
 
-/** Loads the worker's code, then prepares the compiled code, telling the server if that fails. */
-async function loadAndPrepare(): Promise<Result<WorkerCode>> {
+/** Imports the worker's code, then prepares the compiled code, telling the server if that fails. */
+async function importThenPrepareRuntimes(): Promise<Result<WorkerCode>> {
   const [entry, jobReader, layout] = await Promise.all([
     import('../../adapters/render-worker/entry.js'),
     import('../../adapters/render-worker/job-reader.js'),

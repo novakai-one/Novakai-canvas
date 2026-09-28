@@ -128,17 +128,18 @@ function bindAuthoringRoles(
   seed: NewWorkspaceSeed,
   store: AuthoringStore,
 ): AuthoringRoles {
-  const { reader, resources, jobs, producer } = inputs.shared;
+  const { reader, jobs, producer } = inputs.shared;
+  const selector = inputs.shared.resources;
   const assets = inputs.stores.assets;
   const planners = createPlanners(inputs, seed);
-  const validation = createCandidateValidator({ workspace: reader, resources, assets });
-  const fileHolds = createResourceAdmission(resources, assets);
+  const validation = createCandidateValidator({ workspace: reader, resources: selector, assets });
+  const resourceAdmission = createResourceAdmission(selector, assets);
   const feasibility = { workspace: reader, jobs, producer };
   return {
     store,
     planners,
     validation,
-    resources: fileHolds,
+    resources: resourceAdmission,
     changes: inputs.changes,
     feasibility,
   };

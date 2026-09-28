@@ -29,9 +29,9 @@ import { buildWorkspace } from './workspace.js';
  */
 export async function openWorkspace(options: WorkspaceOptions): Promise<Result<WorkspaceSession>> {
   try {
-    return await openAndStart(options);
+    return await openStoresThenStart(options);
   } catch {
-    return workspaceUnopenedFailure();
+    return workspaceOpenFailure();
   }
 }
 
@@ -39,32 +39,50 @@ export async function openWorkspace(options: WorkspaceOptions): Promise<Result<W
 const STORE_OPENERS: StoreOpeners = Object.freeze({ assets: openAssets, storage: openSqlite });
 
 /** Opens the workspace folder's stores, then starts the workspace on them. */
-async function openAndStart(options: WorkspaceOptions): Promise<Result<WorkspaceSession>> {
+async function openStoresThenStart(options: WorkspaceOptions): Promise<Result<WorkspaceSession>> {
   const workspaceFiles = await import('../../adapters/files/workspace-files.js');
   const stores = await workspaceFiles.openWorkspaceFiles(options, STORE_OPENERS);
   if (!stores.ok) {
     return stores;
   }
-  return startOpened(stores.value, options);
+  return startOrCloseStores(stores.value, options);
 }
 
-/** Starts the opened workspace, and closes its stores if that fails or throws. */
-async function startOpened(
+/** Starts the workspace on its open stores, and closes the stores if that fails or throws. */
+async function startOrCloseStores(
   stores: OpenStores,
   options: WorkspaceOptions,
 ): Promise<Result<WorkspaceSession>> {
-  const started = await configureWorkspace(stores, options).catch(compositionFailure);
+  const started = await prepareAndStart(stores, options).catch(workspaceBuildFailure);
   if (!started.ok) {
     await stores.close();
   }
   return started;
 }
 
-/** Prepares the built-in resources and starts the render workers, then builds the workspace. */
-async function configureWorkspace(
+/** Prepares the shipped resources and the render workers, then builds and starts the workspace. */
+async function prepareAndStart(
   stores: OpenStores,
   options: WorkspaceOptions,
 ): Promise<Result<WorkspaceSession>> {
+  const prepared = await prepareParts(stores, options);
+  if (!prepared.ok) {
+    return prepared;
+  }
+  return buildAndStart(stores, prepared.value, options);
+}
+
+/** The shipped resources and the running render workers that the workspace is built with. */
+interface PreparedParts {
+  readonly builtins: PreparedBuiltins;
+  readonly renderWorkers: DiagramProducer;
+}
+
+/** Prepares the shipped resources, then starts the render workers. */
+async function prepareParts(
+  stores: OpenStores,
+  options: WorkspaceOptions,
+): Promise<Result<PreparedParts>> {
   const builtins = await prepareBuiltins(options.resourceRoot, options.tokenRoot, stores.assets);
   if (!builtins.ok) {
     return builtins;
@@ -73,17 +91,16 @@ async function configureWorkspace(
   if (!renderWorkers.ok) {
     return renderWorkers;
   }
-  return buildAndStart(stores, builtins.value, options, renderWorkers.value);
+  return success({ builtins: builtins.value, renderWorkers: renderWorkers.value });
 }
 
 /** Builds the workspace, runs core start-up on it, and answers its session once it started. */
 async function buildAndStart(
   stores: OpenStores,
-  builtins: PreparedBuiltins,
+  prepared: PreparedParts,
   options: WorkspaceOptions,
-  renderWorkers: DiagramProducer,
 ): Promise<Result<WorkspaceSession>> {
-  const built = await buildWorkspace(stores, builtins, options, renderWorkers);
+  const built = await buildWorkspace(stores, prepared.builtins, options, prepared.renderWorkers);
   if (!built.ok) {
     return built;
   }
@@ -95,11 +112,11 @@ async function buildAndStart(
 }
 
 /** The `unavailable` failure at `startup` for a workspace that threw while it was opened. */
-function workspaceUnopenedFailure(): Result<never> {
+function workspaceOpenFailure(): Result<never> {
   return failure('unavailable', 'startup', 'Workspace could not open; retain its existing files');
 }
 
 /** The `unavailable` failure at `startup` for a workspace that threw while it was built. */
-function compositionFailure(): Result<never> {
+function workspaceBuildFailure(): Result<never> {
   return failure('unavailable', 'startup', 'Workspace composition failed');
 }

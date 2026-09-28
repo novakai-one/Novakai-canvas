@@ -70,7 +70,7 @@ async function start(
   const workspaceOptions = localWorkspaceOptions(repositoryRoot, directory);
   const workspace = await openWorkspace(workspaceOptions);
   if (!workspace.ok) {
-    report(workspace);
+    printDiagnostic(workspace.error);
     return;
   }
   const serverOptions = localServerOptions(directory, webRoot, port);
@@ -109,9 +109,9 @@ async function serve(
 ): Promise<void> {
   const server = await serveWorkspace(workspace, serverOptions);
   if (!server.ok) {
-    report(server);
+    printDiagnostic(server.error);
     const closed = await workspace.close();
-    report(closed);
+    reportIfFailed(closed);
     return;
   }
   // Only the address is printed; the secret stays in its owner-only file.
@@ -135,13 +135,13 @@ async function stop(
   workspace: WorkspaceSession,
 ): Promise<void> {
   const serverClosed = await server.close();
-  report(serverClosed);
+  reportIfFailed(serverClosed);
   const workspaceClosed = await workspace.close();
-  report(workspaceClosed);
+  reportIfFailed(workspaceClosed);
 }
 
 /** Prints the mistake when `outcome` failed; does nothing when it worked. */
-function report(outcome: Result<unknown>): void {
+function reportIfFailed(outcome: Result<unknown>): void {
   if (!outcome.ok) {
     printDiagnostic(outcome.error);
   }

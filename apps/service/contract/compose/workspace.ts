@@ -67,25 +67,25 @@ export async function buildWorkspace(
   });
   const changes = changeChannel.createChangeChannel();
   const parts = { stores, builtins, options, capabilities, shared, changes };
-  const authoring = await buildAuthoring(parts);
-  const exporter = await buildExporter(parts, authoring.authoring);
+  const builtAuthoring = await buildAuthoring(parts);
+  const exporter = await buildExporter(parts, builtAuthoring.authoring);
   if (!exporter.ok) {
     return exporter;
   }
-  const session = buildSession(parts, authoring.authoring, exporter.value);
-  return success(builtWorkspace(session, authoring));
+  const session = buildSession(parts, builtAuthoring.authoring, exporter.value);
+  return success(builtWorkspace(session, builtAuthoring));
 }
 
 /** Joins the session with what start-up needs from Authoring. */
 function builtWorkspace(
   session: WorkspaceSession,
-  authoring: BuiltAuthoring,
+  builtAuthoring: BuiltAuthoring,
 ): BuiltWorkspace {
   return {
     session,
-    candidateCheck: authoring.candidateCheck,
-    seedRequest: authoring.seedRequest,
+    candidateCheck: builtAuthoring.candidateCheck,
+    seedRequest: builtAuthoring.seedRequest,
     signal: UNCANCELLED,
-    startHistory: authoring.startHistory,
+    startHistory: builtAuthoring.startHistory,
   };
 }
