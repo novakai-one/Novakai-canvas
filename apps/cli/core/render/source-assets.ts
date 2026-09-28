@@ -28,7 +28,7 @@ import { combined } from '../shared/results.js';
 import { admitResource, type AdmissionDependencies } from './resource-admission.js';
 
 /**
- * The parts storing a source's fonts and images uses: Language's parser, the file reader and the
+ * What storing a source's fonts and images needs: Language's parser, the file reader and the
  * render's temporary store.
  */
 export interface AssetDependencies extends AdmissionDependencies {

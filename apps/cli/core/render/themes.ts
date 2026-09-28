@@ -31,7 +31,7 @@ export interface AdmittedThemes {
 }
 
 /**
- * The parts admitting themes uses: theme file reads, the `.theme` reader, the font store, and
+ * What admitting themes needs: theme file reads, the `.theme` reader, the font store, and
  * `themes` (the catalog the service comes with, and the admission step).
  */
 export interface ThemeDependencies extends AdmissionDependencies {

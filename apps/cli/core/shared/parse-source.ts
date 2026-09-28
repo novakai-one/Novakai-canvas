@@ -17,8 +17,8 @@ import { failure, success } from '../../contract/errors.js';
 /**
  * Parses `.canvas` text with Language. `text` is the file's text as read; this is where it is
  * first checked.
- * The mistake it can find: Language can't parse the text (`invalid-source`; its `source` holds
- * Language's reasons).
+ * The mistake it can find: Language can't parse the text (`invalid-source`). The failure keeps
+ * Language's reasons in its `source` field.
  */
 export function parseSource(
   language: SourceParser,

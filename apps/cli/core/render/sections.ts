@@ -18,7 +18,7 @@ import { sectionId, type FilePath, type SectionId } from '../../contract/brands.
 import { failure, success, type Result } from '../../contract/errors.js';
 import { combined } from '../shared/results.js';
 
-/** The parts writing sections uses: the PNG engine (`raster`) and the section file writer. */
+/** What writing sections needs: the PNG engine (`raster`) and the section file writer. */
 interface SectionPorts {
   readonly raster: RasterEngine;
   readonly sectionFiles: SectionFiles;

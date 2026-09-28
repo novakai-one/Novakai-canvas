@@ -19,7 +19,7 @@ import { success, type Result } from '../../contract/errors.js';
 import { readDeclaredResource } from '../resources/stage.js';
 
 /**
- * The parts storing one font or image uses: `resources` reads the file, and `assets` is the
+ * What storing one font or image needs: `resources` reads the file, and `assets` is the
  * render's temporary store.
  */
 export interface AdmissionDependencies {

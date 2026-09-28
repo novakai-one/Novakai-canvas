@@ -21,7 +21,7 @@ import type {
   ThemeAdmission,
 } from '../../contract/records/foreign.js';
 
-/** The parts admitting a theme uses: the shipped catalog, the render's store and Templates. */
+/** What admitting a theme needs: the shipped catalog, the render's store and Templates. */
 export interface ThemeDependencies {
   /** The shipped themes and recipes. */
   readonly presets: Catalog;

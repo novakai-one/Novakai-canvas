@@ -19,7 +19,7 @@ import { presetId, type RecipeOrCollectionId, type PresetId } from '../../contra
 import type { Result } from '../../contract/errors.js';
 import { renderFaultFailure, success } from '../../contract/errors.js';
 
-/** The parts finding a source uses: the render's file reads and Language's parser. */
+/** What finding a source needs: the render's file reads and Language's parser. */
 export interface SourceDependencies {
   readonly inputFiles: Pick<InputFiles, 'read' | 'recipeFile' | 'shippedCollections'>;
   readonly sources: Pick<RenderSources, 'parse'>;

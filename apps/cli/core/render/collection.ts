@@ -22,7 +22,7 @@ import { setSourceTheme } from './source-theme.js';
 import type { AdmittedThemes } from './themes.js';
 
 /**
- * The parts loading a collection uses: file reads, the render's temporary store, and `sources`
+ * What loading a collection needs: file reads, the render's temporary store, and `sources`
  * (Language's parser, Language turning text into a collection, and Model's check).
  */
 export interface CollectionDependencies extends SourceDependencies, AssetDependencies {
@@ -30,8 +30,8 @@ export interface CollectionDependencies extends SourceDependencies, AssetDepende
 }
 
 /**
- * Loads the collection `selector` names as a checked collection, and draws it with
- * `themes.choice` in place of its own theme, when a theme was asked for.
+ * Loads the collection `selector` names as a checked collection. When a theme was asked for,
+ * `themes.choice` is first written in as its theme. It draws nothing; drawing comes later.
  * Mistakes: the source can't be found or read, the theme can't be written in or isn't known
  * (`missing-theme`), a font or image can't be stored, or Language or Model find a problem.
  */
