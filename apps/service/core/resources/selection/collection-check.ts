@@ -111,14 +111,15 @@ function sameRoles(
 }
 
 /**
- * Each asset's stored bytes must still have the media type the collection records. Fails with
- * the first asset's failure in collection order (see `checkMediaType`).
+ * Each asset's stored bytes must still have the media type the collection records, checked in
+ * collection order. Fails with the first asset's failure (see `checkMediaType`); later assets are
+ * not read.
  */
 function checkMediaTypes(
   bindings: readonly AssetBinding[],
   owners: CollectionOwners,
 ): AuthoringResult<void> {
-  const checked = collect(bindings.map((item) => checkMediaType(item, owners)));
+  const checked = collect(bindings, (binding) => checkMediaType(binding, owners));
   return andThen(checked, () => success(undefined));
 }
 

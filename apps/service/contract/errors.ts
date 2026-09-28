@@ -79,29 +79,26 @@ export function andThen<T, U, E>(
 }
 
 /**
- * Every value, in order, when every result succeeded; otherwise the first failure in order,
- * unchanged. The results are already computed, so each one was attempted.
+ * Runs `step` on each item in order and returns every value, in order, when every step
+ * succeeded. The first failure is returned unchanged and later items are not stepped, so a step
+ * that reads an owner reads nothing after the first failure.
  */
-export function collect<T, E>(results: readonly Result<T, E>[]): Result<readonly T[], E> {
-  const failed = results.find(isFailure);
-  if (failed) return failed;
-  return success(results.filter(isSuccess).map((item) => item.value));
+export function collect<I, T, E>(
+  items: readonly I[],
+  step: (item: I) => Result<T, E>,
+): Result<readonly T[], E> {
+  // `appendNext` passes the first failure along unchanged, so later items are not stepped.
+  const appendNext = (collected: Result<readonly T[], E>, item: I): Result<readonly T[], E> =>
+    andThen(collected, (values) => appendStep(values, step(item)));
+  return items.reduce(appendNext, success<readonly T[]>([]));
 }
 
-/** A failed result. */
-type Failure<E> = Extract<Result<never, E>, { readonly ok: false }>;
-
-/** A successful result. */
-type Success<T> = Extract<Result<T, never>, { readonly ok: true }>;
-
-/** Whether this result failed. */
-function isFailure<T, E>(result: Result<T, E>): result is Failure<E> {
-  return !result.ok;
-}
-
-/** Whether this result succeeded. */
-function isSuccess<T, E>(result: Result<T, E>): result is Success<T> {
-  return result.ok;
+/** The values with this step's value appended; the step's failure passes through unchanged. */
+function appendStep<T, E>(
+  values: readonly T[],
+  stepped: Result<T, E>,
+): Result<readonly T[], E> {
+  return andThen(stepped, (value) => success([...values, value]));
 }
 
 /** The recovery text every service failure carries: keep the draft, fix the cause, reconcile. */

@@ -78,7 +78,7 @@ function withFonts(
   bindings: readonly FontBinding[],
   assets: Pick<Assets, 'resolve'>,
 ): AuthoringResult<Json> {
-  const fonts = collect(bindings.map((item) => font(item, assets)));
+  const fonts = collect(bindings, (binding) => font(binding, assets));
   if (!fonts.ok) return fonts;
   const block = rawBlock(raw, base, fonts.value);
   if (!block.ok) return block;
@@ -139,7 +139,7 @@ function rawBlock(
 ): AuthoringResult<Json> {
   const chrome = chromeField(raw.chrome);
   if (!chrome.ok) return chrome;
-  const overrides = collect(Object.entries(raw.overrides).map(tokenEntry));
+  const overrides = collect(Object.entries(raw.overrides), tokenEntry);
   if (!overrides.ok) return overrides;
   const pin = { kind: base.kind, id: base.id, version: base.version, digest: base.digest };
   return {

@@ -130,15 +130,33 @@ function report(
 }
 
 /**
- * The rendered documents as plain JSON when `preview` is true, otherwise `null`. Fails with
- * `corrupt-record` at `feasibility` when they are not JSON.
+ * The rendered documents as plain JSON when `preview` is true, otherwise `null`. Fails as
+ * `plainCopy` fails.
  */
 function previewDocuments(
   documents: readonly RenderDocument[],
   preview: boolean,
 ): AuthoringResult<Json | null> {
   if (!preview) return success(null);
-  const copied = json.safeParse(JSON.parse(JSON.stringify(documents)));
+  return plainCopy(documents);
+}
+
+/**
+ * The documents as `JSON.stringify` writes them, read back and checked as JSON. Fails with
+ * `corrupt-record` at `feasibility` when `JSON.stringify` throws (a BigInt or a cycle; caught
+ * here) or the copy is not JSON.
+ */
+function plainCopy(documents: readonly RenderDocument[]): AuthoringResult<Json> {
+  try {
+    return checkedJson(JSON.parse(JSON.stringify(documents)));
+  } catch {
+    return notJson();
+  }
+}
+
+/** The value checked as JSON. Fails with `corrupt-record` at `feasibility` when it is not JSON. */
+function checkedJson(value: unknown): AuthoringResult<Json> {
+  const copied = json.safeParse(value);
   if (!copied.success) return notJson();
   return success(copied.data);
 }

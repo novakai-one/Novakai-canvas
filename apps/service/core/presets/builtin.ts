@@ -226,7 +226,7 @@ function catalogThemes(
   owners: BuiltinPresetOwners,
 ): Result<ResolvedResources['themes']> {
   const themes = catalog.filter((item) => item.kind === 'theme');
-  const bound = collect(themes.map((item) => boundTheme(item, owners)));
+  const bound = collect(themes, (theme) => boundTheme(theme, owners));
   return andThen(bound, (entries) => success(Object.fromEntries(entries)));
 }
 

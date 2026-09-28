@@ -32,7 +32,9 @@ export function coverage(
     ...themePresets(catalog).flatMap((item) => item.payload.fonts),
   ]);
   if (!held.ok) return held;
-  const bytes = collect(Object.values(bound).map((item) => checkedDigest(bareDigest(item.digest))));
+  const bytes = collect(Object.values(bound), (binding) =>
+    checkedDigest(bareDigest(binding.digest)),
+  );
   return andThen(bytes, (added) => success([...new Set([...held.value, ...added])]));
 }
 

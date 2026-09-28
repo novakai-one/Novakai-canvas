@@ -68,9 +68,10 @@ export interface WiredAuthoring {
 
 /**
  * Loads the store adapter and binds the workspace's Authoring roles. Rejects when the adapter
- * cannot load, or when the trusted installation breaks Authoring's proposal limits (see
- * `installationRequest`); compose startup answers both `unavailable` and closes the native
- * handles.
+ * cannot load; compose startup answers `unavailable` and closes the native handles. An
+ * installation over Authoring's proposal limits does not reject: it is carried as `initialize`'s
+ * failure (`invalid-input` at `bootstrap.proposal`, see `installationRequest`), which startup
+ * answers only for a new workspace.
  */
 export async function wireAuthoring(inputs: AuthoringInputs): Promise<WiredAuthoring> {
   const storeModule = await import('../../adapters/storage/authoring-store.js');

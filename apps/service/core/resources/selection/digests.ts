@@ -17,7 +17,7 @@ import { undecodable } from './refusal.js';
 export function sortedDigests(
   values: readonly string[],
 ): AuthoringResult<readonly AuthoringDigest[]> {
-  return collect([...new Set(values)].toSorted().map(checkedDigest));
+  return collect([...new Set(values)].toSorted(), checkedDigest);
 }
 
 /**

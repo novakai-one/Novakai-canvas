@@ -96,7 +96,7 @@ function assembleJob(
   const id = jobId(purpose, collection);
   if (!id.ok) return id;
   const images = collection.assets.filter((item) => item.mediaType.startsWith('image/'));
-  const assets = collect(images.map((item) => asset(bareDigest(item.digest), owners)));
+  const assets = collect(images, (image) => asset(bareDigest(image.digest), owners));
   if (!assets.ok) return assets;
   return andThen(scaledOptions(theme.style), (options) =>
     success({
@@ -142,7 +142,7 @@ function themeFonts(
   preset: ThemePreset,
   owners: RenderResourceOwners,
 ): AuthoringResult<RenderingJob['fonts']> {
-  const fonts = collect(preset.payload.fonts.map((digest) => font(digest, owners)));
+  const fonts = collect(preset.payload.fonts, (digest) => font(digest, owners));
   if (!fonts.ok) return fonts;
   const checked = fontSet.safeParse(fonts.value);
   if (!checked.success) return undecodable();

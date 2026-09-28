@@ -10,12 +10,20 @@ import { andThen, failure, success, type Result } from '../../contract/errors.js
  * The chunks as UTF-8 text. Fails with `invalid-input` at `body` ("Request body was interrupted or
  * not valid UTF-8") when a chunk is not bytes, the total passes `httpBodyLimit` (reading stops
  * there), the stream fails (an interrupted upload) or the bytes are not valid UTF-8. The last two
- * are Node throws, caught here.
+ * are Node throws, caught where they happen (`receivedBytes`, `decodedText`).
  */
 export async function requestBody(chunks: AsyncIterable<unknown>): Promise<Result<string>> {
+  const bytes = await receivedBytes(chunks);
+  return andThen(bytes, decodedText);
+}
+
+/**
+ * The bounded bytes (see `boundedBytes`). Fails with `invalid-input` at `body` as `boundedBytes`
+ * fails, or when the stream throws (an interrupted upload; caught here).
+ */
+async function receivedBytes(chunks: AsyncIterable<unknown>): Promise<Result<Buffer>> {
   try {
-    const bytes = await boundedBytes(chunks);
-    return andThen(bytes, decodedText);
+    return await boundedBytes(chunks);
   } catch {
     return bodyRefused();
   }
@@ -60,9 +68,16 @@ async function settledBytes(
   return bodyRefused();
 }
 
-/** The bytes as strict UTF-8 text; throws (caught by `requestBody`) when they are not valid UTF-8. */
+/**
+ * The bytes as strict UTF-8 text. Fails with `invalid-input` at `body` when they are not valid
+ * UTF-8 (the decoder's throw, caught here).
+ */
 function decodedText(bytes: Buffer): Result<string> {
-  return success(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+  try {
+    return success(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+  } catch {
+    return bodyRefused();
+  }
 }
 
 /** The one body refusal: `invalid-input` at `body`. */

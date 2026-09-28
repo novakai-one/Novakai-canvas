@@ -44,7 +44,7 @@ export function checkPresets(
   view: WorkspaceContents,
   owners: CatalogCheckOwners,
 ): AuthoringResult<void> {
-  return allPassed(view.presets.map((preset) => checkPreset(snapshot, preset, owners)));
+  return allPassed(view.presets, (preset) => checkPreset(snapshot, preset, owners));
 }
 
 /**
@@ -59,9 +59,7 @@ export function checkMetadata(
 ): AuthoringResult<void> {
   const workspace = checkWorkspaceRecord(snapshot);
   const catalog = andThen(workspace, () => checkCatalogRecord(snapshot, view));
-  return andThen(catalog, () =>
-    allPassed(liveRecords(snapshot, 'asset-admission').map((item) => checkAsset(item, owners))),
-  );
+  return andThen(catalog, () => checkAssets(snapshot, owners));
 }
 
 /**
@@ -78,12 +76,20 @@ function checkPreset(
   if (!slot.ok) return slot;
   const expected = presetResources(preset);
   const retained = requireRetention(slot.value, expected);
-  return andThen(retained, () =>
-    allPassed(
-      expected.map((digest) =>
-        requireFact(owners.assets.resolve(digest).ok, `Missing preset bytes ${digest}`),
-      ),
-    ),
+  return andThen(retained, () => checkPresetBytes(expected, owners));
+}
+
+/**
+ * Assets resolves each preset digest, in order. Fails with `invariant-violation` at `candidate`
+ * ("Missing preset bytes <digest>") at the first digest it cannot resolve; later digests are not
+ * read.
+ */
+function checkPresetBytes(
+  digests: readonly string[],
+  owners: CatalogCheckOwners,
+): AuthoringResult<void> {
+  return allPassed(digests, (digest) =>
+    requireFact(owners.assets.resolve(digest).ok, `Missing preset bytes ${digest}`),
   );
 }
 
@@ -121,6 +127,19 @@ function checkCatalogRecord(
     'Catalog revision differs',
   );
   return andThen(revision, () => requireRetention(catalog.value, []));
+}
+
+/**
+ * Checks each asset-admission record in order (see `checkAsset`); the first failure stops the
+ * checks.
+ */
+function checkAssets(
+  snapshot: Snapshot,
+  owners: CatalogCheckOwners,
+): AuthoringResult<void> {
+  return allPassed(liveRecords(snapshot, 'asset-admission'), (record) =>
+    checkAsset(record, owners),
+  );
 }
 
 /**

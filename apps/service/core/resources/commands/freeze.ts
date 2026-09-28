@@ -68,7 +68,7 @@ function freezeDsl(
   if (!command.success) return invalidPreparation();
   const selected = owners.selector.select(request, snapshot);
   if (!selected.ok) return selected;
-  const pins = collect(Object.entries(selected.value.resources.themes).map(frozenPin));
+  const pins = collect(Object.entries(selected.value.resources.themes), frozenPin);
   return andThen(pins, (frozen) => pinnedRequest(request, command.data, frozen));
 }
 

@@ -39,10 +39,10 @@ export function availableThemes(
   owners: ThemeOwners,
 ): AuthoringResult<Themes> {
   const records = themePresets(catalog);
-  const exact = collect(records.map((item) => exactEntry(item, owners)));
+  const exact = collect(records, (preset) => exactEntry(preset, owners));
   if (!exact.ok) return exact;
   const ids = [...new Set(records.map((item) => item.id))];
-  const aliases = collect(ids.map((id) => aliasEntry(catalog, id, owners)));
+  const aliases = collect(ids, (id) => aliasEntry(catalog, id, owners));
   return andThen(aliases, (latest) => success(Object.fromEntries([...exact.value, ...latest])));
 }
 
@@ -56,10 +56,8 @@ export function pinnedThemes(
   available: Themes,
 ): AuthoringResult<Themes> {
   if (intent.planner !== 'dsl') return success(available);
-  const pins = collect(
-    Object.entries(intent.command.themePins ?? {}).map(([alias, exact]) =>
-      retainedEntry(available, alias, exact),
-    ),
+  const pins = collect(Object.entries(intent.command.themePins ?? {}), ([alias, exact]) =>
+    retainedEntry(available, alias, exact),
   );
   return andThen(pins, (retained) => success({ ...available, ...Object.fromEntries(retained) }));
 }

@@ -126,9 +126,9 @@ function selection(
   const pins = selectionPins(resources);
   if (!pins.ok) return pins;
   const covered = coverage(request, snapshot, catalog, resources.assets);
-  return andThen(covered, (held) =>
-    success({ resources, pins: pins.value, covered: held, reads: presetReads(snapshot) }),
-  );
+  if (!covered.ok) return covered;
+  const reads = presetReads(snapshot);
+  return success({ resources, pins: pins.value, covered: covered.value, reads });
 }
 
 /** Bootstrap reads the fixed installation presets; every other request reads the stored ones. */

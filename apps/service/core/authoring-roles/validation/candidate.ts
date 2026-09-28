@@ -77,14 +77,17 @@ function readVersions(before: Snapshot): readonly ReadVersion[] {
     .map((item) => ({ key: item.key, version: item.version }));
 }
 
-/** Checks each collection in order (see `checkCollection`). */
+/**
+ * Checks each collection in order (see `checkCollection`); the first failure stops the checks, so
+ * later collections are not read through the selector.
+ */
 function checkCollections(
   snapshot: Snapshot,
   view: WorkspaceContents,
   owners: CandidateValidatorOwners,
 ): AuthoringResult<void> {
-  return allPassed(
-    view.collections.map((collection) => checkCollection(snapshot, collection, view, owners)),
+  return allPassed(view.collections, (collection) =>
+    checkCollection(snapshot, collection, view, owners),
   );
 }
 

@@ -89,7 +89,7 @@ function recipePayload(
   family: RecipePayload['family'],
 ): TemplatesResult<RecipePayload> {
   const collection = intent.collection;
-  const assets = collect(collection.assets.map((item) => brandedDigest(bareDigest(item.digest))));
+  const assets = collect(collection.assets, (binding) => brandedDigest(bareDigest(binding.digest)));
   if (!assets.ok) return assets;
   const theme = brandedThemePin({
     id: collection.theme.id,

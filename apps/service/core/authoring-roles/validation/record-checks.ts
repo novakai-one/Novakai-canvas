@@ -62,9 +62,15 @@ export function requireRetention(
   );
 }
 
-/** Passes when every check passed; otherwise the first failure in order. */
-export function allPassed(checks: readonly AuthoringResult<void>[]): AuthoringResult<void> {
-  return andThen(collect(checks), () => success(undefined));
+/**
+ * Runs `check` on each item in order; passes when every check passed. The first failure is
+ * returned unchanged and later items are not checked.
+ */
+export function allPassed<I>(
+  items: readonly I[],
+  check: (item: I) => AuthoringResult<void>,
+): AuthoringResult<void> {
+  return andThen(collect(items, check), () => success(undefined));
 }
 
 /**

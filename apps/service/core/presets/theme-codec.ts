@@ -112,9 +112,9 @@ type TokenEntry = readonly [string, ThemePayload['tokens'][string]];
  * returned invalid identity or token data") when an identity does not match its Templates schema.
  */
 function checkedThemePayload(resolved: PortableTheme): TemplatesResult<ThemePayload> {
-  const tokens = collect(Object.entries(resolved.tokens).map(tokenEntry));
+  const tokens = collect(Object.entries(resolved.tokens), tokenEntry);
   if (!tokens.ok) return tokens;
-  const fonts = collect(resolved.fonts.map(brandedDigest));
+  const fonts = collect(resolved.fonts, brandedDigest);
   if (!fonts.ok) return fonts;
   return andThen(basePin(resolved.base), (base) =>
     success({
