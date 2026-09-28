@@ -16,6 +16,9 @@ import type { StaticFiles } from '../../contract/ports/transport.js';
 import type { SentFile } from '../../contract/records/transport/server.js';
 import type { HostPath } from '../../contract/brands.js';
 
+/** The file `/` asks for. */
+const INDEX_PAGE = '/index.html';
+
 /** The media type of each served extension; any other extension is not a route. */
 const MEDIA_TYPES: Readonly<Record<string, string>> = Object.freeze({
   '.html': 'text/html; charset=utf-8',
@@ -33,58 +36,88 @@ const MEDIA_TYPES: Readonly<Record<string, string>> = Object.freeze({
  * read or isn't a served file type.
  */
 export function createStaticFiles(webRoot: HostPath): StaticFiles {
-  return { read: (path) => read(webRoot, path) };
+  return { read: (path) => readWebAppFile(webRoot, path) };
 }
 
 /**
- * The file at the URL path (`/` is `/index.html`). Fails with `not-found` at `file` when the path
- * is not a valid escape, leaves the root, does not exist or cannot be read ("build the web
- * application first"), or has an unsupported extension. Never rejects.
+ * Reads the built file the URL path names. Any problem, a bad escape or a missing file included,
+ * answers `not-found`; it never rejects.
  */
-async function read(
+async function readWebAppFile(
   root: string,
   pathname: string,
 ): Promise<Result<SentFile>> {
   try {
-    const location = await locate(root, resourcePath(pathname));
-    if (!location.ok) return location;
-    return await load(location.value);
+    const requestedPath = decodeRequestPath(pathname);
+    const location = await locateInsideRoot(root, requestedPath);
+    if (!location.ok) {
+      return location;
+    }
+    return await loadServedFile(location.value);
   } catch {
-    return failure(
-      'not-found',
-      'file',
-      'Application resource was not found; build the web application first',
-    );
+    return missingResourceFailure();
   }
 }
 
-/** The root document for `/`; any other path decoded once. Throws on an invalid escape. */
-function resourcePath(pathname: string): string {
-  if (pathname === '/') return '/index.html';
+/** Works out the file path the URL asks for: `/` asks for `/index.html`; others are decoded once. */
+function decodeRequestPath(pathname: string): string {
+  if (pathname === '/') {
+    return INDEX_PAGE;
+  }
   return decodeURIComponent(pathname);
 }
 
 /**
- * The real path of `path` below the real root. Fails with `not-found` at `file` when it leaves the
- * root; throws when either path does not exist.
+ * Finds the file's real path, links followed, and checks it is inside the real root. Throws when
+ * the root or the file doesn't exist.
  */
-async function locate(
+async function locateInsideRoot(
   root: string,
-  path: string,
+  requestedPath: string,
 ): Promise<Result<string>> {
-  const directory = await realpath(root);
-  const file = await realpath(resolve(directory, `.${path}`));
-  if (!file.startsWith(`${directory}${sep}`))
-    return failure('not-found', 'file', 'Application resource was not found');
-  return success(file);
+  const realRoot = await realpath(root);
+  const realFile = await realpath(resolve(realRoot, `.${requestedPath}`));
+  if (!isInsideFolder(realFile, realRoot)) {
+    return outsideRootFailure();
+  }
+  return success(realFile);
 }
 
-/**
- * The file's bytes and media type. Fails with `not-found` at `file` for an unsupported extension;
- * throws when the file cannot be read.
- */
-async function load(path: string): Promise<Result<SentFile>> {
+/** Whether the path is somewhere below the folder. */
+function isInsideFolder(
+  path: string,
+  folder: string,
+): boolean {
+  const folderPrefix = `${folder}${sep}`;
+  return path.startsWith(folderPrefix);
+}
+
+/** Reads a served file's bytes, with its media type. Throws when the file can't be read. */
+async function loadServedFile(path: string): Promise<Result<SentFile>> {
   const mediaType = MEDIA_TYPES[extname(path)];
-  if (!mediaType) return failure('not-found', 'file', 'Unsupported application resource');
-  return success({ bytes: await readFile(path), mediaType });
+  if (mediaType === undefined) {
+    return unsupportedResourceFailure();
+  }
+  const bytes = await readFile(path);
+  const servedFile: SentFile = { bytes, mediaType };
+  return success(servedFile);
+}
+
+/** Makes the mistake for a file that is missing or can't be read: the web app isn't built. */
+function missingResourceFailure(): Result<never> {
+  return failure(
+    'not-found',
+    'file',
+    'Application resource was not found; build the web application first',
+  );
+}
+
+/** Makes the mistake for a path that leads outside the build folder. */
+function outsideRootFailure(): Result<never> {
+  return failure('not-found', 'file', 'Application resource was not found');
+}
+
+/** Makes the mistake for a file type that is never served. */
+function unsupportedResourceFailure(): Result<never> {
+  return failure('not-found', 'file', 'Unsupported application resource');
 }

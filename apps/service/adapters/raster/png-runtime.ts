@@ -22,7 +22,11 @@ type RasterPhase =
 /** The phase once `prepare` has been called. */
 type StartedPhase = Extract<RasterPhase, { readonly kind: 'started' }>;
 
+/** The phase before anything was loaded. */
 const UNSTARTED: RasterPhase = Object.freeze({ kind: 'unstarted' });
+
+/** The installed resvg WebAssembly file, as a package path. */
+const RESVG_WASM = '@resvg/resvg-wasm/index_bg.wasm';
 
 /**
  * Makes the PNG encoder. Its first `prepare` loads resvg; every later call shares that outcome.
@@ -32,34 +36,50 @@ export function createPngEncoder(): PngEncoder {
   let phase = UNSTARTED;
   return {
     prepare: () => {
-      const started = startedPhase(phase);
+      const started = startOnce(phase);
       phase = started;
       return started.ready;
     },
   };
 }
 
-/** The current started phase, or a new one that begins the native initialization now. */
-function startedPhase(phase: RasterPhase): StartedPhase {
-  if (phase.kind === 'started') return phase;
-  return { kind: 'started', ready: initializeNativeRaster() };
+/** Keeps a phase that has already started, or starts loading resvg now. */
+function startOnce(phase: RasterPhase): StartedPhase {
+  if (phase.kind === 'started') {
+    return phase;
+  }
+  const ready = loadResvg();
+  return { kind: 'started', ready };
 }
 
-/**
- * The installed resvg module, compiled and handed to Export. Fails with `unavailable` at
- * `export.png`: Export's message when it refuses the module, otherwise "PNG export runtime is
- * unavailable".
- */
-async function initializeNativeRaster(): Promise<Result<void>> {
+/** Compiles the installed resvg module and hands it to Export. */
+async function loadResvg(): Promise<Result<void>> {
   try {
-    const require = createRequire(import.meta.url);
-    const wasm = await WebAssembly.compile(
-      await readFile(require.resolve('@resvg/resvg-wasm/index_bg.wasm')),
-    );
-    const result = await initializeRaster(wasm);
-    if (!result.ok) return failure('unavailable', 'export.png', result.error.message);
-    return result;
+    const resvgModule = await compileResvg();
+    const initialized = await initializeRaster(resvgModule);
+    if (!initialized.ok) {
+      return exportRefusedFailure(initialized.error.message);
+    }
+    return initialized;
   } catch {
-    return failure('unavailable', 'export.png', 'PNG export runtime is unavailable');
+    return resvgUnavailableFailure();
   }
+}
+
+/** Reads the installed resvg WebAssembly file and compiles it. Throws when it's missing or broken. */
+async function compileResvg(): Promise<WebAssembly.Module> {
+  const require = createRequire(import.meta.url);
+  const wasmPath = require.resolve(RESVG_WASM);
+  const wasmBytes = await readFile(wasmPath);
+  return WebAssembly.compile(wasmBytes);
+}
+
+/** Makes the mistake for a resvg module Export refused, keeping Export's message. */
+function exportRefusedFailure(exportMessage: string): Result<never> {
+  return failure('unavailable', 'export.png', exportMessage);
+}
+
+/** Makes the mistake for a resvg module that can't be found, read or compiled. */
+function resvgUnavailableFailure(): Result<never> {
+  return failure('unavailable', 'export.png', 'PNG export runtime is unavailable');
 }

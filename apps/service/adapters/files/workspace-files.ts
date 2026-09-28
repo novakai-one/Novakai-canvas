@@ -10,14 +10,23 @@
  */
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { Assets } from '@novakai/canvas-assets';
-import type { Persistence } from '@novakai/canvas-persistence';
+import type { AssetError, Assets } from '@novakai/canvas-assets';
+import type { Persistence, StorageError } from '@novakai/canvas-persistence';
 import type {
   WorkspaceOptions,
   StoreOpeners,
   OpenStores,
 } from '../../contract/records/workspace/startup.js';
-import { failure, type Result } from '../../contract/errors.js';
+import { failure, success, type Result } from '../../contract/errors.js';
+
+/** The uploaded-files folder, inside the workspace folder. */
+const ASSETS_FOLDER = 'assets';
+/** The database file, inside the workspace folder. */
+const DATABASE_FILE = 'workspace.sqlite';
+
+/** A mistake one of the two stores reported. */
+type StoreError = AssetError | StorageError;
+
 /**
  * Opens the uploaded-files store, then the database, in `options.directory`, making the folder if
  * it is missing. The answer's `close` closes both, and reports the first that failed to close.
@@ -29,47 +38,75 @@ export async function openWorkspaceFiles(
   openers: StoreOpeners,
 ): Promise<Result<OpenStores>> {
   try {
-    await mkdir(join(options.directory, 'assets'), { recursive: true });
-    return open(options, openers);
+    const assetsFolder = join(options.directory, ASSETS_FOLDER);
+    await mkdir(assetsFolder, { recursive: true });
+    return openStores(options, openers);
   } catch {
-    return failure('unavailable', 'workspace', 'Workspace files could not be opened');
+    return workspaceFilesFailure();
   }
 }
-/** Closing both owners is attempted even if one reports a failure; callers preserve the original files. */
-async function close(
+
+/** Opens the uploaded-files store first, then the database next to it. */
+function openStores(
+  options: WorkspaceOptions,
+  openers: StoreOpeners,
+): Result<OpenStores> {
+  const assetsFolder = join(options.directory, ASSETS_FOLDER);
+  const assets = openers.assets(assetsFolder);
+  if (!assets.ok) {
+    return storeFailure(assets.error);
+  }
+  return openDatabase(options, openers, assets.value);
+}
+
+/**
+ * Opens the database once the uploaded-files store is open. If the database won't open, it closes
+ * the files store again. Nothing is written yet: Authoring sets the workspace up afterwards.
+ */
+function openDatabase(
+  options: WorkspaceOptions,
+  openers: StoreOpeners,
+  assets: Assets,
+): Result<OpenStores> {
+  const databaseFile = join(options.directory, DATABASE_FILE);
+  const storage = openers.storage(databaseFile, options.workspace);
+  if (!storage.ok) {
+    assets.close();
+    return storeFailure(storage.error);
+  }
+  const stores: OpenStores = {
+    assets,
+    storage: storage.value,
+    close: () => closeStores(storage.value, assets),
+  };
+  return success(stores);
+}
+
+/**
+ * Closes the database and the uploaded-files store. Both are closed even when one fails, and the
+ * first that failed is reported. The files themselves are left as they are.
+ */
+async function closeStores(
   storage: Persistence,
   assets: Assets,
 ): Promise<Result<void>> {
-  const database = storage.close();
-  const blobs = assets.close();
-  if (!database.ok)
-    return failure('unavailable', database.error.path, database.error.message, database.error);
-  if (!blobs.ok) return failure('unavailable', blobs.error.path, blobs.error.message, blobs.error);
-  return { ok: true, value: undefined };
-}
-/** Asset opening precedes canonical storage; failed database opening releases the already-open byte owner. */
-function open(
-  options: WorkspaceOptions,
-  factories: StoreOpeners,
-): Result<OpenStores> {
-  const assets = factories.assets(join(options.directory, 'assets'));
-  if (!assets.ok)
-    return failure('unavailable', assets.error.path, assets.error.message, assets.error);
-  return openDatabase(options, factories, assets.value);
-}
-/** No direct record writes occur during physical opening; Authoring performs initialization after all owners are ready. */
-function openDatabase(
-  options: WorkspaceOptions,
-  factories: StoreOpeners,
-  assets: Assets,
-): Result<OpenStores> {
-  const storage = factories.storage(join(options.directory, 'workspace.sqlite'), options.workspace);
-  if (!storage.ok) {
-    assets.close();
-    return failure('unavailable', storage.error.path, storage.error.message, storage.error);
+  const databaseClosed = storage.close();
+  const assetsClosed = assets.close();
+  if (!databaseClosed.ok) {
+    return storeFailure(databaseClosed.error);
   }
-  return {
-    ok: true,
-    value: { assets, storage: storage.value, close: () => close(storage.value, assets) },
-  };
+  if (!assetsClosed.ok) {
+    return storeFailure(assetsClosed.error);
+  }
+  return success(undefined);
+}
+
+/** Makes the mistake for a store that won't open or close, at its path, keeping its own mistake. */
+function storeFailure(storeError: StoreError): Result<never> {
+  return failure('unavailable', storeError.path, storeError.message, storeError);
+}
+
+/** Makes the mistake for a workspace folder that can't be made, or a store that throws. */
+function workspaceFilesFailure(): Result<never> {
+  return failure('unavailable', 'workspace', 'Workspace files could not be opened');
 }
