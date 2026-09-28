@@ -1,8 +1,13 @@
 /*
- * `recipe admit`'s admission: the checked header and the editable DSL source as a Templates recipe
- * admission, plus the font and image declarations the source makes. Pure apart from the injected
- * Language parser. Templates owns the canonical form and the immutable identity. The caller fixes
- * the recipe file and runs the command again.
+ * Why this file exists
+ *
+ * `recipe admit plan.canvas --id plan --version 1.0.0 --family er --title "Plan"` saves a recipe
+ * for reuse. A recipe file is ordinary `.canvas` text, so Language must be able to parse it first.
+ * Parsing also finds the fonts and images it names, which must be stored before the save.
+ *
+ * This file parses the text, then pairs it with the typed `--id`, `--version`, `--family` and
+ * `--title` as the recipe to save. The text is kept exactly as written. It never reads a file or
+ * talks to the service.
  */
 import type { SourceParser } from '../../contract/ports/source-parser.js';
 import type { RecipeHeader } from '../../contract/records/command.js';
@@ -11,23 +16,28 @@ import type { Result } from '../../contract/errors.js';
 import { parseSource } from '../shared/parse-source.js';
 import { mapped } from '../shared/results.js';
 
-/** A Templates recipe admission. */
+/** A recipe to save, in the form Templates accepts. Templates calls this an admission. */
 export type RecipeAdmission = Extract<Admission, { readonly kind: 'recipe' }>;
 
-/** A recipe file's admission and the resources its source declares, to stage first. */
+/** A parsed recipe file: the recipe to save, and the fonts and images it names, to store first. */
 export interface RecipeSource {
   readonly admission: RecipeAdmission;
   readonly resources: readonly ResourceRequest[];
 }
 
-/** The recipe's admission and declarations. Fails with `invalid-source`. */
-export function recipeSource(
+/**
+ * Parses recipe text into the recipe to save and the fonts and images it names.
+ * `recipeText` is the file's text as read; Language checks it here. The recipe keeps it unchanged,
+ * with the typed `header` and an empty description.
+ * The mistake it can find: Language can't parse the text (`invalid-source`).
+ */
+export function parseRecipe(
   header: RecipeHeader,
-  text: string,
+  recipeText: string,
   language: SourceParser,
 ): Result<RecipeSource> {
-  return mapped(parseSource(language, text), (parsed) => ({
-    admission: recipeAdmission(header, text),
+  return mapped(parseSource(language, recipeText), (parsed) => ({
+    admission: recipeAdmission(header, recipeText),
     resources: parsed.resources,
   }));
 }

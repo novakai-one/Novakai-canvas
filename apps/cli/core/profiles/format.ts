@@ -1,7 +1,12 @@
 /*
- * Profile command text: the descriptor listing `profile describe` prints, with the commands that
- * run the profile, the lint summary line and the line each lint finding prints as. Pure; nothing
- * is read or written.
+ * Why this file exists
+ *
+ * The profile commands print plain text for an agent to read. `profile describe build-spec@1`
+ * prints the profile's rules and the commands that use it. `profile lint` prints one line, such as
+ * `build-spec@1 structural lint found 2 issue(s).`, then one line per broken rule.
+ *
+ * This file writes that text from what Language gives back. It only builds strings; it never
+ * reads or prints anything.
  */
 import type { ProfileId } from '../../contract/brands.js';
 import type {
@@ -10,14 +15,17 @@ import type {
   ProfileLintResult,
 } from '../../contract/records/foreign.js';
 
-/** A lint result that is not `passed`: the `profile-structure` failure reports it. */
+/** A lint that did not pass: rules were broken (`failed`), or the source was only a patch. */
 type FailedLint = Exclude<ProfileLintResult, { readonly status: 'passed' }>;
 
 /** One required slot of a descriptor. */
 type Slot = ProfileDescriptor['slots'][number];
 
-/** The descriptor as `profile describe` prints it: commands, slots, conventions, notes. */
-export function displayDescriptor(descriptor: ProfileDescriptor): string {
+/**
+ * Writes what `profile describe` prints: the profile's name and purpose, the commands that use it,
+ * the parts a source must have, its rules and its notes.
+ */
+export function formatDescriptor(descriptor: ProfileDescriptor): string {
   return [
     `${descriptor.id} — ${descriptor.description}`,
     '',
@@ -35,33 +43,37 @@ export function displayDescriptor(descriptor: ProfileDescriptor): string {
   ].join('\n');
 }
 
-/** The one-line summary: passed, the issue count, or why the source cannot be linted. */
-export function lintSummary(
+/**
+ * Writes the one-line lint summary, such as `build-spec@1 structural lint passed.` A failed lint
+ * gives its number of issues; a patch gets `build-spec@1 requires a full canvas 1 document.`
+ */
+export function formatLintSummary(
   profile: ProfileId,
-  result: ProfileLintResult,
+  outcome: ProfileLintResult,
 ): string {
-  switch (result.status) {
+  switch (outcome.status) {
     case 'passed':
       return `${profile} structural lint passed.`;
     case 'failed':
-      return `${profile} structural lint found ${result.findings.length} issue(s).`;
+      return `${profile} structural lint found ${outcome.findings.length} issue(s).`;
     case 'unsupported-source':
       return `${profile} requires a full canvas 1 document.`;
     default:
-      return unsupportedStatus(profile, result);
+      return unsupportedStatus(profile, outcome);
   }
 }
 
 /**
- * The `profile-structure` message: the summary, a line break, then one line per finding. An
- * unsupported source has no findings, so its message ends with the line break.
+ * Writes the message of a lint that did not pass: the summary line, then one line per broken rule,
+ * such as `PROFILE section @repo 12:3 <message>`. A patch has no broken rules, so its message is
+ * the summary line and a line break.
  */
-export function lintReport(
+export function formatLintReport(
   profile: ProfileId,
-  result: FailedLint,
+  outcome: FailedLint,
 ): string {
-  const findings = result.status === 'failed' ? result.findings : [];
-  return `${lintSummary(profile, result)}\n${findings.map(findingLine).join('\n')}`;
+  const findings = outcome.status === 'failed' ? outcome.findings : [];
+  return `${formatLintSummary(profile, outcome)}\n${findings.map(findingLine).join('\n')}`;
 }
 
 /**

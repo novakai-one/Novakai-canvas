@@ -1,7 +1,13 @@
 /*
- * `theme admit` and `recipe admit`: read the preset file, stage its resource bytes, prepare the
- * preset through the service, then submit one retained Authoring request. Uses injected ports only.
- * Authoring owns the commit; the retained request file is the recovery record for `retry`.
+ * Why this file exists
+ *
+ * An agent can save a theme or recipe for reuse, as in `theme admit brand.theme`. Templates calls
+ * a saved theme or recipe a preset. The save needs care: the fonts and images the file names must
+ * be stored in the service first, and the request must be kept so `retry` can send it again.
+ *
+ * This file runs the save: read the file, store its fonts and images, have the service prepare the
+ * preset, then send it to Authoring. It never saves the preset itself; Authoring does. Each step
+ * gives back a `Result` (see `contract/errors.ts`).
  */
 import type { AdmitCommand } from '../../contract/records/command.js';
 import type { LocalFiles } from '../../contract/ports/local-files.js';
@@ -28,11 +34,11 @@ import type { SubmitDependencies } from '../authoring/submit.js';
 import { buildPresetRequest } from '../authoring/preset-request.js';
 import { chooseRequestId } from '../authoring/request-id.js';
 import { mapped, unsupported } from '../shared/results.js';
-import { recipeSource } from './recipe-admission.js';
+import { parseRecipe } from './recipe-admission.js';
 
 /**
- * What admission uses: the preset file read, the parser, the theme reader, staging, Templates
- * preparation, the workspace read, request IDs, and what `submitRequest` uses.
+ * The tools saving a preset uses: those for staging and sending, plus `files` (reads the file),
+ * `language` or `themeReader` (parses it), `reads` and `resources` (the service), `requestIds`.
  */
 export interface AdmitDependencies extends StagingDependencies, SubmitDependencies {
   readonly files: Pick<LocalFiles, 'readSource'>;
@@ -56,9 +62,10 @@ interface PreparedPreset {
 }
 
 /**
- * All bytes and exact preset content are retained before the sole canonical Authoring apply gate.
- * Fails as the source read, the preset file's grammar, staging, preparation, the workspace read,
- * the fresh request ID, the preset request or `submitRequest` does.
+ * Saves a theme or recipe file for reuse, and gives back the receipt to print.
+ * `theme admit brand.theme` reads the theme, stores its three fonts, then sends the save.
+ * The mistakes it can find: a file that can't be read or parsed, a font or image that can't be
+ * stored, a preset the service won't prepare, or a send that fails (see `submitRequest`).
  */
 export async function admitPreset(
   command: AdmitCommand,
@@ -94,7 +101,7 @@ function presetSource(
     case 'theme-admit':
       return mapped(readers.themeReader.read(text), themeSource);
     case 'recipe-admit':
-      return recipeSource(command.recipe, text, readers.language);
+      return parseRecipe(command.recipe, text, readers.language);
     default:
       return unsupported(command);
   }

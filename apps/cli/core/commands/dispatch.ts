@@ -25,7 +25,7 @@ import {
   readReceipt,
 } from '../reads/queries.js';
 import type { ReadDependencies } from '../reads/queries.js';
-import { answerProfile } from '../profiles/commands.js';
+import { answerProfileCommand } from '../profiles/commands.js';
 import type { ProfileDependencies } from '../profiles/commands.js';
 import { unsupported } from '../shared/results.js';
 import { printOrWriteAnswer } from './delivery.js';
@@ -87,7 +87,7 @@ export async function runProfileCommand(
   command: ProfileCommand,
   dependencies: ProfileCommandDependencies,
 ): Promise<Result<string>> {
-  const answer = await answerProfile(command, dependencies);
+  const answer = await answerProfileCommand(command, dependencies);
   if (!answer.ok) {
     return answer;
   }
