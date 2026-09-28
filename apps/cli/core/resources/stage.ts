@@ -17,8 +17,8 @@ import type {
 import type { ResourceRequest, StageInput } from '../../contract/records/foreign.js';
 import { resourceAlias } from '../../contract/brands.js';
 import type { AssetDigest, FilePath, ResourceAlias } from '../../contract/brands.js';
-import type { FailureInput, LocalFailure, Result, SourceLocation } from '../../contract/errors.js';
-import { failure, success } from '../../contract/errors.js';
+import type { FailureInput, Result, SourceLocation } from '../../contract/errors.js';
+import { located, success } from '../../contract/errors.js';
 import { checked } from '../shared/checks.js';
 import { combined } from '../shared/results.js';
 import { assetOfPin } from './digests.js';
@@ -122,14 +122,6 @@ function declarationPlace(
 ): SourceLocation {
   const { line, column } = request.span.start;
   return { file, line, column, alias };
-}
-
-/** The read failure with the declaration's place; its code, message and recovery are kept. */
-function located(
-  error: LocalFailure,
-  location: SourceLocation,
-): Result<never, LocalFailure> {
-  return failure({ ...error, location });
 }
 
 /** Exact aliases are retained after all declared bytes have been admitted. */

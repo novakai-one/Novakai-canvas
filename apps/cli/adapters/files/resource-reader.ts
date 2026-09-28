@@ -11,8 +11,8 @@ import { dirname, resolve, relative, isAbsolute, extname, sep } from 'node:path'
 import type { ResourceRequest, SupportedMedia } from '../../contract/records/foreign.js';
 import type { LocalBytes } from '../../contract/records/staged-resource.js';
 import type { ResourceReader } from '../../contract/ports/resource-reader.js';
-import type { LocalFailure, Result } from '../../contract/errors.js';
-import { failure, success } from '../../contract/errors.js';
+import type { Result, UnreadResource } from '../../contract/errors.js';
+import { success } from '../../contract/errors.js';
 import type { FilePath } from '../../contract/brands.js';
 
 /** The most bytes one resource may have. */
@@ -47,7 +47,7 @@ export function createResourceReader(): ResourceReader {
 async function read(
   file: FilePath,
   request: ResourceRequest,
-): Promise<Result<LocalBytes, LocalFailure>> {
+): Promise<Result<LocalBytes, UnreadResource>> {
   const path = await confined(file, request.source);
   if (!path.ok) return path;
   return readConfined(request, path.value);
@@ -57,7 +57,7 @@ async function read(
 async function readConfined(
   request: ResourceRequest,
   path: string,
-): Promise<Result<LocalBytes, LocalFailure>> {
+): Promise<Result<LocalBytes, UnreadResource>> {
   const type = mediaType(path, request);
   if (!type.ok) return type;
   const content = await bytes(path);
@@ -69,15 +69,15 @@ async function readConfined(
 async function confined(
   file: FilePath,
   source: string,
-): Promise<Result<string, LocalFailure>> {
+): Promise<Result<string, UnreadResource>> {
   if (isAbsolute(source))
-    return failure({ code: 'absolute-path', message: 'Absolute resource paths are forbidden' });
+    return unread({ code: 'absolute-path', message: 'Absolute resource paths are forbidden' });
   try {
     const root = await realpath(dirname(file));
     const path = await realpath(resolve(root, source));
     return inside(root, path);
   } catch {
-    return failure({ code: 'source-unavailable', message: 'Resource path is unavailable' });
+    return unread({ code: 'source-unavailable', message: 'Resource path is unavailable' });
   }
 }
 
@@ -85,10 +85,10 @@ async function confined(
 function inside(
   root: string,
   path: string,
-): Result<string, LocalFailure> {
+): Result<string, UnreadResource> {
   const remainder = relative(root, path);
   if (remainder === '..' || remainder.startsWith(`..${sep}`) || isAbsolute(remainder))
-    return failure({ code: 'path-escape', message: 'Resource escapes its source directory' });
+    return unread({ code: 'path-escape', message: 'Resource escapes its source directory' });
   return success(path);
 }
 
@@ -96,13 +96,13 @@ function inside(
 function mediaType(
   path: string,
   request: ResourceRequest,
-): Result<SupportedMedia, LocalFailure> {
+): Result<SupportedMedia, UnreadResource> {
   const extension = extname(path).toLowerCase();
   if (!isExtension(extension))
-    return failure({ code: 'unsupported-media', message: 'Resource extension is unsupported' });
+    return unread({ code: 'unsupported-media', message: 'Resource extension is unsupported' });
   const type = media[extension];
   if (!type.startsWith(expectedMedia(request.kind)))
-    return failure({
+    return unread({
       code: 'resource-mismatch',
       message: 'Resource kind and media type do not match',
     });
@@ -120,23 +120,23 @@ function expectedMedia(kind: ResourceRequest['kind']): string {
 }
 
 /** Read and cleanup preserve the first read failure; cleanup is reported when reading succeeds. */
-async function bytes(path: string): Promise<Result<Buffer, LocalFailure>> {
+async function bytes(path: string): Promise<Result<Buffer, UnreadResource>> {
   const opened = await openFile(path);
   if (!opened.ok) return opened;
   return readOpen(opened.value);
 }
 
 /** Open errors remain typed separately from size and media-policy failures. */
-async function openFile(path: string): Promise<Result<FileHandle, LocalFailure>> {
+async function openFile(path: string): Promise<Result<FileHandle, UnreadResource>> {
   try {
     return success(await open(path, 'r'));
   } catch {
-    return failure({ code: 'source-unavailable', message: 'Resource could not be opened' });
+    return unread({ code: 'source-unavailable', message: 'Resource could not be opened' });
   }
 }
 
 /** An opened handle is always closed; the first read failure wins over a simultaneous cleanup failure. */
-async function readOpen(handle: FileHandle): Promise<Result<Buffer, LocalFailure>> {
+async function readOpen(handle: FileHandle): Promise<Result<Buffer, UnreadResource>> {
   const content = await readBounded(handle);
   const closed = await closeFile(handle);
   if (!content.ok) return content;
@@ -145,12 +145,12 @@ async function readOpen(handle: FileHandle): Promise<Result<Buffer, LocalFailure
 }
 
 /** Read through one fixed limit-plus-one buffer until EOF or the first over-limit byte. */
-async function readBounded(handle: FileHandle): Promise<Result<Buffer, LocalFailure>> {
+async function readBounded(handle: FileHandle): Promise<Result<Buffer, UnreadResource>> {
   const buffer = Buffer.alloc(byteLimit + 1);
   const filled = await fill(handle, buffer);
   if (!filled.ok) return filled;
   if (filled.value > byteLimit)
-    return failure({ code: 'resource-too-large', message: 'Resource exceeds 16 MiB' });
+    return unread({ code: 'resource-too-large', message: 'Resource exceeds 16 MiB' });
   return success(buffer.subarray(0, filled.value));
 }
 
@@ -158,13 +158,13 @@ async function readBounded(handle: FileHandle): Promise<Result<Buffer, LocalFail
 async function fill(
   handle: FileHandle,
   buffer: Buffer,
-): Promise<Result<number, LocalFailure>> {
+): Promise<Result<number, UnreadResource>> {
   let progress = { offset: 0, eof: false };
   try {
     while (!complete(progress, buffer.length))
       progress = await nextChunk(handle, buffer, progress.offset);
   } catch {
-    return failure({ code: 'source-unavailable', message: 'Resource bytes could not be read' });
+    return unread({ code: 'source-unavailable', message: 'Resource bytes could not be read' });
   }
   return success(progress.offset);
 }
@@ -188,14 +188,19 @@ function complete(
 }
 
 /** Closing is a typed cleanup outcome so a successful read cannot conceal handle uncertainty. */
-async function closeFile(handle: FileHandle): Promise<Result<void, LocalFailure>> {
+async function closeFile(handle: FileHandle): Promise<Result<void, UnreadResource>> {
   try {
     await handle.close();
     return success(undefined);
   } catch {
-    return failure({
+    return unread({
       code: 'source-unavailable',
       message: 'Resource handle could not be closed safely',
     });
   }
+}
+
+/** A read failure as a value: its located code and message. Core adds the declaration's place. */
+function unread(fault: UnreadResource): Result<never, UnreadResource> {
+  return { ok: false, error: fault };
 }

@@ -18,7 +18,7 @@ import type {
 import type { CollectionRevision, RecordId, RequestId } from '../../contract/brands.js';
 import type { FailureInput, Result } from '../../contract/errors.js';
 import { recordId } from '../../contract/brands.js';
-import { failure, malformedRequest, success } from '../../contract/errors.js';
+import { evidenced, failure, malformedRequest, success } from '../../contract/errors.js';
 import { checked } from '../shared/checks.js';
 import { envelope } from './envelope.js';
 
@@ -101,7 +101,7 @@ function storedVersion(
   if (record === undefined) return failure(missingCollection);
   const collection = reader.validate(record.value);
   if (!collection.ok)
-    return failure({
+    return evidenced({
       code: 'invalid-response',
       message: 'The collection is not a valid Model document',
       recovery: 'Correct the named Model diagnostics.',

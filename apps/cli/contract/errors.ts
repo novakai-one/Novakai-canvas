@@ -1,108 +1,38 @@
 /*
- * The CLI's failure vocabulary: closed codes, the two failure shapes and the Result helpers every
- * layer returns, plus the builders of render:png's own faults (`faulted`, and `nativeFault` for a
- * native throw). Pure. Nothing throws across a boundary; `cli/canvas.ts` prints the failure and
- * sets the exit code. Consumers branch on the code, never on the message. The fault builders are
- * here, not in records/ (data only) or a file of their own, because render core and the render
- * adapters both call them and core may import only records/, ports/, brands, schemas and errors.
+ * The CLI's failure vocabulary: the foreign failure, the Result every layer returns and the
+ * builders of each failure shape, plus the builders of render:png's own faults (`faulted`, and
+ * `nativeFault` for a native throw). The local failure codes and shapes are declared in
+ * records/local-failure.ts and re-exported here, so every layer imports failures from one place.
+ * Pure. Nothing throws across a boundary; `cli/canvas.ts` prints the failure and sets the exit
+ * code. Consumers branch on the code, never on the message. The fault builders are here, not in
+ * records/ (data only) or a file of their own, because render core and the render adapters both
+ * call them and core may import only records/, ports/, brands, schemas and errors.
  */
-import { filePath, type FilePath, type RequestId, type ResourceAlias } from './brands.js';
-import type { FailureSource, OperationSource, SourcePosition } from './records/foreign.js';
+import { filePath, type FilePath, type RequestId } from './brands.js';
+import type { OperationSource } from './records/foreign.js';
+import type {
+  EvidencedFailure,
+  LocalCode,
+  LocalFailure,
+  LocatedFailure,
+  PlainFailure,
+  SourceLocation,
+  UnreadResource,
+} from './records/local-failure.js';
 import type { NativeDetail, ProviderFault, RenderFault } from './records/render-fault.js';
 
-/**
- * A failure the CLI found itself.
- *
- * Arguments (nothing was read or sent; an empty FILE or --out path reports the local-file code its
- * read or write would give):
- * - `invalid-command`: no such command.
- * - `invalid-arguments`: an unknown flag, a wrong operand count, a flag the command does not
- *   take, or a missing or malformed operand or flag value (collection ID, recipe header, pin).
- * - `invalid-mode`: `--mode` is not create, replace or patch.
- * - `invalid-revision`: `--revision` is not a non-negative safe integer.
- * - `invalid-server`: `--server` is not an `http://127.0.0.1` origin.
- * - `invalid-request`: a request ID operand or `--request` is not a valid Authoring request ID.
- * - `unknown-profile`: the profile is not `build-spec@1`.
- *
- * Local files:
- * - `source-unavailable`: a source or resource file cannot be opened or read as UTF-8.
- * - `source-too-large`: the source file is over 16 MiB.
- * - `output-unavailable`: the `--out` file cannot be written. The command already ran, unless the
- *   path was empty.
- *
- * Request journal:
- * - `retention-unavailable`: the request could not be retained. No Authoring request is sent.
- * - `request-unavailable`: the retained request file is missing or cannot be read.
- * - `request-reused`: the request ID is already retained for a different request.
- * - `journal-corrupt`: the request ID's retained file reads, but is not JSON, not a journal
- *   record, or another request ID's record. No Authoring request is sent; check the ID's receipt
- *   before authoring again under a new ID.
- *
- * Resources (`location` names the declaration; printed before the message):
- * - `absolute-path`: the resource path is absolute.
- * - `path-escape`: the resource path leaves the source file's directory.
- * - `unsupported-media`: the file extension is not a supported font or image type.
- * - `resource-mismatch`: a font declaration names an image file, or the reverse.
- * - `resource-too-large`: the resource file is over 16 MiB.
- *
- * Source and preconditions:
- * - `invalid-source`: Language rejected the source; `source` holds its diagnostics.
- * - `invalid-input`: an Authoring request failed its schema. Two sources: the request the CLI
- *   built from the source, or the request the service's `/resources/freeze` answer returned. The
- *   second is a bad service answer, not a user input error.
- * - `not-found`: the collection to change does not exist.
- * - `already-exists`: the collection to create already exists.
- * - `revision-required`: replace or patch without `--revision`.
- * - `revision-conflict`: `--revision` is not the collection's current revision.
- *
- * Themes: `invalid-theme` (the file does not match the theme grammar, or its header @id or version
- * is not a Templates preset ID or version), `duplicate-token` (one token set twice). Profiles:
- * `profile-structure` (lint findings, listed in the message).
- *
- * Transport:
- * - `connection-uncertain`: no confirmed answer. Check the receipt before retrying.
- * - `invalid-response`: an owner's answer broke its own contract. A service answer did not match
- *   its schema or lacks what the command needs, such as a committed receipt; the service's
- *   credential reader returned no token; or Language's parse gave an empty resource alias or an
- *   asset alias that is not Model's asset ID.
- *
- * Setup: `cli-unavailable` and `render-unavailable` (an unexpected throw at the entry point).
- *   `cli-unavailable` also reports a fresh request ID that fails Authoring's grammar; nothing was
- *   sent.
- */
-export type LocalCode =
-  | 'invalid-command'
-  | 'invalid-arguments'
-  | 'invalid-mode'
-  | 'invalid-revision'
-  | 'invalid-server'
-  | 'invalid-request'
-  | 'unknown-profile'
-  | 'source-unavailable'
-  | 'source-too-large'
-  | 'output-unavailable'
-  | 'retention-unavailable'
-  | 'request-unavailable'
-  | 'request-reused'
-  | 'journal-corrupt'
-  | 'absolute-path'
-  | 'path-escape'
-  | 'unsupported-media'
-  | 'resource-mismatch'
-  | 'resource-too-large'
-  | 'invalid-source'
-  | 'invalid-input'
-  | 'not-found'
-  | 'already-exists'
-  | 'revision-required'
-  | 'revision-conflict'
-  | 'invalid-theme'
-  | 'duplicate-token'
-  | 'profile-structure'
-  | 'connection-uncertain'
-  | 'invalid-response'
-  | 'cli-unavailable'
-  | 'render-unavailable';
+export type {
+  EvidenceCode,
+  EvidencedFailure,
+  LocalCode,
+  LocalFailure,
+  LocatedCode,
+  LocatedFailure,
+  PlainCode,
+  PlainFailure,
+  SourceLocation,
+  UnreadResource,
+} from './records/local-failure.js';
 
 /**
  * A failure another owner wrote, kept whole in `foreign`.
@@ -113,30 +43,6 @@ export type ForeignCode = 'service-rejected' | 'credential-unavailable';
 
 /** Every code a CLI failure can carry. */
 export type CliErrorCode = LocalCode | ForeignCode;
-
-/**
- * Where a source declares the font or image a failure is about: the file, Language's 1-based line
- * and column, and the alias. Printed as `file:line:column asset @alias` before the message.
- */
-export interface SourceLocation extends Pick<SourcePosition, 'line' | 'column'> {
-  /** The DSL or theme file that declares the resource. */
-  readonly file: FilePath;
-  /** The name the declaration gives the resource. */
-  readonly alias: ResourceAlias;
-}
-
-/** A failure the CLI found. */
-export interface LocalFailure {
-  readonly code: LocalCode;
-  /** Human-readable. Its wording is not part of the contract. */
-  readonly message: string;
-  /** What to do next. */
-  readonly recovery: string;
-  /** The resource declaration a resource failure is about. */
-  readonly location?: SourceLocation;
-  /** Language, Model or service evidence, kept whole. */
-  readonly source?: FailureSource;
-}
 
 /** A service failure record, printed exactly as the service wrote it. */
 export interface ForeignFailure {
@@ -151,8 +57,8 @@ export type CliFailure = LocalFailure | ForeignFailure;
 export type Result<T, E = CliFailure> =
   { readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: E };
 
-/** What `failure` needs. `recovery` may be omitted. */
-export type FailureInput = Omit<LocalFailure, 'recovery'> & { readonly recovery?: string };
+/** What `failure` needs: a plain failure whose `recovery` may be omitted. */
+export type FailureInput = Omit<PlainFailure, 'recovery'> & { readonly recovery?: string };
 
 const correctAndRetry = 'Correct the named input and retry.';
 
@@ -161,13 +67,28 @@ export function success<T>(value: T): Result<T, never> {
   return { ok: true, value };
 }
 
+/** Builds a plain failure. `recovery` defaults to 'Correct the named input and retry.' */
+export function failure(input: FailureInput): Result<never, PlainFailure> {
+  const { code, message, recovery = correctAndRetry } = input;
+  return { ok: false, error: { code, message, recovery } };
+}
+
 /**
- * Builds a local failure. `recovery` defaults to 'Correct the named input and retry.'; an absent
- * `location` or `source` stays absent.
+ * Builds the failure of an unread font or image, naming its declaration at `location`. The
+ * recovery is the default one.
  */
-export function failure(input: FailureInput): Result<never, LocalFailure> {
-  const { code, message, recovery = correctAndRetry, ...context } = input;
-  return { ok: false, error: { code, message, recovery, ...context } };
+export function located(
+  unread: UnreadResource,
+  location: SourceLocation,
+): Result<never, LocatedFailure> {
+  const { code, message } = unread;
+  return { ok: false, error: { code, message, recovery: correctAndRetry, location } };
+}
+
+/** Builds a failure that keeps another owner's evidence, `source`, whole. */
+export function evidenced(input: EvidencedFailure): Result<never, EvidencedFailure> {
+  const { code, message, recovery, source } = input;
+  return { ok: false, error: { code, message, recovery, source } };
 }
 
 /**

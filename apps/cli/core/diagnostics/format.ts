@@ -32,12 +32,18 @@ function failureLines(
   error: LocalFailure | OperationSource,
   message: string,
 ): readonly string[] {
-  return [`${error.code}: ${message}`, ...sourceLines(error.source), error.recovery];
+  return [`${error.code}: ${message}`, ...sourceLines(evidenceOf(error)), error.recovery];
+}
+
+/** The evidence a failure keeps; a plain or located local failure keeps none. */
+function evidenceOf(error: LocalFailure | OperationSource): FailureSource | undefined {
+  if (!('source' in error)) return undefined;
+  return error.source;
 }
 
 /** The message, after the resource declaration's place when the failure names one. */
 function locatedMessage(error: LocalFailure): string {
-  if (error.location === undefined) return error.message;
+  if (!('location' in error)) return error.message;
   const { file, line, column, alias } = error.location;
   return `${file}:${line}:${column} asset @${alias}: ${error.message}`;
 }

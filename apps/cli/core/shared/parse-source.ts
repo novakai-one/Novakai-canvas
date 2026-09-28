@@ -6,7 +6,7 @@
 import type { SourceLanguage } from '../../contract/ports/source-language.js';
 import type { ParsedSource } from '../../contract/records/foreign.js';
 import type { Result } from '../../contract/errors.js';
-import { failure, success } from '../../contract/errors.js';
+import { evidenced, success } from '../../contract/errors.js';
 
 /** The parsed source. Fails with `invalid-source`; `source` holds Language's diagnostics. */
 export function parseSource(
@@ -15,7 +15,7 @@ export function parseSource(
 ): Result<ParsedSource> {
   const parsed = language.parse(text);
   if (!parsed.ok)
-    return failure({
+    return evidenced({
       code: 'invalid-source',
       message: 'Language rejected this source',
       recovery: 'Correct the named source diagnostics and retry.',
