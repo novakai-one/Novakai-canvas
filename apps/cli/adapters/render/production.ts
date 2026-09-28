@@ -35,6 +35,12 @@ export interface ServiceLayoutTools {
   readonly inspectDocument: RenderOutput['inspect'];
 }
 
+/** A render lays out from scratch: there is no earlier layout to keep the boxes steady against. */
+const noPreviousScene = null;
+
+/** The ID every headless render job gets. */
+const headlessJobId = 'headless';
+
 /**
  * Gives the render its `layOut` and `inspect` steps, using the service's `tools`. `layOut` fails
  * if the empty library or the job can't be made, or as the service's layout does.
@@ -43,40 +49,42 @@ export function createServiceLayout(
   tools: ServiceLayoutTools,
 ): Pick<RenderOutput, 'layOut' | 'inspect'> {
   return {
-    layOut: (collection, catalog) => producedDiagram(tools, collection, catalog),
+    layOut: (collection, catalog) => layOutCollection(tools, collection, catalog),
     inspect: tools.inspectDocument,
   };
 }
 
-/**
- * The service's document of `collection`, drawn over `catalog`. Fails with Library's check of
- * the headless library, the render job's failure or the producer's. Nothing cancels a headless
- * render.
- */
-async function producedDiagram(
+/** Makes the render job for the collection, then has the service lay it out as a document. */
+async function layOutCollection(
   tools: ServiceLayoutTools,
   collection: Collection,
   catalog: Catalog,
 ): Promise<Result<RenderDocument, RenderFailureSource>> {
-  const job = renderJob(tools.renderJobs, collection, catalog);
-  if (!job.ok) return job;
-  return tools.produceDiagram(job.value, new AbortController().signal);
+  const job = makeRenderJob(tools.renderJobs, collection, catalog);
+  if (!job.ok) {
+    return job;
+  }
+  // Nothing cancels a headless render, so the signal is never aborted.
+  const neverCancelled = new AbortController().signal;
+  return tools.produceDiagram(job.value, neverCancelled);
 }
 
-/** The job over one collection, the catalog and the headless library. Fails as either does. */
-function renderJob(
+/** Makes the job over the one collection, the render's catalog and an empty library. */
+function makeRenderJob(
   renderJobs: ServiceLayoutTools['renderJobs'],
   collection: Collection,
   catalog: Catalog,
 ): Result<RenderingJob, RenderFailureSource> {
-  const library = headlessLibrary();
-  if (!library.ok) return library;
+  const library = makeEmptyLibrary();
+  if (!library.ok) {
+    return library;
+  }
   const view = { collections: [collection], presets: catalog, library: library.value };
-  return renderJobs.create(collection, view, null, 'headless');
+  return renderJobs.create(collection, view, noPreviousScene, headlessJobId);
 }
 
-/** The empty library snapshot headless renders run against. Fails with Library's diagnostics. */
-function headlessLibrary(): LibraryResult<LibrarySnapshot> {
+/** Makes the empty library a headless render runs against, checked by Library. */
+function makeEmptyLibrary(): LibraryResult<LibrarySnapshot> {
   return validateLibrarySnapshot({
     organisation: { schemaVersion: 1, id: 'headless', revision: 0, folders: [], entries: [] },
     collections: [],

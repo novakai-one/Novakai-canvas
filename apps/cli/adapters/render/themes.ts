@@ -12,6 +12,7 @@ import { z } from 'zod';
 import type { LoweredIntent } from '@novakai/canvas-language';
 import type { Templates } from '@novakai/canvas-templates';
 import type { RenderFailureSource } from '../../contract/records/render-failure.js';
+import type { ProviderFault } from '../../contract/records/render-fault.js';
 import type { ThemeFont, RenderThemes } from '../../contract/ports/render-themes.js';
 import { providerFailure, success, type Result } from '../../contract/errors.js';
 import type {
@@ -33,6 +34,16 @@ export interface ThemeDependencies {
   readonly prepareTheme: HeadlessTools['prepareTheme'];
 }
 
+/** One theme admission's input: the catalog, the theme and its staged fonts. */
+interface ThemeInput {
+  readonly catalog: Catalog;
+  readonly theme: ThemeAdmission;
+  readonly fonts: readonly ThemeFont[];
+}
+
+/** The theme as plain JSON, the way the service's theme preparation takes it. */
+type JsonTheme = Parameters<HeadlessTools['prepareTheme']>[0];
+
 /**
  * Gives core the shipped catalog, and the step that admits a `--theme-file` theme into a catalog.
  * Admitting fails when the service or Templates refuses the theme, or when a number in it is too
@@ -41,43 +52,46 @@ export interface ThemeDependencies {
 export function createRenderThemes(dependencies: ThemeDependencies): RenderThemes {
   return {
     catalog: dependencies.presets,
-    admit: (catalog, theme, fonts) => admittedTheme(dependencies, { catalog, theme, fonts }),
+    admit: (catalog, theme, fonts) => admitTheme(dependencies, { catalog, theme, fonts }),
   };
 }
 
-/** The service's theme preparation's answer. */
-type PreparedTheme = ReturnType<HeadlessTools['prepareTheme']>;
-
-/** One theme admission's input: the catalog, the theme and its staged fonts. */
-interface ThemeInput {
-  readonly catalog: Catalog;
-  readonly theme: ThemeAdmission;
-  readonly fonts: readonly ThemeFont[];
-}
-
-/**
- * The catalog with the theme admitted through the service's preparation and Templates' plan. A
- * value JSON cannot hold (a dimension too large to be finite) fails as `provider-failed` with the
- * JSON check's message; otherwise fails as the preparation or the plan does.
- */
-function admittedTheme(
-  owners: ThemeDependencies,
+/** Checks the theme is plain JSON, then has the service prepare it and Templates plan it in. */
+function admitTheme(
+  dependencies: ThemeDependencies,
   input: ThemeInput,
 ): Result<Catalog, RenderFailureSource> {
-  const admission = z.json().safeParse(input.theme);
-  if (!admission.success) return providerFailure(admission.error);
-  const prepared = owners.prepareTheme(admission.data, input.catalog, input.fonts, owners);
-  return plannedTheme(owners, input.catalog, prepared);
+  const jsonTheme = checkThemeIsJson(input.theme);
+  if (!jsonTheme.ok) {
+    return jsonTheme;
+  }
+  return prepareAndPlanTheme(dependencies, input, jsonTheme.value);
 }
 
-/** The prepared theme planned into the catalog. Fails as the preparation or the plan does. */
-function plannedTheme(
-  owners: ThemeDependencies,
-  catalog: Catalog,
-  prepared: PreparedTheme,
+/** Checks the theme holds only what JSON can hold; a dimension too large to be finite can't. */
+function checkThemeIsJson(theme: ThemeAdmission): Result<JsonTheme, ProviderFault> {
+  const checked = z.json().safeParse(theme);
+  if (!checked.success) {
+    return providerFailure(checked.error);
+  }
+  return success(checked.data);
+}
+
+/** Has the service prepare the theme with its fonts, then Templates plan it into the catalog. */
+function prepareAndPlanTheme(
+  dependencies: ThemeDependencies,
+  input: ThemeInput,
+  jsonTheme: JsonTheme,
 ): Result<Catalog, RenderFailureSource> {
-  if (!prepared.ok) return prepared;
-  const planned = owners.templates.planAdmission(catalog, prepared.value);
-  if (!planned.ok) return planned;
+  // The service reads the theme's base through templates, and its fonts back from assets.
+  const themeOwners = { assets: dependencies.assets, templates: dependencies.templates };
+  const prepared = dependencies.prepareTheme(jsonTheme, input.catalog, input.fonts, themeOwners);
+  if (!prepared.ok) {
+    return prepared;
+  }
+  const planned = dependencies.templates.planAdmission(input.catalog, prepared.value);
+  if (!planned.ok) {
+    return planned;
+  }
   return success(planned.value.candidate);
 }

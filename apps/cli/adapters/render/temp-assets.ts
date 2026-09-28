@@ -20,61 +20,77 @@ import { providerFailure, success, type Result } from '../../contract/errors.js'
 /** What opening or closing the store fails with. */
 type StoreFailure = ProviderFault | AssetError;
 
+/** The start of each temp folder's name; the system adds six random characters. */
+const tempFolderPrefix = 'canvas-render-';
+
 /**
  * Makes a fresh temp folder and opens an Assets store in it. Fails with `provider-failed` if the
  * folder can't be made, or with Assets' own failure (the folder is then removed).
  */
 export async function openTempAssetStore(): Promise<Result<TempAssetStore, StoreFailure>> {
-  const directory = await created();
-  if (!directory.ok) return directory;
-  return opened(directory.value);
+  const folder = await makeTempFolder();
+  if (!folder.ok) {
+    return folder;
+  }
+  return openStoreIn(folder.value);
 }
 
-/** Make the directory. A throw becomes `provider-failed` with its path, OS code and syscall. */
-async function created(): Promise<Result<FilePath, ProviderFault>> {
+/** Makes a fresh, empty folder in the system's temp folder, such as `/tmp/canvas-render-a1B2c3`. */
+async function makeTempFolder(): Promise<Result<FilePath, ProviderFault>> {
   try {
-    return success(filePath.parse(await mkdtemp(join(tmpdir(), 'canvas-render-'))));
-  } catch (error) {
-    return providerFailure(error);
+    const prefixPath = join(tmpdir(), tempFolderPrefix);
+    const createdPath = await mkdtemp(prefixPath);
+    const folder = filePath.parse(createdPath);
+    return success(folder);
+  } catch (thrown) {
+    return providerFailure(thrown);
   }
 }
 
-/** Assets opened in `path`. Fails with Assets' failure after removing `path`. */
-async function opened(path: FilePath): Promise<Result<TempAssetStore, StoreFailure>> {
-  const assets = openAssets(path);
-  if (!assets.ok) return removedAfter(path, assets.error);
-  return success({ assets: assets.value, close: () => closed(assets.value, path) });
+/** Opens an Assets store in the folder. If that fails, removes the folder first. */
+async function openStoreIn(folder: FilePath): Promise<Result<TempAssetStore, StoreFailure>> {
+  const opened = openAssets(folder);
+  if (!opened.ok) {
+    // A failed removal isn't reported: Assets' own mistake says more.
+    await removeFolder(folder);
+    return openStoreFailure(opened.error);
+  }
+  const store = storeWithClose(opened.value, folder);
+  return success(store);
 }
 
-/** `error` as the outcome once `path` is removed; a failed removal is not reported over it. */
-async function removedAfter(
-  path: FilePath,
-  error: AssetError,
-): Promise<Result<never, AssetError>> {
-  await removed(path);
-  return { ok: false, error };
+/** Pairs the open store with its `close`, which also removes the folder. */
+function storeWithClose(
+  assets: Assets,
+  folder: FilePath,
+): TempAssetStore {
+  return { assets, close: () => closeStoreAndRemoveFolder(assets, folder) };
 }
 
-/**
- * Close the store, then remove its directory; both are always attempted. Fails with Assets' close
- * failure first, else the removal's `provider-failed`.
- */
-async function closed(
+/** Closes the store, then removes its folder. Both always run; a close mistake comes first. */
+async function closeStoreAndRemoveFolder(
   assets: Pick<Assets, 'close'>,
-  path: FilePath,
+  folder: FilePath,
 ): Promise<Result<void, StoreFailure>> {
-  const store = assets.close();
-  const directory = await removed(path);
-  if (!store.ok) return store;
-  return directory;
+  const closed = assets.close();
+  const removed = await removeFolder(folder);
+  if (!closed.ok) {
+    return closed;
+  }
+  return removed;
 }
 
-/** Delete the directory and all it holds; a missing one is not a failure. */
-async function removed(path: FilePath): Promise<Result<void, ProviderFault>> {
+/** Deletes the folder and everything in it. A folder already gone is not a mistake. */
+async function removeFolder(folder: FilePath): Promise<Result<void, ProviderFault>> {
   try {
-    await rm(path, { recursive: true, force: true });
+    await rm(folder, { recursive: true, force: true });
     return success(undefined);
-  } catch (error) {
-    return providerFailure(error);
+  } catch (thrown) {
+    return providerFailure(thrown);
   }
+}
+
+/** Passes on Assets' own mistake about opening the store. */
+function openStoreFailure(assetError: AssetError): Result<never, AssetError> {
+  return { ok: false, error: assetError };
 }

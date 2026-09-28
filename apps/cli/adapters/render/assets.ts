@@ -20,18 +20,26 @@ import type { Assets, StageInput } from '../../contract/records/foreign.js';
  */
 export function createRenderAssets(store: Pick<Assets, 'stage' | 'resolve'>): RenderAssets {
   return {
-    stage: (input) => stagedDigest(store, input),
+    stage: (input) => stageAndGiveDigest(store, input),
     readBack: (digest) => store.resolve(digest),
-    decodeBase64: (text) => Buffer.from(text, 'base64'),
+    decodeBase64,
   };
 }
 
-/** The digest Assets stored `input`'s normalized bytes under. Fails with Assets' failure. */
-async function stagedDigest(
-  assets: Pick<Assets, 'stage'>,
+/** Stores one file's bytes in the render's store, and gives the digest they are stored under. */
+async function stageAndGiveDigest(
+  store: Pick<Assets, 'stage'>,
   input: StageInput,
 ): Promise<Result<AssetDigest, RenderFailureSource>> {
-  const admitted = await assets.stage(input);
-  if (!admitted.ok) return admitted;
-  return success(admitted.value.descriptor.digest);
+  const staged = await store.stage(input);
+  if (!staged.ok) {
+    return staged;
+  }
+  const digest = staged.value.descriptor.digest;
+  return success(digest);
+}
+
+/** Turns base64 text back into bytes. */
+function decodeBase64(base64: string): Uint8Array {
+  return Buffer.from(base64, 'base64');
 }
