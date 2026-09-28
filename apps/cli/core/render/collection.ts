@@ -12,6 +12,7 @@ import type { RenderSources } from '../../contract/ports/render-sources.js';
 import type { Collection, ResolvedResources } from '../../contract/records/foreign.js';
 import type { CollectionSelector, ThemeChoice } from '../../contract/records/render.js';
 import type { RenderFailureSource } from '../../contract/records/render-failure.js';
+import type { RenderFault } from '../../contract/records/render-fault.js';
 import type { SourceFile } from '../../contract/records/source-file.js';
 import type { Result } from '../../contract/errors.js';
 import { renderFaultFailure, success } from '../../contract/errors.js';
@@ -41,52 +42,71 @@ export async function loadCollection(
   dependencies: CollectionDependencies,
 ): Promise<Result<Collection, RenderFailureSource>> {
   const original = await findCollectionSource(selector, themes.catalog, dependencies);
-  if (!original.ok) return original;
-  const source = themedSource(original.value, themes.choice, dependencies.sources.parse);
-  if (!source.ok) return source;
-  return lowered(source.value, themes, dependencies);
+  if (!original.ok) {
+    return original;
+  }
+  const themed = applyThemeChoice(original.value, themes.choice, dependencies.sources.parse);
+  if (!themed.ok) {
+    return themed;
+  }
+  return makeCollection(themed.value, themes, dependencies);
 }
 
-/** The source as it is without a choice; otherwise a copy naming the chosen theme. */
-function themedSource(
+/** Writes the chosen theme into a copy of the source. With no choice, the source stays as it is. */
+function applyThemeChoice(
   source: SourceFile,
   choice: ThemeChoice | undefined,
   parse: RenderSources['parse'],
 ): Result<SourceFile, RenderFailureSource> {
-  if (choice === undefined) return success(source);
+  if (choice === undefined) {
+    return success(source);
+  }
   return setSourceTheme(source, choice, parse);
 }
 
 /**
- * The source's asset records, then the source lowered against the catalog's theme pins and those
- * records (Language has Model check the collection, records included), then checked with the
- * chosen pin. Fails as each step does.
+ * Stores the source's fonts and images, has Language turn the text into a collection, then checks
+ * it with the chosen theme.
  */
-async function lowered(
+async function makeCollection(
   source: SourceFile,
   themes: AdmittedThemes,
   dependencies: CollectionDependencies,
 ): Promise<Result<Collection, RenderFailureSource>> {
   const assets = await admitSourceAssets(source, dependencies);
-  if (!assets.ok) return assets;
+  if (!assets.ok) {
+    return assets;
+  }
   const pins = pinResources(themes.catalog, assets.value);
   const collection = dependencies.sources.lower(source.source, pins);
-  if (!collection.ok) return collection;
-  return withChoice(collection.value, pins, themes.choice, dependencies.sources);
+  if (!collection.ok) {
+    return collection;
+  }
+  return checkWithChosenTheme(collection.value, pins, themes.choice, dependencies.sources);
 }
 
 /**
- * Model's check of the lowered collection, with the chosen theme's pin in place of its own when
- * there is a choice. Fails with `missing-theme` or Model's diagnostics.
+ * Has Model check the collection. When a theme was asked for, the chosen theme's pin takes the
+ * place of the collection's own first.
  */
-function withChoice(
+function checkWithChosenTheme(
   collection: Collection,
   pins: ResolvedResources,
   choice: ThemeChoice | undefined,
   sources: Pick<RenderSources, 'validate'>,
 ): Result<Collection, RenderFailureSource> {
-  if (choice === undefined) return sources.validate(collection);
-  const pin = pins.themes[choice];
-  if (pin === undefined) return renderFaultFailure({ code: 'missing-theme', theme: choice });
-  return sources.validate({ ...collection, theme: pin });
+  if (choice === undefined) {
+    return sources.validate(collection);
+  }
+  const chosenPin = pins.themes[choice];
+  if (chosenPin === undefined) {
+    return missingThemeFailure(choice);
+  }
+  const withChosenTheme = { ...collection, theme: chosenPin };
+  return sources.validate(withChosenTheme);
+}
+
+/** Makes the mistake for a theme the render doesn't know (`missing-theme`). */
+function missingThemeFailure(theme: ThemeChoice): Result<never, RenderFault> {
+  return renderFaultFailure({ code: 'missing-theme', theme });
 }

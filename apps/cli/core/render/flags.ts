@@ -60,12 +60,13 @@ export function isRenderFormat(text: string): text is RenderFormat {
   return Object.hasOwn(renderFormats, text);
 }
 
-/** One flag and its placeholder, as the usage line writes them. */
+/** Writes one flag and its placeholder as the usage line shows them: `--out DIR`. */
 function written([flag, placeholder]: readonly [string, Placeholder]): string {
-  return [flagAsTyped(flag), ...placeholder].join(' ');
+  const words = [flagAsTyped(flag), ...placeholder];
+  return words.join(' ');
 }
 
-/** An optional flag in the usage line. */
-function bracketed(words: string): string {
-  return `[${words}]`;
+/** Puts an optional flag in brackets, as the usage line shows it: `[--theme ID]`. */
+function bracketed(flagWords: string): string {
+  return `[${flagWords}]`;
 }

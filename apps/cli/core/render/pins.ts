@@ -25,12 +25,22 @@ export function pinResources(
   catalog: Catalog,
   assets: readonly CollectionAsset[],
 ): ResolvedResources {
-  return { themes: themePins(catalog), assets: Object.fromEntries(assets.map(assetEntry)) };
+  const themes = themePinsById(catalog);
+  const assetPins = assetPinsById(assets);
+  return { themes, assets: assetPins };
 }
 
-/** Every admitted theme's pin, keyed by theme ID, in catalog order. */
-function themePins(catalog: Catalog): ResolvedResources['themes'] {
-  return Object.fromEntries(catalog.filter(isTheme).map(themeEntry));
+/** Keys each admitted theme's pin by its theme ID, in catalog order. */
+function themePinsById(catalog: Catalog): ResolvedResources['themes'] {
+  const themes = catalog.filter(isTheme);
+  const entries = themes.map(themeEntry);
+  return Object.fromEntries(entries);
+}
+
+/** Keys each font and image record by its asset ID. */
+function assetPinsById(assets: readonly CollectionAsset[]): ResolvedResources['assets'] {
+  const entries = assets.map(assetEntry);
+  return Object.fromEntries(entries);
 }
 
 /** Whether a preset is a theme. */
@@ -38,20 +48,18 @@ function isTheme(preset: Catalog[number]): preset is ThemePreset {
   return preset.kind === 'theme';
 }
 
-/** A theme preset's ID and its Model pin: ID, version, `sha256:` digest and roles. */
+/** Pairs a theme's ID with its Model pin: ID, version, `sha256:` digest and roles. */
 function themeEntry(preset: ThemePreset): readonly [string, Collection['theme']] {
-  return [
-    preset.id,
-    {
-      id: preset.id,
-      version: preset.version,
-      digest: formatPin(preset.digest),
-      roles: preset.payload.roles,
-    },
-  ];
+  const pin: Collection['theme'] = {
+    id: preset.id,
+    version: preset.version,
+    digest: formatPin(preset.digest),
+    roles: preset.payload.roles,
+  };
+  return [preset.id, pin];
 }
 
-/** An asset record under its asset ID. */
+/** Pairs a font or image record with its asset ID. */
 function assetEntry(asset: CollectionAsset): readonly [string, CollectionAsset] {
   return [asset.id, asset];
 }

@@ -9,10 +9,10 @@
  * `resource-rejected` record. It reads and writes nothing.
  */
 import type { ExportDiagnostic, Resource, Resources } from '../../contract/records/foreign.js';
-import { success } from '../../contract/errors.js';
+import { success, type Failure } from '../../contract/errors.js';
 
 /** Export's `resource-rejected` refusal for a resource the snapshot did not retain. */
-const unretained: ExportDiagnostic = Object.freeze({
+const unretainedResourceRefusal: ExportDiagnostic = Object.freeze({
   code: 'resource-rejected',
   path: 'snapshot.resources',
   message: 'Resource differs from its owner-admitted snapshot',
@@ -26,23 +26,34 @@ const unretained: ExportDiagnostic = Object.freeze({
  */
 export function buildResourceCheck(retained: readonly Resource[]): Resources {
   return {
-    async inspect(items) {
-      if (!items.every((item) => isRetained(item, retained)))
-        return { ok: false, error: unretained };
-      return success(items);
+    /** Approves the requested batch when the snapshot kept every resource in it. */
+    async inspect(requested) {
+      if (hasUnretainedResource(requested, retained)) {
+        return unretainedResourceFailure();
+      }
+      return success(requested);
     },
   };
 }
 
-/** Whether `item` equals one retained resource. */
-function isRetained(
-  item: Resource,
+/** Whether any requested resource differs from every resource the snapshot kept. */
+function hasUnretainedResource(
+  requested: readonly Resource[],
   retained: readonly Resource[],
 ): boolean {
-  return retained.some((candidate) => sameResource(item, candidate));
+  return requested.some((resource) => isUnretained(resource, retained));
 }
 
-/** Same kind, digest, media type, bytes and metadata. */
+/** Whether `resource` equals none of the resources the snapshot kept. */
+function isUnretained(
+  resource: Resource,
+  retained: readonly Resource[],
+): boolean {
+  const match = retained.find((candidate) => sameResource(resource, candidate));
+  return match === undefined;
+}
+
+/** Whether two resources have the same kind, digest, media type, bytes and metadata. */
 function sameResource(
   left: Resource,
   right: Resource,
@@ -56,31 +67,39 @@ function sameResource(
   );
 }
 
-/** Byte-for-byte equality. */
+/** Whether two byte arrays hold the same bytes in the same order. */
 function sameBytes(
   left: Uint8Array,
   right: Uint8Array,
 ): boolean {
-  return left.length === right.length && left.every((byte, index) => byte === right[index]);
+  if (left.length !== right.length) {
+    return false;
+  }
+  return left.every((byte, index) => byte === right[index]);
 }
 
-/** The same keys, each with the same value. */
+/** Whether two metadata records have the same keys, each with the same value. */
 function sameMetadata(
   left: Resource['metadata'],
   right: Resource['metadata'],
 ): boolean {
-  const entries = Object.entries(left);
-  return (
-    entries.length === Object.keys(right).length &&
-    entries.every(([key, value]) => hasEntry(right, key, value))
-  );
+  const leftEntries = Object.entries(left);
+  if (leftEntries.length !== Object.keys(right).length) {
+    return false;
+  }
+  return leftEntries.every(([key, expected]) => hasEntry(right, key, expected));
 }
 
-/** Whether `record` holds `key` with exactly `value`. */
+/** Whether `record` holds `key` with exactly `expected`. */
 function hasEntry(
   record: Resource['metadata'],
   key: string,
-  value: unknown,
+  expected: unknown,
 ): boolean {
-  return Object.hasOwn(record, key) && Object.is(record[key], value);
+  return Object.hasOwn(record, key) && Object.is(record[key], expected);
+}
+
+/** Makes Export's `resource-rejected` refusal, for a resource the snapshot didn't keep. */
+function unretainedResourceFailure(): Failure<ExportDiagnostic> {
+  return { ok: false, error: unretainedResourceRefusal };
 }

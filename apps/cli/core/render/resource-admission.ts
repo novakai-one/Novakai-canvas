@@ -39,15 +39,22 @@ export async function admitResource(
   dependencies: AdmissionDependencies,
 ): Promise<Result<AssetDigest, RenderFailureSource>> {
   const resource = await readDeclaredResource(declaringFile, declaration, dependencies.resources);
-  if (!resource.ok) return resource;
-  return storedDigest(resource.value, dependencies.assets);
+  if (!resource.ok) {
+    return resource;
+  }
+  return storeResource(resource.value, dependencies.assets);
 }
 
-/** A pinned declaration's digest as it is; local bytes staged first. Fails with Assets' failure. */
-function storedDigest(
+/**
+ * Stores the bytes read from a local file, and gives back their digest. A `sha256:…` declaration
+ * already names its bytes, so its digest is used as it is.
+ */
+async function storeResource(
   resource: ResourceToStage,
   assets: AdmissionDependencies['assets'],
 ): Promise<Result<AssetDigest, RenderFailureSource>> {
-  if (resource.kind === 'pinned') return Promise.resolve(success(resource.digest));
+  if (resource.kind === 'pinned') {
+    return success(resource.digest);
+  }
   return assets.stage(resource.input);
 }
