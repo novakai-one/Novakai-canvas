@@ -1,9 +1,13 @@
 /*
- * Builds the render job for one collection from one consistent workspace view: the exact pinned
- * theme, its fonts, the collection's images, the resolved diagram style and the layout options.
- * Pure over the injected owners (Assets, Templates, Design System); nothing is written. Every
- * refusal is a returned value (job-refusal.ts). Authoring owns admission and keeps the prior scene
- * when a job cannot be built.
+ * Why this file exists
+ *
+ * The render worker can't read the workspace, so a render job must carry everything it needs. For
+ * example, to draw `my-diagram` the job carries the exact theme version it names, that theme's
+ * fonts, the collection's images, the diagram style worked out from the theme, and layout spacing.
+ *
+ * This file builds that job, asking Templates, Assets and Design System for each part. Each step
+ * answers Authoring's `Result` (mistakes made in job-refusal.ts). It never writes, and never uses
+ * a viewer's personal settings.
  */
 import type {
   AuthoringResult,
@@ -25,18 +29,21 @@ import type { RenderJobInputs } from '../../contract/ports/headless.js';
 import type { WorkspaceContents } from '../../contract/records/workspace/contents.js';
 import type { RenderingJob, RenderPurpose } from '../../contract/records/rendering/job.js';
 import type { RenderJobs } from '../../contract/ports/rendering.js';
-import { jobId } from './job-id.js';
-import { fromOwner, resourceRefused, undecodable } from './job-refusal.js';
+import { buildRenderJobId } from './job-id.js';
+import {
+  malformedResourceFailure,
+  missingResourceFailure,
+  requireResource,
+} from './job-refusal.js';
 
 /**
- * Binds job building to the given owners. `create` returns the job for one collection, named after
- * its purpose (see `create` below). It fails with `missing-asset` at `render-resources` when an
- * owner rejects a resource (the owner's failure kept as source) or the pinned preset is not a
- * theme, and with `invalid-input` at `render-resources` when a resource does not fit its
- * Presentation or Layout schema.
+ * Makes the render-job builder, which reads through `inputs`. Its `create` builds the job for one
+ * collection (see `RenderJobs` in contract/ports/rendering.ts).
+ * Mistakes: `missing-asset` when the theme, a font or an image can't be found, or the chosen
+ * preset isn't a theme; `invalid-input` when one of them is malformed.
  */
-export function createRenderJobs(owners: RenderJobInputs): RenderJobs {
-  return { create: (collection, view, purpose) => create(collection, view, purpose, owners) };
+export function createRenderJobs(inputs: RenderJobInputs): RenderJobs {
+  return { create: (collection, view, purpose) => create(collection, view, purpose, inputs) };
 }
 
 /** The pinned theme's fonts and the diagram style resolved from it. */
@@ -83,9 +90,10 @@ function styledTheme(
 }
 
 /**
- * The job: its ID (see `jobId`), the collection, the theme's fonts and style, the collection's
- * images (see `asset`) and the layout options scaled with the style. Fails with `missing-asset`
- * or `invalid-input` at `render-resources` as `jobId`, `asset` or `scaledOptions` fails.
+ * The job: its ID (see `buildRenderJobId`), the collection, the theme's fonts and style, the
+ * collection's images (see `asset`) and the layout options scaled with the style. Fails with
+ * `missing-asset` or `invalid-input` at `render-resources` as `buildRenderJobId`, `asset` or
+ * `scaledOptions` fails.
  */
 function assembleJob(
   collection: Collection,
@@ -93,7 +101,7 @@ function assembleJob(
   theme: StyledTheme,
   owners: RenderJobInputs,
 ): AuthoringResult<RenderingJob> {
-  const id = jobId(purpose, collection);
+  const id = buildRenderJobId(purpose, collection);
   if (!id.ok) return id;
   const images = collection.assets.filter((item) => item.mediaType.startsWith('image/'));
   const assets = collect(images, (image) => asset(removeDigestPrefix(image.digest), owners));
@@ -121,7 +129,7 @@ function pinnedTheme(
   view: WorkspaceContents,
   owners: RenderJobInputs,
 ): AuthoringResult<ThemePreset> {
-  const preset = fromOwner(
+  const preset = requireResource(
     owners.templates.read(view.presets, {
       kind: 'theme',
       id: collection.theme.id,
@@ -130,7 +138,8 @@ function pinnedTheme(
     }),
   );
   if (!preset.ok) return preset;
-  if (preset.value.kind !== 'theme') return resourceRefused('Collection does not select a theme');
+  if (preset.value.kind !== 'theme')
+    return missingResourceFailure('Collection does not select a theme');
   return success(preset.value);
 }
 
@@ -145,7 +154,7 @@ function themeFonts(
   const fonts = collect(preset.payload.fonts, (digest) => font(digest, owners));
   if (!fonts.ok) return fonts;
   const checked = fontSet.safeParse(fonts.value);
-  if (!checked.success) return undecodable();
+  if (!checked.success) return malformedResourceFailure();
   return success(checked.data);
 }
 
@@ -161,7 +170,7 @@ function diagramStyle(
   fonts: RenderingJob['fonts'],
   owners: RenderJobInputs,
 ): AuthoringResult<RenderingJob['style']> {
-  const tokens = fromOwner(
+  const tokens = requireResource(
     owners.system.resolve({
       scope: 'diagram',
       sources: owners.sources,
@@ -171,14 +180,14 @@ function diagramStyle(
     }),
   );
   if (!tokens.ok) return tokens;
-  const projected = fromOwner(owners.system.projectDiagram(tokens.value));
+  const projected = requireResource(owners.system.projectDiagram(tokens.value));
   return andThen(projected, (projection) => checkedStyle({ ...projection, digest: preset.digest }));
 }
 
 /** The style checked as Presentation's resolved style. Fails with `invalid-input` otherwise. */
 function checkedStyle(candidate: unknown): AuthoringResult<RenderingJob['style']> {
   const style = resolvedStyle.safeParse(candidate);
-  if (!style.success) return undecodable();
+  if (!style.success) return malformedResourceFailure();
   return success(style.data);
 }
 
@@ -197,7 +206,7 @@ function scaledOptions(style: RenderingJob['style']): AuthoringResult<RenderingJ
     gridColumns: 4,
     maxBranches: 4096,
   });
-  if (!options.success) return undecodable();
+  if (!options.success) return malformedResourceFailure();
   return success(options.data);
 }
 
@@ -211,7 +220,7 @@ function font(
   digest: string,
   owners: RenderJobInputs,
 ): AuthoringResult<FontSource> {
-  const blob = fromOwner(owners.assets.resolve(digest));
+  const blob = requireResource(owners.assets.resolve(digest));
   if (!blob.ok) return blob;
   const source = fontSource.safeParse({
     digest,
@@ -219,7 +228,7 @@ function font(
     mediaType: blob.value.descriptor.mediaType,
     base64: blob.value.base64,
   });
-  if (!source.success) return undecodable();
+  if (!source.success) return malformedResourceFailure();
   return success(source.data);
 }
 
@@ -232,7 +241,7 @@ function asset(
   digest: string,
   owners: RenderJobInputs,
 ): AuthoringResult<VisualAsset> {
-  const blob = fromOwner(owners.assets.resolve(digest));
+  const blob = requireResource(owners.assets.resolve(digest));
   if (!blob.ok) return blob;
   const image = visualAsset.safeParse({
     digest,
@@ -241,6 +250,6 @@ function asset(
     width: blob.value.descriptor.width,
     height: blob.value.descriptor.height,
   });
-  if (!image.success) return undecodable();
+  if (!image.success) return malformedResourceFailure();
   return success(image.data);
 }

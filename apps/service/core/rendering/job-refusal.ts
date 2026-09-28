@@ -1,8 +1,13 @@
 /*
- * How building a render job refuses, as Authoring failure values at `render-resources`:
- * `missing-asset` when an owner rejects a resource or the pinned preset is not a theme, and
- * `invalid-input` when a resource does not fit its Presentation or Layout schema. Pure; Authoring
- * keeps the prior scene when a job cannot be built.
+ * Why this file exists
+ *
+ * A render job needs a theme, fonts and images, which Templates, Assets and Design System look up.
+ * Any of them can refuse. For example, if a font file that `my-diagram`'s theme uses is gone, the
+ * job can't be built, and the last drawing stays on screen.
+ *
+ * This file makes the two mistakes building a job can end in, both at `render-resources`:
+ * `missing-asset` when something can't be found, and `invalid-input` when it's malformed. They are
+ * Authoring's `Result`, because Authoring's layout check builds jobs too. It never throws.
  */
 import type { FailureSource } from '../../contract/records/transport/failure-source.js';
 import type { AuthoringResult } from '../../contract/records/capability-types.js';
@@ -10,21 +15,21 @@ import type { Result } from '../../contract/errors.js';
 import { authoringFailure } from '../../contract/errors.js';
 
 /**
- * The owner's result as a job result. Render resources are mandatory owner results: there is no
- * machine-local fallback font or blank image. Fails with `missing-asset` at `render-resources`
- * ("A render resource owner rejected input", the owner's failure kept as source) when the owner
- * refused.
+ * Passes on what Templates, Assets or Design System answered, or turns their refusal into
+ * `missing-asset` at `render-resources`, keeping their own failure as the source.
+ * There is no stand-in: a job never gets a fallback font or a blank image.
  */
-export function fromOwner<T>(result: Result<T, FailureSource>): AuthoringResult<T> {
-  if (!result.ok) return resourceRefused('A render resource owner rejected input', result.error);
-  return result;
+export function requireResource<T>(answer: Result<T, FailureSource>): AuthoringResult<T> {
+  if (!answer.ok)
+    return missingResourceFailure('A render resource owner rejected input', answer.error);
+  return answer;
 }
 
 /**
- * A render resource refusal: `missing-asset` at `render-resources` with this message, and the
- * owner's failure in `source` when an owner refused.
+ * The `missing-asset` mistake at `render-resources`, with this message.
+ * `source` is the refusal of Templates, Assets or Design System, when one of them refused.
  */
-export function resourceRefused(
+export function missingResourceFailure(
   message: string,
   source?: FailureSource,
 ): AuthoringResult<never> {
@@ -32,10 +37,10 @@ export function resourceRefused(
 }
 
 /**
- * A resource that does not fit its Presentation or Layout schema: `invalid-input` at
- * `render-resources` ("Render resources could not be decoded").
+ * The `invalid-input` mistake at `render-resources`: a resource isn't in the form Presentation or
+ * Layout expects.
  */
-export function undecodable(): AuthoringResult<never> {
+export function malformedResourceFailure(): AuthoringResult<never> {
   return authoringFailure(
     'invalid-input',
     'render-resources',

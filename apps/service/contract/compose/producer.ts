@@ -13,7 +13,7 @@ import type { DiagramProducer } from '../ports/rendering.js';
 import type { Result } from '../errors.js';
 import { failure, success } from '../errors.js';
 import { hostPath, type HostPath } from '../brands.js';
-import { produce } from '../../core/rendering/produce.js';
+import { runRenderJob } from '../../core/rendering/produce.js';
 
 /** How long one render job, or one worker start-up, may take before it fails `unavailable`. */
 const RENDER_TIMEOUT_MS = 30_000;
@@ -40,7 +40,7 @@ export async function startRenderWorkers(): Promise<Result<DiagramProducer>> {
     if (!ready.ok) return notInitialized();
     return success({
       produce: (job, signal) =>
-        produce(job, signal, transport, { read: output.readRenderDocument }),
+        runRenderJob(job, signal, transport, { read: output.readRenderDocument }),
     });
   } catch {
     return notInitialized();

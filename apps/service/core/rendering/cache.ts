@@ -1,8 +1,13 @@
 /*
- * Remembers the last few successful renders, keyed by everything that shapes the output except
- * the job id. The apply check renders the candidate, and the read right after the commit asks for
- * the same render, which is then answered from memory. In-memory state only; no I/O. Failures are
- * never kept, so a retry always reaches the producer.
+ * Why this file exists
+ *
+ * Saving a change usually draws the same diagram twice. For example, saving a change to
+ * `my-diagram` draws it once to check it can be laid out, then the browser asks to see it.
+ * Laying a diagram out is slow, and the second drawing would come out the same.
+ *
+ * This file remembers the last 8 drawings that worked and answers a repeat from memory. A job is a
+ * repeat when everything but its ID matches. A failure is never remembered, so a retry always
+ * draws again. It keeps nothing on disk.
  */
 import type { DiagramProducer } from '../../contract/ports/rendering.js';
 import type { RenderingJob, RenderDocument } from '../../contract/records/rendering/job.js';
@@ -12,9 +17,9 @@ import type { Result } from '../../contract/errors.js';
 const KEEP = 8;
 
 /**
- * Wraps the producer with a cache of the last `KEEP` successful renders. A job with the same
- * input as a kept render gets the kept result; any other job goes to the producer. Failures pass
- * through unchanged and are not kept.
+ * Wraps `producer` so it answers a repeated render job from memory.
+ * A job that matches one of the last 8 that worked gets that same answer. Any other job goes to
+ * `producer`, and its mistakes pass through unchanged.
  */
 export function cacheRenders(producer: DiagramProducer): DiagramProducer {
   const kept = new Map<string, Result<RenderDocument>>();

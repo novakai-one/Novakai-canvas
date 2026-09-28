@@ -16,7 +16,7 @@ import type { WorkspaceSession } from '../../contract/types.js';
 import { success } from '../../contract/errors.js';
 import type { CollectionId } from '../../contract/brands.js';
 import { collectionId } from '../../contract/schemas.js';
-import { missingCollection } from '../rendering/collection.js';
+import { missingCollectionFailure } from '../rendering/collection.js';
 import { stripHistoryContents } from '../session/history-versions.js';
 import { readJsonBody } from './json-body.js';
 import { readLastValue } from './api-query.js';
@@ -106,7 +106,7 @@ async function exportArtifact(
 /**
  * Runs `step` on the `?id` collection. Fails with `not-found` at the query text when it is not a
  * Model collection ID (an absent `?id` reads as empty text), the same answer as a missing
- * collection (`missingCollection`); otherwise `step`'s outcome passes through.
+ * collection (`missingCollectionFailure`); otherwise `step`'s outcome passes through.
  */
 async function withCollection(
   call: ApiCall,
@@ -114,6 +114,6 @@ async function withCollection(
 ): Promise<HttpOutcome> {
   const text = readLastValue(call.query, 'id') ?? '';
   const id = collectionId.safeParse(text);
-  if (!id.success) return missingCollection(text);
+  if (!id.success) return missingCollectionFailure(text);
   return step(id.data);
 }

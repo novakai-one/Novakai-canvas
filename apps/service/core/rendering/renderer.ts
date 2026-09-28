@@ -1,8 +1,12 @@
 /*
- * Renders one committed collection for a read: select the bytes it pins, hold them under an
- * Assets read lease, build its render job and produce the document. Pure over the injected owners.
- * The renderer has no write authority; callers own retry and keep their last readable scene on
- * any failure.
+ * Why this file exists
+ *
+ * Drawing a saved collection takes a moment, and its font and image files must not vanish
+ * halfway. For example, clean-up must not remove a font `my-diagram` uses while it is being drawn.
+ *
+ * This file draws one saved collection: it holds the collection's stored files (a "lease") until
+ * the drawing is done, builds its `read` job and runs it. Each step answers a `Result` (see
+ * `contract/errors.ts`). It never saves, and never retries.
  */
 import type { Assets, Collection } from '../../contract/records/capability-types.js';
 import type {
@@ -15,18 +19,29 @@ import type { WorkspaceContents } from '../../contract/records/workspace/content
 import type { RenderDocument } from '../../contract/records/rendering/job.js';
 import { failure, type Result } from '../../contract/errors.js';
 
-/** The owners one collection read needs: byte selection and leases, job building and the producer. */
-export interface CollectionRenderOwners {
+/** What the renderer uses to hold a collection's files, build its job and run it. */
+export interface CollectionRendererDependencies {
+  /** Assets, which holds stored files until they are let go. */
   readonly assets: Pick<Assets, 'acquire'>;
+  /** Builds the render job (jobs.ts). */
   readonly jobs: RenderJobs;
+  /** Runs a job on a render worker and checks the reply (produce.ts, behind cache.ts). */
   readonly producer: DiagramProducer;
+  /** Lists the digests of the stored files a collection uses. */
   readonly resources: Pick<ResourceSelector, 'digestsForCollection'>;
 }
 
-/** Binds collection reads to the given owners; `render` behaves as `render` below. */
-export function createCollectionRenderer(owners: CollectionRenderOwners): CollectionRenderer {
+/**
+ * Makes the renderer for saved collections. Its `render` draws one collection, holding its files
+ * until the drawing is done.
+ * Mistakes: `unavailable` when the files can't be found or held, or the job can't be built. The
+ * producer's own mistakes pass through.
+ */
+export function createCollectionRenderer(
+  dependencies: CollectionRendererDependencies,
+): CollectionRenderer {
   return {
-    render: (collection, workspace, signal) => render(collection, workspace, signal, owners),
+    render: (collection, workspace, signal) => render(collection, workspace, signal, dependencies),
   };
 }
 
@@ -41,7 +56,7 @@ async function render(
   collection: Collection,
   workspace: WorkspaceContents,
   signal: AbortSignal,
-  owners: CollectionRenderOwners,
+  owners: CollectionRendererDependencies,
 ): Promise<Result<RenderDocument>> {
   const resources = owners.resources.digestsForCollection(collection, workspace);
   if (!resources.ok)
@@ -64,7 +79,7 @@ async function produce(
   collection: Collection,
   workspace: WorkspaceContents,
   signal: AbortSignal,
-  owners: CollectionRenderOwners,
+  owners: CollectionRendererDependencies,
 ): Promise<Result<RenderDocument>> {
   const job = owners.jobs.create(collection, workspace, 'read');
   if (!job.ok) return failure('unavailable', job.error.path, job.error.message, job.error);
