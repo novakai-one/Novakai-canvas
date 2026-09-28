@@ -17,7 +17,10 @@ import {
   observeEnvironment,
 } from '../adapters/preferences/browser-preferences.js';
 import { createThemeSelector } from '../adapters/react/ThemeSelector.js';
-import { createPanelController } from '../adapters/sessions/panel-session.js';
+import {
+  createPanelController,
+  defaultInterfaceVisibility,
+} from '../adapters/sessions/panel-session.js';
 import { createWorkspaceNavigation } from '../adapters/edge/browser-navigation.js';
 import { readPanelPreferences } from '../adapters/preferences/panel-preferences.js';
 import {
@@ -134,6 +137,7 @@ async function mount(
       subscribe: (listener) => panels.subscribe(listener),
       getSnapshot: () => panels.getSnapshot(),
       setInterfaceVisibility: (control, visible) => panels.setInterfaceVisibility(control, visible),
+      defaultInterfaceVisibility,
     },
     ids,
   });

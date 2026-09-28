@@ -9,7 +9,6 @@ import { createElement, type ComponentType, type ReactElement } from 'react';
 import type { FeatureProps, ThemeSelectorProps } from '../react-types.js';
 import type { LibraryBrowserProps } from '../library-react.js';
 import type { PreferenceController } from '../records/preferences.js';
-import type { PanelController } from '../panel-types.js';
 import type { PanelDefaults, PanelId, PanelSectionDefinition } from '../records/panels.js';
 import type { Result } from '../errors.js';
 import type { RegisteredSection } from '../../adapters/react/WorkspaceSidePanel.js';
@@ -29,7 +28,10 @@ import { createWireEditor } from '../../adapters/react/WireEditor.js';
 import { createWireSemantics } from '../../adapters/react/WireSemantics.js';
 import { createWireEndpoints } from '../../adapters/react/WireEndpoints.js';
 import { createWireRouting } from '../../adapters/react/WireRouting.js';
-import { createInterfacePreferences } from '../../adapters/react/InterfacePreferences.js';
+import {
+  createInterfacePreferences,
+  type RoadVisibility,
+} from '../../adapters/react/InterfacePreferences.js';
 import { createObjectEditor } from '../../adapters/react/ObjectEditor.js';
 import { createContentEditor } from '../../adapters/react/ContentEditor.js';
 import { createEngineeringFields } from '../../adapters/react/EngineeringFields.js';
@@ -40,10 +42,7 @@ export interface FeatureParts {
   readonly preferences: PreferenceController;
   readonly ThemeSelector: ComponentType<ThemeSelectorProps>;
   readonly Browser: ComponentType<LibraryBrowserProps>;
-  readonly roadVisibility: Pick<
-    PanelController,
-    'subscribe' | 'getSnapshot' | 'setInterfaceVisibility'
-  >;
+  readonly roadVisibility: RoadVisibility;
   /** New definition IDs for the Definitions panel and content block IDs for the object inspector. */
   readonly ids: Pick<IdSource, 'definitionId' | 'descendantId'>;
 }

@@ -45,11 +45,4 @@
     font-size: var(--nv-font-caption);
     color: var(--nv-color-subtle);
   }
-  .object {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: var(--nv-space-2);
-    padding: var(--nv-space-2);
-  }
 }
