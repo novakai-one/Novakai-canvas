@@ -1,3 +1,8 @@
+/*
+ * A wire form's draft: its key, the wire its retained edits produce, and the Model changes Apply
+ * sends. `wireDraftKey` is the only maker of `WireDraftKey`. Pure; no function here fails, so
+ * there is nothing to recover. Model and Authoring decide at Apply whether the changes are valid.
+ */
 import type { Change, Relationship, WireAppearance } from '../../contract/records/owners.js';
 import type { WireDraft, WireEdit, EditedWire } from '../../contract/records/wire-editor.js';
 import type {
@@ -22,6 +27,15 @@ export function wireDraftKey(
 /** Replay against the captured version, even after an agent changes the displayed collection. */
 export function editedWire(draft: WireDraft): EditedWire {
   return draft.edits.reduce(applyWireEdit, { relationship: draft.relationship, wire: draft.wire });
+}
+/** Submit one atomic Model change list. Unchanged shared or local records are not needlessly replaced. */
+export function wireChanges(draft: WireDraft): readonly Change[] {
+  const edited = editedWire(draft);
+  return [
+    ...relationshipChanges(draft.relationship, edited.relationship),
+    ...explicitRouteReset(draft),
+    ...routeChanges(draft, edited.wire),
+  ];
 }
 /** A closed command registry separates semantic edits from local appearance edits. */
 const operations: Readonly<
@@ -125,15 +139,6 @@ function automatic(current: EditedWire): EditedWire {
   const { manual, ...wire } = current.wire;
   void manual;
   return { ...current, wire: { ...wire, locked: false, sourceSide: 'auto', targetSide: 'auto' } };
-}
-/** Submit one atomic Model change list. Unchanged shared or local records are not needlessly replaced. */
-export function wireChanges(draft: WireDraft): readonly Change[] {
-  const edited = editedWire(draft);
-  return [
-    ...relationshipChanges(draft.relationship, edited.relationship),
-    ...explicitRouteReset(draft),
-    ...routeChanges(draft, edited.wire),
-  ];
 }
 /** Model preserves omitted manual points on replace; its explicit reset operation must precede that replacement. */
 function explicitRouteReset(draft: WireDraft): readonly Change[] {

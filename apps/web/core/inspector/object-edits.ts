@@ -1,7 +1,22 @@
+/*
+ * An object form's draft: its key, and the object its retained edits produce. `objectDraftKey` is
+ * the only maker of `ObjectDraftKey`. Pure; no function here fails, so there is nothing to recover.
+ * Model and Authoring decide at Apply whether the edited object is valid.
+ */
 import type { DiagramObject, ContentBlock } from '../../contract/records/owners.js';
 import type { ObjectDraft, ObjectEdit } from '../../contract/records/inspector.js';
 import type { CollectionId, ObjectDraftKey, ObjectId } from '../../contract/brands.js';
 import { objectDraftKeySchema } from '../../contract/brands.js';
+/**
+ * The key of an object's form: its collection and object, as JSON text. It names one form whichever
+ * diagram appearance selected the object. The only maker of `ObjectDraftKey`; never fails.
+ */
+export function objectDraftKey(
+  collection: CollectionId,
+  object: ObjectId,
+): ObjectDraftKey {
+  return objectDraftKeySchema.parse(JSON.stringify([collection, object]));
+}
 /** Readable form data is derived from retained intentions. Only Model/Authoring may admit its final validity. */
 export function editedObject(draft: ObjectDraft): DiagramObject {
   return draft.edits.reduce(applyEdit, draft.object);
@@ -147,17 +162,6 @@ const contentDefaults: Readonly<
   member: (id) => ({ id, kind: 'member', label: 'member', type: 'string', visibility: 'public' }),
   signature: (id) => ({ id, kind: 'signature', label: 'execute', parameters: [], returns: 'void' }),
 };
-/**
- * The key of an object's form: its collection and object, as JSON text. It names one form whichever
- * diagram appearance selected the object. The only maker of `ObjectDraftKey`; never fails.
- */
-export function objectDraftKey(
-  collection: CollectionId,
-  object: ObjectId,
-): ObjectDraftKey {
-  return objectDraftKeySchema.parse(JSON.stringify([collection, object]));
-}
-
 /** ER key edits retain identity and clear reference metadata when the field no longer represents a foreign key. */
 function editKey(
   object: DiagramObject,
