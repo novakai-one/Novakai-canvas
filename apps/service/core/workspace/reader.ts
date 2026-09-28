@@ -12,7 +12,9 @@
  */
 import type {
   AuthoringResult,
+  Catalog,
   Collection,
+  Json,
   LibrarySnapshot,
   LoweredIntent,
   Snapshot,
@@ -22,7 +24,11 @@ import type {
 import type { LibraryRules, ModelRules } from '../../contract/ports/capabilities.js';
 import type { WorkspaceContents } from '../../contract/records/workspace/contents.js';
 import type { WorkspaceReader } from '../../contract/ports/workspace.js';
-import { authoringFailure, success } from '../../contract/errors.js';
+import type {
+  CapabilityFailure,
+  FailureSource,
+} from '../../contract/records/transport/failure-source.js';
+import { authoringFailure, collect, success } from '../../contract/errors.js';
 import { projectCollection } from './collection-projection.js';
 import { listLiveRecords } from './records.js';
 
@@ -42,129 +48,145 @@ export interface WorkspaceReaderDependencies {
  * is `projectCollection`. Starts no I/O.
  */
 export function createWorkspaceReader(dependencies: WorkspaceReaderDependencies): WorkspaceReader {
-  return { read: (snapshot) => read(snapshot, dependencies), project: projectCollection };
+  return {
+    read: (snapshot) => readWorkspaceContents(snapshot, dependencies),
+    project: projectCollection,
+  };
 }
 
-/**
- * Checks the live collection, catalog and preset records of one snapshot. Fails with
- * `invariant-violation` at:
- * - the record ID, when Model rejects a collection (Model's failure kept as source);
- * - `catalog`, when there is not exactly one catalog, or Library rejects it (source kept);
- * - `presets`, when Templates rejects the stored presets (Templates' message and source kept).
- */
-function read(
+/** The message a record gets when the capability that owns it refuses it. */
+const REFUSED_MESSAGE = 'The owning capability rejected this input';
+
+/** The checked collections, and the catalog Library checked against them. */
+type CollectionsAndCatalog = Pick<WorkspaceContents, 'collections' | 'library'>;
+
+/** Checks the live collections and the catalog, then the presets, of one snapshot. */
+function readWorkspaceContents(
   snapshot: Snapshot,
   dependencies: WorkspaceReaderDependencies,
 ): AuthoringResult<WorkspaceContents> {
+  const collectionsAndCatalog = checkCollectionsAndCatalog(snapshot, dependencies);
+  if (!collectionsAndCatalog.ok) {
+    return collectionsAndCatalog;
+  }
+  const presets = checkPresets(snapshot, dependencies.templates);
+  if (!presets.ok) {
+    return presets;
+  }
+  return success({ ...collectionsAndCatalog.value, presets: presets.value });
+}
+
+/** Checks the collections with Model, then the catalog with Library against those collections. */
+function checkCollectionsAndCatalog(
+  snapshot: Snapshot,
+  dependencies: WorkspaceReaderDependencies,
+): AuthoringResult<CollectionsAndCatalog> {
+  const collections = checkCollections(snapshot, dependencies.model);
+  if (!collections.ok) {
+    return collections;
+  }
+  const library = checkCatalog(snapshot, collections.value, dependencies.library);
+  if (!library.ok) {
+    return library;
+  }
+  return success({ collections: collections.value, library: library.value });
+}
+
+/** Checks each live collection record with Model, in snapshot order; the first refusal stops it. */
+function checkCollections(
+  snapshot: Snapshot,
+  model: WorkspaceReaderDependencies['model'],
+): AuthoringResult<readonly Collection[]> {
   const records = listLiveRecords(snapshot, 'collection');
-  const collections = records.reduce<AuthoringResult<readonly Collection[]>>(
-    (checked, record) => collection(checked, record, dependencies.model),
-    success([]),
-  );
-  if (!collections.ok) return collections;
-  return complete(snapshot, collections.value, dependencies);
+  return collect(records, (record) => checkCollection(record, model));
 }
 
-/**
- * One reduce step over the collection records. An earlier failure passes through unchanged;
- * otherwise the record is checked and added (see `checkedCollection`).
- */
-function collection(
-  records: AuthoringResult<readonly Collection[]>,
+/** Checks one collection record with Model. */
+function checkCollection(
   record: StoredRecord,
   model: WorkspaceReaderDependencies['model'],
-): AuthoringResult<readonly Collection[]> {
-  if (!records.ok) return records;
-  return checkedCollection(records.value, record, model);
+): AuthoringResult<Collection> {
+  const collection = model.validate(record.value);
+  if (!collection.ok) {
+    return refusedRecordFailure(record.key.id, collection.error);
+  }
+  return success(collection.value);
 }
 
-/**
- * Adds one collection record once Model accepts it. A rejected record is `invariant-violation`
- * at its record ID with Model's failure as source, so no invalid member is dropped.
- */
-function checkedCollection(
-  accepted: readonly Collection[],
-  record: StoredRecord,
-  model: WorkspaceReaderDependencies['model'],
-): AuthoringResult<readonly Collection[]> {
-  const checked = model.validate(record.value);
-  if (!checked.ok)
-    return authoringFailure(
-      'invariant-violation',
-      record.key.id,
-      'The owning capability rejected this input',
-      [],
-      checked.error,
-    );
-  return success([...accepted, checked.value]);
-}
-
-/**
- * Requires exactly one catalog record, then checks it (see `checkedLibrary`). Zero or several
- * catalogs is `invariant-violation` at `catalog`.
- */
-function complete(
+/** Finds the one catalog record, then checks it with Library against the checked collections. */
+function checkCatalog(
   snapshot: Snapshot,
   collections: readonly Collection[],
-  dependencies: WorkspaceReaderDependencies,
-): AuthoringResult<WorkspaceContents> {
-  const catalogs = listLiveRecords(snapshot, 'catalog');
-  if (catalogs.length !== 1)
-    return authoringFailure(
-      'invariant-violation',
-      'catalog',
-      'Workspace requires exactly one catalog',
-    );
-  return checkedLibrary(catalogs[0]?.value, snapshot, collections, dependencies);
-}
-
-/**
- * Checks the catalog and the checked collections with Library, then the presets (see
- * `checkedPresets`). A Library rejection is `invariant-violation` at `catalog`, Library's failure
- * kept as source.
- */
-function checkedLibrary(
-  catalog: unknown,
-  snapshot: Snapshot,
-  collections: readonly Collection[],
-  dependencies: WorkspaceReaderDependencies,
-): AuthoringResult<WorkspaceContents> {
-  const library = dependencies.library.validateSnapshot({
-    organisation: catalog,
-    collections: collections.map(projectCollection),
+  library: WorkspaceReaderDependencies['library'],
+): AuthoringResult<LibrarySnapshot> {
+  const storedCatalog = findSingleCatalog(snapshot);
+  if (!storedCatalog.ok) {
+    return storedCatalog;
+  }
+  const summaries = collections.map(projectCollection);
+  const catalog = library.validateSnapshot({
+    organisation: storedCatalog.value,
+    collections: summaries,
     recent: [],
   });
-  if (!library.ok)
-    return authoringFailure(
-      'invariant-violation',
-      'catalog',
-      'The owning capability rejected this input',
-      [],
-      library.error,
-    );
-  return checkedPresets(snapshot, collections, library.value, dependencies.templates);
+  if (!catalog.ok) {
+    return refusedRecordFailure('catalog', catalog.error);
+  }
+  return success(catalog.value);
+}
+
+/** Finds the stored contents of the workspace's single live catalog record. */
+function findSingleCatalog(snapshot: Snapshot): AuthoringResult<Json> {
+  const catalogs = listLiveRecords(snapshot, 'catalog');
+  if (!isExactlyOne(catalogs)) {
+    return catalogCountFailure();
+  }
+  return success(catalogs[0].value);
+}
+
+/** Whether the list holds exactly one record. */
+function isExactlyOne(records: readonly StoredRecord[]): records is readonly [StoredRecord] {
+  return records.length === 1;
+}
+
+/** Checks the live preset records (the stored themes and recipes) with Templates. */
+function checkPresets(
+  snapshot: Snapshot,
+  templates: WorkspaceReaderDependencies['templates'],
+): AuthoringResult<Catalog> {
+  const records = listLiveRecords(snapshot, 'preset');
+  const storedPresets = records.map((record) => record.value);
+  const presets = templates.readCatalog(storedPresets);
+  if (!presets.ok) {
+    return refusedPresetsFailure(presets.error);
+  }
+  return success(presets.value);
 }
 
 /**
- * Checks the live preset records with Templates and answers the complete contents. A Templates
- * rejection is `invariant-violation` at `presets`, Templates' message and failure kept.
+ * Makes the mistake for a record its capability refused (`invariant-violation` at `path`), keeping
+ * the refusal as `source`.
  */
-function checkedPresets(
-  snapshot: Snapshot,
-  collections: readonly Collection[],
-  library: LibrarySnapshot,
-  templates: WorkspaceReaderDependencies['templates'],
-): AuthoringResult<WorkspaceContents> {
-  const presets = templates.readCatalog(
-    listLiveRecords(snapshot, 'preset').map((record) => record.value),
+function refusedRecordFailure(
+  path: string,
+  refusal: FailureSource,
+): AuthoringResult<never> {
+  return authoringFailure('invariant-violation', path, REFUSED_MESSAGE, [], refusal);
+}
+
+/** Makes the mistake for a workspace without exactly one catalog (`invariant-violation`). */
+function catalogCountFailure(): AuthoringResult<never> {
+  return authoringFailure(
+    'invariant-violation',
+    'catalog',
+    'Workspace requires exactly one catalog',
   );
-  if (!presets.ok)
-    return authoringFailure(
-      'invariant-violation',
-      'presets',
-      presets.error.message,
-      [],
-      presets.error,
-    );
-  return success({ collections, library, presets: presets.value });
+}
+
+/**
+ * Makes the mistake for presets Templates refused (`invariant-violation` at `presets`), keeping
+ * Templates' message and failure.
+ */
+function refusedPresetsFailure(refusal: CapabilityFailure): AuthoringResult<never> {
+  return authoringFailure('invariant-violation', 'presets', refusal.message, [], refusal);
 }

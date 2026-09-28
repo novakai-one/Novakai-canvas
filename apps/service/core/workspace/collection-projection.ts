@@ -15,7 +15,7 @@ import type {
   ObjectProjection,
   SectionProjection,
 } from '../../contract/records/capability-types.js';
-import type { ObjectId } from '../../contract/brands.js';
+import type { ObjectId, SectionId } from '../../contract/brands.js';
 
 /** One Model section. */
 type ModelSection = Collection['sections'][number];
@@ -28,45 +28,51 @@ type ModelObject = Collection['objects'][number];
  * blocks joined by newlines; a collection with no description gets empty text. Never fails.
  */
 export function projectCollection(collection: Collection): CollectionProjection {
+  const description = collection.description ?? '';
+  const sections = collection.sections.map(projectSection);
+  const objects = collection.objects.map((object) => projectObject(object, collection.sections));
   return {
     id: collection.id,
     revision: collection.revision,
     title: collection.title,
-    description: collection.description ?? '',
-    sections: collection.sections.map(projectSection),
-    objects: collection.objects.map((object) => projectObject(object, collection.sections)),
+    description,
+    sections,
+    objects,
   };
 }
 
-/** A section's ID and title. */
+/** Keeps a section's ID and title. */
 function projectSection(section: ModelSection): SectionProjection {
   return { id: section.id, title: section.title };
 }
 
-/**
- * An object's ID and label, its text blocks joined by newlines as the description, and the
- * sections that show it (see `showsObject`).
- */
+/** Keeps an object's ID and label, and adds its description and the sections that show it. */
 function projectObject(
   object: ModelObject,
   sections: readonly ModelSection[],
 ): ObjectProjection {
-  const showing = sections.filter((section) => showsObject(section, object.id));
-  return {
-    id: object.id,
-    label: object.label,
-    description: textDescription(object),
-    visibleIn: showing.map((section) => section.id),
-  };
+  const description = textDescription(object);
+  const visibleIn = sectionsShowing(object.id, sections);
+  return { id: object.id, label: object.label, description, visibleIn };
 }
 
-/** The object's text blocks joined by newlines; empty text when it has none. */
+/** Joins the object's text blocks with newlines; an object with none gets empty text. */
 function textDescription(object: ModelObject): string {
   const textBlocks = object.content.filter((block) => block.kind === 'text');
-  return textBlocks.map((block) => block.text).join('\n');
+  const texts = textBlocks.map((block) => block.text);
+  return texts.join('\n');
 }
 
-/** Whether the section shows the object as an appearance or as a group that represents it. */
+/** Lists the IDs of the sections that show the object, in section order. */
+function sectionsShowing(
+  object: ObjectId,
+  sections: readonly ModelSection[],
+): readonly SectionId[] {
+  const showing = sections.filter((section) => showsObject(section, object));
+  return showing.map((section) => section.id);
+}
+
+/** Whether the section shows the object as an appearance, or as a group that represents it. */
 function showsObject(
   section: ModelSection,
   object: ObjectId,

@@ -18,12 +18,21 @@ const NAVIGATION_HISTORY_ID = 'navigation';
  * Versions stay as they are. Never fails.
  */
 export function stripHistoryContents(snapshot: Snapshot): Snapshot {
-  return { ...snapshot, records: snapshot.records.map(versionOnly) };
+  const records = snapshot.records.map(stripUndoStepContents);
+  return { ...snapshot, records };
 }
 
-/** The record with its contents set to `null` when it is a history record other than navigation. */
-function versionOnly(record: StoredRecord): StoredRecord {
-  if (record.key.kind !== 'history') return record;
-  if (record.key.id === NAVIGATION_HISTORY_ID) return record;
-  return { ...record, value: null };
+/** Sets an undo step's contents to `null`, and keeps any other record whole. */
+function stripUndoStepContents(record: StoredRecord): StoredRecord {
+  if (isUndoStep(record)) {
+    return { ...record, value: null };
+  }
+  return record;
+}
+
+/** Whether the record is one undo step: a `history` record other than `navigation`. */
+function isUndoStep(record: StoredRecord): boolean {
+  const isHistory = record.key.kind === 'history';
+  const isNavigation = record.key.id === NAVIGATION_HISTORY_ID;
+  return isHistory && !isNavigation;
 }
