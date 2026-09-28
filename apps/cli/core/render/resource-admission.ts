@@ -9,7 +9,7 @@ import type { RenderAssets } from '../../contract/ports/render-assets.js';
 import type { ResourceReader } from '../../contract/ports/resource-reader.js';
 import type { ResourceRequest } from '../../contract/records/foreign.js';
 import type { RenderFailureSource } from '../../contract/records/render-failure.js';
-import type { StagedResource } from '../../contract/records/staged-resource.js';
+import type { ResourceToStage } from '../../contract/records/staged-resource.js';
 import type { AssetDigest, FilePath } from '../../contract/brands.js';
 import { success, type Result } from '../../contract/errors.js';
 import { readDeclaredResource } from '../resources/stage.js';
@@ -38,7 +38,7 @@ export async function admitResource(
 
 /** A pinned declaration's digest as it is; local bytes staged first. Fails with Assets' failure. */
 function storedDigest(
-  resource: StagedResource,
+  resource: ResourceToStage,
   assets: AdmissionDependencies['assets'],
 ): Promise<Result<AssetDigest, RenderFailureSource>> {
   if (resource.kind === 'pinned') return Promise.resolve(success(resource.digest));

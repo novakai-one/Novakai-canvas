@@ -14,8 +14,8 @@ import type { ServiceResources } from '../../contract/ports/service-resources.js
 import type { RetainedRequest } from '../../contract/records/retained-request.js';
 import type {
   NamedAssetDigest,
+  ResourceToStage,
   StagedBackup,
-  StagedResource,
 } from '../../contract/records/staged-resource.js';
 import type { ResourceRequest, StageInput } from '../../contract/records/foreign.js';
 import { resourceAlias } from '../../contract/brands.js';
@@ -27,7 +27,10 @@ import { combined } from '../shared/results.js';
 import { parseAssetPin } from './digests.js';
 import { buildStageInput } from './provenance.js';
 
-/** The tools staging uses: the font and image file reader, and the service's `stage` and `blob`. */
+/**
+ * The tools staging uses: the file reader, and the service's `stage` (stores bytes) and `blob`
+ * (reads stored bytes back).
+ */
 export interface StagingDependencies {
   readonly reader: ResourceReader;
   readonly resources: Pick<ServiceResources, 'stage' | 'blob'>;
@@ -46,8 +49,8 @@ const unnamedResource: FailureInput = Object.freeze({
 
 /**
  * Stages the fonts and images a source declares, then has the service write their digests into
- * `retained`'s request ("freeze" them). Gives back that request with its byte copies.
- * `file` is the source file; declared files are read from its folder.
+ * `retained`'s request; this is called freezing the request. Gives back that request with its
+ * byte copies. Declared files are read from the folder of `file`, the source file.
  * The mistakes it can find: those of {@link stageResources}, or a failed freeze.
  */
 export async function prepareResources(
@@ -83,9 +86,8 @@ export async function stageResources(
 }
 
 /**
- * Reads one declared font or image. A `sha256:` pin is used as it is; anything else is read as a
- * file from the folder of `file`, the source that declares it. Gives back the resource ready to
- * stage: its name and its bytes or pin. Nothing is stored yet.
+ * Reads one declared font or image, ready to stage; nothing is stored yet. A `sha256:` pin is used
+ * as it is; anything else is read as a file from the folder of `file`, the source that declares it.
  * The mistakes it can find: no name (`invalid-response`), or a file outside that folder, missing,
  * of the wrong type or too large (the failure names the declaration's line).
  */
@@ -93,7 +95,7 @@ export async function readDeclaredResource(
   file: FilePath,
   declaration: ResourceRequest,
   reader: ResourceReader,
-): Promise<Result<StagedResource, LocalFailure>> {
+): Promise<Result<ResourceToStage, LocalFailure>> {
   const alias = checked(resourceAlias, declaration.alias, unnamedResource);
   if (!alias.ok) return alias;
   const pinned = parseAssetPin(declaration.source);
@@ -118,7 +120,7 @@ async function localResource(
   request: ResourceRequest,
   alias: ResourceAlias,
   reader: ResourceReader,
-): Promise<Result<StagedResource, LocalFailure>> {
+): Promise<Result<ResourceToStage, LocalFailure>> {
   const bytes = await reader.read(file, request);
   if (!bytes.ok) return located(bytes.error, declarationPlace(file, request, alias));
   return success({ kind: 'local', alias, input: buildStageInput(request, bytes.value) });
@@ -162,7 +164,7 @@ async function freeze(
 
 /** A pinned digest is backed up as it is; local bytes are staged first. */
 function stage(
-  resource: StagedResource,
+  resource: ResourceToStage,
   dependencies: StagingDependencies,
 ): Promise<Result<StagedBackup>> {
   if (resource.kind === 'pinned') return backup(resource.alias, resource.digest, dependencies);

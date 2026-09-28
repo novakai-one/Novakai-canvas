@@ -26,7 +26,7 @@ export interface LocalBytes {
  * One font or image to stage: `pinned` by a digest the service already holds (nothing was read),
  * or `local` bytes read from a file, in `input` as Assets takes them. `alias` is its source name.
  */
-export type StagedResource =
+export type ResourceToStage =
   | { readonly kind: 'pinned'; readonly alias: ResourceAlias; readonly digest: AssetDigest }
   | { readonly kind: 'local'; readonly alias: ResourceAlias; readonly input: StageInput };
 
