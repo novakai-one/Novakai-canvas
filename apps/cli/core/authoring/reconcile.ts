@@ -13,7 +13,7 @@ import type { SubmitDependencies } from './submit.js';
 import { formatReceipt } from '../reads/receipt.js';
 import type { ServiceReads } from '../../contract/ports/service-reads.js';
 import type { RequestJournal } from '../../contract/ports/request-journal.js';
-import type { JournalRecord } from '../../contract/records/retained-request.js';
+import type { JournalRecord, RetainedRequest } from '../../contract/records/retained-request.js';
 import type { ServiceAnswer, ReceiptLookup } from '../../contract/records/service-answers.js';
 import type { RequestId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
@@ -34,20 +34,30 @@ export async function replayRetainedRequest(
   request: RequestId,
   dependencies: RetryDependencies,
 ): Promise<Result<string>> {
-  const retained = await dependencies.journal.read(request);
-  if (!retained.ok) return retained;
-  const lookup = await dependencies.reads.receipt(request);
-  if (!lookup.ok) return lookup;
-  return reconciled(retained.value, lookup.value, dependencies);
+  const kept = await dependencies.journal.read(request);
+  if (!kept.ok) {
+    return kept;
+  }
+  const receiptAnswer = await dependencies.reads.receipt(request);
+  if (!receiptAnswer.ok) {
+    return receiptAnswer;
+  }
+  return showReceiptOrResend(kept.value, receiptAnswer.value, dependencies);
 }
 
-/** Receipt absence permits explicit caller-requested replay; changed Authoring preconditions remain rejected by the owner. */
-async function reconciled(
-  record: JournalRecord,
-  lookup: ServiceAnswer<ReceiptLookup>,
+/**
+ * Gives back the receipt when the kept request was already saved. Otherwise sends it again, under
+ * the running service's generation.
+ */
+async function showReceiptOrResend(
+  kept: JournalRecord,
+  receiptAnswer: ServiceAnswer<ReceiptLookup>,
   dependencies: RetryDependencies,
 ): Promise<Result<string>> {
-  if (lookup.value.kind === 'committed')
-    return formatReceipt(lookup.value.receipt, record.request.request);
-  return submitRequest({ ...record, generation: lookup.generation }, 'apply', dependencies);
+  const lookup = receiptAnswer.value;
+  if (lookup.kind === 'committed') {
+    return formatReceipt(lookup.receipt, kept.request.request);
+  }
+  const resent: RetainedRequest = { ...kept, generation: receiptAnswer.generation };
+  return submitRequest(resent, 'apply', dependencies);
 }

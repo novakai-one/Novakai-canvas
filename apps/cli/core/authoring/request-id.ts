@@ -22,6 +22,9 @@ export function chooseRequestId(
   command: RequestOption,
   freshIds: RequestIds,
 ): Result<RequestId> {
-  if (command.request !== undefined) return success(command.request);
-  return freshIds.next();
+  const typedRequest = command.request;
+  if (typedRequest === undefined) {
+    return freshIds.next();
+  }
+  return success(typedRequest);
 }

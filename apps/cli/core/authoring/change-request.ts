@@ -12,7 +12,6 @@
 import type { CollectionValidator } from '../../contract/ports/collection-validator.js';
 import type { ChangeIntent } from '../../contract/records/command.js';
 import type {
-  Collection,
   ReadVersion,
   AuthoringRequest,
   WorkspaceSnapshot,
@@ -23,12 +22,15 @@ import type {
   RecordId,
   RequestId,
   StorageVersion,
+  WorkspaceId,
 } from '../../contract/brands.js';
-import type { FailureInput, LocalFailure, Result } from '../../contract/errors.js';
-import { collectionRevision, recordId, storageVersion } from '../../contract/brands.js';
+import type { LocalFailure, Result } from '../../contract/errors.js';
+import { recordId } from '../../contract/brands.js';
 import { failure, invalidInputFailure, success } from '../../contract/errors.js';
-import { checked } from '../shared/checks.js';
 import { buildAuthoringRequest } from './envelope.js';
+import type { AuthoringRequestDraft, PlannedChange, SourceChange } from './envelope.js';
+import { readStoredCounters } from './stored-counters.js';
+import type { CollectionCounters } from './stored-counters.js';
 
 /** One change from a source file, before it is checked against the workspace. */
 export interface ChangeDraft {
@@ -42,32 +44,6 @@ export interface ChangeDraft {
   readonly request: RequestId;
 }
 
-/** `replace` or `patch` of a collection no record is stored under. */
-const missingCollection: FailureInput = Object.freeze({
-  code: 'not-found',
-  message: 'The collection does not exist',
-});
-
-/** A stored collection record whose storage version is not Authoring's whole number. */
-const invalidStoredVersion: FailureInput = Object.freeze({
-  code: 'invalid-response',
-  message: 'The stored collection has an invalid storage version',
-});
-
-/** A stored collection whose Model revision is not a whole number, 0 or more. */
-const invalidStoredRevision: FailureInput = Object.freeze({
-  code: 'invalid-response',
-  message: 'The stored collection has an invalid revision',
-});
-
-/** A stored collection's two counters, each checked once. */
-interface CollectionCounters {
-  /** Authoring's storage version: the precondition the change sends. */
-  readonly version: StorageVersion;
-  /** Model's revision: what the agent's `--revision` must match. */
-  readonly revision: CollectionRevision;
-}
-
 /**
  * Checks the collection ID a source declares can be stored as an Authoring record ID.
  * `declaredId` is the ID as Language read it from the source, such as `commerce`.
@@ -79,14 +55,10 @@ export function checkCollectionRecordId(
   declaredId: string,
 ): Result<RecordId> {
   const id = recordId.safeParse(declaredId);
-  if (!id.success) return unstorableIdFailure(intent);
+  if (!id.success) {
+    return unstorableIdFailure(intent);
+  }
   return success(id.data);
-}
-
-/** `invalid-input` for `create`; `not-found` for `replace` and `patch`, as no record is stored. */
-function unstorableIdFailure(intent: ChangeIntent): Result<never, LocalFailure> {
-  if (intent.mode === 'create') return invalidInputFailure();
-  return failure(missingCollection);
 }
 
 /**
@@ -100,139 +72,181 @@ export function buildChangeRequest(
   snapshot: WorkspaceSnapshot,
   validator: CollectionValidator,
 ): Result<AuthoringRequest> {
-  const record = snapshot.records.find(
-    (item) => item.key.kind === 'collection' && item.key.id === draft.collection,
-  );
-  const version = expectedVersion(draft.intent, record, validator);
-  if (!version.ok) return version;
-  return withCatalog(draft, snapshot, version.value);
+  const stored = findCollectionRecord(snapshot, draft.collection);
+  const version = expectedVersion(draft.intent, stored, validator);
+  if (!version.ok) {
+    return version;
+  }
+  const catalog = findLiveCatalog(snapshot);
+  if (!catalog.ok) {
+    return catalog;
+  }
+  const expected = listPreconditions(draft, version.value, catalog.value);
+  const requestDraft = draftChangeRequest(draft, snapshot.workspace, expected);
+  return buildAuthoringRequest(requestDraft, invalidInputFailure());
+}
+
+/** Finds the record stored under the collection's ID, even a deleted collection's. */
+function findCollectionRecord(
+  snapshot: WorkspaceSnapshot,
+  id: RecordId,
+): StoredRecord | undefined {
+  return snapshot.records.find((record) => isCollectionRecord(record, id));
+}
+
+/** Whether the record is the collection record `id`. */
+function isCollectionRecord(
+  record: StoredRecord,
+  id: RecordId,
+): boolean {
+  return record.key.kind === 'collection' && record.key.id === id;
+}
+
+/** Works out the version the change expects the collection's record at: `absent` for `create`. */
+function expectedVersion(
+  intent: ChangeIntent,
+  stored: StoredRecord | undefined,
+  validator: CollectionValidator,
+): Result<ReadVersion['version']> {
+  if (intent.mode === 'create') {
+    return versionForCreate(stored);
+  }
+  return storedVersion(stored, intent.revision, validator);
 }
 
 /**
- * `create` needs no record under the ID, so a deleted collection is never silently brought back;
- * `replace` and `patch` need the stored revision. Fails with `already-exists` or as
- * {@link storedVersion} does.
+ * Checks nothing is stored under the ID, so a deleted collection is never silently brought back.
  */
-function expectedVersion(
-  intent: ChangeIntent,
-  record: StoredRecord | undefined,
-  reader: CollectionValidator,
-): Result<ReadVersion['version']> {
-  if (intent.mode !== 'create') return storedVersion(record, intent.revision, reader);
-  if (record !== undefined)
-    return failure({
-      code: 'already-exists',
-      message: 'Collection identity already exists; choose a new collection ID',
-    });
+function versionForCreate(stored: StoredRecord | undefined): Result<ReadVersion['version']> {
+  if (stored !== undefined) {
+    return alreadyExistsFailure();
+  }
   return success('absent');
 }
 
-/**
- * The record's storage version, once its Model revision matches the one the agent read. Fails
- * with `not-found`, as {@link countersOf} does, or as {@link matchedRevision} does.
- */
+/** Finds the stored record's version, once its revision matches the one the agent read. */
 function storedVersion(
-  record: StoredRecord | undefined,
+  stored: StoredRecord | undefined,
   requested: CollectionRevision | undefined,
-  reader: CollectionValidator,
+  validator: CollectionValidator,
 ): Result<StorageVersion> {
-  if (record === undefined) return failure(missingCollection);
-  const counters = countersOf(record, reader);
-  if (!counters.ok) return counters;
-  return matchedRevision(counters.value.version, counters.value.revision, requested);
+  if (stored === undefined) {
+    return missingCollectionFailure();
+  }
+  const counters = readStoredCounters(stored, validator);
+  if (!counters.ok) {
+    return counters;
+  }
+  return matchRevision(counters.value, requested);
 }
 
 /**
- * The record's storage version and its collection's Model revision, each minted here. Fails with
- * `invalid-response`: Model rejects the stored collection (its diagnostics are kept), or a counter
- * is not a whole number.
+ * Gives back the storage version when the agent read the current revision; a missing `--revision`
+ * is never permission to overwrite newer work.
  */
-function countersOf(
-  record: StoredRecord,
-  reader: CollectionValidator,
-): Result<CollectionCounters> {
-  const collection = reader.validate(record.value);
-  if (!collection.ok)
-    return failure({
-      code: 'invalid-response',
-      message: 'The collection is not a valid Model document',
-      recovery: 'Correct the named Model diagnostics.',
-      source: collection.error,
-    });
-  return mintedCounters(record, collection.value);
-}
-
-/**
- * The record's storage version and the collection's revision, as their brands. Fails with
- * `invalid-response` when either is not a whole number.
- */
-function mintedCounters(
-  record: StoredRecord,
-  collection: Collection,
-): Result<CollectionCounters> {
-  const version = checked(storageVersion, record.version, invalidStoredVersion);
-  if (!version.ok) return version;
-  const revision = checked(collectionRevision, collection.revision, invalidStoredRevision);
-  if (!revision.ok) return revision;
-  return success({ version: version.value, revision: revision.value });
-}
-
-/**
- * `version` when the agent read the current revision. A missing revision is never permission to
- * overwrite newer work. Fails with `revision-required` or `revision-conflict`.
- */
-function matchedRevision(
-  version: StorageVersion,
-  current: CollectionRevision,
+function matchRevision(
+  counters: CollectionCounters,
   requested: CollectionRevision | undefined,
 ): Result<StorageVersion> {
-  if (requested === undefined)
-    return failure({
-      code: 'revision-required',
-      message: 'Editing requires --revision from canvas read',
-    });
-  if (requested !== current)
-    return failure({
-      code: 'revision-conflict',
-      message: `Read revision ${requested} differs from current revision ${current}`,
-      recovery: 'Read the collection and compare changes before submitting a new request.',
-    });
-  return success(version);
+  if (requested === undefined) {
+    return revisionRequiredFailure();
+  }
+  if (requested !== counters.revision) {
+    return revisionConflictFailure(requested, counters.revision);
+  }
+  return success(counters.version);
 }
 
 /**
- * The checked request. Every change needs the live catalog in the snapshot; only `create` expects
- * it, so the new collection registers in the same transaction. Fails with `invalid-response` (no
- * catalog) or `invalid-input`.
+ * Finds the workspace's live catalog record, which every change needs, even a `replace`.
+ * The mistake it can find: no catalog, or only a deleted one (`invalid-response`).
  */
-function withCatalog(
+function findLiveCatalog(snapshot: WorkspaceSnapshot): Result<StoredRecord> {
+  const catalog = snapshot.records.find(isLiveCatalog);
+  if (catalog === undefined) {
+    return missingCatalogFailure();
+  }
+  return success(catalog);
+}
+
+/** Whether the record is the workspace's catalog, and not deleted. */
+function isLiveCatalog(record: StoredRecord): boolean {
+  return record.key.kind === 'catalog' && !record.deleted;
+}
+
+/**
+ * Lists each record the change expects at the version read: the collection, and for `create` the
+ * catalog too, so the new collection is registered in the same save.
+ */
+function listPreconditions(
   draft: ChangeDraft,
-  snapshot: WorkspaceSnapshot,
   version: ReadVersion['version'],
-): Result<AuthoringRequest> {
-  const catalog = snapshot.records.find((item) => item.key.kind === 'catalog' && !item.deleted);
-  if (catalog === undefined)
-    return failure({ code: 'invalid-response', message: 'Workspace catalog is missing' });
-  const collection: ReadVersion = { key: { kind: 'collection', id: draft.collection }, version };
-  const expected = preconditions(draft.intent, collection, catalog);
-  return buildAuthoringRequest(
-    {
-      workspace: snapshot.workspace,
-      request: draft.request,
-      expected,
-      assets: [],
-      change: { planner: 'dsl', payload: { source: draft.source, mode: draft.intent.mode } },
-    },
-    invalidInputFailure(),
-  );
-}
-
-/** The collection's precondition, then the catalog's for `create`. */
-function preconditions(
-  intent: ChangeIntent,
-  collection: ReadVersion,
   catalog: StoredRecord,
 ): readonly ReadVersion[] {
-  if (intent.mode !== 'create') return [collection];
-  return [collection, { key: catalog.key, version: catalog.version }];
+  const collectionVersion: ReadVersion = {
+    key: { kind: 'collection', id: draft.collection },
+    version,
+  };
+  if (draft.intent.mode === 'create') {
+    const catalogVersion: ReadVersion = { key: catalog.key, version: catalog.version };
+    return [collectionVersion, catalogVersion];
+  }
+  return [collectionVersion];
+}
+
+/** Puts together the parts of the change request that `buildAuthoringRequest` is given. */
+function draftChangeRequest(
+  draft: ChangeDraft,
+  workspace: WorkspaceId,
+  expected: readonly ReadVersion[],
+): AuthoringRequestDraft {
+  const sourceChange: SourceChange = { source: draft.source, mode: draft.intent.mode };
+  const change: PlannedChange = { planner: 'dsl', payload: sourceChange };
+  return { workspace, request: draft.request, expected, assets: [], change };
+}
+
+/** Makes the mistake for a declared ID that can't be stored: `invalid-input` or `not-found`. */
+function unstorableIdFailure(intent: ChangeIntent): Result<never, LocalFailure> {
+  if (intent.mode === 'create') {
+    return invalidInputFailure();
+  }
+  return missingCollectionFailure();
+}
+
+/** Makes the mistake for `replace` or `patch` of a collection that isn't stored (`not-found`). */
+function missingCollectionFailure(): Result<never, LocalFailure> {
+  return failure({ code: 'not-found', message: 'The collection does not exist' });
+}
+
+/** Makes the mistake for `create` of an ID a record is already stored under (`already-exists`). */
+function alreadyExistsFailure(): Result<never, LocalFailure> {
+  return failure({
+    code: 'already-exists',
+    message: 'Collection identity already exists; choose a new collection ID',
+  });
+}
+
+/** Makes the mistake for `replace` or `patch` typed without `--revision` (`revision-required`). */
+function revisionRequiredFailure(): Result<never, LocalFailure> {
+  return failure({
+    code: 'revision-required',
+    message: 'Editing requires --revision from canvas read',
+  });
+}
+
+/** Makes the mistake for a `--revision` that isn't the stored one (`revision-conflict`). */
+function revisionConflictFailure(
+  requested: CollectionRevision,
+  current: CollectionRevision,
+): Result<never, LocalFailure> {
+  return failure({
+    code: 'revision-conflict',
+    message: `Read revision ${requested} differs from current revision ${current}`,
+    recovery: 'Read the collection and compare changes before submitting a new request.',
+  });
+}
+
+/** Makes the mistake for a workspace with no live catalog record (`invalid-response`). */
+function missingCatalogFailure(): Result<never, LocalFailure> {
+  return failure({ code: 'invalid-response', message: 'Workspace catalog is missing' });
 }
