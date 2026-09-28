@@ -21,7 +21,7 @@ import type { FilePath } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
 import { joined, mapped, unsupported } from '../shared/results.js';
-import type { CommandDefaults, CommandFlags, CommandWords } from './flags.js';
+import type { CommandDefaults, CommandFlags } from './flags.js';
 import { profileCommand } from './profile-operands.js';
 import { expansion, recipeHeader } from './recipe-values.js';
 import {
@@ -35,6 +35,7 @@ import {
   sourceFile,
   writes,
 } from './values.js';
+import type { CommandWords } from './words.js';
 
 /**
  * The read scope, change mode and revision, checked first as the base CLI does. `parse.ts` refused

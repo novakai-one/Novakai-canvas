@@ -1,12 +1,16 @@
 /*
- * `canvas --help`: a title, every command's usage lines from the command table in table order, then
- * the notes on options, modes, read scopes and receipts. Pure; built once. Available before the
+ * `canvas --help`: a title, every command's usage lines in the command table's order, then the
+ * notes on options, modes, read scopes and receipts. Pure; built once. Printed before the
  * credential, any file or the service is touched.
  */
 import { commandRows } from './table.js';
+import type { CommandRow } from './table.js';
 
 /** The first line. */
 const title = 'Novakai Canvas — author collections with readable DSL';
+
+/** The line between the title, the commands and the notes. */
+const blankLine = '';
 
 /** The lines after the commands. */
 const notes: readonly string[] = Object.freeze([
@@ -17,7 +21,13 @@ const notes: readonly string[] = Object.freeze([
   'A missing or uncertain receipt is not confirmation that an edit was saved.',
 ]);
 
-/** The help text, with no trailing line break. */
-export const usage = [title, '', ...commandRows().flatMap((row) => row.usage), '', ...notes].join(
-  '\n',
-);
+/** Every command's usage lines, in the command table's order. */
+const commandUsage: readonly string[] = commandRows().flatMap(readUsageLines);
+
+/** The help text: the title, the commands, then the notes, with no trailing line break. */
+export const usage = [title, blankLine, ...commandUsage, blankLine, ...notes].join('\n');
+
+/** One command's lines in `canvas --help`, as its table row gives them. */
+function readUsageLines(row: CommandRow): readonly string[] {
+  return row.usage;
+}
