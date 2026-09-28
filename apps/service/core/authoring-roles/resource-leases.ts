@@ -1,7 +1,13 @@
 /*
- * Authoring's resource admission role: selects a request's resources and holds their bytes under
- * an Assets lease until Authoring settles the commit or receipt. Pure over the injected selector
- * and Assets; Assets keeps protection for maintenance recovery when a release fails.
+ * Why this file exists
+ *
+ * A change can use stored files, like a theme's fonts or a diagram's images. If clean-up removed
+ * one while Authoring was still saving the change, the saved diagram would point at a missing file.
+ * So Authoring first holds every file the request uses (a "lease"), and lets go once the save is
+ * settled. For example, a DSL change showing a logo holds the logo's file until its receipt exists.
+ *
+ * This file builds that hold for Authoring. It asks the selector which files the request uses and
+ * asks Assets to hold them. It never writes records. If letting go fails, Assets keeps the hold.
  */
 import type {
   Assets,
@@ -15,9 +21,10 @@ import type { ResourceSelector } from '../../contract/ports/workspace.js';
 import { authoringFailure } from '../../contract/errors.js';
 
 /**
- * Binds actual Assets leases; even an empty digest set uses the owner's real lifecycle contract.
- * `acquire` answers the selector's failure unchanged, or `missing-asset` (Assets' failure kept as
- * source) when the bytes cannot be leased. `release` answers `storage-unavailable` (source kept).
+ * Builds Authoring's file hold (`ResourceAdmission`). Its `acquire` picks the files a request uses,
+ * holds them, and answers the hold (`ResourceLease`), whose `release` lets go.
+ * Mistakes: the selector's own, or `missing-asset` when a file can't be held. `release` answers
+ * `storage-unavailable` when letting go fails.
  */
 export function createResourceAdmission(
   selector: Pick<ResourceSelector, 'select'>,

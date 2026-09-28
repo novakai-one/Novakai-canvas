@@ -1,7 +1,13 @@
 /*
- * Authoring's `dsl` planner role: lowers DSL source text through Language on the stored
- * collection and hands the new collection to the collection planner. Pure over the injected
- * owners. Authoring owns scope, commit and retry.
+ * Why this file exists
+ *
+ * Agents, and people using the source editor, change diagrams by sending DSL text. For example,
+ * `pnpm canvas create flow.canvas` sends a `dsl` change holding the file's text and the mode
+ * `create`. Language must read that text and apply it before anything can be saved.
+ *
+ * This file is the `dsl` planner. It checks the themes and files picked for the request haven't
+ * changed, and asks Language to read the text and apply it to the stored collection. The new
+ * collection goes on to the collection planner (collection-proposal.ts). Authoring saves it.
  */
 import type {
   AuthoringResult,
@@ -23,26 +29,30 @@ import { dslCommand } from '../../../contract/records/planning/commands.js';
 import { plannerId } from '../../../contract/schemas.js';
 import { authoringFailure } from '../../../contract/errors.js';
 import { sameResourcesJson } from '../../resources/selection/pins.js';
-import { changePayload, ownerRejected } from './change-payload.js';
+import { readChangePayload, capabilityRefusalFailure } from './change-payload.js';
 
-/** What the `dsl` planner uses; compose passes Language from ServiceCapabilities. */
-export interface DslPlannerOwners {
+/** What the `dsl` planner needs. */
+export interface DslPlannerDependencies {
+  /** Language. Reads DSL text (`parse`) and applies it to a collection (`lower`). */
   readonly language: Pick<Language, 'parse' | 'lower'>;
+  /** Reads the snapshot into checked collections. */
   readonly workspace: Pick<WorkspaceReader, 'read'>;
+  /** Picks the themes and files the request uses, again, on this snapshot. */
   readonly resources: Pick<ResourceSelector, 'select'>;
+  /** Plans the new collection's save (collection-proposal.ts). */
   readonly collections: CollectionPlanner;
 }
 
 /**
- * Binds the `dsl` planner, which humans and agents may both address. `plan` fails with
- * `invalid-input` at `intent` (not a change), `dsl` (bad envelope) or `source` (Language parse,
- * source kept), `revision-conflict` at `pins`, or `invariant-violation` at `source` (Language
- * lower, source kept). Reader, selector and collection planner failures pass through unchanged.
+ * Builds the `dsl` planner. Its `plan` turns the DSL text into a new collection and answers the
+ * planned save. Mistakes: `invalid-input` for a malformed change or text Language can't read,
+ * `revision-conflict` at `pins` when the picked themes or files changed, or `invariant-violation`
+ * at `source` when Language can't apply the text.
  */
-export function createDslPlanner(owners: DslPlannerOwners): IntentPlanner {
+export function createDslPlanner(dependencies: DslPlannerDependencies): IntentPlanner {
   return {
     id: plannerId.parse('dsl'),
-    plan: async (request, snapshot, pins) => lower(request, snapshot, pins, owners),
+    plan: async (request, snapshot, pins) => lower(request, snapshot, pins, dependencies),
   };
 }
 
@@ -54,11 +64,11 @@ function lower(
   request: Request,
   snapshot: Snapshot,
   pins: Json,
-  owners: DslPlannerOwners,
+  dependencies: DslPlannerDependencies,
 ): AuthoringResult<Proposal> {
-  const input = changePayload(request, 'intent', 'Expected a diagram change');
+  const input = readChangePayload(request, 'intent', 'Expected a diagram change');
   if (!input.ok) return input;
-  return lowerSource(input.value, request, snapshot, pins, owners);
+  return lowerSource(input.value, request, snapshot, pins, dependencies);
 }
 
 /**
@@ -71,7 +81,7 @@ function lowerSource(
   request: Request,
   snapshot: Snapshot,
   pins: Json,
-  owners: DslPlannerOwners,
+  dependencies: DslPlannerDependencies,
 ): AuthoringResult<Proposal> {
   const command = dslCommand.safeParse(input);
   if (!command.success)
@@ -80,9 +90,9 @@ function lowerSource(
       'dsl',
       'DSL change requires source and an explicit mode',
     );
-  const selected = owners.resources.select(request, snapshot);
+  const selected = dependencies.resources.select(request, snapshot);
   if (!selected.ok) return selected;
-  return compile(command.data, snapshot, pins, selected.value, owners);
+  return compile(command.data, snapshot, pins, selected.value, dependencies);
 }
 
 /**
@@ -96,7 +106,7 @@ function compile(
   snapshot: Snapshot,
   pins: Json,
   selected: ResourceSelection,
-  owners: DslPlannerOwners,
+  dependencies: DslPlannerDependencies,
 ): AuthoringResult<Proposal> {
   if (!sameResourcesJson(pins, selected.resourcesJson))
     return authoringFailure(
@@ -104,9 +114,9 @@ function compile(
       'pins',
       'Resource selection differs from the admitted lease',
     );
-  const parsed = owners.language.parse(command.source);
-  if (!parsed.ok) return ownerRejected('invalid-input', 'source', parsed.error);
-  return compileCollection(command, parsed.value.collection, snapshot, selected, owners);
+  const parsed = dependencies.language.parse(command.source);
+  if (!parsed.ok) return capabilityRefusalFailure('invalid-input', 'source', parsed.error);
+  return compileCollection(command, parsed.value.collection, snapshot, selected, dependencies);
 }
 
 /**
@@ -120,16 +130,16 @@ function compileCollection(
   id: string,
   snapshot: Snapshot,
   selected: ResourceSelection,
-  owners: DslPlannerOwners,
+  dependencies: DslPlannerDependencies,
 ): AuthoringResult<Proposal> {
-  const view = owners.workspace.read(snapshot);
+  const view = dependencies.workspace.read(snapshot);
   if (!view.ok) return view;
   const original = view.value.collections.find((item) => item.id === id) ?? null;
-  const intent = owners.language.lower({
+  const intent = dependencies.language.lower({
     ...command,
     snapshot: original,
     resources: selected.resources,
   });
-  if (!intent.ok) return ownerRejected('invariant-violation', 'source', intent.error);
-  return owners.collections.propose(snapshot, intent.value.collection);
+  if (!intent.ok) return capabilityRefusalFailure('invariant-violation', 'source', intent.error);
+  return dependencies.collections.propose(snapshot, intent.value.collection);
 }

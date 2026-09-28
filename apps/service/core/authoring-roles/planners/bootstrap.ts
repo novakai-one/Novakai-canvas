@@ -1,7 +1,13 @@
 /*
- * Authoring's bootstrap planner role and the deterministic installation request that uses it.
- * A new workspace receives its metadata, empty catalog and shipped presets as ordinary canonical
- * writes. Pure over the trusted installation data. Authoring owns commit, receipt and retry.
+ * Why this file exists
+ *
+ * A brand-new workspace is empty. Before anyone can use it, it needs its details record, an empty
+ * catalog, and the built-in themes and recipes. For example, `pnpm dev --workspace ./new` on an
+ * empty folder saves those records first.
+ *
+ * Those first records are saved through Authoring like any other change. This file builds that
+ * change (`buildSeedRequest`) and the `bootstrap` planner that plans it; both answer Authoring's
+ * `Result` (contract/errors.ts). Only start-up uses them; no HTTP route can reach the planner.
  */
 import type {
   AuthoringResult,
@@ -16,7 +22,7 @@ import { actorId, plannerId, requestSchema } from '../../../contract/schemas.js'
 import { andThen, authoringFailure, success } from '../../../contract/errors.js';
 import { MAIN_CATALOG_ID, METADATA_RECORD_ID, presetRecordId } from '../../workspace/records.js';
 import { presetResources } from '../../presets/resources.js';
-import { changePayload, checkedProposal } from './change-payload.js';
+import { readChangePayload, checkProposal } from './change-payload.js';
 
 /** The actor that signs the installation request. Parsed once at module load; the ID is valid. */
 const INSTALLATION_ACTOR: Request['actor'] = Object.freeze({
@@ -25,23 +31,22 @@ const INSTALLATION_ACTOR: Request['actor'] = Object.freeze({
 });
 
 /**
- * Binds the private `bootstrap` planner to trusted installation data; HTTP never exposes it.
- * `plan` answers the installation proposal, or `invalid-input` at `bootstrap` when the request
- * is not a change or its payload is not the initialize command, and `invalid-input` at
- * `bootstrap.proposal` when the trusted installation breaks Authoring's proposal limits.
+ * Builds the `bootstrap` planner. Its `plan` answers a new workspace's first records from `seed`:
+ * its details, an empty `main` catalog, and one record per built-in preset. Mistakes:
+ * `invalid-input` at `bootstrap` when the request isn't the initialize change, or at
+ * `bootstrap.proposal` when the seed is over Authoring's limits.
  */
-export function createInstallationPlanner(installation: NewWorkspaceSeed): IntentPlanner {
-  return { id: plannerId.parse('bootstrap'), plan: async (request) => plan(request, installation) };
+export function createBootstrapPlanner(seed: NewWorkspaceSeed): IntentPlanner {
+  return { id: plannerId.parse('bootstrap'), plan: async (request) => plan(request, seed) };
 }
 
 /**
- * The deterministic installation request: it expects every installation record to be absent,
- * so it never replaces or upserts an existing workspace. Fails with `invalid-input` at
- * `bootstrap.proposal` when the installation breaks Authoring's proposal limits, and
- * `invalid-input` at `bootstrap` when Authoring's request schema rejects the request.
+ * Builds the change request that fills a new workspace with `seed`. It expects every record to be
+ * absent, so it can never overwrite a workspace. Mistakes: `invalid-input` at `bootstrap.proposal`
+ * when the seed is over Authoring's limits, or at `bootstrap` when the request fails its check.
  */
-export function installationRequest(installation: NewWorkspaceSeed): AuthoringResult<Request> {
-  return andThen(proposal(installation), (planned) => requestFor(installation, planned));
+export function buildSeedRequest(seed: NewWorkspaceSeed): AuthoringResult<Request> {
+  return andThen(proposal(seed), (planned) => requestFor(seed, planned));
 }
 
 /**
@@ -81,7 +86,7 @@ function plan(
   request: Request,
   installation: NewWorkspaceSeed,
 ): AuthoringResult<Proposal> {
-  const input = changePayload(request, 'bootstrap', 'Initialization requires a change request');
+  const input = readChangePayload(request, 'bootstrap', 'Initialization requires a change request');
   if (!input.ok) return input;
   if (!initializeCommand.safeParse(input.value).success)
     return authoringFailure('invalid-input', 'bootstrap', 'Invalid initialization command');
@@ -94,7 +99,7 @@ function plan(
  * installation exceeds Authoring's proposal limits.
  */
 function proposal(installation: NewWorkspaceSeed): AuthoringResult<Proposal> {
-  return checkedProposal(
+  return checkProposal(
     {
       reads: [],
       diff: { initialized: installation.workspace },

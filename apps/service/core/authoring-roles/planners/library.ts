@@ -1,7 +1,13 @@
 /*
- * Authoring's `library` planner role: Library plans a batch of catalog organisation changes and
- * the planner proposes the one catalog write. Organisation changes never rewrite diagrams. Pure
- * over the injected owners. Authoring owns scope, commit and retry.
+ * Why this file exists
+ *
+ * People sort their diagrams into folders in the catalog. For example, making a folder in the
+ * browser sends a `library` change holding `{ op: 'create-folder', value }`. That changes the
+ * catalog only, never a diagram.
+ *
+ * This file is the `library` planner. It asks Library to apply the batch to the stored catalog, and
+ * plans one write of the new catalog. The save is refused if any collection or the catalog changed
+ * in the meantime. It only plans; Authoring saves.
  */
 import type {
   AuthoringResult,
@@ -16,24 +22,26 @@ import { libraryCommand } from '../../../contract/records/planning/commands.js';
 import { plannerId } from '../../../contract/schemas.js';
 import { authoringFailure } from '../../../contract/errors.js';
 import { listLiveRecords } from '../../workspace/records.js';
-import { changePayload, checkedProposal, ownerRejected } from './change-payload.js';
+import { readChangePayload, checkProposal, capabilityRefusalFailure } from './change-payload.js';
 
-/** What the library planner uses; compose passes Library from ServiceCapabilities. */
-export interface LibraryPlannerOwners {
+/** What the `library` planner needs. */
+export interface LibraryPlannerDependencies {
+  /** Library's rules. Applies a batch of catalog changes. */
   readonly library: Pick<LibraryRules, 'planOrganisation'>;
+  /** Reads the snapshot into the checked catalog. */
   readonly workspace: Pick<WorkspaceReader, 'read'>;
 }
 
 /**
- * Binds the `library` planner. `plan` fails with `invalid-input` at `intent` (not a change),
- * `library` (bad envelope) or `catalog` (proposal over Authoring's limits), and with
- * `invariant-violation` at `catalog` when Library rejects the batch (source kept) or no catalog
- * exists. Reader failures pass through unchanged.
+ * Builds the `library` planner. Its `plan` applies a batch of catalog changes and answers the
+ * planned catalog write. Mistakes: `invalid-input` when the request isn't a change or its batch is
+ * malformed, or `invariant-violation` at `catalog` when Library refuses the batch or no catalog is
+ * stored. The reader's pass through.
  */
-export function createLibraryPlanner(owners: LibraryPlannerOwners): IntentPlanner {
+export function createLibraryPlanner(dependencies: LibraryPlannerDependencies): IntentPlanner {
   return {
     id: plannerId.parse('library'),
-    plan: async (request, snapshot) => propose(request, snapshot, owners),
+    plan: async (request, snapshot) => propose(request, snapshot, dependencies),
   };
 }
 
@@ -45,9 +53,9 @@ export function createLibraryPlanner(owners: LibraryPlannerOwners): IntentPlanne
 function propose(
   request: Request,
   snapshot: Snapshot,
-  owners: LibraryPlannerOwners,
+  dependencies: LibraryPlannerDependencies,
 ): AuthoringResult<Proposal> {
-  const input = changePayload(request, 'intent', 'Expected a library change');
+  const input = readChangePayload(request, 'intent', 'Expected a library change');
   if (!input.ok) return input;
   const command = libraryCommand.safeParse(input.value);
   if (!command.success)
@@ -56,7 +64,7 @@ function propose(
       'library',
       'Library changes require a bounded change batch',
     );
-  return planOrganisationChange(command.data.changes, snapshot, owners);
+  return planOrganisationChange(command.data.changes, snapshot, dependencies);
 }
 
 /**
@@ -67,12 +75,15 @@ function propose(
 function planOrganisationChange(
   changes: readonly unknown[],
   snapshot: Snapshot,
-  owners: LibraryPlannerOwners,
+  dependencies: LibraryPlannerDependencies,
 ): AuthoringResult<Proposal> {
-  const current = owners.workspace.read(snapshot);
+  const current = dependencies.workspace.read(snapshot);
   if (!current.ok) return current;
-  const planned = owners.library.planOrganisation({ snapshot: current.value.library, changes });
-  if (!planned.ok) return ownerRejected('invariant-violation', 'catalog', planned.error);
+  const planned = dependencies.library.planOrganisation({
+    snapshot: current.value.library,
+    changes,
+  });
+  if (!planned.ok) return capabilityRefusalFailure('invariant-violation', 'catalog', planned.error);
   return catalogProposal(planned.value.candidate, snapshot);
 }
 
@@ -89,7 +100,7 @@ function catalogProposal(
   const current = listLiveRecords(snapshot, 'catalog')[0];
   if (current === undefined)
     return authoringFailure('invariant-violation', 'catalog', 'A library catalog is required');
-  return checkedProposal(
+  return checkProposal(
     {
       writes: [{ kind: 'put', key: current.key, value: organisation, resources: [] }],
       reads: snapshot.records

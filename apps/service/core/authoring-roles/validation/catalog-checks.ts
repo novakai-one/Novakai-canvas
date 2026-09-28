@@ -1,8 +1,13 @@
 /*
- * The candidate checks after the collections: every preset record, the workspace metadata, the
- * catalog record and every asset-admission record, each against its retained bytes. Pure over
- * Assets; every check answers `invariant-violation` at `candidate` as a value (record-checks.ts),
- * and the first failure stops validation. Authoring keeps the committed snapshot on rejection.
+ * Why this file exists
+ *
+ * After the collections, the final check looks at every other kind of record. Each must exist, be
+ * valid, and keep exactly the stored files it should, and those files must really be there. For
+ * example, a theme's record must keep exactly its font files, and each font must be readable.
+ *
+ * This file checks the presets, then the workspace's details, the catalog and each uploaded file's
+ * description. Each check answers a `Result` (contract/errors.ts), and the first mistake stops it.
+ * Every mistake is `invariant-violation` at `candidate`, made in record-checks.ts. It only reads.
  */
 import type {
   Assets,
@@ -22,44 +27,45 @@ import {
   presetRecordId,
 } from '../../workspace/records.js';
 import {
-  allPassed,
-  invariantBroken,
+  checkEach,
+  invariantViolationFailure,
   requireFact,
   requireRecord,
-  requireRetention,
+  requireExactFiles,
 } from './record-checks.js';
 
-/** What the catalog checks read: Assets resolves retained digests. */
-export interface CatalogCheckOwners {
+/** What these checks need: Assets, to confirm each stored file can be read. */
+export interface CatalogCheckDependencies {
+  /** The file store. `resolve` reads a stored file by its digest. */
   readonly assets: Pick<Assets, 'resolve'>;
 }
 
 /**
- * Checks each preset in order: its record at `preset:<digest>` retains exactly its fonts or
- * assets, and Assets resolves each of those digests. Fails with `invariant-violation` at
- * `candidate` when the record is missing, the resources differ or bytes are missing.
+ * Checks each preset, in order. Its record must exist and keep exactly the files it uses (a
+ * theme's fonts, a recipe's stored files), and each of those files must be readable. The first
+ * mistake stops the checks.
  */
 export function checkPresets(
   snapshot: Snapshot,
-  view: WorkspaceContents,
-  owners: CatalogCheckOwners,
+  contents: WorkspaceContents,
+  dependencies: CatalogCheckDependencies,
 ): AuthoringResult<void> {
-  return allPassed(view.presets, (preset) => checkPreset(snapshot, preset, owners));
+  return checkEach(contents.presets, (preset) => checkPreset(snapshot, preset, dependencies));
 }
 
 /**
- * Checks the workspace metadata, then the catalog, then every asset-admission record. Fails with
- * `invariant-violation` at `candidate` as `checkWorkspaceRecord`, `checkCatalogRecord` or
- * `checkAsset` fails.
+ * Checks the workspace's details record, then the catalog record, then each uploaded file's
+ * description. The details must name this workspace, the catalog must be at its current revision,
+ * and each uploaded file must be readable. The first mistake stops the checks.
  */
-export function checkMetadata(
+export function checkMetadataRecords(
   snapshot: Snapshot,
-  view: WorkspaceContents,
-  owners: CatalogCheckOwners,
+  contents: WorkspaceContents,
+  dependencies: CatalogCheckDependencies,
 ): AuthoringResult<void> {
   const workspace = checkWorkspaceRecord(snapshot);
-  const catalog = andThen(workspace, () => checkCatalogRecord(snapshot, view));
-  return andThen(catalog, () => checkAssets(snapshot, owners));
+  const catalog = andThen(workspace, () => checkCatalogRecord(snapshot, contents));
+  return andThen(catalog, () => checkAssets(snapshot, dependencies));
 }
 
 /**
@@ -70,13 +76,13 @@ export function checkMetadata(
 function checkPreset(
   snapshot: Snapshot,
   preset: Preset,
-  owners: CatalogCheckOwners,
+  dependencies: CatalogCheckDependencies,
 ): AuthoringResult<void> {
   const slot = requireRecord(snapshot, 'preset', presetRecordId(preset.digest));
   if (!slot.ok) return slot;
   const expected = presetResources(preset);
-  const retained = requireRetention(slot.value, expected);
-  return andThen(retained, () => checkPresetBytes(expected, owners));
+  const retained = requireExactFiles(slot.value, expected);
+  return andThen(retained, () => checkPresetBytes(expected, dependencies));
 }
 
 /**
@@ -86,34 +92,34 @@ function checkPreset(
  */
 function checkPresetBytes(
   digests: readonly string[],
-  owners: CatalogCheckOwners,
+  dependencies: CatalogCheckDependencies,
 ): AuthoringResult<void> {
-  return allPassed(digests, (digest) =>
-    requireFact(owners.assets.resolve(digest).ok, `Missing preset bytes ${digest}`),
+  return checkEach(digests, (digest) =>
+    requireFact(dependencies.assets.resolve(digest).ok, `Missing preset bytes ${digest}`),
   );
 }
 
 /**
  * The workspace metadata record: present, valid, naming this workspace and retaining no bytes.
  * Fails with `invariant-violation` at `candidate` ("Invalid workspace metadata", "Workspace
- * metadata identity differs", or as `requireRecord` / `requireRetention` fail).
+ * metadata identity differs", or as `requireRecord` / `requireExactFiles` fail).
  */
 function checkWorkspaceRecord(snapshot: Snapshot): AuthoringResult<void> {
   const slot = requireRecord(snapshot, 'workspace', METADATA_RECORD_ID);
   if (!slot.ok) return slot;
   const metadata = workspaceMetadata.safeParse(slot.value.value);
-  if (!metadata.success) return invariantBroken('Invalid workspace metadata');
+  if (!metadata.success) return invariantViolationFailure('Invalid workspace metadata');
   const identity = requireFact(
     metadata.data.id === snapshot.workspace,
     'Workspace metadata identity differs',
   );
-  return andThen(identity, () => requireRetention(slot.value, []));
+  return andThen(identity, () => requireExactFiles(slot.value, []));
 }
 
 /**
  * The catalog record: present at the catalog's revision and retaining no bytes. Fails with
  * `invariant-violation` at `candidate` ("Catalog revision differs", or as `requireRecord` /
- * `requireRetention` fail).
+ * `requireExactFiles` fail).
  */
 function checkCatalogRecord(
   snapshot: Snapshot,
@@ -126,7 +132,7 @@ function checkCatalogRecord(
     catalog.value.version === organisation.revision,
     'Catalog revision differs',
   );
-  return andThen(revision, () => requireRetention(catalog.value, []));
+  return andThen(revision, () => requireExactFiles(catalog.value, []));
 }
 
 /**
@@ -135,10 +141,10 @@ function checkCatalogRecord(
  */
 function checkAssets(
   snapshot: Snapshot,
-  owners: CatalogCheckOwners,
+  dependencies: CatalogCheckDependencies,
 ): AuthoringResult<void> {
-  return allPassed(listLiveRecords(snapshot, 'asset-admission'), (record) =>
-    checkAsset(record, owners),
+  return checkEach(listLiveRecords(snapshot, 'asset-admission'), (record) =>
+    checkAsset(record, dependencies),
   );
 }
 
@@ -149,17 +155,17 @@ function checkAssets(
  */
 function checkAsset(
   record: StoredRecord,
-  owners: CatalogCheckOwners,
+  dependencies: CatalogCheckDependencies,
 ): AuthoringResult<void> {
   const parsed = assetMetadata.safeParse(record.value);
-  if (!parsed.success) return invariantBroken('Invalid asset discovery metadata');
+  if (!parsed.success) return invariantViolationFailure('Invalid asset discovery metadata');
   const digest = parsed.data.digest;
   const identity = requireFact(
     record.key.id === assetRecordId(digest),
     'Asset discovery identity differs from its digest',
   );
-  const retained = andThen(identity, () => requireRetention(record, [digest]));
+  const retained = andThen(identity, () => requireExactFiles(record, [digest]));
   return andThen(retained, () =>
-    requireFact(owners.assets.resolve(digest).ok, `Missing admitted asset ${digest}`),
+    requireFact(dependencies.assets.resolve(digest).ok, `Missing admitted asset ${digest}`),
   );
 }

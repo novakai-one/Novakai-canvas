@@ -1,8 +1,13 @@
 /*
- * Authoring's feasibility role: renders every changed collection of a candidate, turns routing
- * warnings into Authoring warnings and, when asked, returns the rendered documents as a preview.
- * Pure over the injected reader, job builder and producer. Authoring still performs the final
- * conditional commit after every successful check.
+ * Why this file exists
+ *
+ * A change can pass every rule and still be impossible to draw. So before Authoring saves a change,
+ * it asks whether each changed collection can still be laid out ("feasibility"). For example,
+ * `pnpm canvas preview` on a DSL change lays out the changed collection, and the answer shows it.
+ *
+ * This file answers that question for Authoring. It renders each changed collection, passes on its
+ * routing warnings, and hands back the drawn result when a preview is asked for. Each step answers
+ * a `Result` (contract/errors.ts); the first mistake stops the check. It never saves anything.
  */
 import type {
   AuthoringDiagnostic,
@@ -21,23 +26,28 @@ import type { RenderDocument } from '../../contract/records/rendering/job.js';
 import { json } from '../../contract/schemas.js';
 import { andThen, authoringFailure, success } from '../../contract/errors.js';
 
-/** What feasibility reads the candidate with, builds each job with and renders it with. */
-export interface FeasibilityOwners {
+/** What the layout check needs: a reader, a job builder, the renderer, and the request's signal. */
+export interface FeasibilityDependencies {
+  /** Reads the changed workspace into checked collections. */
   readonly workspace: WorkspaceReader;
+  /** Builds the render job for one collection. */
   readonly jobs: RenderJobs;
+  /** Renders one job into a laid-out document. */
   readonly producer: DiagramProducer;
-  /** The request's cancellation; every feasibility render runs under it. */
+  /** The request's cancellation. Every render here stops when it aborts. */
   readonly signal: AbortSignal;
 }
 
 /**
- * Binds feasibility to the real producer. `check` fails with `constraint-conflict` at the
- * producer's path when a changed collection cannot be rendered (producer failure kept as
- * source), and `corrupt-record` at `feasibility` when a rendered document is not JSON. Reader and
- * job failures pass through unchanged. No partial preview is returned.
+ * Builds Authoring's layout check (`Feasibility`). Its `check` renders each changed collection and
+ * answers the routing warnings, the layout changes and, when asked, the drawn result.
+ * Mistakes: `constraint-conflict` when a collection can't be rendered or the request is cancelled,
+ * `corrupt-record` when the result isn't JSON. The reader's and job builder's pass through.
  */
-export function createFeasibility(owners: FeasibilityOwners): Feasibility {
-  return { check: (candidate, changed, preview) => check(candidate, changed, preview, owners) };
+export function createFeasibility(dependencies: FeasibilityDependencies): Feasibility {
+  return {
+    check: (candidate, changed, preview) => check(candidate, changed, preview, dependencies),
+  };
 }
 
 /**
@@ -49,16 +59,16 @@ async function check(
   candidate: Snapshot,
   changed: readonly RecordKey[],
   preview: boolean,
-  owners: FeasibilityOwners,
+  dependencies: FeasibilityDependencies,
 ): Promise<AuthoringResult<FeasibilityReport>> {
-  const view = owners.workspace.read(candidate);
+  const view = dependencies.workspace.read(candidate);
   if (!view.ok) return view;
   const ids = new Set(
     changed.filter((key) => key.kind === 'collection').map((key) => String(key.id)),
   );
   const collections = view.value.collections.filter((collection) => ids.has(collection.id));
   const documents = await collections.reduce(
-    (previous, collection) => append(previous, collection, view.value, owners),
+    (previous, collection) => append(previous, collection, view.value, dependencies),
     Promise.resolve<AuthoringResult<readonly RenderDocument[]>>({ ok: true, value: [] }),
   );
   if (!documents.ok) return documents;
@@ -73,11 +83,11 @@ async function append(
   previous: Promise<AuthoringResult<readonly RenderDocument[]>>,
   collection: Collection,
   view: WorkspaceContents,
-  owners: FeasibilityOwners,
+  dependencies: FeasibilityDependencies,
 ): Promise<AuthoringResult<readonly RenderDocument[]>> {
   const result = await previous;
   if (!result.ok) return result;
-  const next = await render(collection, view, owners);
+  const next = await render(collection, view, dependencies);
   if (!next.ok) return next;
   return { ok: true, value: [...result.value, next.value] };
 }
@@ -91,11 +101,11 @@ async function append(
 async function render(
   collection: Collection,
   view: WorkspaceContents,
-  owners: FeasibilityOwners,
+  dependencies: FeasibilityDependencies,
 ): Promise<AuthoringResult<RenderDocument>> {
-  const job = owners.jobs.create(collection, view, 'change-check');
+  const job = dependencies.jobs.create(collection, view, 'change-check');
   if (!job.ok) return job;
-  const result = await owners.producer.produce(job.value, owners.signal);
+  const result = await dependencies.producer.produce(job.value, dependencies.signal);
   if (!result.ok)
     return authoringFailure(
       'constraint-conflict',

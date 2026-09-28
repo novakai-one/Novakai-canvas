@@ -1,7 +1,12 @@
 /*
- * The collection planner the diagram planners share: proposes one collection write and, on a
- * create, Library's catalog membership in the same Authoring transaction. Pure over the injected
- * owners. Authoring owns scope, preconditions, commit and retry.
+ * Why this file exists
+ *
+ * The DSL and Model planners both end by saving one collection. A new collection must also get an
+ * entry in the catalog, or it would be saved but never listed. For example, `pnpm canvas create`
+ * with a new diagram writes the collection and its catalog entry in the same save.
+ *
+ * This file plans that save once, for both planners (`CollectionPlanner`): the collection's write,
+ * plus Library's catalog entry when the collection is new. It only plans; Authoring saves.
  */
 import type {
   AuthoringResult,
@@ -17,22 +22,28 @@ import type {
   ResourceSelector,
   WorkspaceReader,
 } from '../../../contract/ports/workspace.js';
-import { checkedProposal, ownerRejected } from './change-payload.js';
+import { checkProposal, capabilityRefusalFailure } from './change-payload.js';
 
-/** What the collection planner uses; compose passes Library from ServiceCapabilities. */
-export interface CollectionProposalOwners {
+/** What planning a collection's save needs. */
+export interface CollectionPlannerDependencies {
+  /** Library's rules. Adds a new collection to the catalog. */
   readonly library: Pick<LibraryRules, 'planMembership'>;
+  /** Reads the snapshot into checked collections and catalog. */
   readonly workspace: WorkspaceReader;
+  /** Works out which stored files the collection needs, so its write keeps them. */
   readonly resources: Pick<ResourceSelector, 'digestsForCollection'>;
 }
 
 /**
- * Binds the collection planner. `propose` fails with `invariant-violation` at `catalog` when
- * Library refuses the new membership (source kept), or `invalid-input` at `proposal` when the
- * proposal exceeds Authoring's limits. Reader and selector failures pass through unchanged.
+ * Builds the collection planner. Its `propose` plans one collection's write, plus its catalog entry
+ * when the collection is new. Mistakes: `invariant-violation` at `catalog` when Library refuses the
+ * entry, or `invalid-input` at `proposal` when the save is over Authoring's limits. The reader's
+ * and selector's pass through.
  */
-export function createCollectionPlanner(owners: CollectionProposalOwners): CollectionPlanner {
-  return { propose: (snapshot, collection) => propose(snapshot, collection, owners) };
+export function createCollectionPlanner(
+  dependencies: CollectionPlannerDependencies,
+): CollectionPlanner {
+  return { propose: (snapshot, collection) => propose(snapshot, collection, dependencies) };
 }
 
 /**
@@ -42,13 +53,13 @@ export function createCollectionPlanner(owners: CollectionProposalOwners): Colle
 function propose(
   snapshot: Snapshot,
   collection: Collection,
-  owners: CollectionProposalOwners,
+  dependencies: CollectionPlannerDependencies,
 ): AuthoringResult<Proposal> {
-  const view = owners.workspace.read(snapshot);
+  const view = dependencies.workspace.read(snapshot);
   if (!view.ok) return view;
-  const blobs = owners.resources.digestsForCollection(collection, view.value);
+  const blobs = dependencies.resources.digestsForCollection(collection, view.value);
   if (!blobs.ok) return blobs;
-  return proposal(collection, view.value, blobs.value, owners);
+  return proposal(collection, view.value, blobs.value, dependencies);
 }
 
 /**
@@ -61,7 +72,7 @@ function proposal(
   collection: Collection,
   view: WorkspaceContents,
   resources: readonly AuthoringDigest[],
-  owners: CollectionProposalOwners,
+  dependencies: CollectionPlannerDependencies,
 ): AuthoringResult<Proposal> {
   const write = {
     kind: 'put',
@@ -71,8 +82,8 @@ function proposal(
   };
   if (view.collections.some((item) => item.id === collection.id))
     return checked([write], collection.id);
-  const inventory = [...view.library.collections, owners.workspace.project(collection)];
-  const organisation = owners.library.planMembership({
+  const inventory = [...view.library.collections, dependencies.workspace.project(collection)];
+  const organisation = dependencies.library.planMembership({
     snapshot: view.library,
     changes: [
       {
@@ -82,7 +93,8 @@ function proposal(
     ],
     inventory,
   });
-  if (!organisation.ok) return ownerRejected('invariant-violation', 'catalog', organisation.error);
+  if (!organisation.ok)
+    return capabilityRefusalFailure('invariant-violation', 'catalog', organisation.error);
   return checked(
     [
       write,
@@ -105,7 +117,7 @@ function checked(
   writes: readonly unknown[],
   collection: string,
 ): AuthoringResult<Proposal> {
-  return checkedProposal(
+  return checkProposal(
     { writes, reads: [], diff: { collection }, warnings: [] },
     'proposal',
     'Collection proposal exceeds the authoring contract',

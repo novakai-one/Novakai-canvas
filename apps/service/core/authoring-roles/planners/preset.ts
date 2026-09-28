@@ -1,7 +1,13 @@
 /*
- * Authoring's `preset` planner role: repeats the preset preparation against Authoring's snapshot
- * and proposes the preset record plus the metadata revision bump. A drifted preparation rejects
- * without a write. Pure over the injected resource commands. Authoring owns commit and replay.
+ * Why this file exists
+ *
+ * Saving a theme or recipe takes two steps. For example, `pnpm canvas theme admit blueprint.theme`
+ * first prepares the theme, then sends the prepared result as a `preset` change. The workspace
+ * might change in between, so the prepared result can't just be trusted.
+ *
+ * This file is the `preset` planner. It prepares the preset again on Authoring's snapshot and
+ * refuses the change if the result differs. Otherwise it plans the preset's write, or no write if
+ * it is already stored. It only plans; Authoring saves.
  */
 import type {
   AuthoringErrorCode,
@@ -25,19 +31,20 @@ import { workspaceMetadata } from '../../../contract/records/workspace/metadata.
 import { plannerId } from '../../../contract/schemas.js';
 import { authoringFailure } from '../../../contract/errors.js';
 import { findLiveRecord, METADATA_RECORD_ID } from '../../workspace/records.js';
-import { changePayload, checkedProposal } from './change-payload.js';
+import { readChangePayload, checkProposal } from './change-payload.js';
 
 /**
- * Binds the `preset` planner. `plan` fails with `invalid-input` at `preset` (not a change, or
- * not an exact prepared preset) or `preset.proposal` (over Authoring's limits),
- * `revision-conflict` at `preset` when the prepared content changed, `corrupt-record` at
- * `metadata` when workspace metadata is missing or invalid, and with the preparation's own
- * diagnostic when preparation fails (its code mapped by `AUTHORING_CODE`).
+ * Builds the `preset` planner. Its `plan` prepares the preset again with `preparePreset` and
+ * answers the planned save. Mistakes: `revision-conflict` at `preset` when the prepared content
+ * changed, `corrupt-record` at `metadata` when the workspace's details are missing or broken,
+ * `invalid-input` for a malformed change, or the preparation's own mistake.
  */
-export function createPresetPlanner(owner: Pick<ResourceCommands, 'preparePreset'>): IntentPlanner {
+export function createPresetPlanner(
+  resourceCommands: Pick<ResourceCommands, 'preparePreset'>,
+): IntentPlanner {
   return {
     id: plannerId.parse('preset'),
-    plan: async (request, snapshot) => plan(request, snapshot, owner),
+    plan: async (request, snapshot) => plan(request, snapshot, resourceCommands),
   };
 }
 
@@ -51,7 +58,7 @@ function plan(
   snapshot: Snapshot,
   owner: Pick<ResourceCommands, 'preparePreset'>,
 ): AuthoringResult<Proposal> {
-  const input = changePayload(request, 'preset', 'Expected a preset change');
+  const input = readChangePayload(request, 'preset', 'Expected a preset change');
   if (!input.ok) return input;
   const command = presetCommand.safeParse(input.value);
   if (!command.success)
@@ -218,5 +225,5 @@ function insertion(
  * `preset.proposal` when it exceeds Authoring's limits.
  */
 function presetProposal(input: unknown): AuthoringResult<Proposal> {
-  return checkedProposal(input, 'preset.proposal', 'Prepared preset exceeds proposal limits');
+  return checkProposal(input, 'preset.proposal', 'Prepared preset exceeds proposal limits');
 }

@@ -28,12 +28,12 @@ import type { AuthoringStore, ConditionalStorage } from '../ports/storage.js';
 import { createResourceAdmission } from '../../core/authoring-roles/resource-leases.js';
 import {
   createFeasibility,
-  type FeasibilityOwners,
+  type FeasibilityDependencies,
 } from '../../core/authoring-roles/feasibility.js';
 import { createCandidateValidator } from '../../core/authoring-roles/validation/candidate.js';
 import {
-  createInstallationPlanner,
-  installationRequest,
+  createBootstrapPlanner,
+  buildSeedRequest,
 } from '../../core/authoring-roles/planners/bootstrap.js';
 import { createCollectionPlanner } from '../../core/authoring-roles/planners/collection-proposal.js';
 import { createDslPlanner } from '../../core/authoring-roles/planners/dsl.js';
@@ -94,7 +94,7 @@ export async function buildAuthoring(inputs: AuthoringInputs): Promise<BuiltAuth
   return {
     authoring: (signal) => requestAuthoring(runtime, signal),
     candidateCheck: runtime.validation,
-    seedRequest: installationRequest(seed),
+    seedRequest: buildSeedRequest(seed),
     startHistory: () => startup.initializeHistory(inputs.options.workspace),
   };
 }
@@ -116,8 +116,8 @@ interface AdmissionRuntime {
   readonly validation: CandidateValidator;
   readonly resources: ResourceAdmission;
   readonly changes: Notifications;
-  /** Feasibility's owners; each request adds its own signal. */
-  readonly feasibility: Omit<FeasibilityOwners, 'signal'>;
+  /** What the layout check needs; each request adds its own signal. */
+  readonly feasibility: Omit<FeasibilityDependencies, 'signal'>;
 }
 
 /** Binds the store, planners, validator, leases, notifications and feasibility. Never fails. */
@@ -147,7 +147,7 @@ function planners(
   const { reader, resources, commands } = inputs.shared;
   const collections = createCollectionPlanner({ library, workspace: reader, resources });
   return [
-    createInstallationPlanner(seed),
+    createBootstrapPlanner(seed),
     createPresetPlanner(commands),
     createLibraryPlanner({ library, workspace: reader }),
     createDslPlanner({ language, workspace: reader, resources, collections }),

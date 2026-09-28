@@ -1,9 +1,13 @@
 /*
- * Authoring's candidate validator role: the mandatory final gate over a stamped candidate. Every
- * collection, preset, metadata and asset-admission record is checked against its owner and its
- * retained bytes. Pure over the injected owners; every check returns its refusal as a value and
- * the first one stops validation. Authoring keeps the committed snapshot on rejection and owns
- * scope, commit and recovery.
+ * Why this file exists
+ *
+ * A planner only plans writes. Before Authoring saves them, the whole workspace as it would look
+ * afterwards (the "candidate") gets one last check. For example, if a saved theme's font file were
+ * missing from storage, the check would refuse the change and nothing would be saved.
+ *
+ * This file builds that check (`CandidateValidator`). It checks each collection here, then the
+ * presets and the other records (catalog-checks.ts). Each check answers a `Result`
+ * (contract/errors.ts), and the first mistake stops it. It never changes the candidate.
  */
 import type {
   AuthoringResult,
@@ -16,29 +20,37 @@ import type { AuthoringDigest } from '../../../contract/brands.js';
 import type { ResourceSelector, WorkspaceReader } from '../../../contract/ports/workspace.js';
 import type { WorkspaceContents } from '../../../contract/records/workspace/contents.js';
 import { andThen, success } from '../../../contract/errors.js';
-import { checkMetadata, checkPresets, type CatalogCheckOwners } from './catalog-checks.js';
 import {
-  allPassed,
-  invariantBroken,
+  checkMetadataRecords,
+  checkPresets,
+  type CatalogCheckDependencies,
+} from './catalog-checks.js';
+import {
+  checkEach,
+  invariantViolationFailure,
   requireFact,
   requireRecord,
-  requireRetention,
+  requireExactFiles,
 } from './record-checks.js';
 
-/** What candidate validation reads; no validator can commit or alter the candidate it inspects. */
-export interface CandidateValidatorOwners extends CatalogCheckOwners {
+/** What the final check reads. Nothing here can save or change the candidate. */
+export interface CandidateValidatorDependencies extends CatalogCheckDependencies {
+  /** Reads the candidate into checked collections, catalog and presets. */
   readonly workspace: Pick<WorkspaceReader, 'read'>;
+  /** Works out which stored files each collection needs. */
   readonly resources: Pick<ResourceSelector, 'digestsForCollection'>;
 }
 
 /**
- * Binds the validator. `validate` answers the read versions it consulted (history excluded), or
- * `invariant-violation` at `candidate` when a record is missing, a revision or retained byte
- * manifest differs, metadata is invalid or names another workspace, or bytes are missing (the
- * owner's failure kept as source where there is one). Reader failures pass through unchanged.
+ * Builds the final check (`CandidateValidator`). Its `validate` checks the candidate and answers
+ * the versions of the records as they were before the change (history left out). Mistakes:
+ * `invariant-violation` at `candidate` when a record is missing or out of date, keeps the wrong
+ * files, names another workspace, or a file is gone. The reader's pass through.
  */
-export function createCandidateValidator(owners: CandidateValidatorOwners): CandidateValidator {
-  return { validate: async (before, after) => validate(before, after, owners) };
+export function createCandidateValidator(
+  dependencies: CandidateValidatorDependencies,
+): CandidateValidator {
+  return { validate: async (before, after) => validate(before, after, dependencies) };
 }
 
 /**
@@ -48,11 +60,11 @@ export function createCandidateValidator(owners: CandidateValidatorOwners): Cand
 function validate(
   before: Snapshot,
   after: Snapshot,
-  owners: CandidateValidatorOwners,
+  dependencies: CandidateValidatorDependencies,
 ): AuthoringResult<readonly ReadVersion[]> {
-  const view = owners.workspace.read(after);
+  const view = dependencies.workspace.read(after);
   if (!view.ok) return view;
-  const checked = checkCandidate(after, view.value, owners);
+  const checked = checkCandidate(after, view.value, dependencies);
   return andThen(checked, () => success(readVersions(before)));
 }
 
@@ -63,11 +75,11 @@ function validate(
 function checkCandidate(
   snapshot: Snapshot,
   view: WorkspaceContents,
-  owners: CandidateValidatorOwners,
+  dependencies: CandidateValidatorDependencies,
 ): AuthoringResult<void> {
-  const collections = checkCollections(snapshot, view, owners);
-  const presets = andThen(collections, () => checkPresets(snapshot, view, owners));
-  return andThen(presets, () => checkMetadata(snapshot, view, owners));
+  const collections = checkCollections(snapshot, view, dependencies);
+  const presets = andThen(collections, () => checkPresets(snapshot, view, dependencies));
+  return andThen(presets, () => checkMetadataRecords(snapshot, view, dependencies));
 }
 
 /** The version of every record in `before` except history. Never fails. */
@@ -84,10 +96,10 @@ function readVersions(before: Snapshot): readonly ReadVersion[] {
 function checkCollections(
   snapshot: Snapshot,
   view: WorkspaceContents,
-  owners: CandidateValidatorOwners,
+  dependencies: CandidateValidatorDependencies,
 ): AuthoringResult<void> {
-  return allPassed(view.collections, (collection) =>
-    checkCollection(snapshot, collection, view, owners),
+  return checkEach(view.collections, (collection) =>
+    checkCollection(snapshot, collection, view, dependencies),
   );
 }
 
@@ -100,7 +112,7 @@ function checkCollection(
   snapshot: Snapshot,
   collection: Collection,
   view: WorkspaceContents,
-  owners: CandidateValidatorOwners,
+  dependencies: CandidateValidatorDependencies,
 ): AuthoringResult<void> {
   const slot = requireRecord(snapshot, 'collection', collection.id);
   if (!slot.ok) return slot;
@@ -108,8 +120,8 @@ function checkCollection(
     slot.value.version === collection.revision,
     `Collection revision differs: ${collection.id}`,
   );
-  const expected = andThen(revision, () => expectedResources(collection, view, owners));
-  return andThen(expected, (digests) => requireRetention(slot.value, digests));
+  const expected = andThen(revision, () => expectedResources(collection, view, dependencies));
+  return andThen(expected, (digests) => requireExactFiles(slot.value, digests));
 }
 
 /**
@@ -119,9 +131,9 @@ function checkCollection(
 function expectedResources(
   collection: Collection,
   view: WorkspaceContents,
-  owners: CandidateValidatorOwners,
+  dependencies: CandidateValidatorDependencies,
 ): AuthoringResult<readonly AuthoringDigest[]> {
-  const expected = owners.resources.digestsForCollection(collection, view);
-  if (!expected.ok) return invariantBroken(expected.error.message, expected.error);
+  const expected = dependencies.resources.digestsForCollection(collection, view);
+  if (!expected.ok) return invariantViolationFailure(expected.error.message, expected.error);
   return expected;
 }
