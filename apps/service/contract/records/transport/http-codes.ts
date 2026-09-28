@@ -75,8 +75,8 @@ type MissingCodes<T extends readonly HttpErrorCode[]> = [Unlisted<T>] extends [n
   : { readonly missing: Unlisted<T> };
 
 /**
- * Returns `codes` unchanged. Compiles only when `codes` lists every HttpErrorCode; the compiler
- * error names the missing codes.
+ * Returns `codes` unchanged, and compiles only when they list every `HttpErrorCode` (the compiler
+ * error names any code left out).
  */
 function everyCode<const T extends readonly HttpErrorCode[]>(codes: T & MissingCodes<T>): T {
   return codes;

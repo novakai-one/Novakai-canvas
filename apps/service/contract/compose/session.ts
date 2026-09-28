@@ -14,6 +14,7 @@ import type { PreparedBuiltins } from '../records/presets/builtins.js';
 import type { Exporter } from '../ports/export.js';
 import type { ChangeChannel } from '../ports/notifications.js';
 import type { WorkspaceSession } from '../types.js';
+import type { Result } from '../errors.js';
 import { createWorkspaceSession } from '../../core/session/facade.js';
 import { createSessionLifetime } from '../../core/session/lifetime.js';
 import type { SharedParts } from './shared-parts.js';
@@ -38,10 +39,7 @@ export function buildSession(
   exporter: Exporter,
 ): WorkspaceSession {
   const { stores, changes, shared } = inputs;
-  const lifetime = createSessionLifetime(async () => {
-    changes.close();
-    return stores.close();
-  });
+  const lifetime = createSessionLifetime(() => closeChangesThenStores(changes, stores));
   return createWorkspaceSession({
     workspace: inputs.options.workspace,
     builtins: inputs.builtins,
@@ -54,4 +52,13 @@ export function buildSession(
     renderer: shared.renderer,
     exportFile: exporter.exportFile,
   });
+}
+
+/** Closes the change stream, then the workspace's stores. */
+async function closeChangesThenStores(
+  changes: Pick<ChangeChannel, 'close'>,
+  stores: Pick<OpenStores, 'close'>,
+): Promise<Result<void>> {
+  changes.close();
+  return stores.close();
 }

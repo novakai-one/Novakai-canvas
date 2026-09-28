@@ -22,7 +22,7 @@ import type { Result } from '../errors.js';
 import { success } from '../errors.js';
 import { createServiceCapabilities } from './capabilities.js';
 import { buildSharedParts } from './shared-parts.js';
-import { UNCANCELLED, buildAuthoring } from './authoring.js';
+import { UNCANCELLED, buildAuthoring, type BuiltAuthoring } from './authoring.js';
 import { buildExporter } from './export.js';
 import { buildSession } from './session.js';
 
@@ -56,7 +56,7 @@ export async function buildWorkspace(
   options: WorkspaceOptions,
   renderWorkers: DiagramProducer,
 ): Promise<Result<BuiltWorkspace>> {
-  const channel = await import('../../adapters/notifications/change-channel.js');
+  const changeChannel = await import('../../adapters/notifications/change-channel.js');
   const capabilities = createServiceCapabilities(builtins.tokens);
   const shared = buildSharedParts({
     assets: stores.assets,
@@ -65,16 +65,27 @@ export async function buildWorkspace(
     capabilities,
     renderWorkers,
   });
-  const changes = channel.createChangeChannel();
+  const changes = changeChannel.createChangeChannel();
   const parts = { stores, builtins, options, capabilities, shared, changes };
   const authoring = await buildAuthoring(parts);
   const exporter = await buildExporter(parts, authoring.authoring);
-  if (!exporter.ok) return exporter;
-  return success({
-    session: buildSession(parts, authoring.authoring, exporter.value),
+  if (!exporter.ok) {
+    return exporter;
+  }
+  const session = buildSession(parts, authoring.authoring, exporter.value);
+  return success(builtWorkspace(session, authoring));
+}
+
+/** Joins the session with what start-up needs from Authoring. */
+function builtWorkspace(
+  session: WorkspaceSession,
+  authoring: BuiltAuthoring,
+): BuiltWorkspace {
+  return {
+    session,
     candidateCheck: authoring.candidateCheck,
     seedRequest: authoring.seedRequest,
     signal: UNCANCELLED,
     startHistory: authoring.startHistory,
-  });
+  };
 }

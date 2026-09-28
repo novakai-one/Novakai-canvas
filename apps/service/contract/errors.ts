@@ -63,12 +63,8 @@ export function failure<T>(
   message: string,
   source?: FailureSource,
 ): Result<T> {
-  const rejected: Extract<Result<T>, { readonly ok: false }> = {
-    ok: false,
-    error: { code, path, message, recovery: RECOVERY[code] },
-  };
-  if (source === undefined) return rejected;
-  return { ok: false, error: { ...rejected.error, source } };
+  const diagnostic = buildDiagnostic(code, path, message, source);
+  return { ok: false, error: diagnostic };
 }
 
 /**
@@ -82,7 +78,9 @@ export function andThen<T, U, E>(
   result: Result<T, E>,
   next: (value: T) => Result<U, E>,
 ): Result<U, E> {
-  if (!result.ok) return result;
+  if (!result.ok) {
+    return result;
+  }
   return next(result.value);
 }
 
@@ -96,18 +94,39 @@ export function collect<I, T, E>(
   items: readonly I[],
   step: (item: I) => Result<T, E>,
 ): Result<readonly T[], E> {
+  const noValuesYet: Result<readonly T[], E> = success([]);
   // `appendNext` passes the first failure along unchanged, so later items are not stepped.
-  const appendNext = (collected: Result<readonly T[], E>, item: I): Result<readonly T[], E> =>
-    andThen(collected, (values) => appendStep(values, step(item)));
-  return items.reduce(appendNext, success<readonly T[]>([]));
+  return items.reduce((collected, item) => appendNext(collected, item, step), noValuesYet);
 }
 
-/** The values with this step's value appended; the step's failure passes through unchanged. */
-function appendStep<T, E>(
-  values: readonly T[],
-  stepped: Result<T, E>,
+/** Builds one mistake with its code's recovery advice, keeping `source` only when there is one. */
+function buildDiagnostic(
+  code: ErrorCode,
+  path: string,
+  message: string,
+  source: FailureSource | undefined,
+): Diagnostic {
+  const recovery = RECOVERY[code];
+  if (source === undefined) {
+    return { code, path, message, recovery };
+  }
+  return { code, path, message, recovery, source };
+}
+
+/** Steps the next item and appends its value, or passes an earlier failure on unchanged. */
+function appendNext<I, T, E>(
+  collected: Result<readonly T[], E>,
+  item: I,
+  step: (item: I) => Result<T, E>,
 ): Result<readonly T[], E> {
-  return andThen(stepped, (value) => success([...values, value]));
+  if (!collected.ok) {
+    return collected;
+  }
+  const stepped = step(item);
+  if (!stepped.ok) {
+    return stepped;
+  }
+  return success([...collected.value, stepped.value]);
 }
 
 /** The recovery text every service failure carries: keep the draft, fix the cause, reconcile. */

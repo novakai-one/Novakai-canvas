@@ -11,7 +11,7 @@
  */
 import { openAssets } from '@novakai/canvas-assets';
 import { openSqlite } from '@novakai/canvas-persistence';
-import type { WorkspaceOptions, OpenStores } from '../records/workspace/startup.js';
+import type { OpenStores, StoreOpeners, WorkspaceOptions } from '../records/workspace/startup.js';
 import type { PreparedBuiltins } from '../records/presets/builtins.js';
 import type { DiagramProducer } from '../ports/rendering.js';
 import type { WorkspaceSession } from '../types.js';
@@ -29,31 +29,35 @@ import { buildWorkspace } from './workspace.js';
  */
 export async function openWorkspace(options: WorkspaceOptions): Promise<Result<WorkspaceSession>> {
   try {
-    const files = await import('../../adapters/files/workspace-files.js');
-    const stores = await files.openWorkspaceFiles(options, {
-      assets: openAssets,
-      storage: openSqlite,
-    });
-    if (!stores.ok) return stores;
-    return await startOpened(stores.value, options);
+    return await openAndStart(options);
   } catch {
-    return failure('unavailable', 'startup', 'Workspace could not open; retain its existing files');
+    return workspaceUnopenedFailure();
   }
 }
 
-/**
- * Starts an opened workspace; any failure or throw closes the stores. A throw is
- * `unavailable` at `startup` ("Workspace composition failed").
- */
+/** How the workspace folder's two stores are opened: Assets for files, SQLite for records. */
+const STORE_OPENERS: StoreOpeners = Object.freeze({ assets: openAssets, storage: openSqlite });
+
+/** Opens the workspace folder's stores, then starts the workspace on them. */
+async function openAndStart(options: WorkspaceOptions): Promise<Result<WorkspaceSession>> {
+  const workspaceFiles = await import('../../adapters/files/workspace-files.js');
+  const stores = await workspaceFiles.openWorkspaceFiles(options, STORE_OPENERS);
+  if (!stores.ok) {
+    return stores;
+  }
+  return startOpened(stores.value, options);
+}
+
+/** Starts the opened workspace, and closes its stores if that fails or throws. */
 async function startOpened(
   stores: OpenStores,
   options: WorkspaceOptions,
 ): Promise<Result<WorkspaceSession>> {
-  const result = await configureWorkspace(stores, options).catch(() =>
-    failure<WorkspaceSession>('unavailable', 'startup', 'Workspace composition failed'),
-  );
-  if (!result.ok) await stores.close();
-  return result;
+  const started = await configureWorkspace(stores, options).catch(compositionFailure);
+  if (!started.ok) {
+    await stores.close();
+  }
+  return started;
 }
 
 /** Prepares the built-in resources and starts the render workers, then builds the workspace. */
@@ -62,13 +66,17 @@ async function configureWorkspace(
   options: WorkspaceOptions,
 ): Promise<Result<WorkspaceSession>> {
   const builtins = await prepareBuiltins(options.resourceRoot, options.tokenRoot, stores.assets);
-  if (!builtins.ok) return builtins;
+  if (!builtins.ok) {
+    return builtins;
+  }
   const renderWorkers = await startRenderWorkers();
-  if (!renderWorkers.ok) return renderWorkers;
+  if (!renderWorkers.ok) {
+    return renderWorkers;
+  }
   return buildAndStart(stores, builtins.value, options, renderWorkers.value);
 }
 
-/** Builds the workspace, then runs core startup; the session is answered only once it started. */
+/** Builds the workspace, runs core start-up on it, and answers its session once it started. */
 async function buildAndStart(
   stores: OpenStores,
   builtins: PreparedBuiltins,
@@ -76,8 +84,22 @@ async function buildAndStart(
   renderWorkers: DiagramProducer,
 ): Promise<Result<WorkspaceSession>> {
   const built = await buildWorkspace(stores, builtins, options, renderWorkers);
-  if (!built.ok) return built;
+  if (!built.ok) {
+    return built;
+  }
   const started = await startWorkspace(built.value);
-  if (!started.ok) return started;
+  if (!started.ok) {
+    return started;
+  }
   return success(built.value.session);
+}
+
+/** The `unavailable` failure at `startup` for a workspace that threw while it was opened. */
+function workspaceUnopenedFailure(): Result<never> {
+  return failure('unavailable', 'startup', 'Workspace could not open; retain its existing files');
+}
+
+/** The `unavailable` failure at `startup` for a workspace that threw while it was built. */
+function compositionFailure(): Result<never> {
+  return failure('unavailable', 'startup', 'Workspace composition failed');
 }

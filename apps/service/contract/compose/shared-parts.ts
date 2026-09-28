@@ -9,9 +9,12 @@
  * nothing. Each part keeps its own mistakes.
  */
 import type { Assets } from '@novakai/canvas-assets';
+import type { LoweredIntent } from '@novakai/canvas-language';
+import type { Templates } from '@novakai/canvas-templates';
 import type { PreparedBuiltins } from '../records/presets/builtins.js';
 import type { ResourceCommands, ResourceSelector, WorkspaceReader } from '../ports/workspace.js';
 import type { ServiceCapabilities } from '../ports/capabilities.js';
+import type { ThemeSavingInputs } from '../ports/headless.js';
 import type { CollectionRenderer, DiagramProducer, RenderJobs } from '../ports/rendering.js';
 import { EMPTY_RESOURCES } from '../ports/capabilities.js';
 import type { HostPath } from '../brands.js';
@@ -58,33 +61,60 @@ export interface SharedParts {
 
 /** Builds the shared parts for one workspace. Never fails; reads no files. */
 export function buildSharedParts(inputs: SharedPartInputs): SharedParts {
-  const { assets, builtins, capabilities } = inputs;
-  const { model, library, language, system } = capabilities;
-  const templates = capabilities.templates(EMPTY_RESOURCES);
+  const { model, library } = inputs.capabilities;
+  const templates = inputs.capabilities.templates(EMPTY_RESOURCES);
   const producer = cacheRenders(inputs.renderWorkers);
   const reader = createWorkspaceReader({ model, library, templates });
-  const resources = createResourceSelector({
-    model,
-    assets,
-    templates,
-    language,
-    builtinPresets: builtins.presets,
-  });
-  const jobs = createRenderJobs({
-    assets,
-    system,
-    sources: builtins.tokens,
-    templates,
-    wasmResource: libavoidWasmPath(inputs.resourceRoot),
-  });
-  const commands = createResourceCommands({
-    assets,
-    selector: resources,
-    language,
-    translateTheme: (admission, catalog, bindings) =>
-      prepareTheme(admission, catalog, bindings, { assets, templates }),
-    templates: capabilities.templates,
-  });
-  const renderer = createCollectionRenderer({ assets, jobs, producer, resources });
+  const resources = resourceSelector(inputs, templates);
+  const jobs = renderJobs(inputs, templates);
+  const commands = resourceCommands(inputs, resources, templates);
+  const renderer = createCollectionRenderer({ assets: inputs.assets, jobs, producer, resources });
   return { reader, resources, commands, jobs, producer, renderer };
+}
+
+/** Builds the part that picks the themes and files a request or collection uses. */
+function resourceSelector(
+  inputs: SharedPartInputs,
+  templates: Templates<LoweredIntent>,
+): ResourceSelector {
+  const { model, language } = inputs.capabilities;
+  return createResourceSelector({
+    model,
+    assets: inputs.assets,
+    templates,
+    language,
+    builtinPresets: inputs.builtins.presets,
+  });
+}
+
+/** Builds the part that makes one collection's render job. */
+function renderJobs(
+  inputs: SharedPartInputs,
+  templates: Templates<LoweredIntent>,
+): RenderJobs {
+  const wasmResource = libavoidWasmPath(inputs.resourceRoot);
+  return createRenderJobs({
+    assets: inputs.assets,
+    system: inputs.capabilities.system,
+    sources: inputs.builtins.tokens,
+    templates,
+    wasmResource,
+  });
+}
+
+/** Builds the commands behind `/api/v1/resources/…`; a theme is readied with `prepareTheme`. */
+function resourceCommands(
+  inputs: SharedPartInputs,
+  selector: ResourceSelector,
+  templates: Templates<LoweredIntent>,
+): ResourceCommands {
+  const themeSaving: ThemeSavingInputs = { assets: inputs.assets, templates };
+  return createResourceCommands({
+    assets: inputs.assets,
+    selector,
+    language: inputs.capabilities.language,
+    translateTheme: (admission, catalog, bindings) =>
+      prepareTheme(admission, catalog, bindings, themeSaving),
+    templates: inputs.capabilities.templates,
+  });
 }
