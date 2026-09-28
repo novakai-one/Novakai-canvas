@@ -15,8 +15,8 @@ import { dirname, resolve, relative, isAbsolute, extname, sep } from 'node:path'
 import type { ResourceRequest, SupportedMedia } from '../../contract/records/foreign.js';
 import type { LocalBytes } from '../../contract/records/staged-resource.js';
 import type { ResourceReader } from '../../contract/ports/resource-reader.js';
-import type { LocalFailure, Result } from '../../contract/errors.js';
-import { failure, success } from '../../contract/errors.js';
+import type { ResourceReadFailure, Result } from '../../contract/errors.js';
+import { resourceReadFailure, success } from '../../contract/errors.js';
 import type { FilePath } from '../../contract/brands.js';
 
 /** The most bytes one resource may have. */
@@ -63,7 +63,7 @@ export function createResourceReader(): ResourceReader {
 async function readResource(
   file: FilePath,
   request: ResourceRequest,
-): Promise<Result<LocalBytes, LocalFailure>> {
+): Promise<Result<LocalBytes, ResourceReadFailure>> {
   const resourcePath = await confinePath(file, request.source);
   if (!resourcePath.ok) {
     return resourcePath;
@@ -75,7 +75,7 @@ async function readResource(
 async function readConfinedResource(
   resourcePath: string,
   request: ResourceRequest,
-): Promise<Result<LocalBytes, LocalFailure>> {
+): Promise<Result<LocalBytes, ResourceReadFailure>> {
   const mediaType = checkMediaType(resourcePath, request.kind);
   if (!mediaType.ok) {
     return mediaType;
@@ -92,7 +92,7 @@ async function readConfinedResource(
 async function confinePath(
   file: FilePath,
   source: string,
-): Promise<Result<string, LocalFailure>> {
+): Promise<Result<string, ResourceReadFailure>> {
   if (isAbsolute(source)) {
     return absolutePathFailure();
   }
@@ -107,7 +107,7 @@ async function confinePath(
 async function findRealPaths(
   file: FilePath,
   source: string,
-): Promise<Result<RealPaths, LocalFailure>> {
+): Promise<Result<RealPaths, ResourceReadFailure>> {
   try {
     const sourceFolder = await realpath(dirname(file));
     const resourcePath = await realpath(resolve(sourceFolder, source));
@@ -118,7 +118,7 @@ async function findRealPaths(
 }
 
 /** Checks the resource sits inside the source file's folder, and gives its real path. */
-function checkInsideSourceFolder(realPaths: RealPaths): Result<string, LocalFailure> {
+function checkInsideSourceFolder(realPaths: RealPaths): Result<string, ResourceReadFailure> {
   if (leavesSourceFolder(realPaths)) {
     return pathEscapeFailure();
   }
@@ -137,7 +137,7 @@ function leavesSourceFolder(realPaths: RealPaths): boolean {
 function checkMediaType(
   resourcePath: string,
   kind: ResourceRequest['kind'],
-): Result<SupportedMedia, LocalFailure> {
+): Result<SupportedMedia, ResourceReadFailure> {
   const extension = extname(resourcePath).toLowerCase();
   if (!isKnownExtension(extension)) {
     return unsupportedMediaFailure();
@@ -161,7 +161,9 @@ function expectedMediaPrefix(kind: ResourceRequest['kind']): string {
 }
 
 /** Opens the file, reads at most 16 MiB of it, and closes it again. */
-async function readResourceBytes(resourcePath: string): Promise<Result<Buffer, LocalFailure>> {
+async function readResourceBytes(
+  resourcePath: string,
+): Promise<Result<Buffer, ResourceReadFailure>> {
   const openedFile = await openResource(resourcePath);
   if (!openedFile.ok) {
     return openedFile;
@@ -170,7 +172,9 @@ async function readResourceBytes(resourcePath: string): Promise<Result<Buffer, L
 }
 
 /** Opens the file for reading. */
-async function openResource(resourcePath: string): Promise<Result<FileHandle, LocalFailure>> {
+async function openResource(
+  resourcePath: string,
+): Promise<Result<FileHandle, ResourceReadFailure>> {
   try {
     const openedFile = await open(resourcePath, 'r');
     return success(openedFile);
@@ -180,7 +184,7 @@ async function openResource(resourcePath: string): Promise<Result<FileHandle, Lo
 }
 
 /** Reads the open file, then always closes it. A read mistake is reported before a close one. */
-async function readThenClose(openedFile: FileHandle): Promise<Result<Buffer, LocalFailure>> {
+async function readThenClose(openedFile: FileHandle): Promise<Result<Buffer, ResourceReadFailure>> {
   const bytes = await readWithinLimit(openedFile);
   const closed = await closeResource(openedFile);
   if (!bytes.ok) {
@@ -193,7 +197,9 @@ async function readThenClose(openedFile: FileHandle): Promise<Result<Buffer, Loc
 }
 
 /** Reads the file into a buffer one byte over the limit, and refuses a file that fills it. */
-async function readWithinLimit(openedFile: FileHandle): Promise<Result<Buffer, LocalFailure>> {
+async function readWithinLimit(
+  openedFile: FileHandle,
+): Promise<Result<Buffer, ResourceReadFailure>> {
   const buffer = Buffer.alloc(byteLimit + 1);
   const byteCount = await fillBuffer(openedFile, buffer);
   if (!byteCount.ok) {
@@ -210,7 +216,7 @@ async function readWithinLimit(openedFile: FileHandle): Promise<Result<Buffer, L
 async function fillBuffer(
   openedFile: FileHandle,
   buffer: Buffer,
-): Promise<Result<number, LocalFailure>> {
+): Promise<Result<number, ResourceReadFailure>> {
   try {
     const byteCount = await readUntilEndOrFull(openedFile, buffer);
     return success(byteCount);
@@ -253,7 +259,7 @@ async function readNextChunk(
 }
 
 /** Closes the file, reporting a close that fails, so a good read can't hide it. */
-async function closeResource(openedFile: FileHandle): Promise<Result<void, LocalFailure>> {
+async function closeResource(openedFile: FileHandle): Promise<Result<void, ResourceReadFailure>> {
   try {
     await openedFile.close();
     return success(undefined);
@@ -263,34 +269,31 @@ async function closeResource(openedFile: FileHandle): Promise<Result<void, Local
 }
 
 /** Makes the mistake for a resource path that starts at the root of the disk (`absolute-path`). */
-function absolutePathFailure(): Result<never, LocalFailure> {
-  return failure({ code: 'absolute-path', message: 'Absolute resource paths are forbidden' });
+function absolutePathFailure(): Result<never, ResourceReadFailure> {
+  return resourceReadFailure('absolute-path', 'Absolute resource paths are forbidden');
 }
 
 /** Makes the mistake for a resource that can't be found, opened, read or closed. */
-function sourceUnavailableFailure(message: string): Result<never, LocalFailure> {
-  return failure({ code: 'source-unavailable', message });
+function sourceUnavailableFailure(message: string): Result<never, ResourceReadFailure> {
+  return resourceReadFailure('source-unavailable', message);
 }
 
 /** Makes the mistake for a resource outside the source file's folder (`path-escape`). */
-function pathEscapeFailure(): Result<never, LocalFailure> {
-  return failure({ code: 'path-escape', message: 'Resource escapes its source directory' });
+function pathEscapeFailure(): Result<never, ResourceReadFailure> {
+  return resourceReadFailure('path-escape', 'Resource escapes its source directory');
 }
 
 /** Makes the mistake for an extension that isn't a known font or image (`unsupported-media`). */
-function unsupportedMediaFailure(): Result<never, LocalFailure> {
-  return failure({ code: 'unsupported-media', message: 'Resource extension is unsupported' });
+function unsupportedMediaFailure(): Result<never, ResourceReadFailure> {
+  return resourceReadFailure('unsupported-media', 'Resource extension is unsupported');
 }
 
 /** Makes the mistake for a font declared with an image file, or the reverse. */
-function resourceMismatchFailure(): Result<never, LocalFailure> {
-  return failure({
-    code: 'resource-mismatch',
-    message: 'Resource kind and media type do not match',
-  });
+function resourceMismatchFailure(): Result<never, ResourceReadFailure> {
+  return resourceReadFailure('resource-mismatch', 'Resource kind and media type do not match');
 }
 
 /** Makes the mistake for a resource file over 16 MiB (`resource-too-large`). */
-function resourceTooLargeFailure(): Result<never, LocalFailure> {
-  return failure({ code: 'resource-too-large', message: 'Resource exceeds 16 MiB' });
+function resourceTooLargeFailure(): Result<never, ResourceReadFailure> {
+  return resourceReadFailure('resource-too-large', 'Resource exceeds 16 MiB');
 }

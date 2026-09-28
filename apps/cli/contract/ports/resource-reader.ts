@@ -10,7 +10,7 @@
  * `adapters/files/resource-reader.ts` does the reading.
  */
 import type { FilePath } from '../brands.js';
-import type { LocalFailure, Result } from '../errors.js';
+import type { ResourceReadFailure, Result } from '../errors.js';
 import type { ResourceRequest } from '../records/foreign.js';
 import type { LocalBytes } from '../records/staged-resource.js';
 
@@ -22,9 +22,10 @@ export interface ResourceReader {
   /**
    * Reads the file `request` names, and gives back its bytes and type. Fails when the path is
    * absolute or leaves the folder, the file can't be read, or it is the wrong type or too large.
+   * The failure doesn't say where the source declares the file; core adds that.
    */
   read(
     file: FilePath,
     request: ResourceRequest,
-  ): Promise<Result<LocalBytes, LocalFailure>>;
+  ): Promise<Result<LocalBytes, ResourceReadFailure>>;
 }

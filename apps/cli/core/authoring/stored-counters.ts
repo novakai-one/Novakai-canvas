@@ -14,7 +14,7 @@ import type { Collection, FailureSource, StoredRecord } from '../../contract/rec
 import type { CollectionRevision, StorageVersion } from '../../contract/brands.js';
 import type { LocalFailure, Result } from '../../contract/errors.js';
 import { collectionRevision, storageVersion } from '../../contract/brands.js';
-import { failure, success } from '../../contract/errors.js';
+import { evidenced, failure, success } from '../../contract/errors.js';
 
 /** A stored collection's two counters, each checked once. */
 export interface CollectionCounters {
@@ -59,7 +59,7 @@ function checkCounters(
 
 /** Makes the mistake for a stored collection Model rejects, keeping Model's reasons. */
 function invalidStoredCollectionFailure(modelReasons: FailureSource): Result<never, LocalFailure> {
-  return failure({
+  return evidenced({
     code: 'invalid-response',
     message: 'The collection is not a valid Model document',
     recovery: 'Correct the named Model diagnostics.',

@@ -57,7 +57,7 @@ Three types carry the story along that route:
 
 - `Command` — what was asked. One member per command. `contract/records/command.ts`
 - `Result` — either the answer or a failure. Nothing throws. `contract/errors.ts`
-- Failure codes — a fixed list; code branches on the code, never the message. `contract/errors.ts`
+- Failure codes — a fixed list; code branches on the code, never the message. Each code allows one shape: plain, located (names a font or image declaration) or evidenced (keeps Language's or Model's reasons). `contract/records/local-failure.ts`, built by `contract/errors.ts`
 
 Four folders, four jobs:
 

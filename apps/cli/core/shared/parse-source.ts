@@ -12,7 +12,7 @@
 import type { SourceParser } from '../../contract/ports/source-parser.js';
 import type { FailureSource, ParsedSource } from '../../contract/records/foreign.js';
 import type { LocalFailure, Result } from '../../contract/errors.js';
-import { failure, success } from '../../contract/errors.js';
+import { evidenced, success } from '../../contract/errors.js';
 
 /**
  * Parses `.canvas` text with Language. `text` is the file's text as read; this is where it is
@@ -33,7 +33,7 @@ export function parseSource(
 
 /** Makes the mistake for text Language can't parse (`invalid-source`), keeping Language's reasons. */
 function invalidSourceFailure(languageReasons: FailureSource): Result<never, LocalFailure> {
-  return failure({
+  return evidenced({
     code: 'invalid-source',
     message: 'Language rejected this source',
     recovery: 'Correct the named source diagnostics and retry.',
