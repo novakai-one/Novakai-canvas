@@ -20,6 +20,17 @@ const ABSENT: HeaderValue = Object.freeze({ kind: 'absent' });
 /** A header the request sent more than once. */
 const REPEATED: HeaderValue = Object.freeze({ kind: 'repeated' });
 
+/** The lowercase names of the eight headers the checks use. */
+type HeaderName =
+  | 'host'
+  | 'origin'
+  | 'sec-fetch-site'
+  | 'sec-fetch-mode'
+  | 'sec-fetch-dest'
+  | 'authorization'
+  | 'cookie'
+  | 'content-type';
+
 /**
  * Reads the method and the eight headers the checks use, from Node's header lists (lowercase
  * names, every value sent). A missing method reads as empty text. Never fails.
@@ -28,17 +39,16 @@ export function readHttpMetadata(
   method: string | undefined,
   headers: HeaderLists,
 ): HttpMetadata {
-  const read = (name: string): HeaderValue => headerValue(headers[name]);
   return {
     method: method ?? '',
-    host: read('host'),
-    origin: read('origin'),
-    site: read('sec-fetch-site'),
-    mode: read('sec-fetch-mode'),
-    destination: read('sec-fetch-dest'),
-    authorization: read('authorization'),
-    cookie: read('cookie'),
-    contentType: read('content-type'),
+    host: readHeader(headers, 'host'),
+    origin: readHeader(headers, 'origin'),
+    site: readHeader(headers, 'sec-fetch-site'),
+    mode: readHeader(headers, 'sec-fetch-mode'),
+    destination: readHeader(headers, 'sec-fetch-dest'),
+    authorization: readHeader(headers, 'authorization'),
+    cookie: readHeader(headers, 'cookie'),
+    contentType: readHeader(headers, 'content-type'),
   };
 }
 
@@ -53,7 +63,9 @@ export function headerMatches(
   header: HeaderValue,
   text: string,
 ): boolean {
-  if (header.kind === 'repeated') return false;
+  if (header.kind === 'repeated') {
+    return false;
+  }
   return headerText(header) === text;
 }
 
@@ -62,14 +74,24 @@ export function headerMatches(
  * refuse a header sent more than once before asking. Never fails.
  */
 export function headerText(header: UnambiguousHeader): string {
-  if (header.kind === 'absent') return '';
+  if (header.kind === 'absent') {
+    return '';
+  }
   return header.value;
 }
 
-/** `absent` when there is no value, `single` for one, `repeated` for several. */
-function headerValue(values: readonly string[] | undefined): HeaderValue {
-  const [only, ...others] = values ?? [];
-  if (only === undefined) return ABSENT;
-  if (others.length > 0) return REPEATED;
-  return { kind: 'single', value: only };
+/** Reads one header from Node's header lists: not sent, sent once, or sent more than once. */
+function readHeader(
+  headers: HeaderLists,
+  name: HeaderName,
+): HeaderValue {
+  const sentValues = headers[name] ?? [];
+  const [firstValue, ...laterValues] = sentValues;
+  if (firstValue === undefined) {
+    return ABSENT;
+  }
+  if (laterValues.length > 0) {
+    return REPEATED;
+  }
+  return { kind: 'single', value: firstValue };
 }

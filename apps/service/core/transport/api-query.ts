@@ -16,11 +16,15 @@ import type { ApiQuery } from '../../contract/records/transport/protocol.js';
  */
 export type QueryKey = 'id' | 'history' | 'section' | 'object';
 
+/** What a key that wasn't sent reads as: no values. */
+const NO_VALUES: readonly string[] = Object.freeze([]);
+
 /** Reads every key in the URL's query, not only `QueryKey`, with its values in order. */
 export function readApiQuery(params: URLSearchParams): ApiQuery {
-  const keys = [...new Set(params.keys())];
-  const entries = keys.map((key) => queryEntry(params, key));
-  return Object.freeze(Object.fromEntries(entries));
+  const keys = new Set(params.keys());
+  const keysWithValues = [...keys].map((key) => keyWithValues(params, key));
+  const query: ApiQuery = Object.freeze(Object.fromEntries(keysWithValues));
+  return query;
 }
 
 /** Reads every value sent for `key`, in order, as sent; none when the key wasn't sent. */
@@ -28,7 +32,11 @@ export function readAllValues(
   query: ApiQuery,
   key: QueryKey,
 ): readonly string[] {
-  return query[key] ?? [];
+  const values = query[key];
+  if (values === undefined) {
+    return NO_VALUES;
+  }
+  return values;
 }
 
 /**
@@ -39,11 +47,12 @@ export function readLastValue(
   query: ApiQuery,
   key: QueryKey,
 ): string | undefined {
-  return readAllValues(query, key).at(-1);
+  const values = readAllValues(query, key);
+  return values.at(-1);
 }
 
-/** One query key with every value given for it, in order. */
-function queryEntry(
+/** Pairs one query key with every value sent for it, in order. */
+function keyWithValues(
   params: URLSearchParams,
   key: string,
 ): readonly [string, readonly string[]] {

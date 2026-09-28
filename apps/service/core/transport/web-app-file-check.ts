@@ -27,6 +27,9 @@ export interface WebAppFileCheckDependencies {
 /** The grant for a request that already holds the session. */
 const SESSION_EXISTS: BrowserGrant = Object.freeze({ kind: 'session-exists' });
 
+/** The cookie's settings: hidden from page scripts, sent only by this site, for every path. */
+const COOKIE_SETTINGS = 'HttpOnly; SameSite=Strict; Path=/';
+
 /**
  * Builds the check that decides whether a web app file may be sent. A direct page open
  * (`Sec-Fetch-Mode: navigate`) answers `session-issued`, carrying the `Set-Cookie` header text to
@@ -39,42 +42,56 @@ export function createWebAppFileCheck(
   return (metadata) => checkWebAppFile(metadata, dependencies);
 }
 
-/** A navigation as `issuedSession`; any other request as `existingSession`. */
+/** Gives a page open a new session cookie; any other request must already hold one. */
 function checkWebAppFile(
   metadata: HttpMetadata,
   dependencies: WebAppFileCheckDependencies,
 ): Result<BrowserGrant> {
-  if (!headerMatches(metadata.mode, 'navigate')) return existingSession(metadata, dependencies);
-  return issuedSession(metadata, dependencies);
+  if (isNavigation(metadata)) {
+    return issueSession(metadata, dependencies);
+  }
+  return checkExistingSession(metadata, dependencies);
+}
+
+/** Whether the browser says it is opening a page (`Sec-Fetch-Mode: navigate`). */
+function isNavigation(metadata: HttpMetadata): boolean {
+  return headerMatches(metadata.mode, 'navigate');
 }
 
 /**
- * A resource fetch reuses the established session only. Fails as admission `authenticate`:
- * `unauthorized` at `host`, `session` or `credential`.
- */
-function existingSession(
-  metadata: HttpMetadata,
-  dependencies: WebAppFileCheckDependencies,
-): Result<BrowserGrant> {
-  const caller = dependencies.admission.authenticate(metadata);
-  if (!caller.ok) return caller;
-  return success(SESSION_EXISTS);
-}
-
-/**
- * Only a navigation may receive the session cookie. Fails as admission `checkNavigation`:
+ * Gives the session cookie to a direct page open. Fails as admission `checkNavigation`:
  * `unauthorized` at `host` or `navigation`.
  */
-function issuedSession(
+function issueSession(
   metadata: HttpMetadata,
   dependencies: WebAppFileCheckDependencies,
 ): Result<BrowserGrant> {
   const navigation = dependencies.admission.checkNavigation(metadata);
-  if (!navigation.ok) return navigation;
-  return success({ kind: 'session-issued', setCookie: sessionCookie(dependencies) });
+  if (!navigation.ok) {
+    return navigation;
+  }
+  const setCookie = sessionCookie(dependencies);
+  return success({ kind: 'session-issued', setCookie });
 }
 
-/** The `Set-Cookie` value: the session secret, HttpOnly, same-site only, for every path. */
+/**
+ * Checks a file request already holds the session. Fails as admission `authenticate`:
+ * `unauthorized` at `host`, `session` or `credential`.
+ */
+function checkExistingSession(
+  metadata: HttpMetadata,
+  dependencies: WebAppFileCheckDependencies,
+): Result<BrowserGrant> {
+  const caller = dependencies.admission.authenticate(metadata);
+  if (!caller.ok) {
+    return caller;
+  }
+  return success(SESSION_EXISTS);
+}
+
+/** Writes the `Set-Cookie` value: the cookie's name, the session secret, and its settings. */
 function sessionCookie(dependencies: WebAppFileCheckDependencies): string {
-  return `${dependencies.admission.cookieName}=${dependencies.security.browserSession}; HttpOnly; SameSite=Strict; Path=/`;
+  const { cookieName } = dependencies.admission;
+  const { browserSession } = dependencies.security;
+  return `${cookieName}=${browserSession}; ${COOKIE_SETTINGS}`;
 }

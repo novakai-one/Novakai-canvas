@@ -24,56 +24,80 @@ import { readAllValues } from './api-query.js';
 export function readSourceScope(query: ApiQuery): Result<Scope> {
   const sections = readAllValues(query, 'section');
   const objects = readAllValues(query, 'object');
-  const bothScopes = sections.length > 0 && objects.length > 0;
-  if (bothScopes)
-    return failure('invalid-input', 'scope', 'Use either section or object, not both');
-  return parseSingleScope(sections, objects);
+  if (hasBothScopes(sections, objects)) {
+    return bothScopesFailure();
+  }
+  if (hasRepeatedScope(sections, objects)) {
+    return repeatedScopeFailure();
+  }
+  return parseScope(sections, objects);
 }
 
-/**
- * Fails with `invalid-input` at `scope` when a scope key was repeated; otherwise as
- * `parseScope`.
- */
-function parseSingleScope(
+/** Whether the query asks for a section and an object at once. */
+function hasBothScopes(
+  sections: readonly string[],
+  objects: readonly string[],
+): boolean {
+  const sectionGiven = sections.length > 0;
+  const objectGiven = objects.length > 0;
+  return sectionGiven && objectGiven;
+}
+
+/** Whether `section` or `object` was given more than once. */
+function hasRepeatedScope(
+  sections: readonly string[],
+  objects: readonly string[],
+): boolean {
+  const sectionRepeated = sections.length > 1;
+  const objectRepeated = objects.length > 1;
+  return sectionRepeated || objectRepeated;
+}
+
+/** Reads the one section or object asked for, or the whole collection when neither was. */
+function parseScope(
   sections: readonly string[],
   objects: readonly string[],
 ): Result<Scope> {
-  const repeatedScope = sections.length > 1 || objects.length > 1;
-  if (repeatedScope)
-    return failure('invalid-input', 'scope', 'Each read scope query may be provided only once');
-  return parseScope(sections[0], objects[0]);
+  const [section] = sections;
+  const [object] = objects;
+  if (section !== undefined) {
+    return parseSectionScope(section);
+  }
+  if (object !== undefined) {
+    return parseObjectScope(object);
+  }
+  return success({ kind: 'all' });
 }
 
-/** A section scope when `section` was given; otherwise as `parseObjectOrAll`. */
-function parseScope(
-  section: string | undefined,
-  object: string | undefined,
-): Result<Scope> {
-  if (section !== undefined) return parseSectionScope(section);
-  return parseObjectOrAll(object);
-}
-
-/** The whole collection when no object ID is given; otherwise an object scope. */
-function parseObjectOrAll(object: string | undefined): Result<Scope> {
-  if (object === undefined) return success({ kind: 'all' });
-  return parseObjectScope(object);
-}
-
-/** Fails with `invalid-input` at `scope` when the ID breaks Model's object ID grammar. */
-function parseObjectScope(id: string): Result<Scope> {
-  const parsed = objectId.safeParse(id);
-  if (!parsed.success) return nonCanonicalScope();
-  return success({ kind: 'object', id: parsed.data });
-}
-
-/** Fails with `invalid-input` at `scope` when the ID breaks Model's section ID grammar. */
+/** Checks the ID follows Model's section ID format, and makes it a section scope. */
 function parseSectionScope(id: string): Result<Scope> {
-  const parsed = sectionId.safeParse(id);
-  if (!parsed.success) return nonCanonicalScope();
-  return success({ kind: 'section', id: parsed.data });
+  const section = sectionId.safeParse(id);
+  if (!section.success) {
+    return nonCanonicalIdFailure();
+  }
+  return success({ kind: 'section', id: section.data });
 }
 
-/** `invalid-input` at `scope`: the ID is empty or not canonical. */
-function nonCanonicalScope(): Result<Scope> {
+/** Checks the ID follows Model's object ID format, and makes it an object scope. */
+function parseObjectScope(id: string): Result<Scope> {
+  const object = objectId.safeParse(id);
+  if (!object.success) {
+    return nonCanonicalIdFailure();
+  }
+  return success({ kind: 'object', id: object.data });
+}
+
+/** Makes the mistake for a query that gives both `section` and `object`. */
+function bothScopesFailure(): Result<never> {
+  return failure('invalid-input', 'scope', 'Use either section or object, not both');
+}
+
+/** Makes the mistake for a `section` or `object` given more than once. */
+function repeatedScopeFailure(): Result<never> {
+  return failure('invalid-input', 'scope', 'Each read scope query may be provided only once');
+}
+
+/** Makes the mistake for a section or object ID that is empty or not in the right format. */
+function nonCanonicalIdFailure(): Result<never> {
   return failure('invalid-input', 'scope', 'Scope IDs must be non-empty canonical IDs');
 }

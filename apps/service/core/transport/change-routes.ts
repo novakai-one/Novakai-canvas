@@ -15,9 +15,14 @@ import type {
   RouteKey,
 } from '../../contract/records/transport/protocol.js';
 import type { HttpOutcome } from '../../contract/records/transport/http-codes.js';
-import type { ChangeBodyReader, HttpAdmission } from '../../contract/ports/transport.js';
+import type {
+  BodyCheckContext,
+  ChangeBodyReader,
+  HttpAdmission,
+} from '../../contract/ports/transport.js';
 import type { WorkspaceSession } from '../../contract/types.js';
 import type { Generation } from '../../contract/brands.js';
+import type { Result } from '../../contract/errors.js';
 import { jsonRoute, type RouteHandler } from './route-answer.js';
 
 /** A change route, as `METHOD path`: every route under `/api/v1/authoring/`. */
@@ -34,9 +39,6 @@ export interface ChangeRouteDependencies {
   readonly bodyReader: ChangeBodyReader;
 }
 
-/** The Authoring step a mutation route runs: `prepare` previews or plans, `apply` commits. */
-type MutationRoute = 'prepare' | 'apply';
-
 /**
  * Builds the two change routes; both answer JSON. `preview` calls the session's `prepare`, which
  * works out what the change would do without saving it; `apply` calls `apply`, which saves it. A
@@ -46,45 +48,49 @@ export function changeRoutes(
   dependencies: ChangeRouteDependencies,
 ): Readonly<Record<ChangeRouteKey, RouteHandler>> {
   return Object.freeze({
-    'POST /api/v1/authoring/preview': jsonRoute((call) =>
-      runMutation(call, dependencies, 'prepare'),
-    ),
-    'POST /api/v1/authoring/apply': jsonRoute((call) => runMutation(call, dependencies, 'apply')),
+    'POST /api/v1/authoring/preview': jsonRoute((call) => previewChange(call, dependencies)),
+    'POST /api/v1/authoring/apply': jsonRoute((call) => applyChange(call, dependencies)),
   });
 }
 
-/**
- * Decodes the mutation envelope, then runs the route's step on it. Fails as the body reader:
- * `invalid-input` at `content-type`, `body` or `request`, `conflict` at `generation`,
- * `unauthorized` at `actor` or `intent.planner`.
- */
-async function runMutation(
+/** Reads the change from the body, then asks the session what it would do, without saving it. */
+async function previewChange(
   call: ApiCall,
   dependencies: ChangeRouteDependencies,
-  route: MutationRoute,
 ): Promise<HttpOutcome> {
-  const mutation = dependencies.bodyReader.read(call.body, {
+  const change = readChange(call, dependencies);
+  if (!change.ok) {
+    return change;
+  }
+  return dependencies.session.prepare(change.value.request, call.signal, change.value.mode);
+}
+
+/** Reads the change from the body, then asks the session to save it. */
+async function applyChange(
+  call: ApiCall,
+  dependencies: ChangeRouteDependencies,
+): Promise<HttpOutcome> {
+  const change = readChange(call, dependencies);
+  if (!change.ok) {
+    return change;
+  }
+  return dependencies.session.apply(change.value.request, call.signal, change.value.options);
+}
+
+/**
+ * Reads the change with the body reader, checked against this server run and the caller. Fails as
+ * the body reader: `invalid-input` at `content-type`, `body` or `request`, `conflict` at
+ * `generation`, `unauthorized` at `actor` or `intent.planner`.
+ */
+function readChange(
+  call: ApiCall,
+  dependencies: ChangeRouteDependencies,
+): Result<AdmittedChange> {
+  const context: BodyCheckContext = {
     caller: call.caller,
     metadata: call.metadata,
     generation: dependencies.generation,
     admission: dependencies.admission,
-  });
-  if (!mutation.ok) return mutation;
-  return MUTATION_STEPS[route](mutation.value, call.signal, dependencies.session);
+  };
+  return dependencies.bodyReader.read(call.body, context);
 }
-
-/** Runs one Authoring step on an admitted mutation. */
-type MutationStep = (
-  mutation: AdmittedChange,
-  signal: AbortSignal,
-  session: ChangeRouteDependencies['session'],
-) => Promise<HttpOutcome>;
-
-/**
- * The session call of each step. `prepare` passes the envelope's prepare mode; `apply` its
- * options. Authoring outcomes pass through.
- */
-const MUTATION_STEPS: Readonly<Record<MutationRoute, MutationStep>> = Object.freeze({
-  prepare: (mutation, signal, session) => session.prepare(mutation.request, signal, mutation.mode),
-  apply: (mutation, signal, session) => session.apply(mutation.request, signal, mutation.options),
-});

@@ -10,7 +10,7 @@
  * service's `invalid-input` at `source`, with Language's own failure kept inside it so the caller
  * can see why. It never changes what Language prints.
  */
-import type { Language, Scope } from '../../contract/records/capability-types.js';
+import type { Language, LanguageError, Scope } from '../../contract/records/capability-types.js';
 import { failure, success, type Result } from '../../contract/errors.js';
 
 /** What the source routes need from Language: its vocabulary, and a collection printed as DSL. */
@@ -35,26 +35,29 @@ export interface SourcePrinter {
 export function createSourcePrinter(language: Pick<Language, 'describe' | 'print'>): SourcePrinter {
   return {
     describe: () => language.describe(),
-    print: (collection, scope) => print(language, collection, scope),
+    print: (collection, scope) => printCollection(language, collection, scope),
   };
 }
 
-/**
- * The collection's DSL for the scope. Language validates the collection itself. Fails with
- * `invalid-input` at `source` when Language refuses (Language's failure kept as source).
- */
-function print(
+/** Asks Language to print the collection as DSL for the scope; Language checks the collection. */
+function printCollection(
   language: Pick<Language, 'print'>,
   collection: unknown,
   scope: Scope,
 ): Result<unknown> {
   const printed = language.print({ collection, scope });
-  if (!printed.ok)
-    return failure(
-      'invalid-input',
-      'source',
-      'Language could not print this collection',
-      printed.error,
-    );
+  if (!printed.ok) {
+    return languageRefusedFailure(printed.error);
+  }
   return success(printed.value);
+}
+
+/** Makes the mistake for a collection Language can't print, keeping Language's own failure. */
+function languageRefusedFailure(languageFailure: LanguageError): Result<never> {
+  return failure(
+    'invalid-input',
+    'source',
+    'Language could not print this collection',
+    languageFailure,
+  );
 }

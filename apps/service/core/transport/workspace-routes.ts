@@ -10,10 +10,15 @@
  * `identity` (the workspace ID), `render`, `inspect` (a quality report), `receipt` (what a saved
  * request did) and `export` (a DSL, Markdown, SVG or PNG file). It never writes storage.
  */
-import type { ApiCall, RouteKey, RouteOutcome } from '../../contract/records/transport/protocol.js';
+import type {
+  ApiCall,
+  ApiQuery,
+  RouteKey,
+  RouteOutcome,
+} from '../../contract/records/transport/protocol.js';
 import type { HttpOutcome } from '../../contract/records/transport/http-codes.js';
 import type { WorkspaceSession } from '../../contract/types.js';
-import { success } from '../../contract/errors.js';
+import { success, type Result } from '../../contract/errors.js';
 import type { CollectionId } from '../../contract/brands.js';
 import { collectionId } from '../../contract/schemas.js';
 import { missingCollectionFailure } from '../rendering/collection.js';
@@ -46,6 +51,9 @@ export interface WorkspaceRouteDependencies {
 /** The workspace session, as the workspace routes read it. */
 type RouteSession = WorkspaceRouteDependencies['session'];
 
+/** The `?history` value that asks for history versions without their contents. */
+const VERSIONS_ONLY = 'versions';
+
 /**
  * Builds the eight workspace routes. `export` answers a file's bytes; the rest answer JSON. The
  * session's answers pass through: `workspace` calls `read`, `installation` reads `builtins`, and
@@ -57,63 +65,111 @@ export function workspaceRoutes(
 ): Readonly<Record<WorkspaceRouteKey, RouteHandler>> {
   const { session } = dependencies;
   return Object.freeze({
-    'GET /api/v1/workspace': jsonRoute((call) => workspace(call, session)),
+    'GET /api/v1/workspace': jsonRoute((call) => readWorkspace(call, session)),
     'GET /api/v1/history': jsonRoute(() => session.history()),
-    'GET /api/v1/installation': jsonRoute(async () =>
-      success({ fonts: session.builtins.fonts, tokens: session.builtins.tokens }),
-    ),
-    'GET /api/v1/identity': jsonRoute(async () => success({ workspace: session.workspace })),
-    'GET /api/v1/render': jsonRoute((call) =>
-      withCollection(call, (id) => session.render(id, call.signal)),
-    ),
-    'GET /api/v1/inspect': jsonRoute((call) =>
-      withCollection(call, (id) => session.inspect(id, call.signal)),
-    ),
-    'GET /api/v1/receipt': jsonRoute((call) => session.receipt(readLastValue(call.query, 'id'))),
-    'POST /api/v1/export': (call) => exportArtifact(call, session),
+    'GET /api/v1/installation': jsonRoute(() => readInstallation(session)),
+    'GET /api/v1/identity': jsonRoute(() => readIdentity(session)),
+    'GET /api/v1/render': jsonRoute((call) => renderCollection(call, session)),
+    'GET /api/v1/inspect': jsonRoute((call) => inspectCollection(call, session)),
+    'GET /api/v1/receipt': jsonRoute((call) => readReceipt(call, session)),
+    'POST /api/v1/export': (call) => exportFile(call, session),
   });
 }
 
 /**
- * The workspace snapshot; with `?history=versions`, history contents are stripped and navigation
- * kept. Authoring's read failures pass through.
+ * Reads the workspace snapshot; with `?history=versions`, history contents are stripped and
+ * navigation kept. Authoring's read failures pass through.
  */
-async function workspace(
+async function readWorkspace(
   call: ApiCall,
   session: RouteSession,
 ): Promise<HttpOutcome> {
-  const read = await session.read();
-  if (!read.ok) return read;
-  const versionsOnly = readLastValue(call.query, 'history') === 'versions';
-  if (!versionsOnly) return read;
-  return success(stripHistoryContents(read.value));
+  const snapshot = await session.read();
+  if (!snapshot.ok) {
+    return snapshot;
+  }
+  if (asksForVersionsOnly(call.query)) {
+    const versions = stripHistoryContents(snapshot.value);
+    return success(versions);
+  }
+  return snapshot;
+}
+
+/** Whether the query asks for history versions only (`?history=versions`). */
+function asksForVersionsOnly(query: ApiQuery): boolean {
+  const history = readLastValue(query, 'history');
+  return history === VERSIONS_ONLY;
+}
+
+/** Answers the built-in fonts and design tokens. */
+async function readInstallation(session: RouteSession): Promise<HttpOutcome> {
+  const { fonts, tokens } = session.builtins;
+  return success({ fonts, tokens });
+}
+
+/** Answers the workspace ID. */
+async function readIdentity(session: RouteSession): Promise<HttpOutcome> {
+  return success({ workspace: session.workspace });
+}
+
+/** Renders the `?id` collection: nodes placed and wires routed. Fails as `readCollectionId`. */
+async function renderCollection(
+  call: ApiCall,
+  session: RouteSession,
+): Promise<HttpOutcome> {
+  const id = readCollectionId(call.query);
+  if (!id.ok) {
+    return id;
+  }
+  return session.render(id.value, call.signal);
+}
+
+/** Answers the quality report of the `?id` collection. Fails as `readCollectionId`. */
+async function inspectCollection(
+  call: ApiCall,
+  session: RouteSession,
+): Promise<HttpOutcome> {
+  const id = readCollectionId(call.query);
+  if (!id.ok) {
+    return id;
+  }
+  return session.inspect(id.value, call.signal);
+}
+
+/** Answers what the saved request named by `?id` did. The session checks the ID. */
+async function readReceipt(
+  call: ApiCall,
+  session: RouteSession,
+): Promise<HttpOutcome> {
+  const requestIdText = readLastValue(call.query, 'id');
+  return session.receipt(requestIdText);
 }
 
 /**
  * Exports the body read as JSON, answering the file as bytes. Fails with `invalid-input` at
  * `content-type` or `body` as `readJsonBody` (json-body.ts); export failures pass through as JSON.
  */
-async function exportArtifact(
+async function exportFile(
   call: ApiCall,
   session: RouteSession,
 ): Promise<RouteOutcome> {
-  const input = readJsonBody(call.body, call.metadata.contentType, 'resource');
-  if (!input.ok) return answerJson(input);
-  const file = await session.exportFile(input.value, call.signal);
+  const json = readJsonBody(call.body, call.metadata.contentType, 'resource');
+  if (!json.ok) {
+    return answerJson(json);
+  }
+  const file = await session.exportFile(json.value, call.signal);
   return answerFile(file);
 }
 
 /**
- * Runs `step` on the `?id` collection. Fails with `not-found` at the query text when it is not a
- * Model collection ID (an absent `?id` reads as empty text), the same answer as a missing
- * collection (`missingCollectionFailure`); otherwise `step`'s outcome passes through.
+ * Reads `?id` as a Model collection ID. Fails with `not-found` at the query text when it isn't one
+ * (an absent `?id` reads as empty text), the same answer as a missing collection.
  */
-async function withCollection(
-  call: ApiCall,
-  step: (id: CollectionId) => Promise<HttpOutcome>,
-): Promise<HttpOutcome> {
-  const text = readLastValue(call.query, 'id') ?? '';
-  const id = collectionId.safeParse(text);
-  if (!id.success) return missingCollectionFailure(text);
-  return step(id.data);
+function readCollectionId(query: ApiQuery): Result<CollectionId> {
+  const idText = readLastValue(query, 'id') ?? '';
+  const id = collectionId.safeParse(idText);
+  if (!id.success) {
+    return missingCollectionFailure(idText);
+  }
+  return success(id.data);
 }

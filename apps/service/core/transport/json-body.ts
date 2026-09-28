@@ -26,7 +26,8 @@ interface BodyMessages {
   readonly syntax: string;
 }
 
-const messages: Readonly<Record<JsonBodyPurpose, BodyMessages>> = Object.freeze({
+/** The refusal messages each route family sends. */
+const REFUSAL_MESSAGES: Readonly<Record<JsonBodyPurpose, BodyMessages>> = Object.freeze({
   change: Object.freeze({
     contentType: 'Use application/json for a mutation',
     syntax: 'Request body must be valid JSON',
@@ -36,6 +37,9 @@ const messages: Readonly<Record<JsonBodyPurpose, BodyMessages>> = Object.freeze(
     syntax: 'Expected valid resource JSON',
   }),
 });
+
+/** The one media type a JSON body may be sent as. */
+const JSON_MEDIA_TYPE = 'application/json';
 
 /**
  * Reads the body text, as sent, and answers the parsed JSON, still unchecked (the route checks it).
@@ -47,32 +51,46 @@ export function readJsonBody(
   contentType: HeaderValue,
   purpose: JsonBodyPurpose,
 ): Result<unknown> {
-  if (!isJson(contentType))
-    return failure('invalid-input', 'content-type', messages[purpose].contentType);
-  return parsedJson(body, messages[purpose].syntax);
+  if (!isJsonContentType(contentType)) {
+    return notJsonContentTypeFailure(purpose);
+  }
+  return parseJson(body, purpose);
 }
 
-/** Whether the header, sent once, has the media type `application/json`. */
-function isJson(contentType: HeaderValue): boolean {
-  if (contentType.kind === 'repeated') return false;
-  return mediaType(headerText(contentType)) === 'application/json';
+/** Whether the `Content-Type` header, sent once, has the media type `application/json`. */
+function isJsonContentType(contentType: HeaderValue): boolean {
+  if (contentType.kind === 'repeated') {
+    return false;
+  }
+  const sentMediaType = mediaType(headerText(contentType));
+  return sentMediaType === JSON_MEDIA_TYPE;
 }
 
-/** The media type without its parameters: `application/json; charset=utf-8` → `application/json`. */
+/** Reads the media type without its parameters: `application/json; charset=utf-8` → `application/json`. */
 function mediaType(contentType: string): string {
-  const [type = ''] = contentType.split(';');
-  return type.trim();
+  const [beforeParameters = ''] = contentType.split(';');
+  return beforeParameters.trim();
 }
 
-/** The text as JSON. Fails with `invalid-input` at `body`, carrying `message`, on a syntax error. */
-function parsedJson(
+/** Parses the body text as JSON. */
+function parseJson(
   body: string,
-  message: string,
+  purpose: JsonBodyPurpose,
 ): Result<unknown> {
   try {
-    const value: unknown = JSON.parse(body);
-    return success(value);
+    const json: unknown = JSON.parse(body);
+    return success(json);
   } catch {
-    return failure('invalid-input', 'body', message);
+    return invalidJsonFailure(purpose);
   }
+}
+
+/** Makes the mistake for a body not sent as `application/json`, in the route family's words. */
+function notJsonContentTypeFailure(purpose: JsonBodyPurpose): Result<never> {
+  return failure('invalid-input', 'content-type', REFUSAL_MESSAGES[purpose].contentType);
+}
+
+/** Makes the mistake for body text that isn't JSON, in the route family's words. */
+function invalidJsonFailure(purpose: JsonBodyPurpose): Result<never> {
+  return failure('invalid-input', 'body', REFUSAL_MESSAGES[purpose].syntax);
 }
