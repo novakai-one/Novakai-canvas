@@ -37,8 +37,6 @@ export interface ProfileSlot {
 export interface ProfileAppendix {
   /** The document number every appendix shares: section `@flow-51` is appendix 5.1. */
   readonly number: DocumentNumber;
-  /** The appendix ID shape as text, built from `modes` and `number`: `@(flow|sequence|state)-5N`. */
-  readonly idPattern: string;
   readonly modes: ProfileModes;
   readonly description: string;
 }

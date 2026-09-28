@@ -1,7 +1,8 @@
 /*
  * The build-spec@1 profile descriptor: the four required slots, the appendix rule, the structural
  * conventions and the notes. Pure, frozen data. Hosts print it; every lint rule reads its section
- * IDs and its appendix rule from here.
+ * IDs and its appendix rule from here. Every appendix ID in the prose is built from the rule's
+ * number and modes by `appendixIdForms`.
  */
 import { sectionId } from '../../../contract/brands.js';
 import type { Mode } from '../../../contract/ports/model.js';
@@ -40,12 +41,11 @@ const appendixModes: ProfileModes = Object.freeze(['flow', 'sequence', 'state'] 
 /** Appendices share document 5: section `@flow-51` is appendix 5.1. */
 const appendixNumber: DocumentNumber = 5;
 
-/** The appendix rule. The lint's appendix ID check and `idPattern` are both built from it. */
+/** The appendix rule. The lint's appendix ID check and every appendix ID in the prose read it. */
 export const buildSpecAppendix: ProfileAppendix = Object.freeze({
   number: appendixNumber,
-  idPattern: `@(${appendixModes.join('|')})-${appendixNumber}N`,
   modes: appendixModes,
-  description: 'At least one numbered 5.N flow, sequence or state appendix.',
+  description: `At least one numbered ${appendixNumber}.N ${joinedWithOr(appendixModes)} appendix.`,
 });
 
 /** build-spec@1: five logical documents in one ordinary collection. */
@@ -62,7 +62,7 @@ export const buildSpecProfile: ProfileDescriptor = Object.freeze({
   appendix: buildSpecAppendix,
   conventions: Object.freeze([
     'Required section numeric orders must increase: repo < entities < modules < ownership < every appendix; extra sections may appear anywhere.',
-    'Appendix IDs use @flow-5N, @sequence-5N or @state-5N; the prefix must match the native mode and N is positive.',
+    `Appendix IDs use ${appendixIdForms(buildSpecAppendix)}; the prefix must match the native mode and N is positive.`,
     'CRUD row IDs are @<entity-id>-row, exactly one five-cell row for each entity shown in @entities.',
     'Extra non-profile sections are preserved and do not satisfy or invalidate a reserved profile slot.',
   ]),
@@ -72,6 +72,15 @@ export const buildSpecProfile: ProfileDescriptor = Object.freeze({
     'Lint checks structure only; it does not certify prose, implementation completeness or rendering.',
   ]),
 });
+
+/**
+ * The appendix ID forms as prose, one per mode, built from the rule's modes and number:
+ * `@flow-5N, @sequence-5N or @state-5N`. The `missing-appendix` message and the conventions use it.
+ */
+export function appendixIdForms(appendix: ProfileAppendix): string {
+  const forms = appendix.modes.map((mode) => `@${mode}-${appendix.number}N`);
+  return joinedWithOr(forms);
+}
 
 /**
  * One frozen required slot. `id` is a fixed literal above, so Model's `sectionId` always accepts
@@ -84,4 +93,12 @@ function requiredSlot(
   description: string,
 ): ProfileSlot {
   return Object.freeze({ id: sectionId.parse(id), number, mode, description });
+}
+
+/** Words as an English list ending in `or`: `a`, `a or b`, `a, b or c`; empty for no words. */
+function joinedWithOr(words: readonly string[]): string {
+  const lastWord = words.at(-1) ?? '';
+  const leading = words.slice(0, -1);
+  if (leading.length === 0) return lastWord;
+  return `${leading.join(', ')} or ${lastWord}`;
 }

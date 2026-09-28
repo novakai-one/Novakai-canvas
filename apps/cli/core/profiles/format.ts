@@ -40,11 +40,16 @@ export function lintSummary(
   profile: ProfileId,
   result: ProfileLintResult,
 ): string {
-  if (result.status === 'failed')
-    return `${profile} structural lint found ${result.findings.length} issue(s).`;
-  if (result.status === 'unsupported-source')
-    return `${profile} requires a full canvas 1 document.`;
-  return `${profile} structural lint passed.`;
+  switch (result.status) {
+    case 'passed':
+      return `${profile} structural lint passed.`;
+    case 'failed':
+      return `${profile} structural lint found ${result.findings.length} issue(s).`;
+    case 'unsupported-source':
+      return `${profile} requires a full canvas 1 document.`;
+    default:
+      return unsupportedStatus(profile, result);
+  }
 }
 
 /**
@@ -57,6 +62,18 @@ export function lintReport(
 ): string {
   const findings = result.status === 'failed' ? result.findings : [];
   return `${lintSummary(profile, result)}\n${findings.map(findingLine).join('\n')}`;
+}
+
+/**
+ * The summary for a lint status of no known kind. Language's closed `ProfileLintResult` makes this
+ * unreachable; the `never` type proves every status above is handled.
+ */
+function unsupportedStatus(
+  profile: ProfileId,
+  result: never,
+): string {
+  void result;
+  return `${profile} structural lint returned an unsupported status.`;
 }
 
 /** The describe, scaffold and lint command lines for one profile, as `profile describe` lists them. */
