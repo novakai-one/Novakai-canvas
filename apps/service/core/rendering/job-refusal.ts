@@ -21,8 +21,9 @@ import { authoringFailure } from '../../contract/errors.js';
  * There is no stand-in: a job never gets a fallback font or a blank image.
  */
 export function requireResource<T>(answer: Result<T, FailureSource>): AuthoringResult<T> {
-  if (!answer.ok)
-    return missingResourceFailure('A render resource owner rejected input', answer.error);
+  if (!answer.ok) {
+    return refusedResourceFailure(answer.error);
+  }
   return answer;
 }
 
@@ -47,4 +48,12 @@ export function malformedResourceFailure(): AuthoringResult<never> {
     'render-resources',
     'Render resources could not be decoded',
   );
+}
+
+/**
+ * Makes the `missing-asset` mistake for a refusal from Templates, Assets or Design System, keeping
+ * the refusal as its source.
+ */
+function refusedResourceFailure(refusal: FailureSource): AuthoringResult<never> {
+  return missingResourceFailure('A render resource owner rejected input', refusal);
 }

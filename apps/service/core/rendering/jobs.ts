@@ -13,23 +13,18 @@ import type {
   AuthoringResult,
   Collection,
   FontSource,
+  Preset,
   ThemePreset,
-  VisualAsset,
 } from '../../contract/records/capability-types.js';
-import {
-  fontSource,
-  fontSet,
-  visualAsset,
-  resolvedStyle,
-  layoutOptions,
-} from '../../contract/schemas.js';
-import { andThen, collect, success } from '../../contract/errors.js';
+import { resolvedStyle, layoutOptions } from '../../contract/schemas.js';
+import { success } from '../../contract/errors.js';
 import { removeDigestPrefix } from '../../contract/brands.js';
 import type { RenderJobInputs } from '../../contract/ports/headless.js';
 import type { WorkspaceContents } from '../../contract/records/workspace/contents.js';
 import type { RenderingJob, RenderPurpose } from '../../contract/records/rendering/job.js';
 import type { RenderJobs } from '../../contract/ports/rendering.js';
 import { buildRenderJobId } from './job-id.js';
+import { readCollectionImages, readThemeFonts } from './job-files.js';
 import {
   malformedResourceFailure,
   missingResourceFailure,
@@ -44,159 +39,198 @@ import {
  * expects.
  */
 export function createRenderJobs(inputs: RenderJobInputs): RenderJobs {
-  return { create: (collection, view, purpose) => create(collection, view, purpose, inputs) };
+  return {
+    create: (collection, contents, purpose) => buildJob(collection, contents, purpose, inputs),
+  };
 }
 
-/** The pinned theme's fonts and the diagram style resolved from it. */
+/** The pinned theme's fonts and the diagram style worked out from it. */
 interface StyledTheme {
   readonly fonts: RenderingJob['fonts'];
   readonly style: RenderingJob['style'];
 }
 
+/** A render job before its layout options are added. */
+type JobWithoutOptions = Omit<RenderingJob, 'options'>;
+
 /**
- * Builds the job from the collection's exact pinned theme; personal UI scope cannot enter it.
+ * One exact theme version, in the form Templates and Design System read it. The ID, version and
+ * digest are text as stored; Templates and Design System check them.
+ */
+interface ThemeVersion {
+  readonly kind: 'theme';
+  readonly id: string;
+  readonly version: string;
+  readonly digest: string;
+}
+
+/** One theme font in the form Design System reads it, marked as fine to use. */
+interface ApprovedFont {
+  readonly family: FontSource['family'];
+  readonly digest: FontSource['digest'];
+  readonly approved: true;
+}
+
+/**
+ * Builds one collection's job from the exact theme version it pins, never from personal settings.
  *
- * Steps; the first failure stops the build:
- * 1. Read the pinned theme, its fonts and its diagram style (see `styledTheme`).
- * 2. Name the job, read the images and scale the layout options (see `assembleJob`).
- *
- * Fails as `createRenderJobs` names.
+ * 1. Read the pinned theme through Templates.
+ * 2. Read its fonts through Assets, then its diagram style through Design System.
+ * 3. Add the job's ID, the collection's images and the layout options.
  */
-function create(
+function buildJob(
   collection: Collection,
-  view: WorkspaceContents,
+  contents: WorkspaceContents,
   purpose: RenderPurpose,
-  owners: RenderJobInputs,
+  inputs: RenderJobInputs,
 ): AuthoringResult<RenderingJob> {
-  const styled = styledTheme(collection, view, owners);
-  return andThen(styled, (theme) => assembleJob(collection, purpose, theme, owners));
+  const theme = readPinnedTheme(collection, contents, inputs);
+  if (!theme.ok) {
+    return theme;
+  }
+  const styled = styleTheme(theme.value, inputs);
+  if (!styled.ok) {
+    return styled;
+  }
+  return assembleJob(collection, purpose, styled.value, inputs);
 }
 
-/**
- * Reads the theme the collection pins through Templates, each of its fonts through Assets, then
- * resolves and projects the diagram tokens through Design System. Fails as `pinnedTheme`,
- * `themeFonts` or `diagramStyle` fails.
- */
-function styledTheme(
+/** Reads the exact theme version the collection pins, through Templates. */
+function readPinnedTheme(
   collection: Collection,
-  view: WorkspaceContents,
-  owners: RenderJobInputs,
-): AuthoringResult<StyledTheme> {
-  const preset = pinnedTheme(collection, view, owners);
-  if (!preset.ok) return preset;
-  const fonts = themeFonts(preset.value, owners);
-  if (!fonts.ok) return fonts;
-  const style = diagramStyle(preset.value, fonts.value, owners);
-  return andThen(style, (resolved) => success({ fonts: fonts.value, style: resolved }));
-}
-
-/**
- * The job: its ID (see `buildRenderJobId`), the collection, the theme's fonts and style, the
- * collection's images (see `asset`) and the layout options scaled with the style. Fails with
- * `missing-asset` or `invalid-input` at `render-resources` as `buildRenderJobId`, `asset` or
- * `scaledOptions` fails.
- */
-function assembleJob(
-  collection: Collection,
-  purpose: RenderPurpose,
-  theme: StyledTheme,
-  owners: RenderJobInputs,
-): AuthoringResult<RenderingJob> {
-  const id = buildRenderJobId(purpose, collection);
-  if (!id.ok) return id;
-  const images = collection.assets.filter((item) => item.mediaType.startsWith('image/'));
-  const assets = collect(images, (image) => asset(removeDigestPrefix(image.digest), owners));
-  if (!assets.ok) return assets;
-  return andThen(scaledOptions(theme.style), (options) =>
-    success({
-      id: id.value,
-      collection,
-      fonts: theme.fonts,
-      style: theme.style,
-      wasmResource: owners.wasmResource,
-      assets: assets.value,
-      options,
-    }),
-  );
-}
-
-/**
- * The exact theme the collection pins, read through Templates. Fails with `missing-asset` at
- * `render-resources` when Templates refuses the pin (its failure kept as source), or ("Collection
- * does not select a theme") when the pinned preset is not a theme.
- */
-function pinnedTheme(
-  collection: Collection,
-  view: WorkspaceContents,
-  owners: RenderJobInputs,
+  contents: WorkspaceContents,
+  inputs: RenderJobInputs,
 ): AuthoringResult<ThemePreset> {
-  const preset = requireResource(
-    owners.templates.read(view.presets, {
-      kind: 'theme',
-      id: collection.theme.id,
-      version: collection.theme.version,
-      digest: removeDigestPrefix(collection.theme.digest),
-    }),
-  );
-  if (!preset.ok) return preset;
-  if (preset.value.kind !== 'theme')
-    return missingResourceFailure('Collection does not select a theme');
-  return success(preset.value);
+  const pin = versionPinnedBy(collection);
+  const preset = requireResource(inputs.templates.read(contents.presets, pin));
+  if (!preset.ok) {
+    return preset;
+  }
+  return requireTheme(preset.value);
 }
 
-/**
- * Every font the theme pins, read through Assets, as a Presentation font set. Fails as `font`
- * fails, or with `invalid-input` at `render-resources` when they are not a font set.
- */
-function themeFonts(
-  preset: ThemePreset,
-  owners: RenderJobInputs,
-): AuthoringResult<RenderingJob['fonts']> {
-  const fonts = collect(preset.payload.fonts, (digest) => font(digest, owners));
-  if (!fonts.ok) return fonts;
-  const checked = fontSet.safeParse(fonts.value);
-  if (!checked.success) return malformedResourceFailure();
-  return success(checked.data);
+/** Writes the exact theme version the collection pins. */
+function versionPinnedBy(collection: Collection): ThemeVersion {
+  return {
+    kind: 'theme',
+    id: collection.theme.id,
+    version: collection.theme.version,
+    digest: removeDigestPrefix(collection.theme.digest),
+  };
 }
 
-/**
- * The diagram style: Design System resolves the theme's tokens with its fonts, then projects them.
- * Presentation's digest denotes the selected immutable preset; all resolved style values still
- * enter its full derivation key. Fails with `missing-asset` at `render-resources` when Design
- * System refuses (its failure kept as source), or `invalid-input` when the projection is not a
- * resolved style.
- */
-function diagramStyle(
-  preset: ThemePreset,
+/** Checks the pinned preset is a theme, not a recipe. */
+function requireTheme(preset: Preset): AuthoringResult<ThemePreset> {
+  if (preset.kind !== 'theme') {
+    return notAThemeFailure();
+  }
+  return success(preset);
+}
+
+/** Reads the theme's fonts, then works out the diagram style from the theme and those fonts. */
+function styleTheme(
+  theme: ThemePreset,
+  inputs: RenderJobInputs,
+): AuthoringResult<StyledTheme> {
+  const fonts = readThemeFonts(theme, inputs.assets);
+  if (!fonts.ok) {
+    return fonts;
+  }
+  const style = resolveDiagramStyle(theme, fonts.value, inputs);
+  if (!style.ok) {
+    return style;
+  }
+  return success({ fonts: fonts.value, style: style.value });
+}
+
+/** Asks Design System for the theme's diagram tokens, then turns them into the diagram style. */
+function resolveDiagramStyle(
+  theme: ThemePreset,
   fonts: RenderingJob['fonts'],
-  owners: RenderJobInputs,
+  inputs: RenderJobInputs,
 ): AuthoringResult<RenderingJob['style']> {
-  const tokens = requireResource(
-    owners.system.resolve({
-      scope: 'diagram',
-      sources: owners.sources,
-      theme: preset.payload,
-      fonts: fonts.map((item) => ({ family: item.family, digest: item.digest, approved: true })),
-      pin: { kind: 'theme', id: preset.id, version: preset.version, digest: preset.digest },
-    }),
-  );
-  if (!tokens.ok) return tokens;
-  const projected = requireResource(owners.system.projectDiagram(tokens.value));
-  return andThen(projected, (projection) => checkedStyle({ ...projection, digest: preset.digest }));
+  const tokenRequest = {
+    scope: 'diagram',
+    sources: inputs.sources,
+    theme: theme.payload,
+    fonts: fonts.map(approvedFont),
+    pin: versionOf(theme),
+  };
+  const tokens = requireResource(inputs.system.resolve(tokenRequest));
+  if (!tokens.ok) {
+    return tokens;
+  }
+  const projection = requireResource(inputs.system.projectDiagram(tokens.value));
+  if (!projection.ok) {
+    return projection;
+  }
+  // The digest names the theme version the style came from. Presentation still keys the style on
+  // all of its values, not on the digest alone.
+  const unchecked = { ...projection.value, digest: theme.digest };
+  return checkStyle(unchecked);
 }
 
-/** The style checked as Presentation's resolved style. Fails with `invalid-input` otherwise. */
-function checkedStyle(candidate: unknown): AuthoringResult<RenderingJob['style']> {
-  const style = resolvedStyle.safeParse(candidate);
-  if (!style.success) return malformedResourceFailure();
+/** Writes one theme font in the form Design System reads it. */
+function approvedFont(font: FontSource): ApprovedFont {
+  return { family: font.family, digest: font.digest, approved: true };
+}
+
+/** Writes the theme's own exact version. */
+function versionOf(theme: ThemePreset): ThemeVersion {
+  return { kind: 'theme', id: theme.id, version: theme.version, digest: theme.digest };
+}
+
+/** Checks the style is in the form Presentation expects. */
+function checkStyle(unchecked: unknown): AuthoringResult<RenderingJob['style']> {
+  const style = resolvedStyle.safeParse(unchecked);
+  if (!style.success) {
+    return malformedResourceFailure();
+  }
   return success(style.data);
 }
 
-/**
- * The layout options, scaled with the resolved style's gap, padding and body line height. Fails
- * with `invalid-input` at `render-resources` when they are not Layout options.
- */
-function scaledOptions(style: RenderingJob['style']): AuthoringResult<RenderingJob['options']> {
+/** Adds the job's ID and the collection's images, then the layout options. */
+function assembleJob(
+  collection: Collection,
+  purpose: RenderPurpose,
+  styled: StyledTheme,
+  inputs: RenderJobInputs,
+): AuthoringResult<RenderingJob> {
+  const id = buildRenderJobId(purpose, collection);
+  if (!id.ok) {
+    return id;
+  }
+  const images = readCollectionImages(collection, inputs.assets);
+  if (!images.ok) {
+    return images;
+  }
+  const withoutOptions: JobWithoutOptions = {
+    id: id.value,
+    collection,
+    fonts: styled.fonts,
+    style: styled.style,
+    wasmResource: inputs.wasmResource,
+    assets: images.value,
+  };
+  return addLayoutOptions(withoutOptions);
+}
+
+/** Adds the layout options, scaled with the job's style, to finish the job. */
+function addLayoutOptions(withoutOptions: JobWithoutOptions): AuthoringResult<RenderingJob> {
+  const options = scaleLayoutOptions(withoutOptions.style);
+  if (!options.ok) {
+    return options;
+  }
+  const job = { ...withoutOptions, options: options.value };
+  return success(job);
+}
+
+/** Works out the layout options from the style's gap, padding and body line height. */
+function scaleLayoutOptions(
+  style: RenderingJob['style'],
+): AuthoringResult<RenderingJob['options']> {
+  // `gridColumns` is the column count when a section doesn't set one; `maxBranches` is the most
+  // Layout allows.
   const options = layoutOptions.safeParse({
     gap: { compact: style.gap * 3, normal: style.gap * 8, roomy: style.gap * 12 },
     padding: style.padding * 2,
@@ -207,50 +241,13 @@ function scaledOptions(style: RenderingJob['style']): AuthoringResult<RenderingJ
     gridColumns: 4,
     maxBranches: 4096,
   });
-  if (!options.success) return malformedResourceFailure();
+  if (!options.success) {
+    return malformedResourceFailure();
+  }
   return success(options.data);
 }
 
-/**
- * Reads one admitted font: the stored bytes and the family Assets recorded, which measurement and
- * the browser and export all use. Fails with `missing-asset` at `render-resources` when Assets
- * cannot resolve the digest, and `invalid-input` when the result is not a Presentation font
- * source.
- */
-function font(
-  digest: string,
-  owners: RenderJobInputs,
-): AuthoringResult<FontSource> {
-  const blob = requireResource(owners.assets.resolve(digest));
-  if (!blob.ok) return blob;
-  const source = fontSource.safeParse({
-    digest,
-    family: blob.value.descriptor.fontFamily,
-    mediaType: blob.value.descriptor.mediaType,
-    base64: blob.value.base64,
-  });
-  if (!source.success) return malformedResourceFailure();
-  return success(source.data);
-}
-
-/**
- * Reads one admitted image. Its dimensions come from Assets' admission, never from authored pixel
- * hints. Fails with `missing-asset` at `render-resources` when Assets cannot resolve the digest,
- * and `invalid-input` when the result is not a Presentation visual asset.
- */
-function asset(
-  digest: string,
-  owners: RenderJobInputs,
-): AuthoringResult<VisualAsset> {
-  const blob = requireResource(owners.assets.resolve(digest));
-  if (!blob.ok) return blob;
-  const image = visualAsset.safeParse({
-    digest,
-    mediaType: blob.value.descriptor.mediaType,
-    base64: blob.value.base64,
-    width: blob.value.descriptor.width,
-    height: blob.value.descriptor.height,
-  });
-  if (!image.success) return malformedResourceFailure();
-  return success(image.data);
+/** Makes the `missing-asset` mistake for a pinned preset that is a recipe, not a theme. */
+function notAThemeFailure(): AuthoringResult<never> {
+  return missingResourceFailure('Collection does not select a theme');
 }

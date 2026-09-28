@@ -23,9 +23,17 @@ export async function runRenderJob(
   transport: RenderTransport,
   reader: RenderReader,
 ): Promise<Result<RenderDocument>> {
-  const output = await transport.run(job, signal);
-  if (!output.ok) return output;
-  if (signal.aborted)
-    return failure('cancelled', 'render', 'A newer rendering request replaced this result');
-  return reader.read(output.value, job);
+  const reply = await transport.run(job, signal);
+  if (!reply.ok) {
+    return reply;
+  }
+  if (signal.aborted) {
+    return stoppedRequestFailure();
+  }
+  return reader.read(reply.value, job);
+}
+
+/** Makes the `cancelled` mistake at `render` for a request that was stopped while its job ran. */
+function stoppedRequestFailure(): Result<never> {
+  return failure('cancelled', 'render', 'A newer rendering request replaced this result');
 }
