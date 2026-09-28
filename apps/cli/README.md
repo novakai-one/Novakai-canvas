@@ -1,65 +1,123 @@
-# CLI host
+# apps/cli — how agents author collections
 
-Two executables. The CLI parses argv, binds ports and prints. Capabilities and the local service decide domain rules, with two exceptions in `core/`: the build-spec@1 lint rules (`core/profiles/lint/`; a follow-up moves them into a capability) and the `.theme` grammar (`core/themes/`).
+Read this top to bottom. Each level adds one step of detail.
 
-| Run                                                      | Entry           | Does                                                                                                                                                                                                         |
-| -------------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `pnpm canvas COMMAND`                                    | `cli/canvas.ts` | Reads and changes collections through the local service (`pnpm dev`). Every change crosses Authoring. `profile` commands and `--help` run locally, with no service. `pnpm canvas --help` lists all commands. |
-| `pnpm render:png --collection ID\|FILE.canvas --out DIR` | `cli/render.ts` | Draws a collection: writes one SVG or PNG file per section into `--out`. Changes no stored collection.                                                                                                       |
+## Level 1 — What this folder is
 
-## Command → owning core file
+The CLI is the text front door to Novakai Canvas.
 
-| Command                                                | Core file                                                                 | Ports it uses                                                                                                    |
-| ------------------------------------------------------ | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `--help`                                               | `core/commands/help.ts`                                                   | none                                                                                                             |
-| `describe`, `list`, `read`, `inspect`, `receipt`       | `core/reads/queries.ts`                                                   | service reads, Model check                                                                                       |
-| `create`, `replace`, `patch`, `preview`                | `core/authoring/submit.ts` (source → request in `prepare.ts`)             | local files, Language, Model check, request IDs, resource reader, service reads + resources + authoring, journal |
-| `apply`, `retry`                                       | `core/authoring/reconcile.ts` (receipt first, then the identical request) | journal, service reads + resources + authoring                                                                   |
-| `theme admit`, `recipe admit`                          | `core/presets/admit.ts` (`.theme` grammar in `core/themes/`)              | local files, Language, request IDs, resource reader, service reads + resources + authoring, journal              |
-| `recipe instantiate`                                   | `core/commands/dispatch.ts` (one service call)                            | service resources                                                                                                |
-| `profile describe`, `profile scaffold`, `profile lint` | `core/profiles/commands.ts` (lint rules in `core/profiles/lint/`)         | local files, Language. No service.                                                                               |
-| `render:png`                                           | `core/render/render.ts` (argv in `request.ts`)                            | render ports (`contract/ports/render.ts`), resource reader                                                       |
+- The web app (`apps/web`) is the visual front door: people click and drag.
+- The CLI is the typed front door: AI agents type commands, because they cannot click a canvas.
+- Both send their work to the same local server (`apps/service`). The server saves it.
 
-Argv → command: `core/commands/parse.ts` checks words against `table.ts` (one row per command: operands, flags, help lines). Values are minted in `values.ts`, `operands.ts`, `recipe-values.ts`, `profile-operands.ts`. `dispatch.ts` routes and is the one `--out` writer.
+```
+person in a browser  ->  apps/web  --+
+                                     +->  apps/service  ->  Authoring  ->  saved collections
+agent in a terminal  ->  apps/cli  --+
+```
 
-Add a command: its member in `contract/records/command.ts` → its row in `table.ts` → its fields in `operands.ts` → its case in `dispatch.ts`.
+The CLI decides nothing about diagrams. It reads what was typed, sends it on, and prints the answer.
+Whether a diagram is valid is decided by the capabilities (Model, Layout, ...).
+Whether a change is saved is decided by Authoring.
 
-## Folder map
+## Level 2 — The 7 things it does
 
-| Folder                                          | Holds                                                                                                                                                             |
-| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cli/`                                          | The two executables. Import `contract/index.ts` and Node only.                                                                                                    |
-| `contract/index.ts`                             | Public surface: `runCli`, `runRender`, `formatFailure`, result types.                                                                                             |
-| `contract/api.ts`                               | Core entry points for compose. The only contract file that imports core.                                                                                          |
-| `contract/compose.ts`, `contract/compose/`      | Composition root: binds ports per command family (`service.ts`, `profiles.ts`, `render*.ts`, `language.ts`). The only files that import adapters.                 |
-| `contract/brands.ts`, `schemas.ts`, `errors.ts` | Branded IDs (capability brands re-exported), foreign schemas, closed failure codes and `Result`.                                                                  |
-| `contract/records/`                             | Data shapes: command union, argv, retained request, service answers, theme source, render request/report/failure, profiles.                                       |
-| `contract/ports/`                               | One interface per I/O seam: HTTP transport, service reads/authoring/resources, journal, local files, resource reader, Language, Model check, request IDs, render. |
-| `core/commands/`                                | Argv grammar, command table, help, routing.                                                                                                                       |
-| `core/reads/`                                   | Read-only service commands and their text.                                                                                                                        |
-| `core/authoring/`                               | DSL change → retained Authoring request → preview/apply; retry.                                                                                                   |
-| `core/resources/`                               | Stage, back up and restore font/image bytes; `sha256:` digests.                                                                                                   |
-| `core/presets/`, `core/themes/`                 | Theme/recipe admission; the `.theme` grammar.                                                                                                                     |
-| `core/profiles/`                                | build-spec@1: descriptor, starter, lint rules. Local only.                                                                                                        |
-| `core/render/`                                  | `render:png` workflow: themes, collection, snapshot, sections, report.                                                                                            |
-| `core/diagnostics/`, `core/shared/`             | Failure → terminal lines; Result and parse helpers.                                                                                                               |
-| `adapters/argv/`                                | Node `parseArgs` → raw arguments.                                                                                                                                 |
-| `adapters/service-http/`                        | Loopback HTTP transport and the three service-call adapters over it.                                                                                              |
-| `adapters/files/`                               | Source and `--out` files, request journal, confined resource reads.                                                                                               |
-| `adapters/render/`                              | Temp asset store, render file I/O, PNG raster start-up.                                                                                                           |
+1. **Learn the diagram language** — `describe`
+2. **Look at what exists** — `list`, `read`, `inspect`
+3. **Change a diagram** — `create`, `replace`, `patch`; or check first with `preview`, then `apply`
+4. **Recover a save whose answer was lost** — `receipt`, `retry`
+5. **Add reusable pieces** — `theme admit`, `recipe admit`, `recipe instantiate`
+6. **Work with build specs** — `profile describe`, `profile scaffold`, `profile lint` (no server needed)
+7. **Draw a diagram to image files** — `pnpm render:png` (a separate program)
 
-## Import rules
+The usual agent path uses the first three, then looks at the result:
 
-| From                                                    | May import                                                                                          | Checked by `pnpm architecture` |
-| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------ |
-| `core/`                                                 | `core/`, `contract/{records,ports,brands,schemas,errors}`. No packages, no Node.                    | yes                            |
-| `adapters/`                                             | `contract/{records,ports,brands,schemas,errors}`, Node, packages. Never `core/` or another adapter. | yes                            |
-| `adapters/`                                             | Never `contract/api.ts`, `index.ts` or compose.                                                     | no                             |
-| `contract/` outside compose                             | Never `adapters/`.                                                                                  | yes                            |
-| `contract/records/`, `ports/`, `brands.ts`, `errors.ts` | Never `core/`, `adapters/`, `api.ts`, `index.ts` or compose.                                        | yes                            |
-| `contract/` except `api.ts`                             | Never `core/`.                                                                                      | no                             |
-| `cli/`                                                  | `contract/index.ts` and Node only.                                                                  | no                             |
+```
+describe  ->  list / read  ->  create or patch  ->  inspect / render:png
+ (learn)       (look)           (change)            (check the result)
+```
 
-## Failures
+## Level 3 — The route every command takes
 
-Every entry point returns a `Result`. Codes are the closed union in `contract/errors.ts`; branch on the code, never the message. A service or credential failure is printed exactly as its owner wrote it. After a sent request: `canvas receipt ID`, then `canvas retry ID`.
+Every command, whichever purpose it serves, travels the same route:
+
+```
+words typed in the terminal
+  -> cli/canvas.ts               starts the program
+  -> core/commands/parse.ts      turns the words into one Command, or a clear refusal
+  -> core/commands/dispatch.ts   sends the Command to its purpose
+  -> core/<purpose>/             decides what to ask for and what to print
+  -> adapters/                   talks to the server, files and image renderer
+  -> the printed answer, or a failure with a code
+```
+
+Three types carry the story along that route:
+
+- `Command` — what was asked. One member per command. `contract/records/command.ts`
+- `Result` — either the answer or a failure. Nothing throws. `contract/errors.ts`
+- Failure codes — a fixed list; code branches on the code, never the message. `contract/errors.ts`
+
+Four folders, four jobs:
+
+- `cli/` — the two programs you run. Tiny.
+- `core/` — the decisions. No network, no files, no clock.
+- `adapters/` — the outside world: terminal arguments, HTTP to the server, files, the renderer.
+- `contract/` — the public face, the data shapes, the error codes, and `compose/`, the one place that plugs the parts together.
+
+## Level 4 — Each purpose, one at a time
+
+### 1. Learn the diagram language
+- `describe` asks the server for the DSL vocabulary and prints it.
+- Starts in `core/reads/queries.ts`.
+
+### 2. Look at what exists
+- `list` prints the collections; `read` prints one collection's source; `inspect` prints its layout warnings.
+- Starts in `core/reads/queries.ts` (collection text in `core/reads/collections.ts`, source in `core/reads/source.ts`).
+
+### 3. Change a diagram
+1. Read the `.canvas` file and parse it with the Language capability.
+2. Turn it into one Authoring request with a fresh request ID (`core/authoring/prepare.ts`, `change-request.ts`).
+3. Keep a copy of the request in the local journal, so it can be retried.
+4. Send it: saved at once (`create`, `replace`, `patch`) or checked first (`preview`, then `apply`).
+- Starts in `core/authoring/submit.ts`. `apply` starts in `core/authoring/reconcile.ts`.
+
+### 4. Recover a save whose answer was lost
+1. `receipt` asks the server whether the request was saved (`core/reads/receipt.ts`).
+2. `retry` checks the receipt first; only if there is none, it resends the SAME request from the journal — never a new one.
+- Starts in `core/authoring/reconcile.ts`.
+
+### 5. Add reusable pieces
+- `theme admit` reads a `.theme` file (its grammar is in `core/themes/`) and sends it with its font files.
+- `recipe admit` sends a reusable diagram starter; `recipe instantiate` turns a starter into editable DSL (written with `--out`).
+- Admitting starts in `core/presets/admit.ts`; instantiate is one server call in `core/commands/dispatch.ts`. Font and image files are staged by `core/resources/`.
+
+### 6. Work with build specs
+- `profile describe` explains the build-spec format; `profile scaffold` writes a starter spec; `profile lint` checks a spec against the rules.
+- Runs locally, with no server.
+- Starts in `core/profiles/commands.ts`. The rules are in `core/profiles/lint/`.
+
+### 7. Draw a diagram to image files
+- `pnpm render:png --collection ID --out DIR` writes one PNG or SVG per section. It changes nothing that is saved.
+- Starts in `core/render/render.ts` (the typed arguments are read in `core/render/request.ts`).
+
+---
+
+## Reference for maintainers
+
+**Add a command** — four places, in this order:
+1. Its member in `contract/records/command.ts`.
+2. Its row in `core/commands/table.ts` (words, flags, help line).
+3. Its fields in `core/commands/operands.ts`.
+4. Its case in `core/commands/dispatch.ts`.
+
+**Import rules** (checked by `pnpm architecture` unless marked):
+- `core/` imports only `core/` and `contract/{records,ports,brands,schemas,errors}`. No packages, no Node.
+- `adapters/` imports only `contract/{records,ports,brands,schemas,errors}`, Node and packages. Never `core/` or another adapter.
+- Only `contract/compose/` imports adapters.
+- `contract/records/`, `ports/`, `brands.ts`, `errors.ts` never import `core/`, `adapters/` or compose.
+- `cli/` imports only `contract/index.ts` and Node (not checked).
+
+**Known exceptions** — two rule sets still live here and are moving to a capability:
+the build-spec rules (`core/profiles/lint/`) and the `.theme` grammar (`core/themes/`).
+
+**After a failed send** — run `pnpm canvas receipt ID`, then `pnpm canvas retry ID`.
