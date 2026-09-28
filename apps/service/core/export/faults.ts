@@ -5,8 +5,9 @@
  * go of the held files fails afterwards. For example, asking for `my-diagram` at revision 2 when
  * it is at revision 3 is `snapshot-mismatch` at `identity.revision`.
  *
- * This file makes those mistakes in Export's own form, and turns the final one into the service's
- * answer (`invalid-input`, `cancelled` or `unavailable`), keeping Export's mistake as the source.
+ * This file makes those mistakes in Export's own form, and turns the mistake an export ends with
+ * into the service's answer (`invalid-input`, `cancelled` or `unavailable`), keeping Export's
+ * mistake as the source.
  * A failure to let go never hides the export's own mistake. It never throws.
  */
 import { failure, type ErrorCode, type Result } from '../../contract/errors.js';
