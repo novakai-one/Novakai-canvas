@@ -17,7 +17,8 @@ export function createGestureIds(
   host: Pick<SurfaceHost, 'nextGestureId' | 'onError'>,
 ): NextGestureId {
   return function nextGestureId(): Result<GestureId> {
-    const parsed = parseGestureId(host.nextGestureId());
+    const text = host.nextGestureId();
+    const parsed = parseGestureId(text);
     if (!parsed.ok) host.onError(parsed.error);
     return parsed;
   };

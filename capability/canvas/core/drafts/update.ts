@@ -1,13 +1,14 @@
 import type { SessionState } from '../../contract/records/state.js';
 import type { GestureDraft, PlacementDraft, RouteDraft } from '../../contract/records/draft.js';
 import type { EventOf } from '../../contract/events.js';
+import type { GestureId } from '../../contract/brands.js';
 import { box } from '../../contract/records/camera.js';
 import { parse, reject } from '../validation/outcomes.js';
 import { targetInfo } from '../scenes/address.js';
 /** Every continuation names its active gesture; delayed callbacks cannot edit a replacement draft. */
 export function activeDraft(
   state: SessionState,
-  id: string,
+  id: GestureId,
 ): GestureDraft {
   if (state.draft === null) return reject('invalid-gesture', id, 'No active gesture');
   if (state.draft.id !== id)

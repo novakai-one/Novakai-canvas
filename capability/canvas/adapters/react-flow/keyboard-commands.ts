@@ -9,6 +9,27 @@ import type { BrowserInput } from '../../contract/react-types.js';
 import type { Target } from '../../contract/records/selection.js';
 import type { SessionState } from '../../contract/records/state.js';
 
+/** Canvas handles only its documented key vocabulary; global browser and text-editor shortcuts remain native. */
+export function createKeyboardCommands(context: KeyboardContext): KeyboardCommand {
+  const { owners, dispatch } = context;
+  return function keyboard(event) {
+    if (!handlesKey(event, owners.input)) return;
+    const issued = owners.nextGestureId();
+    if (!issued.ok) return;
+    event.preventDefault();
+    focusKeyboardTarget(context, event.target);
+    dispatch({
+      kind: 'keyboard',
+      id: issued.value,
+      key: event.key,
+      alt: event.altKey,
+      shift: event.shiftKey,
+      typing: false,
+      modal: false,
+    });
+  };
+}
+
 /** The keys the canvas handles; every other key stays with the browser. */
 const canvasKeys: ReadonlySet<string> = new Set([
   'ArrowLeft',
@@ -20,27 +41,6 @@ const canvasKeys: ReadonlySet<string> = new Set([
   'Backspace',
   'Escape',
 ]);
-
-/** Canvas handles only its documented key vocabulary; global browser and text-editor shortcuts remain native. */
-export function createKeyboardCommands(context: KeyboardContext): KeyboardCommand {
-  const { owners, dispatch } = context;
-  return function keyboard(event) {
-    if (!handlesKey(event, owners.input)) return;
-    const gestureId = owners.nextGestureId();
-    if (!gestureId.ok) return;
-    event.preventDefault();
-    focusKeyboardTarget(context, event.target);
-    dispatch({
-      kind: 'keyboard',
-      id: gestureId.value,
-      key: event.key,
-      alt: event.altKey,
-      shift: event.shiftKey,
-      typing: false,
-      modal: false,
-    });
-  };
-}
 
 /** True for a canvas key that no earlier handler took and that was not typed into a native control. */
 function handlesKey(

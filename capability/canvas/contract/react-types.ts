@@ -191,13 +191,6 @@ export interface SequenceProps {
   readonly actions: Pick<ViewActions, 'dispatch'>;
   readonly paint: Paint;
 }
-export interface RouteHandlesProps {
-  readonly edge: ViewWire;
-  readonly actions: GestureActions;
-  readonly editable: boolean;
-  readonly nudge: number;
-  readonly controlPosition: Point;
-}
 export interface Interactions {
   readonly actions: ViewActions;
   readonly flow: Pick<

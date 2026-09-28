@@ -3,6 +3,7 @@ import type { SessionState, Transition } from '../../contract/records/state.js';
 import type { RecoverableDraft } from '../../contract/records/draft.js';
 import type { SceneAdmission } from '../../contract/ports/scene-admission.js';
 import type { EventOf } from '../../contract/events.js';
+import type { GestureId } from '../../contract/brands.js';
 import { sameStamp, admitScene } from '../scenes/accept.js';
 import { indexScene } from '../scenes/index.js';
 import { refreshReadingOrder } from '../scenes/reading.js';
@@ -60,7 +61,7 @@ function reconcileScene(
 /** Definitive rejection changes only the matching retained gesture; later drafts cannot be cleared accidentally. */
 export function rejectDraft(
   state: SessionState,
-  id: string,
+  id: GestureId,
   message: string,
 ): SessionState {
   const recovery = state.recovery.map((entry): RecoverableDraft => {
@@ -76,7 +77,7 @@ export function rejectDraft(
 /** Receipt confirmation and explicit discard remove a single matching recovery copy; replay is harmless. */
 export function removeRecovery(
   state: SessionState,
-  id: string,
+  id: GestureId,
 ): SessionState {
   return {
     ...state,

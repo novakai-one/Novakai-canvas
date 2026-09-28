@@ -17,13 +17,6 @@ import type { Target } from '../../contract/records/selection.js';
 import type { CanvasEvent } from '../../contract/events.js';
 import type { SessionState } from '../../contract/records/state.js';
 import type { Endpoint } from '../../contract/records/intent.js';
-/** The React Flow change records selection reads. */
-type FlowChange = NodeChange<FlowNode> | EdgeChange<FlowEdge>;
-/** The two node endpoints one React Flow connection joins. */
-interface ConnectionEnds {
-  readonly source: Endpoint;
-  readonly target: Endpoint;
-}
 /** Translate React Flow events to public Canvas commands; drag, resize and keys come from `parts`. */
 export function createInteractions(
   parts: InteractionParts,
@@ -83,10 +76,11 @@ export function createInteractions(
   function connect(connection: Connection): void {
     const ends = connectionEnds(owners.session.getSnapshot(), connection);
     if (ends === null) return;
-    const gestureId = owners.nextGestureId();
-    if (!gestureId.ok) return;
-    dispatch({ kind: 'connect', id: gestureId.value, endpoint: ends.source });
-    dispatch({ kind: 'connect', id: gestureId.value, endpoint: ends.target });
+    const issued = owners.nextGestureId();
+    if (!issued.ok) return;
+    const id = issued.value;
+    dispatch({ kind: 'connect', id, endpoint: ends.source });
+    dispatch({ kind: 'connect', id, endpoint: ends.target });
   }
   const actions: ViewActions = {
     dispatch,
@@ -143,6 +137,11 @@ export function createInteractions(
     },
   };
 }
+/** The two node endpoints one React Flow connection joins. */
+interface ConnectionEnds {
+  readonly source: Endpoint;
+  readonly target: Endpoint;
+}
 /** The node endpoints a connection joins, read from the admitted index; null unless both ends are nodes. */
 function connectionEnds(
   state: SessionState,
@@ -167,6 +166,8 @@ function sameTarget(
 function targetAddress(target: Target): string {
   return JSON.stringify(target);
 }
+/** The React Flow change records selection reads. */
+type FlowChange = NodeChange<FlowNode> | EdgeChange<FlowEdge>;
 /** Incoming selection change carries its scoped node/edge ID; no generated ID parsing is needed. */
 function selectedTargets(
   owners: InteractionOwners,

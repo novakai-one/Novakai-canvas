@@ -11,12 +11,6 @@ import type { PointerGesture } from '../../contract/ports/session.js';
 import type { SessionState } from '../../contract/records/state.js';
 import type { GestureId } from '../../contract/brands.js';
 
-/** A previewable drag: its gesture and the index keys that move with it. */
-interface LiveMove {
-  readonly id: GestureId;
-  readonly keys: ReadonlySet<string>;
-}
-
 /**
  * Builds the drag and resize handlers. A drag of plain nodes publishes only a live offset; tree
  * and sequence sections take the full per-frame path. Release submits one coalesced intent;
@@ -39,9 +33,9 @@ export function createGeometryGestures(context: GeometryContext): GeometryGestur
     nodes: readonly FlowNode[],
   ): void {
     if (owners.input.ownsNativeInput(event.target)) return;
-    const gestureId = owners.nextGestureId();
-    if (!gestureId.ok) return;
-    const id = gestureId.value;
+    const issued = owners.nextGestureId();
+    if (!issued.ok) return;
+    const id = issued.value;
     suppressHover('drag');
     owners.session.writePointer({
       id,
@@ -98,10 +92,11 @@ export function createGeometryGestures(context: GeometryContext): GeometryGestur
   }
   /** Resize controls operate on one target and retain the same gesture identity through their lifecycle. */
   function beginResize(target: Target): void {
-    const gestureId = owners.nextGestureId();
-    if (!gestureId.ok) return;
-    owners.session.writePointer({ id: gestureId.value, target, start: { x: 0, y: 0 } });
-    dispatch({ kind: 'begin', id: gestureId.value, gesture: 'resize', targets: [target] });
+    const issued = owners.nextGestureId();
+    if (!issued.ok) return;
+    const id = issued.value;
+    owners.session.writePointer({ id, target, start: { x: 0, y: 0 } });
+    dispatch({ kind: 'begin', id, gesture: 'resize', targets: [target] });
   }
   /** React Flow resize coordinates are parent-relative; add the displayed parent's world origin once. */
   function resize(
@@ -143,6 +138,11 @@ function stillActive(
 ): active is PointerGesture {
   if (active === null) return false;
   return owners.session.getSnapshot().draft?.id === active.id;
+}
+/** A previewable drag: its gesture and the index keys that move with it. */
+interface LiveMove {
+  readonly id: GestureId;
+  readonly keys: ReadonlySet<string>;
 }
 /** The drag's live move when every dragged node is previewable; null means the full per-frame path. */
 function liveMove(

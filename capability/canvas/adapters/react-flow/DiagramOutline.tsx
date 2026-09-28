@@ -53,11 +53,11 @@ export function createDiagramOutline(
     props: OutlineProps,
   ): void {
     if (item.target.kind !== 'node') return;
-    const gestureId = props.actions.nextGestureId();
-    if (!gestureId.ok) return;
+    const issued = props.actions.nextGestureId();
+    if (!issued.ok) return;
     props.actions.dispatch({
       kind: 'connect',
-      id: gestureId.value,
+      id: issued.value,
       endpoint: { section: item.target.section, node: item.target.id, member },
     });
   }

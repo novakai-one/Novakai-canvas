@@ -6,6 +6,7 @@ import type {
   RecoverableDraft,
 } from '../../contract/records/draft.js';
 import type { EditIntent, LocalPlacement } from '../../contract/records/intent.js';
+import type { GestureId } from '../../contract/brands.js';
 import { activeDraft } from './update.js';
 import { regroupIntent } from './regroup.js';
 import { targetInfo } from '../scenes/address.js';
@@ -47,7 +48,7 @@ export function draftIntent(
 /** Release emits once and retains a recovery copy until the host confirms its matching receipt. */
 export function finishDraft(
   state: SessionState,
-  id: string,
+  id: GestureId,
 ): Transition {
   const draft = activeDraft(state, id);
   if (!draft.changed) return changed(state, { ...state, draft: null });
