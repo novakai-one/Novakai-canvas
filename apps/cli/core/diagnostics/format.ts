@@ -22,7 +22,7 @@ type RecordIssue = Extract<ValidationIssue, { readonly path: string }>;
  * Turns a failure into the lines to print: `code: message`, the lines saying why, then what to do
  * next.
  * A font or image mistake names its place first, such as `walk.canvas:4:1 asset @logo: …`.
- * A failure the service package wrote prints exactly as written.
+ * A failure the service sent (a `ForeignFailure`) prints the service's own code and words.
  */
 export function formatFailure(error: CliFailure): readonly string[] {
   switch (error.code) {

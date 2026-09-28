@@ -16,7 +16,7 @@ const emptyLibrary = 'No collections yet. Use canvas create diagram.canvas.';
 
 /**
  * Writes one line per saved collection, as `list` prints: ID, revision, title and section count,
- * separated by tabs. Deleted collections are left out, and one Model refuses shows as
+ * separated by tabs. Deleted collections are left out. A collection that Model rejects shows as
  * `Invalid collection`. With none, it writes `No collections yet. Use canvas create diagram.canvas.`
  */
 export function formatCollectionList(
