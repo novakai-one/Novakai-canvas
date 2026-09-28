@@ -20,11 +20,11 @@ const unretained: ExportDiagnostic = Object.freeze({
 });
 
 /**
- * Gives back the checker Export calls before using any bytes (Export's `Resources`). It passes a
- * batch only when each one equals a resource in `retained`, the snapshot's list; otherwise it
- * answers `resource-rejected`.
+ * Gives back the checker Export calls before using any bytes (Export's `Resources`). It approves a
+ * requested batch only when every resource in it equals one in `retained`, the snapshot's list;
+ * otherwise it answers `resource-rejected`.
  */
-export function retainedResourceCheck(retained: readonly Resource[]): Resources {
+export function buildResourceCheck(retained: readonly Resource[]): Resources {
   return {
     async inspect(items) {
       if (!items.every((item) => isRetained(item, retained)))

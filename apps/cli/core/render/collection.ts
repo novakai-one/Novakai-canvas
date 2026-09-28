@@ -30,8 +30,8 @@ export interface CollectionDependencies extends SourceDependencies, AssetDepende
 }
 
 /**
- * Loads the collection `selector` names as a checked collection, using the theme `themes` chose,
- * if any, in place of its own.
+ * Loads the collection `selector` names as a checked collection, and draws it with
+ * `themes.choice` in place of its own theme, when a theme was asked for.
  * Mistakes: the source can't be found or read, the theme can't be written in or isn't known
  * (`missing-theme`), a font or image can't be stored, or Language or Model find a problem.
  */
