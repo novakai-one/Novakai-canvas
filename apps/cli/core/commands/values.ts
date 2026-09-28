@@ -1,8 +1,17 @@
 /*
- * One check per argument value: read scope, change mode, revision, collection ID, request ID, file
- * path, profile, server and workspace. Each mints its brand once, from flag text as given, and
- * fills its default. Pure. A rejected value is a failure naming the argument; nothing was read or
- * sent, so the caller corrects it and runs the command again.
+ * Why this file exists
+ *
+ * Everything an agent types is text. In `pnpm canvas replace plan.canvas --revision 3`, the `3` is
+ * text, not a number. Before the CLI can use a value, it has to check the text makes sense and
+ * turn it into a checked type. `3` becomes a `CollectionRevision`. A `--server` address must be
+ * this machine (`http://127.0.0.1:…`), so the agent's token is never sent anywhere else.
+ *
+ * This file has one check per kind of value: which part of a collection to read, the change mode,
+ * the revision, a collection ID, a request ID, a file path, a profile, and where to send the
+ * command. When a flag was left out, its check fills in the usual value, such as `--mode create`.
+ *
+ * It only checks text. It never opens a file or talks to the server. Each check answers with a
+ * `Result` (see `contract/errors.ts`), and a value typed wrong comes back as a mistake naming it.
  */
 import {
   collectionId,
@@ -68,8 +77,10 @@ const invalidRevision: FailureInput = Object.freeze({
 });
 
 /**
- * --section or --object as a read scope; neither means the whole collection. Fails with
- * `invalid-arguments` when the ID is not a canonical ID.
+ * Works out which part of a collection `read` returns: one section (`--section intro`), one object
+ * (`--object customer`), or all of it when neither was typed.
+ *
+ * The mistake it can find: a section or object ID that isn't valid (`invalid-arguments`).
  */
 export function checkReadScope(flags: Pick<CommandFlags, 'section' | 'object'>): Result<ReadScope> {
   if (flags.section !== undefined) {
@@ -82,8 +93,12 @@ export function checkReadScope(flags: Pick<CommandFlags, 'section' | 'object'>):
 }
 
 /**
- * The change mode. A change command (`create`, `replace`, `patch`) is its own mode; any other
- * command checks --mode (`create` when absent). Fails with `invalid-mode`.
+ * Works out how a file changes a collection: `create`, `replace` or `patch`.
+ *
+ * The commands `create`, `replace` and `patch` are their own mode. Any other command uses
+ * `--mode`, or `create` when it wasn't typed.
+ *
+ * The mistake it can find: a `--mode` that isn't one of the three (`invalid-mode`).
  */
 export function checkChangeMode(
   name: CommandName,
@@ -100,8 +115,11 @@ export function checkChangeMode(
 }
 
 /**
- * --revision: a whole number from 0 to `Number.MAX_SAFE_INTEGER`; absent stays absent. Fails with
- * `invalid-revision`.
+ * Checks `--revision`, the collection revision the agent last read. It must be a whole number from
+ * 0 up, such as `3`. When it wasn't typed, it stays left out.
+ *
+ * The mistake it can find: anything else, such as `-1`, `abc` or a number too large
+ * (`invalid-revision`).
  */
 export function checkRevisionOption(flags: Pick<CommandFlags, 'revision'>): Result<RevisionOption> {
   if (flags.revision === undefined) {
@@ -114,23 +132,39 @@ export function checkRevisionOption(flags: Pick<CommandFlags, 'revision'>): Resu
   return success({ revision: revision.value });
 }
 
-/** A collection ID operand (`read`, `inspect`). Fails with `invalid-arguments`. */
-export function checkCollectionId(collectionText: string): Result<CollectionId> {
-  return checked(collectionId, collectionText, {
+/**
+ * Checks the collection ID typed after `read` or `inspect`. `typedCollectionId` is the text as
+ * typed, such as `my-diagram`.
+ *
+ * The mistake it can find: an ID that isn't a letter followed by letters, digits, `_` or `-`
+ * (`invalid-arguments`).
+ */
+export function checkCollectionId(typedCollectionId: string): Result<CollectionId> {
+  return checked(collectionId, typedCollectionId, {
     code: 'invalid-arguments',
     message: 'Collection IDs must be canonical IDs: a letter, then letters, digits, _ or -.',
   });
 }
 
-/** A request ID operand (`receipt`, `retry`, `apply`) or --request. Fails with `invalid-request`. */
-export function checkRequestId(requestText: string): Result<RequestId> {
-  return checked(requestId, requestText, {
+/**
+ * Checks a request ID: the word typed after `receipt`, `retry` or `apply`, or the text after
+ * `--request`. `typedRequestId` is the text as typed.
+ *
+ * The mistake it can find: text that isn't a valid request ID (`invalid-request`).
+ */
+export function checkRequestId(typedRequestId: string): Result<RequestId> {
+  return checked(requestId, typedRequestId, {
     code: 'invalid-request',
     message: 'Request ID is invalid',
   });
 }
 
-/** --request; absent stays absent and a fresh ID is minted later. Fails with `invalid-request`. */
+/**
+ * Checks `--request`, a fixed ID for the request the command sends, so its receipt can be looked
+ * up later. When it wasn't typed, it stays left out, and a new ID is made when the request is sent.
+ *
+ * The mistake it can find: text that isn't a valid request ID (`invalid-request`).
+ */
 export function checkRequestOption(flags: Pick<CommandFlags, 'request'>): Result<RequestOption> {
   if (flags.request === undefined) {
     return success({});
@@ -143,16 +177,22 @@ export function checkRequestOption(flags: Pick<CommandFlags, 'request'>): Result
 }
 
 /**
- * A FILE operand. Only an empty path fails here, with the text its read would give:
- * `source-unavailable`. It fails before the credential read, the server check or any send.
+ * Checks the file path typed after the command, such as `plan.canvas` in `create plan.canvas`.
+ * `typedFilePath` is the path as typed. The file itself is read later.
+ *
+ * The mistake it can find: an empty path (`source-unavailable`, the same message a failed read
+ * gives). It is found before anything is sent.
  */
-export function checkSourceFile(fileText: string): Result<FilePath> {
-  return checked(filePath, fileText, unreadableSource(fileText));
+export function checkSourceFile(typedFilePath: string): Result<FilePath> {
+  return checked(filePath, typedFilePath, unreadableSource(typedFilePath));
 }
 
 /**
- * --out; absent stays absent. An empty path fails with the text its write would give:
- * `output-unavailable`. It fails before the command runs, so nothing is sent or committed.
+ * Checks `--out`, the file the command's answer is written to. When it wasn't typed, it stays left
+ * out, and the answer is printed instead.
+ *
+ * The mistake it can find: an empty path (`output-unavailable`, the same message a failed write
+ * gives). It is found before the command runs, so nothing is sent or saved.
  */
 export function checkOutOption(flags: Pick<CommandFlags, 'out'>): Result<OutOption> {
   if (flags.out === undefined) {
@@ -165,11 +205,16 @@ export function checkOutOption(flags: Pick<CommandFlags, 'out'>): Result<OutOpti
   return success({ out: out.value });
 }
 
-/** A profile operand or --profile. Fails with `unknown-profile`. */
-export function checkProfile(profileText: string): Result<ProfileId> {
-  return checked(profileId, profileText, {
+/**
+ * Checks a profile name, typed after `profile describe`, `profile scaffold` or `--profile`.
+ * `typedProfileId` is the text as typed, such as `build-spec@1`.
+ *
+ * The mistake it can find: a profile the CLI doesn't know (`unknown-profile`).
+ */
+export function checkProfileId(typedProfileId: string): Result<ProfileId> {
+  return checked(profileId, typedProfileId, {
     code: 'unknown-profile',
-    message: `Unknown profile: ${profileText}`,
+    message: `Unknown profile: ${typedProfileId}`,
     recovery: 'Use build-spec@1.',
   });
 }
@@ -177,8 +222,10 @@ export function checkProfile(profileText: string): Result<ProfileId> {
 /**
  * Checks where to send the command (`--server`) and which workspace folder to use (`--workspace`).
  * If `--server` wasn't typed, the local service's usual address is used. If `--workspace` wasn't
- * typed, `defaultWorkspace` is used. Stops with `invalid-server` at an address that isn't the local
- * service, before any credential is read.
+ * typed, `defaultWorkspace` is used.
+ *
+ * The mistake it can find: a `--server` that isn't an address on this machine, such as
+ * `http://example.com` (`invalid-server`). It is found before any credential is read.
  */
 export function checkServiceOptions(
   flags: Pick<CommandFlags, 'server' | 'workspace'>,

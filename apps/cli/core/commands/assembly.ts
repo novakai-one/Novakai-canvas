@@ -1,9 +1,20 @@
 /*
- * `pnpm canvas` command assembly: an accepted command's operand and flag text become one
- * `ParsedCommand`, each command carrying only the checked fields it reads. The builders are in
- * `service-commands.ts` and `profile-commands.ts`. Pure. Values are checked in the base CLI's
- * order (listed on `assembleCommand`). A rejected value is a failure naming the argument; nothing
- * was read or sent, so the caller corrects it and runs the command again.
+ * Why this file exists
+ *
+ * By this point the CLI knows the command, and that its words and flags fit. But every value is
+ * still text as the agent typed it. In `pnpm canvas replace plan.canvas --revision 3`, the `3` is
+ * only text. The rest of the CLI needs checked values: a real revision number, a file path, a
+ * server address on this machine.
+ *
+ * This file turns the accepted command into one `ParsedCommand`, with every value checked and
+ * every left-out option filled in. It checks `--section`, `--object`, `--mode` and `--revision`
+ * first, the same way for every command. Then it hands the command's own values to its builder,
+ * in `service-commands.ts` or `profile-commands.ts`. Last, for a command sent to the service, it
+ * adds where to send it (`--server`, `--workspace`).
+ *
+ * It never reads a file or talks to the server. Each step answers with a `Result` (see
+ * `contract/errors.ts`). The checks, and the mistakes they report, are in `values.ts` and
+ * `recipe-values.ts`.
  */
 import type {
   ChangeMode,
@@ -30,15 +41,15 @@ import {
   buildProfileScaffoldCommand,
 } from './profile-commands.js';
 import {
-  buildAnswerOnlyCommand,
-  buildFileCommand,
+  buildCreateOrThemeAdmitCommand,
+  buildDescribeOrListCommand,
   buildInspectCommand,
   buildPreviewCommand,
   buildReadCommand,
+  buildReceiptRetryOrApplyCommand,
   buildRecipeAdmitCommand,
   buildRecipeInstantiateCommand,
-  buildRequestCommand,
-  buildRevisionCheckedCommand,
+  buildReplaceOrPatchCommand,
 } from './service-commands.js';
 import type { OneOperandCommand } from './table.js';
 import {
@@ -77,18 +88,18 @@ const profileCommands: Readonly<Record<ProfileCommandName, ProfileCommandName>> 
 } satisfies Record<ProfileCommandName, ProfileCommandName>);
 
 /**
- * Assembles the accepted command with every value checked.
+ * Checks every value typed with the command, and builds the `ParsedCommand` the CLI runs.
  *
- * Steps; the first failure stops assembly and is returned unchanged:
- * 1. Check the read scope, --mode, then --revision.
- * 2. Build the command for who runs it. `help` carries no values. A profile command runs locally:
- *    its operand, then its own flags and --out. A service command is sent: its operand, then its
- *    own flags, --request and --out, then its --server and --workspace (`defaultWorkspace` when
- *    the flag is absent).
+ * It takes three steps. If a step finds a mistake, it stops there and returns that mistake.
+ * 1. Check `--section` or `--object`, then `--mode`, then `--revision`.
+ * 2. Check the word after the command, then the command's own flags. `help` has nothing to check.
+ *    A profile command, such as `profile lint plan.canvas`, runs on this machine and stops here.
+ * 3. For a command sent to the service, check `--server` and `--workspace`. If `--workspace`
+ *    wasn't typed, the command uses `defaultWorkspace`.
  *
- * Fails with `invalid-arguments`, `invalid-mode`, `invalid-revision`, `invalid-request`,
- * `unknown-profile`, `source-unavailable` (an empty FILE), `output-unavailable` (an empty --out)
- * or `invalid-server`.
+ * The mistakes it can find: a bad `--section` or `--object` ID, an unknown `--mode`, a bad
+ * `--revision`, a bad collection ID, request ID or recipe pin, an unknown profile, a missing or bad
+ * recipe or scaffold flag, an empty file or `--out` path, or a `--server` not on this machine.
  */
 export function assembleCommand(
   accepted: AcceptedCommand,
@@ -170,7 +181,7 @@ function buildNoOperandCommand(
   if (name === 'help') {
     return success({ kind: 'help' });
   }
-  const serviceCommand = buildAnswerOnlyCommand(name, flags);
+  const serviceCommand = buildDescribeOrListCommand(name, flags);
   return addServiceOptions(serviceCommand, flags, defaultWorkspace);
 }
 
@@ -234,13 +245,13 @@ function buildServiceCommand(
     case 'receipt':
     case 'retry':
     case 'apply':
-      return buildRequestCommand(name, operand, flags);
+      return buildReceiptRetryOrApplyCommand(name, operand, flags);
     case 'create':
     case 'theme-admit':
-      return buildFileCommand(name, operand, flags);
+      return buildCreateOrThemeAdmitCommand(name, operand, flags);
     case 'replace':
     case 'patch':
-      return buildRevisionCheckedCommand(name, operand, flags, revisionOption);
+      return buildReplaceOrPatchCommand(name, operand, flags, revisionOption);
     case 'preview':
       return buildPreviewCommand(operand, flags, mode, revisionOption);
     case 'recipe-admit':

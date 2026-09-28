@@ -1,7 +1,15 @@
 /*
- * `canvas --help`: a title, every command's usage lines in the command table's order, then the
- * notes on options, modes, read scopes and receipts. Pure; built once. Printed before the
- * credential, any file or the service is touched.
+ * Why this file exists
+ *
+ * An agent that doesn't know the commands types `pnpm canvas --help`. It should get every command
+ * and how to type it, such as `canvas read ID [--section ID | --object ID] [--out FILE]`, plus
+ * a few notes. One note: a missing receipt doesn't mean an edit was saved.
+ *
+ * This file writes that text once, from the command rows in `table.ts`, so the help and the
+ * commands can't drift apart.
+ *
+ * It's plain text, made once. It is printed before the CLI reads any credential or file, or
+ * contacts the service.
  */
 import { commandRows } from './table.js';
 import type { CommandRow } from './table.js';
@@ -24,7 +32,7 @@ const notes: readonly string[] = Object.freeze([
 /** Every command's usage lines, in the command table's order. */
 const commandUsage: readonly string[] = commandRows().flatMap(usageLinesOf);
 
-/** The help text: the title, the commands, then the notes, with no trailing line break. */
+/** The whole `--help` text: a title, every command's lines, then the notes. No final line break. */
 export const helpText = [title, blankLine, ...commandUsage, blankLine, ...notes].join('\n');
 
 /** One command's lines in `canvas --help`, as its table row gives them. */

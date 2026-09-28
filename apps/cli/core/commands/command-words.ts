@@ -1,14 +1,24 @@
 /*
- * Which typed words name the command, as the base CLI chose them: --help replaces them with
- * `help`, and a family word (`theme`, `recipe`, `profile`) joins the word after it. No word is
- * checked here; `parse.ts` checks the first one names a command. Pure.
+ * Why this file exists
+ *
+ * The first word an agent types usually names the command: `pnpm canvas list`. Two things make it
+ * less simple:
+ *
+ *   - `theme`, `recipe` and `profile` start two-word commands. `recipe admit er.canvas` is the
+ *     command `recipe-admit`, with `er.canvas` typed after it.
+ *   - `--help` (or `-h`) anywhere means the `help` command, whatever words were typed.
+ *
+ * This file picks out the word that names the command, and the words typed after it. It never
+ * checks that the word is a real command: `parse.ts` does that next.
  */
 import type { WellFormedArguments } from './command-stages.js';
-import { isFamilyWord } from './table.js';
+import { isCommandGroup } from './table.js';
 
-/** The first word, which should name a command, and the words typed after it. */
+/** The word that should name the command, and the words typed after it. */
 export interface CommandWords {
+  /** `recipe-admit` for `recipe admit er.canvas`. Not checked yet; missing if nothing was typed. */
   readonly firstWord: string | undefined;
+  /** The words after the command: `['er.canvas']`. */
   readonly operandWords: readonly string[];
 }
 
@@ -19,15 +29,18 @@ const helpCommandWords: CommandWords = Object.freeze({
 });
 
 /**
- * The words that name the command. --help wins: every typed word is dropped and the command is
- * `help`. Its flags are still checked, so `list --help --out x` prints usage while
- * `--help --profile x` fails. Otherwise the typed words, with a family word joined to the next.
+ * Picks out the word that names the command, and the words typed after it.
+ *
+ * `--help` wins: the command is `help`, and every typed word is dropped. The flags are still
+ * checked later, so `list --help --out x` prints the help, but `--help --profile x` is a mistake.
+ * Otherwise the words are kept in order, and `theme`, `recipe` or `profile` joins the word after
+ * it: `recipe admit` becomes `recipe-admit`.
  */
 export function chooseCommandWords(wellFormed: WellFormedArguments): CommandWords {
   if (asksForHelp(wellFormed)) {
     return helpCommandWords;
   }
-  const typedWords = joinFamilyWord(wellFormed.positionals);
+  const typedWords = joinTwoWordCommand(wellFormed.positionals);
   return splitFirstWord(typedWords);
 }
 
@@ -37,17 +50,17 @@ function asksForHelp(wellFormed: WellFormedArguments): boolean {
 }
 
 /**
- * `recipe admit FILE` becomes `recipe-admit FILE`: a leading family word joins the word after it.
- * Other words, and a family word typed alone, are returned as given.
+ * `recipe admit FILE` becomes `recipe-admit FILE`: a leading `theme`, `recipe` or `profile` joins
+ * the word after it. Other words, and any of those three typed alone, are returned as given.
  */
-function joinFamilyWord(words: readonly string[]): readonly string[] {
+function joinTwoWordCommand(words: readonly string[]): readonly string[] {
   const [first, second, ...rest] = words;
-  const joinsNextWord = isFamilyWord(first) && second !== undefined;
+  const joinsNextWord = isCommandGroup(first) && second !== undefined;
   if (!joinsNextWord) {
     return words;
   }
-  const familyCommand = `${first}-${second}`;
-  return [familyCommand, ...rest];
+  const twoWordCommand = `${first}-${second}`;
+  return [twoWordCommand, ...rest];
 }
 
 /** The first word and the words after it. With no words, the first word is `undefined`. */

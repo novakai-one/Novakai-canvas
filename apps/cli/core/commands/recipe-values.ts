@@ -1,9 +1,21 @@
 /*
- * `recipe admit` and `recipe instantiate` argument values: the recipe header from
- * --id --version --family --title, and the expansion request from `ID@VERSION#sha256:DIGEST` plus
- * --namespace. Pure; every brand comes from Templates' own schemas, and the `sha256:` pin converts
- * through core/resources/digests. Fails with `invalid-arguments`; nothing was read or sent, so the
- * caller corrects the named argument.
+ * Why this file exists
+ *
+ * Two recipe commands need several values typed right before anything is sent:
+ *
+ *   pnpm canvas recipe admit er.canvas --id er --version 1.0.0 --family er --title "ER diagram"
+ *   pnpm canvas recipe instantiate er@1.0.0#sha256:DIGEST --namespace shop --out shop.canvas
+ *
+ * `recipe admit` saves a diagram file as a reusable recipe. Its four flags describe the recipe
+ * (its header). `recipe instantiate` turns a saved recipe into diagram text the agent can edit. It
+ * needs the exact recipe, written as ID, version and content digest (the recipe's pin), and
+ * `--namespace`, the ID the new collection gets.
+ *
+ * This file checks those values and returns them as checked types. The rules for IDs, versions and
+ * families come from the Templates capability, so the CLI can't disagree with it.
+ *
+ * It never reads the file or asks the service. Each check answers with a `Result` (see
+ * `contract/errors.ts`). Every mistake here is `invalid-arguments`.
  */
 import { presetId as presetIdSchema, version as versionSchema } from '../../contract/brands.js';
 import type { PresetDigest, PresetId, Version } from '../../contract/brands.js';
@@ -55,8 +67,11 @@ interface PresetIdentity {
 type RecipePin = ExpansionRequest['pin'];
 
 /**
- * The recipe header. Fails with `invalid-arguments`: a missing or empty flag first, then an --id
- * that is not a preset ID, a --version that is not `MAJOR.MINOR.PATCH`, or an unknown --family.
+ * Checks the four flags `recipe admit` needs: `--id`, `--version`, `--family` and `--title`.
+ *
+ * The mistakes it can find, in this order: any of the four missing or empty; an `--id` that isn't
+ * a letter followed by letters, digits, `_` or `-`; a `--version` not written like `1.0.0`; a
+ * `--family` that isn't a recipe family, such as `er` or `sop`.
  */
 export function checkRecipeHeader(flags: CommandFlags): Result<RecipeHeader> {
   const headerText = requireHeaderFlags(flags);
@@ -67,19 +82,24 @@ export function checkRecipeHeader(flags: CommandFlags): Result<RecipeHeader> {
 }
 
 /**
- * The expansion request for `recipe instantiate PIN --namespace ID`. Fails with
- * `invalid-arguments` (the usage line) when the pin text, its ID, version or digest, or the
- * namespace is missing or malformed.
+ * Checks what `recipe instantiate` asks for: the exact recipe and the new collection's ID. The
+ * Templates capability calls this an expansion request.
+ *
+ * `typedPin` is the recipe as typed after the command, such as `er@1.0.0#sha256:DIGEST`.
+ * `typedNamespace` is the text after `--namespace`, or `undefined` when it wasn't typed.
+ *
+ * The mistakes it can find: a pin not in that shape; a pin whose ID, version or digest isn't
+ * valid; `--namespace` missing or not a valid ID. Each has the usage line as its message.
  */
-export function checkPinAndNamespace(
-  pinText: string,
-  namespaceText: string | undefined,
+export function checkExpansionRequest(
+  typedPin: string,
+  typedNamespace: string | undefined,
 ): Result<ExpansionRequest> {
-  const pin = checkRecipePin(pinText);
+  const pin = checkRecipePin(typedPin);
   if (!pin.ok) {
     return pin;
   }
-  const namespace = checkNamespace(namespaceText);
+  const namespace = checkNamespace(typedNamespace);
   if (!namespace.ok) {
     return namespace;
   }

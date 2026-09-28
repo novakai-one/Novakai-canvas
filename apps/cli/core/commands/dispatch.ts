@@ -1,8 +1,18 @@
 /*
- * Running a parsed command: the flow that answers the command runs, then `delivery.ts` prints the
- * answer or writes it to the --out file. Uses injected ports only. Failures are returned as
- * values; `cli/canvas.ts` prints them and sets the exit code. After a sent request, recovery is
- * `canvas receipt ID`, then `canvas retry ID`.
+ * Why this file exists
+ *
+ * Once a command line is parsed, something has to run it. `pnpm canvas read my-diagram` has to ask
+ * the service for that collection. `pnpm canvas profile lint plan.canvas` has to check the file on
+ * this machine. Each command has its own flow that does the work.
+ *
+ * This file sends each command to the flow that answers it. Then it hands the answer to
+ * `delivery.ts`, which prints it or writes it to the `--out` file.
+ *
+ * It does no I/O itself. Every flow uses the tools it is handed (its ports), such as the service
+ * connection or the file reader. It never prints and never sets the exit code: `cli/canvas.ts`
+ * does that with what comes back. Each step answers with a `Result` (see `contract/errors.ts`).
+ * If the answer to a sent change is lost, the agent checks it with `canvas receipt ID`, then
+ * `canvas retry ID`.
  */
 import type { ProfileCommand, ServiceCommand } from '../../contract/records/command.js';
 import type { ExpansionRequest } from '../../contract/records/foreign.js';
@@ -26,7 +36,7 @@ import { answerProfile } from '../profiles/commands.js';
 import type { ProfileDependencies } from '../profiles/commands.js';
 import { unsupported } from '../shared/results.js';
 import { deliverAnswer } from './delivery.js';
-import type { CommandAnswer, OutputPorts, PrintedText } from './delivery.js';
+import type { OutputPorts } from './delivery.js';
 
 /** The one port `recipe instantiate` uses: it is a single service call, made here. */
 interface InstantiatePorts {
@@ -34,8 +44,9 @@ interface InstantiatePorts {
 }
 
 /**
- * Every port a service command may use: each flow's own slice, joined. Compose binds each member
- * once.
+ * Every tool a service command may need, joined from each flow's own list: the service
+ * connections, the file reader and writer, the request journal, the Language checker and more.
+ * `contract/compose/service.ts` makes each one once.
  */
 export type ServicePorts = ReadDependencies &
   AuthorDependencies &
@@ -44,21 +55,27 @@ export type ServicePorts = ReadDependencies &
   InstantiatePorts &
   OutputPorts;
 
-/** Every port a profile command may use: the lint file, Language and the --out write. */
+/**
+ * Every tool a profile command may need: the file reader for `lint`, the Language checker, and the
+ * `--out` writer.
+ */
 export type ProfilePorts = ProfileDependencies & OutputPorts;
 
 /**
- * Runs one service command and returns the text to print.
+ * Runs a command on the local service, and returns the text to show on screen.
  *
- * Steps; a failure is returned unchanged:
- * 1. Answer the command with the flow that answers it. Fails as that flow does.
- * 2. Deliver the answer: printed, or written to the --out file. Fails with `output-unavailable`
- *    when the file cannot be written; the command already ran and is not run again.
+ * It takes two steps. If a step finds a mistake, it stops there and returns that mistake.
+ * 1. Send the command to the flow that answers it, such as `read` to the service reads.
+ * 2. Keep the answer to show on screen, or write it to the `--out` file (`delivery.ts`).
+ *
+ * The mistakes it can find: whatever the flow reports (a missing collection, a stale `--revision`,
+ * no answer from the service, …), or an `--out` file that can't be written. In that last case the
+ * command already ran, so it must not be run again.
  */
 export async function runServiceCommand(
   command: ServiceCommand,
   ports: ServicePorts,
-): Promise<Result<PrintedText>> {
+): Promise<Result<string>> {
   const answer = await answerServiceCommand(command, ports);
   if (!answer.ok) {
     return answer;
@@ -67,17 +84,19 @@ export async function runServiceCommand(
 }
 
 /**
- * Runs one profile command and returns the text to print.
+ * Runs a profile command on this machine, and returns the text to show on screen.
  *
- * Steps; a failure is returned unchanged:
- * 1. Answer the command locally (`answerProfile`). Fails as that command does.
- * 2. Deliver the answer: printed, or written to the --out file. Fails with `output-unavailable`
- *    when the file cannot be written.
+ * It takes two steps. If a step finds a mistake, it stops there and returns that mistake.
+ * 1. Answer the command: describe the profile, make the scaffold, or lint the file.
+ * 2. Keep the answer to show on screen, or write it to the `--out` file (`delivery.ts`).
+ *
+ * The mistakes it can find: a lint file that can't be read or doesn't parse, a file that breaks
+ * the profile's rules, or an `--out` file that can't be written.
  */
 export async function runProfileCommand(
   command: ProfileCommand,
   ports: ProfilePorts,
-): Promise<Result<PrintedText>> {
+): Promise<Result<string>> {
   const answer = await answerProfile(command, ports);
   if (!answer.ok) {
     return answer;
@@ -94,7 +113,7 @@ export async function runProfileCommand(
 function answerServiceCommand(
   command: ServiceCommand,
   ports: ServicePorts,
-): Promise<Result<CommandAnswer>> {
+): Promise<Result<string>> {
   switch (command.name) {
     case 'describe':
       return describeLanguage(ports);
@@ -131,6 +150,6 @@ function answerServiceCommand(
 function instantiateRecipe(
   expansion: ExpansionRequest,
   ports: InstantiatePorts,
-): Promise<Result<CommandAnswer>> {
+): Promise<Result<string>> {
   return ports.resources.instantiate(expansion);
 }

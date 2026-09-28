@@ -1,7 +1,15 @@
 /*
- * How many words a command takes after its name: none for `help`, `describe` and `list`, exactly
- * one for every other command (`takesNoOperand` in `table.ts`). Pure. A wrong count fails before
- * any flag or value is checked; nothing was read or sent.
+ * Why this file exists
+ *
+ * Every command needs a set number of words after it. `list` needs none. `read` needs exactly one,
+ * the collection to read: `pnpm canvas read my-diagram`. That word is called the operand. So
+ * `pnpm canvas read` alone, or `read a b`, is a mistake:
+ *
+ *   invalid-arguments: read requires 1 operand(s)
+ *
+ * This file counts the words after the command. Which commands need none is written once, in
+ * `table.ts`. The count is checked before any flag. It never checks what the word says; that
+ * happens later, in `assembly.ts`.
  */
 import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
@@ -12,8 +20,10 @@ import { takesNoOperand } from './table.js';
 import type { NoOperandCommand, OneOperandCommand } from './table.js';
 
 /**
- * The command with exactly the operand it takes. Fails with `invalid-arguments` for any other
- * number of words.
+ * Checks the command got the number of words it needs after it: none for `help`, `describe` and
+ * `list`, and exactly one for every other command.
+ *
+ * The mistake it can find: too many or too few words (`invalid-arguments`).
  */
 export function countOperand(identified: IdentifiedCommand): Result<CountedCommand> {
   const { name, operandWords, flags } = identified;

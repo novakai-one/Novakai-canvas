@@ -1,26 +1,40 @@
 /*
- * The `pnpm canvas` command table: one frozen row per command with the flags it accepts and its
- * `--help` lines, and the commands that take no operand. Pure data plus lookups. The grammar
- * (`parse.ts`, `command-words.ts`, `operand-count.ts`, `accepted-flags.ts`) and the help text
- * (`help.ts`) read it, so a command's words, operand, flags and usage live in one place.
+ * Why this file exists
+ *
+ * Several parts of the CLI need the same facts about each command. Parsing needs to know
+ * that `read` takes `--section`. `--help` needs the line that shows how to type `read`. If each
+ * part kept its own list, the lists would drift apart.
+ *
+ * This file keeps one row per command, with the flags it takes and its `--help` lines. It also
+ * lists the commands typed with no word after them (`help`, `describe`, `list`), and the words that
+ * start a two-word command (`theme`, `recipe`, `profile`).
+ *
+ * It holds data and simple lookups only. The rows are frozen, so nothing can change them while the
+ * CLI runs.
  */
 import type { CommandName } from '../../contract/records/command.js';
 import type { TextFlag } from './flags.js';
 
-/** A word that joins the next word into one command name: `recipe admit` → `recipe-admit`. */
-export type FamilyWord = 'theme' | 'recipe' | 'profile';
+/**
+ * A word that starts a two-word command. `recipe` starts `recipe admit` and `recipe instantiate`,
+ * which the CLI names `recipe-admit` and `recipe-instantiate`.
+ */
+export type CommandGroup = 'theme' | 'recipe' | 'profile';
 
-/** A command that takes no operand: `help`, `describe` or `list`. */
+/** A command typed with no word after it: `help`, `describe` or `list`. */
 export type NoOperandCommand = 'help' | 'describe' | 'list';
 
-/** A command that takes one operand: an ID, a FILE, a profile or a recipe pin. */
+/**
+ * A command typed with one word after it: a collection ID (`read my-diagram`), a file, a request
+ * ID, a profile or a recipe pin.
+ */
 export type OneOperandCommand = Exclude<CommandName, NoOperandCommand>;
 
-/** One command's grammar and help. */
+/** One command's row: the flags it takes, and its lines in `--help`. */
 export interface CommandRow {
-  /** Every flag this command takes; giving it any other flag is `invalid-arguments`. */
+  /** Every flag the command takes. Typing any other flag with it is a mistake. */
   readonly accepted: readonly TextFlag[];
-  /** Its lines in `canvas --help`, verbatim and in order; the table's order is the help order. */
+  /** Its lines in `--help`, exactly as printed. `--help` lists the rows in the table's order. */
   readonly usage: readonly string[];
 }
 
@@ -137,32 +151,32 @@ const noOperandCommands: Readonly<Record<NoOperandCommand, NoOperandCommand>> = 
   list: 'list',
 } satisfies Record<NoOperandCommand, NoOperandCommand>);
 
-/** Every family word, keyed by itself. */
-const familyWords: Readonly<Record<FamilyWord, FamilyWord>> = Object.freeze({
+/** Every word that starts a two-word command, keyed by itself. */
+const commandGroups: Readonly<Record<CommandGroup, CommandGroup>> = Object.freeze({
   theme: 'theme',
   recipe: 'recipe',
   profile: 'profile',
-} satisfies Record<FamilyWord, FamilyWord>);
+} satisfies Record<CommandGroup, CommandGroup>);
 
 /**
- * Whether `word` names a command. A missing word does not, and neither does an inherited object
- * key such as `constructor`.
+ * Whether the word names a command, such as `read` or `recipe-admit`. A missing word doesn't, and
+ * neither does `constructor`, a name every JavaScript object has.
  */
 export function isCommandName(word: string | undefined): word is CommandName {
   return word !== undefined && Object.hasOwn(commandTable, word);
 }
 
-/** Whether `word` joins the next word into one command name. A missing word does not. */
-export function isFamilyWord(word: string | undefined): word is FamilyWord {
-  return word !== undefined && Object.hasOwn(familyWords, word);
+/** Whether the word starts a two-word command: `theme`, `recipe` or `profile`. */
+export function isCommandGroup(word: string | undefined): word is CommandGroup {
+  return word !== undefined && Object.hasOwn(commandGroups, word);
 }
 
-/** Whether the command takes no operand; every other command takes exactly one. */
+/** Whether the command is typed with no word after it. Every other command takes exactly one. */
 export function takesNoOperand(name: CommandName): name is NoOperandCommand {
   return Object.hasOwn(noOperandCommands, name);
 }
 
-/** Whether the command refuses `flag`: its row does not accept it. */
+/** Whether the command doesn't take the flag, as with `list --revision 3`. */
 export function refusesFlag(
   name: CommandName,
   flag: TextFlag,
@@ -171,17 +185,17 @@ export function refusesFlag(
   return !accepted;
 }
 
-/** The command as typed: a family command's two words, such as `recipe admit`. */
-export function typedName(name: CommandName): string {
-  const [family, ...memberWords] = name.split('-');
-  if (!isFamilyWord(family)) {
+/** The command the way an agent types it: `recipe-admit` is typed `recipe admit`. */
+export function commandAsTyped(name: CommandName): string {
+  const [group, ...memberWords] = name.split('-');
+  if (!isCommandGroup(group)) {
     return name;
   }
   const member = memberWords.join('-');
-  return `${family} ${member}`;
+  return `${group} ${member}`;
 }
 
-/** Every row, in `--help` order. */
+/** Every command's row, in the order `--help` lists them. */
 export function commandRows(): readonly CommandRow[] {
   return Object.values(commandTable);
 }

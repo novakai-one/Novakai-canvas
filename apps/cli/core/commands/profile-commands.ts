@@ -1,8 +1,19 @@
 /*
- * One builder per profile command: `profile describe|scaffold|lint` with a checked profile,
- * scaffold's collection ID and title, lint's file, then --out. Pure. Fails with `unknown-profile`,
- * `invalid-arguments`, `source-unavailable` (an empty FILE) or `output-unavailable` (an empty
- * --out); nothing was read or written, so the caller corrects the named argument.
+ * Why this file exists
+ *
+ * A profile is a set of rules a collection can follow. Today there is one, `build-spec@1`: five
+ * documents that together describe a build plan. Three commands work with profiles, and they run
+ * on this machine without the service:
+ *
+ *   pnpm canvas profile describe build-spec@1
+ *   pnpm canvas profile scaffold build-spec@1 --id my-plan --title "My plan"
+ *   pnpm canvas profile lint my-plan.canvas --profile build-spec@1
+ *
+ * This file builds each of those commands from what was typed. It checks the profile name, the
+ * scaffold's `--id` and `--title`, lint's file path, and `--out`, and returns one `ProfileCommand`.
+ *
+ * It never reads or writes a file. Each check answers with a `Result` (see `contract/errors.ts`).
+ * Most checks, and the mistakes they report, are in `values.ts`.
  */
 import { collectionId } from '../../contract/brands.js';
 import type { CollectionId, FilePath } from '../../contract/brands.js';
@@ -11,9 +22,9 @@ import type { ProfileId } from '../../contract/records/profiles.js';
 import type { Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 import { checked } from '../shared/checks.js';
-import { lintProfileRequiredFailure } from './failures.js';
+import { missingLintProfileFailure } from './failures.js';
 import type { CommandFlags } from './flags.js';
-import { checkOutOption, checkProfile, checkSourceFile } from './values.js';
+import { checkOutOption, checkProfileId, checkSourceFile } from './values.js';
 
 /** A flag `profile scaffold` requires: --id or --title. */
 type ScaffoldFlag = 'id' | 'title';
@@ -42,14 +53,16 @@ interface LintTarget {
 }
 
 /**
- * `profile describe PROFILE`: the profile, then --out. Fails with `unknown-profile`, then
- * `output-unavailable`.
+ * Builds `profile describe`, which prints the rules a profile asks a collection to follow.
+ * `typedProfileId` is the profile as typed, such as `build-spec@1`.
+ *
+ * The mistakes it can find: an unknown profile, then an empty `--out` path.
  */
 export function buildProfileDescribeCommand(
-  profileText: string,
+  typedProfileId: string,
   flags: CommandFlags,
 ): Result<ProfileCommand> {
-  const profile = checkProfile(profileText);
+  const profile = checkProfileId(typedProfileId);
   if (!profile.ok) {
     return profile;
   }
@@ -61,14 +74,18 @@ export function buildProfileDescribeCommand(
 }
 
 /**
- * `profile scaffold PROFILE --id ID --title TITLE`: the profile, then --id and --title, then
- * --out. Fails with `unknown-profile`, then `invalid-arguments`, then `output-unavailable`.
+ * Builds `profile scaffold`, which makes the text of a starting collection that follows a profile.
+ * It needs `--id` (the new collection's ID) and `--title`. `typedProfileId` is the profile, as
+ * typed.
+ *
+ * The mistakes it can find: an unknown profile; then `--id` or `--title` missing or blank, or an
+ * `--id` that isn't a valid collection ID; then an empty `--out` path.
  */
 export function buildProfileScaffoldCommand(
-  profileText: string,
+  typedProfileId: string,
   flags: CommandFlags,
 ): Result<ProfileCommand> {
-  const scaffoldTarget = checkScaffoldTarget(profileText, flags);
+  const scaffoldTarget = checkScaffoldTarget(typedProfileId, flags);
   if (!scaffoldTarget.ok) {
     return scaffoldTarget;
   }
@@ -80,14 +97,17 @@ export function buildProfileScaffoldCommand(
 }
 
 /**
- * `profile lint FILE --profile PROFILE`: the profile, then the file, then --out. Fails with
- * `invalid-arguments` or `unknown-profile`, then `source-unavailable`, then `output-unavailable`.
+ * Builds `profile lint`, which checks that a collection file follows a profile's rules.
+ * `typedFilePath` is the file's path as typed; the profile comes from `--profile`.
+ *
+ * The mistakes it can find: `--profile` missing or unknown, then an empty file path, then an empty
+ * `--out` path.
  */
 export function buildProfileLintCommand(
-  fileText: string,
+  typedFilePath: string,
   flags: CommandFlags,
 ): Result<ProfileCommand> {
-  const lintTarget = checkLintTarget(fileText, flags.profile);
+  const lintTarget = checkLintTarget(typedFilePath, flags.profile);
   if (!lintTarget.ok) {
     return lintTarget;
   }
@@ -103,7 +123,7 @@ function checkScaffoldTarget(
   profileText: string,
   flags: CommandFlags,
 ): Result<ScaffoldTarget> {
-  const profile = checkProfile(profileText);
+  const profile = checkProfileId(profileText);
   if (!profile.ok) {
     return profile;
   }
@@ -184,9 +204,9 @@ function checkLintTarget(
  */
 function checkLintProfile(profileText: string | undefined): Result<ProfileId> {
   if (profileText === undefined) {
-    return lintProfileRequiredFailure();
+    return missingLintProfileFailure();
   }
-  return checkProfile(profileText);
+  return checkProfileId(profileText);
 }
 
 /** Whether a scaffold flag was given with more than whitespace. */

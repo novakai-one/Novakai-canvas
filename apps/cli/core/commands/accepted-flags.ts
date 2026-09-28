@@ -1,15 +1,26 @@
 /*
- * Which flags a command may be given: only the flags its table row accepts, never --section
- * together with --object, and always --profile for `profile lint`. The base CLI's wording and
- * order are kept. Pure. `parse.ts` checks this after the operand count; a failure names the flag,
- * and nothing was read or sent, so the caller corrects the flag and runs the command again.
+ * Why this file exists
+ *
+ * Each command takes only some flags. `pnpm canvas list --revision 3` makes no sense, because
+ * `list` doesn't use a revision. If the CLI quietly ignored the flag, the agent would think it had
+ * asked for something it didn't get. So a flag the command doesn't take is a mistake:
+ *
+ *   invalid-arguments: --revision is not valid with list
+ *
+ * This file checks every typed flag against the command's row in `table.ts`. A few flags get their
+ * own message, checked in the same order the earlier CLI used. For example, `--profile` only goes
+ * with `profile lint`, and `--section` and `--object` can't be typed together.
+ *
+ * It only checks which flags were typed, never the text typed after them: `assembly.ts` checks
+ * that next. Each check answers with a `Result` (see `contract/errors.ts`), and the mistakes are
+ * made in `failures.ts`.
  */
 import type { LocalFailure, Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
 import type { AcceptedCommand, CountedCommand } from './command-stages.js';
-import { invalidArgumentsFailure, lintProfileRequiredFailure } from './failures.js';
+import { invalidArgumentsFailure, missingLintProfileFailure } from './failures.js';
 import type { TextFlag } from './flags.js';
-import { refusesFlag, typedName } from './table.js';
+import { commandAsTyped, refusesFlag } from './table.js';
 
 /** A rule's verdict: `true` when the command passes it; otherwise the failure naming the flag. */
 type RuleVerdict = Result<true, LocalFailure>;
@@ -28,19 +39,18 @@ const flagRules: readonly FlagRule[] = Object.freeze([
 ]);
 
 /**
- * The command, once every flag rule passes.
+ * Checks that every flag typed is one the command takes.
  *
- * Fails with `invalid-arguments` for the first broken rule, in this order:
- * 1. `rejectMisplacedProfile`: --profile given to any command but `profile lint`.
- * 2. `requireLintProfile`: `profile lint` given without --profile.
- * 3. `rejectMisplacedIdOrTitle`: --id or --title given to any command but `profile scaffold` and
- *    `recipe admit`.
- * 4. `rejectSectionWithObject`: --section and --object given together.
- * 5. `rejectMisplacedScopeFlags`: --section or --object given to any command but `read`.
- * 6. `rejectUnacceptedFlag`: any other flag the command does not accept, named as
- *    `--X is not valid with COMMAND`.
+ * It checks these six things in order, and stops at the first mistake:
+ * 1. `--profile` is only for `profile lint`.
+ * 2. `profile lint` needs `--profile`.
+ * 3. `--id` and `--title` are only for `profile scaffold` and `recipe admit`.
+ * 4. `--section` and `--object` aren't typed together.
+ * 5. `--section` and `--object` are only for `read`.
+ * 6. Every other flag is one the command takes. If not, the first flag it doesn't take is named:
+ *    `--revision is not valid with list`.
  *
- * Flag values are not checked here; `assembly.ts` checks them.
+ * Every mistake it finds is `invalid-arguments`.
  */
 export function checkAcceptedFlags(counted: CountedCommand): Result<AcceptedCommand> {
   // `checkNextRule` passes the first failure along unchanged, so later rules are skipped.
@@ -83,7 +93,7 @@ function requireLintProfile(counted: CountedCommand): RuleVerdict {
   const lintWithoutProfile =
     counted.name === 'profile-lint' && counted.flags.text.profile === undefined;
   if (lintWithoutProfile) {
-    return lintProfileRequiredFailure();
+    return missingLintProfileFailure();
   }
   return success(true);
 }
@@ -120,7 +130,9 @@ function rejectMisplacedScopeFlags(counted: CountedCommand): RuleVerdict {
 function rejectUnacceptedFlag(counted: CountedCommand): RuleVerdict {
   const refusedFlag = counted.flags.givenOrder.find((flag) => refusesFlag(counted.name, flag));
   if (refusedFlag !== undefined) {
-    return invalidArgumentsFailure(`--${refusedFlag} is not valid with ${typedName(counted.name)}`);
+    return invalidArgumentsFailure(
+      `--${refusedFlag} is not valid with ${commandAsTyped(counted.name)}`,
+    );
   }
   return success(true);
 }
