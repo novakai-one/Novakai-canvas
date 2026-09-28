@@ -9,7 +9,7 @@ import {
   exportRequest,
   exportSelection,
   type ExportRequest,
-} from '../../contract/records/export.js';
+} from '../../contract/records/export/request.js';
 
 /** The checked request, or the first refusal in boundary order. */
 export function readExportRequest(input: unknown): Result<ExportRequest> {

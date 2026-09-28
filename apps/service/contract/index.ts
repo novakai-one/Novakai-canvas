@@ -1,45 +1,22 @@
-/** Service public boundary. Web and CLI use checked requests; Authoring remains the sole mutation authority. */
-export type { Result, Diagnostic, ErrorCode } from './errors.js';
-export type { OperationSource } from './records/failure-source.js';
-export { transportGeneration } from './brands.js';
-export type { TransportGeneration } from './brands.js';
-
-export { runRenderWorker, createDiagramProducer } from './compose.js';
-export type { RenderingJob, RenderDocument } from './records/rendering.js';
-export { renderEnvelope } from './records/worker.js';
-export { inspectionReport } from './records/inspection.js';
-export type { InspectionReport } from './records/inspection.js';
-
-export { prepareInstallation } from './compose.js';
-export type { BuiltinResources } from './records/builtins.js';
-
-export { openWorkspace } from './compose.js';
-export { serveWorkspace } from './compose.js';
-export { readAgentCredential } from './compose.js';
-export type { ServerOptions, LocalServer, BodyStream } from './records/server.js';
-export { createWorkspaceSession } from './api.js';
-export type { WorkspaceSession, SessionDependencies } from './types.js';
-export type { AppliedCommit } from './records/applied-commit.js';
-export type { WorkspaceOptions } from './records/startup.js';
-export { createHttpAdmission } from './api.js';
-export type {
-  Caller,
-  HttpMetadata,
-  HttpSecurity,
-  HttpAdmission,
-  MutationOwner,
-} from './records/http.js';
-export { httpBodyLimit, browserCookieName } from './records/http.js';
-export { readCommand } from './api.js';
-export { responseEnvelope } from './records/protocol.js';
-export type { TransportResponse } from './records/protocol.js';
-export type {
-  CommandAdmission,
-  AdmittedMutation,
-  ApiCall,
-  ApiRouter,
-  WireOutcome,
-} from './records/protocol.js';
-
+/**
+ * The package entry point of `@novakai/canvas-service` (see package.json `exports`). It lists the
+ * 12 names apps/web and apps/cli import, plus `Result` and `Diagnostic`: the return types of
+ * `prepareInstallation` and `readAgentCredential`.
+ *
+ * `projectCollection` comes from `api.ts`, the only non-compose file allowed to import core.
+ * `prepareInstallation`, `readAgentCredential` and `createHeadlessBindings` come from the
+ * composition root. The two envelope schemas parse service answers at the consumer edge.
+ * `hostPath` brands the paths the CLI chooses: the two it passes to `prepareInstallation` and the
+ * libavoid wasm path of its headless render jobs.
+ * Everything else is a type. The service's own process entries (cli/) import compose.ts directly.
+ */
 export { projectCollection } from './api.js';
-export { createHeadlessBindings } from './compose.js';
+export { prepareInstallation, readAgentCredential, createHeadlessBindings } from './compose.js';
+export { responseEnvelope } from './records/transport/protocol.js';
+export type { TransportResponse } from './records/transport/protocol.js';
+export { renderEnvelope } from './records/rendering/worker.js';
+export type { RenderingJob, RenderDocument } from './records/rendering/job.js';
+export type { InspectionReport } from './records/rendering/inspection.js';
+export type { BuiltinResources } from './records/presets/builtins.js';
+export type { Result, Diagnostic } from './errors.js';
+export { hostPath } from './brands.js';

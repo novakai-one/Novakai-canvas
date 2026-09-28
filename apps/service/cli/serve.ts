@@ -1,35 +1,30 @@
+/*
+ * `pnpm dev`: the service process entry. Parses the startup arguments into typed values at this
+ * host edge (port, host paths, workspace ID, creation time), opens the workspace, serves it on
+ * loopback and stops both on SIGINT or SIGTERM. Impure (process, signals, stdio). Every failure is
+ * printed as its code, message and recovery with exit code 1; credential values and request
+ * bodies are never printed. The user corrects the arguments or the workspace and starts again.
+ */
+import { once } from 'node:events';
 import { parseArgs } from 'node:util';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { openWorkspace, serveWorkspace } from '../contract/index.js';
-import type { Result, LocalServer, WorkspaceSession } from '../contract/index.js';
-/** Print stable diagnostic fields only. Credential values and raw request bodies are never logged. */
-function report(result: Result<unknown>): void {
-  if (result.ok) return;
-  process.stderr.write(`${result.error.code}: ${result.error.message}\n${result.error.recovery}\n`);
+import { openWorkspace, serveWorkspace } from '../contract/compose.js';
+import type { Result } from '../contract/errors.js';
+import type { LocalServer } from '../contract/records/transport/server.js';
+import type { WorkspaceSession } from '../contract/types.js';
+import { hostPath, loopbackPort, type HostPath, type LoopbackPort } from '../contract/brands.js';
+import { timestamp, workspaceId } from '../contract/schemas.js';
+
+void main().catch(() => {
+  process.stderr.write('Canvas startup failed. Check the arguments and workspace permissions.\n');
   process.exitCode = 1;
-}
-/** Drain the listener before native owners; callers reconcile outstanding receipt IDs on restart. */
-async function stop(
-  server: LocalServer,
-  workspace: WorkspaceSession,
-): Promise<void> {
-  report(await server.close());
-  report(await workspace.close());
-}
-/** Node owns process signals. One shared shutdown promise makes SIGINT/SIGTERM races harmless. */
-function shutdown(
-  server: LocalServer,
-  workspace: WorkspaceSession,
-): void {
-  let closing: Promise<void> | null = null;
-  const close = (): void => {
-    closing ??= stop(server, workspace);
-  };
-  process.once('SIGINT', close);
-  process.once('SIGTERM', close);
-}
-/** Startup arguments choose filesystem locations; diagram requests can never change them. */
+});
+
+/**
+ * Startup arguments choose filesystem locations; diagram requests can never change them. A port
+ * outside 1024–65535 prints "Port must be an integer from 1024 through 65535." and exits 1.
+ */
 async function main(): Promise<void> {
   const root = fileURLToPath(new URL('../../../', import.meta.url));
   const args = parseArgs({
@@ -39,28 +34,32 @@ async function main(): Promise<void> {
       web: { type: 'string', default: resolve(root, 'apps/web/dist') },
     },
   });
-  const port = Number(args.values.port);
-  if (!Number.isInteger(port) || port < 1024 || port > 65535) {
+  const port = loopbackPort.safeParse(Number(args.values.port));
+  if (!port.success) {
     process.stderr.write('Port must be an integer from 1024 through 65535.\n');
     process.exitCode = 1;
     return;
   }
-  return start(root, resolve(args.values.workspace), resolve(args.values.web), port);
+  return start(root, hostPathAt(args.values.workspace), hostPathAt(args.values.web), port.data);
 }
-/** Real workspace initialization completes before the socket opens; failed socket startup closes native handles. */
+
+/**
+ * Real workspace initialization completes before the socket opens; failed socket startup closes
+ * native handles. The workspace is `local`, created now when it is new.
+ */
 async function start(
   root: string,
-  directory: string,
-  webRoot: string,
-  port: number,
+  directory: HostPath,
+  webRoot: HostPath,
+  port: LoopbackPort,
 ): Promise<void> {
   const workspace = await openWorkspace({
     directory,
-    workspace: 'local',
+    workspace: workspaceId.parse('local'),
     title: 'Canvas workspace',
-    resourceRoot: resolve(root, 'resources'),
-    tokenRoot: resolve(root, 'capability/design-system'),
-    createdAt: Date.now(),
+    resourceRoot: hostPathAt(root, 'resources'),
+    tokenRoot: hostPathAt(root, 'capability/design-system'),
+    createdAt: timestamp.parse(Date.now()),
   });
   if (!workspace.ok) {
     report(workspace);
@@ -69,10 +68,11 @@ async function start(
   const server = await serveWorkspace(workspace.value, {
     port,
     webRoot,
-    credentialFile: resolve(directory, 'agent-credential.json'),
+    credentialFile: hostPathAt(directory, 'agent-credential.json'),
   });
   return started(server, workspace.value);
 }
+
 /** Only the loopback URL and credential path are public startup information; the secret remains in its owner-only file. */
 async function started(
   server: Result<LocalServer>,
@@ -86,7 +86,37 @@ async function started(
   process.stdout.write(`Canvas: ${server.value.url}\n`);
   shutdown(server.value, workspace);
 }
-void main().catch(() => {
-  process.stderr.write('Canvas startup failed. Check the arguments and workspace permissions.\n');
+
+/**
+ * Node owns process signals. The first SIGINT or SIGTERM stops the server and workspace once; the
+ * other signal is then ignored, and a repeated signal gets Node's default (the process ends).
+ */
+function shutdown(
+  server: LocalServer,
+  workspace: WorkspaceSession,
+): void {
+  void Promise.race([once(process, 'SIGINT'), once(process, 'SIGTERM')]).then(() =>
+    stop(server, workspace),
+  );
+}
+
+/** Drain the listener before native owners; callers reconcile outstanding receipt IDs on restart. */
+async function stop(
+  server: LocalServer,
+  workspace: WorkspaceSession,
+): Promise<void> {
+  report(await server.close());
+  report(await workspace.close());
+}
+
+/** Print stable diagnostic fields only. Credential values and raw request bodies are never logged. */
+function report(result: Result<unknown>): void {
+  if (result.ok) return;
+  process.stderr.write(`${result.error.code}: ${result.error.message}\n${result.error.recovery}\n`);
   process.exitCode = 1;
-});
+}
+
+/** The absolute host path of `segments`, resolved from the working directory. Never fails. */
+function hostPathAt(...segments: readonly string[]): HostPath {
+  return hostPath.parse(resolve(...segments));
+}

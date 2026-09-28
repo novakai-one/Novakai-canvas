@@ -72,9 +72,6 @@ importers:
       '@novakai/canvas-authoring':
         specifier: workspace:*
         version: link:../../capability/authoring
-      '@novakai/canvas-canvas':
-        specifier: workspace:*
-        version: link:../../capability/canvas
       '@novakai/canvas-design-system':
         specifier: workspace:*
         version: link:../../capability/design-system

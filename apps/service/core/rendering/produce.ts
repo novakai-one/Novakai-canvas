@@ -1,6 +1,5 @@
-import type { RenderReader } from '../../contract/ports/readout.js';
-import type { RenderTransport } from '../../contract/ports/rendering.js';
-import type { RenderingJob, RenderDocument } from '../../contract/records/rendering.js';
+import type { RenderReader, RenderTransport } from '../../contract/ports/rendering.js';
+import type { RenderingJob, RenderDocument } from '../../contract/records/rendering/job.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
 /** A worker result is a proposal until owner admission succeeds; cancellation retains the current scene. */

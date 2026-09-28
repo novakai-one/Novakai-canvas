@@ -5,16 +5,20 @@
  * Cancellation is checked after each owner await. Pure; the adapter calls the owners.
  */
 import type { Result } from '../../contract/errors.js';
-import type { AuthoringResult, Collection, Snapshot } from '../../contract/records/owners.js';
-import type { WorkspaceContents } from '../../contract/records/workspace.js';
-import type { RenderDocument } from '../../contract/records/rendering.js';
 import type {
-  ExportRequest,
+  AuthoringResult,
+  Collection,
   ExportResult,
   ExportSnapshot,
-  LeaseRead,
+  Snapshot,
+} from '../../contract/records/capabilities.js';
+import type { WorkspaceContents } from '../../contract/records/workspace/contents.js';
+import type { RenderDocument } from '../../contract/records/rendering/job.js';
+import type { LeaseRead } from '../../contract/ports/export.js';
+import type {
   SelectedCollection,
-} from '../../contract/records/export.js';
+  SnapshotIdentity,
+} from '../../contract/records/export/snapshot.js';
 import { cancelledExport, exportRejection, ownerRejection } from './faults.js';
 import { retainedResources } from './resources.js';
 
@@ -30,7 +34,7 @@ export function workspaceSnapshot(
 /** The requested collection from the workspace view; refused when missing or at another revision. */
 export function selectedCollection(
   view: AuthoringResult<WorkspaceContents>,
-  identity: ExportRequest['identity'],
+  identity: SnapshotIdentity,
 ): ExportResult<SelectedCollection> {
   if (!view.ok) return exportRejection('encoding-failed', 'workspace', view.error.message);
   const collection = view.value.collections.find((item) => item.id === identity.collectionId);
