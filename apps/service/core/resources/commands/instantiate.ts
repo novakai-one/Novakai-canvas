@@ -1,7 +1,13 @@
 /*
- * Recipe instantiation: one stored recipe expanded with its selected resources and printed as DSL
- * source. Pure over the injected owners; Language owns all identity remapping. Every refusal is a
- * returned value (refusal.ts), and Authoring owns the canonical write and receipt.
+ * Why this file exists
+ *
+ * A recipe is a stored starter diagram. An agent types
+ * `pnpm canvas recipe instantiate er@1.0.0#sha256:… --namespace demo` to get a copy of it as DSL
+ * text, for a new collection called `demo`. The copy must use the recipe exactly as stored.
+ *
+ * This file finds the recipe, picks the themes and files it names, has Templates fill it in, and
+ * has Language print it as DSL. Each step answers a `Result` (contract/errors.ts); the first
+ * mistake stops it. It never saves anything: the caller creates the collection.
  */
 import type {
   Catalog,
@@ -21,40 +27,36 @@ import type {
 import { instantiateInput } from '../../../contract/records/presets/resource-commands.js';
 import type { ResourceSelector } from '../../../contract/ports/workspace.js';
 import { andThen, success } from '../../../contract/errors.js';
-import { selectionRequest, storedCatalog, unboundTemplates } from './catalog.js';
-import { invalidPreparation, preparationRefused } from './refusal.js';
+import { buildSelectionRequest, readStoredCatalog, templatesWithoutResources } from './catalog.js';
+import { invalidInputFailure, resourceFailure } from './refusal.js';
 
-/** The owners instantiation works through. */
-export interface InstantiateOwners {
+/** What turning a recipe into DSL needs. */
+export interface InstantiateDependencies {
+  /** Picks the themes and files the recipe uses (selection/select.ts). */
   readonly selector: Pick<ResourceSelector, 'select'>;
+  /** Language's printer, which turns the filled-in collection into DSL text. */
   readonly language: Pick<Language, 'print'>;
-  /** Templates bound to one call's resolved resources. */
+  /** Gives Templates set up with the themes and files one call picked. */
   templates(
     resources: ResolvedResources,
   ): Pick<Templates<LoweredIntent>, 'readCatalog' | 'read' | 'instantiate'>;
 }
 
 /**
- * Expansion uses exact stored recipe source and normalized resource bindings.
- *
- * Steps; the first failure stops the instantiation:
- * 1. Find the stored recipe the input pins (see `findRecipe`).
- * 2. Select its resources and expand it through Templates (see `expandRecipe`).
- * 3. Print the expanded collection through Language (see `printedRecipe`).
- *
- * Fails with `invalid-input` at `resources` for a malformed input, at `preset.kind` for a
- * non-recipe pin, at `language` for an unprintable expansion, or with the owner's diagnostic when
- * Templates or the selector refuses.
+ * Turns one stored recipe into DSL text for a new collection. `input` is the request body as sent
+ * (`{ pin, namespace }`); it is checked here. Fails with `invalid-input` at `resources` for a
+ * malformed body, at `preset.kind` when the pin names a theme, at `language` when the result can't
+ * be printed, or with the mistake of Templates or the selector.
  */
-export function instantiate(
-  raw: unknown,
+export function instantiateRecipe(
+  input: unknown,
   snapshot: Snapshot,
-  owners: InstantiateOwners,
+  dependencies: InstantiateDependencies,
 ): ResourceResult<string> {
-  const found = findRecipe(raw, snapshot, owners);
+  const found = findRecipe(input, snapshot, dependencies);
   if (!found.ok) return found;
-  const expanded = expandRecipe(found.value, snapshot, owners);
-  return andThen(expanded, (collection) => printedRecipe(collection, owners));
+  const expanded = expandRecipe(found.value, snapshot, dependencies);
+  return andThen(expanded, (collection) => printedRecipe(collection, dependencies));
 }
 
 /** A stored recipe preset. */
@@ -78,13 +80,13 @@ interface FoundRecipe {
 function findRecipe(
   raw: unknown,
   snapshot: Snapshot,
-  owners: InstantiateOwners,
+  dependencies: InstantiateDependencies,
 ): ResourceResult<FoundRecipe> {
-  const catalog = storedCatalog(snapshot, owners);
+  const catalog = readStoredCatalog(snapshot, dependencies);
   if (!catalog.ok) return catalog;
   const request = instantiateInput.safeParse(raw);
-  if (!request.success) return invalidPreparation();
-  const recipe = storedRecipe(catalog.value, request.data.pin, owners);
+  if (!request.success) return invalidInputFailure();
+  const recipe = storedRecipe(catalog.value, request.data.pin, dependencies);
   return andThen(recipe, (found) =>
     success({ catalog: catalog.value, request: request.data, recipe: found }),
   );
@@ -97,11 +99,11 @@ function findRecipe(
 function storedRecipe(
   catalog: Catalog,
   pin: unknown,
-  owners: InstantiateOwners,
+  dependencies: InstantiateDependencies,
 ): ResourceResult<RecipePreset> {
-  const preset = unboundTemplates(owners).read(catalog, pin);
+  const preset = templatesWithoutResources(dependencies).read(catalog, pin);
   if (!preset.ok) return preset;
-  if (preset.value.kind !== 'recipe') return preparationRefused(NOT_A_RECIPE);
+  if (preset.value.kind !== 'recipe') return resourceFailure(NOT_A_RECIPE);
   return success(preset.value);
 }
 
@@ -121,14 +123,14 @@ const NOT_A_RECIPE: ResourceDiagnostic = Object.freeze({
 function expandRecipe(
   found: FoundRecipe,
   snapshot: Snapshot,
-  owners: InstantiateOwners,
+  dependencies: InstantiateDependencies,
 ): ResourceResult<ExpandedCollection> {
   const admission = { kind: 'recipe', source: found.recipe.payload.source };
-  const selection = selectionRequest({ admission, assets: [] }, snapshot);
+  const selection = buildSelectionRequest({ admission, assets: [] }, snapshot);
   if (!selection.ok) return selection;
-  const selected = owners.selector.select(selection.value, snapshot);
+  const selected = dependencies.selector.select(selection.value, snapshot);
   if (!selected.ok) return selected;
-  const templates = owners.templates(selected.value.resources);
+  const templates = dependencies.templates(selected.value.resources);
   const expanded = templates.instantiate(found.catalog, found.request);
   return andThen(expanded, (expansion) => success(expansion.intent.collection));
 }
@@ -139,10 +141,10 @@ function expandRecipe(
  */
 function printedRecipe(
   collection: ExpandedCollection,
-  owners: InstantiateOwners,
+  dependencies: InstantiateDependencies,
 ): ResourceResult<string> {
-  const printed = owners.language.print({ collection, scope: { kind: 'all' } });
-  if (!printed.ok) return preparationRefused(languageRefusal(printed.error));
+  const printed = dependencies.language.print({ collection, scope: { kind: 'all' } });
+  if (!printed.ok) return resourceFailure(languageRefusal(printed.error));
   return success(printed.value.source);
 }
 

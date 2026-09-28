@@ -1,8 +1,14 @@
 /*
- * The asset bindings one request may use: supplied uploads bound over the collection's earlier
- * bindings, an alias replacing only its own. Pure over Model and Assets. A refusal is
- * `missing-asset` and a malformed pinned digest `invalid-input`, both at `resources`
- * (refusal.ts). Authoring owns recovery.
+ * Why this file exists
+ *
+ * A change can use files, such as an image its DSL declares with
+ * `asset @logo image source="./logo.png"`. The CLI uploads each file and sends its digest with the
+ * change. Each file then needs a binding (name, digest, media type, alt text) that Model accepts.
+ * A new upload replaces only the collection's earlier binding with the same name.
+ *
+ * This file makes the bindings for one change. Each step answers a `Result` (contract/errors.ts).
+ * A file with no `asset` line and no earlier binding of the same bytes is `missing-asset`. It only
+ * reads.
  */
 import type {
   Assets,
@@ -21,14 +27,16 @@ import {
   type ThemeBinding,
 } from '../../presets/theme-binding.js';
 import { findLiveRecord } from '../../workspace/records.js';
-import type { Declared } from './intent.js';
+import type { DeclaredResources } from './intent.js';
 import type { Themes } from './themes.js';
-import { checkedDigest } from './digests.js';
-import { fromOwner, resourceRefused } from './refusal.js';
+import { checkDigest } from './digests.js';
+import { fromCapability, missingAssetFailure } from './refusal.js';
 
-/** The owners asset binding reads: Assets for the bytes' media type, Model for the check. */
-export interface AssetOwners {
+/** What binding files needs. */
+export interface AssetBindingDependencies {
+  /** Model's check of each binding. */
   readonly model: BindingModel;
+  /** The file store, which says whether a file is stored and what its media type is. */
   readonly assets: Pick<Assets, 'resolve'>;
 }
 
@@ -36,7 +44,7 @@ export interface AssetOwners {
 type Upload = Request['assets'][number];
 
 /** What a request's own source declares when it may bind assets. */
-type DeclaredSources = Exclude<Declared, { readonly kind: 'theme-admission' }>;
+type DeclaredSources = Exclude<DeclaredResources, { readonly kind: 'theme-admission' }>;
 
 /** What binding reads: the uploads to bind, their declarations and the earlier bindings. */
 interface BindingInputs {
@@ -47,22 +55,22 @@ interface BindingInputs {
 }
 
 /**
- * Binds each supplied asset over the collection's earlier bindings; an alias replaces only its own.
- * Fails with `missing-asset` at `resources` when Model or Assets refuses, when no theme is
- * admitted, or when an upload has neither authored metadata nor an earlier binding of the same
- * bytes; `invalid-input` at `resources` when a pinned source digest is malformed.
+ * Binds each file the change supplies over its collection's earlier bindings, keyed by name. A
+ * theme being saved binds none. Fails with `missing-asset` at `resources` when a capability
+ * refuses, when no theme was picked, or when a file has neither an `asset` line nor an earlier
+ * binding; `invalid-input` at `resources` when an `asset` line's `sha256:` digest is malformed.
  */
-export function boundAssets(
+export function bindAssets(
   request: Request,
-  declared: Declared,
+  declared: DeclaredResources,
   snapshot: Snapshot,
   resolvedThemes: Themes,
-  owners: AssetOwners,
+  dependencies: AssetBindingDependencies,
 ): AuthoringResult<ResolvedResources['assets']> {
   if (declared.kind === 'theme-admission') return success({});
-  const inputs = bindingInputs(request, declared, snapshot, owners);
+  const inputs = bindingInputs(request, declared, snapshot, dependencies);
   if (!inputs.ok) return inputs;
-  return bindSupplied(inputs.value, resolvedThemes, owners);
+  return bindSupplied(inputs.value, resolvedThemes, dependencies);
 }
 
 /**
@@ -73,9 +81,9 @@ function bindingInputs(
   request: Request,
   declared: DeclaredSources,
   snapshot: Snapshot,
-  owners: AssetOwners,
+  dependencies: AssetBindingDependencies,
 ): AuthoringResult<BindingInputs> {
-  const previous = priorAssets(declared.collection, snapshot, owners.model);
+  const previous = priorAssets(declared.collection, snapshot, dependencies.model);
   if (!previous.ok) return previous;
   const pinned = pinnedUploads(declared.requests);
   if (!pinned.ok) return pinned;
@@ -91,13 +99,13 @@ function bindingInputs(
 function bindSupplied(
   inputs: BindingInputs,
   resolvedThemes: Themes,
-  owners: AssetOwners,
+  dependencies: AssetBindingDependencies,
 ): AuthoringResult<ResolvedResources['assets']> {
   if (inputs.supplied.length === 0) return success(byId(inputs.previous));
   const theme = firstTheme(resolvedThemes);
   if (!theme.ok) return theme;
   const bound = collect(inputs.supplied, (upload) =>
-    suppliedAsset(upload, inputs, theme.value, owners),
+    suppliedAsset(upload, inputs, theme.value, dependencies),
   );
   return andThen(bound, (bindings) => success(byId([...inputs.previous, ...bindings])));
 }
@@ -115,7 +123,7 @@ function priorAssets(
   if (id === null) return success([]);
   const record = findLiveRecord(snapshot, 'collection', id);
   if (!record) return success([]);
-  return andThen(fromOwner(model.validate(record.value)), (collection) =>
+  return andThen(fromCapability(model.validate(record.value)), (collection) =>
     success(collection.assets),
   );
 }
@@ -131,7 +139,7 @@ function pinnedUploads(requests: readonly ResourceRequest[]): AuthoringResult<re
 
 /** One pinned declaration as an upload. Fails with `invalid-input` at `resources` on a malformed digest. */
 function pinnedUpload(request: ResourceRequest): AuthoringResult<Upload> {
-  const digest = checkedDigest(removeDigestPrefix(request.source));
+  const digest = checkDigest(removeDigestPrefix(request.source));
   return andThen(digest, (checked) => success({ alias: request.alias, digest: checked }));
 }
 
@@ -141,7 +149,7 @@ function pinnedUpload(request: ResourceRequest): AuthoringResult<Upload> {
  */
 function firstTheme(themes: Themes): AuthoringResult<ThemeBinding> {
   const theme = Object.values(themes)[0];
-  if (!theme) return resourceRefused('Asset binding requires an admitted theme');
+  if (!theme) return missingAssetFailure('Asset binding requires an admitted theme');
   return success(theme);
 }
 
@@ -154,16 +162,16 @@ function suppliedAsset(
   upload: Upload,
   inputs: BindingInputs,
   theme: ThemeBinding,
-  owners: AssetOwners,
+  dependencies: AssetBindingDependencies,
 ): AuthoringResult<AssetBinding> {
   const metadata = inputs.requests.find(
     (item) => item.alias === upload.alias && item.kind !== 'theme',
   );
-  if (metadata) return newAsset(upload, metadata, theme, owners);
+  if (metadata) return newAsset(upload, metadata, theme, dependencies);
   const existing = inputs.previous.find(
     (item) => item.id === upload.alias && item.digest === addDigestPrefix(upload.digest),
   );
-  if (!existing) return resourceRefused(`Missing authored asset metadata: ${upload.alias}`);
+  if (!existing) return missingAssetFailure(`Missing authored asset metadata: ${upload.alias}`);
   return success(existing);
 }
 
@@ -176,9 +184,9 @@ function newAsset(
   upload: Upload,
   metadata: ResourceRequest,
   theme: ThemeBinding,
-  owners: AssetOwners,
+  dependencies: AssetBindingDependencies,
 ): AuthoringResult<AssetBinding> {
-  const blob = fromOwner(owners.assets.resolve(upload.digest));
+  const blob = fromCapability(dependencies.assets.resolve(upload.digest));
   if (!blob.ok) return blob;
   const draft = {
     id: upload.alias,
@@ -187,7 +195,7 @@ function newAsset(
     alt: metadata.alt ?? upload.alias,
     ...optionalMetadata(metadata),
   };
-  const checked = fromOwner(assetBindings([draft], theme, owners.model));
+  const checked = fromCapability(assetBindings([draft], theme, dependencies.model));
   return andThen(checked, firstBinding);
 }
 
@@ -197,7 +205,7 @@ function newAsset(
  */
 function firstBinding(bindings: readonly AssetBinding[]): AuthoringResult<AssetBinding> {
   const [validated] = bindings;
-  if (!validated) return resourceRefused('Asset binding is missing after owner validation');
+  if (!validated) return missingAssetFailure('Asset binding is missing after owner validation');
   return success(validated);
 }
 

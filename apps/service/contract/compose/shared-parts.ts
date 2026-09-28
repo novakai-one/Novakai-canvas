@@ -68,7 +68,7 @@ export function buildSharedParts(inputs: SharedPartInputs): SharedParts {
     assets,
     templates,
     language,
-    installation: builtins.presets,
+    builtinPresets: builtins.presets,
   });
   const jobs = createRenderJobs({
     assets,
@@ -81,7 +81,7 @@ export function buildSharedParts(inputs: SharedPartInputs): SharedParts {
     assets,
     selector: resources,
     language,
-    normalize: (admission, catalog, bindings) =>
+    translateTheme: (admission, catalog, bindings) =>
       prepareTheme(admission, catalog, bindings, { assets, templates }),
     templates: capabilities.templates,
   });

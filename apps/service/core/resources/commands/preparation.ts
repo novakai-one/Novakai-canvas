@@ -1,8 +1,14 @@
 /*
- * Preset preparation: a theme or recipe admission normalised, bound to its selected resources and
- * planned by Templates against one snapshot, without a canonical write. Pure over the injected
- * owners; every refusal is a returned value (refusal.ts), and Authoring owns the canonical write
- * and receipt.
+ * Why this file exists
+ *
+ * Saving a theme or recipe (a "preset") takes two steps. First,
+ * `pnpm canvas theme admit blueprint.theme` asks `POST /api/v1/resources/prepare` what saving it
+ * would store: the exact record, its version and digest, and every stored record it read. Then the
+ * preset planner prepares it again at save, and refuses the change if anything moved.
+ *
+ * This file prepares one preset against one snapshot: it translates a source-syntax theme, picks
+ * the themes and files it uses, and has Templates plan it. Each step answers a `Result`
+ * (contract/errors.ts); the first mistake stops it. It never saves anything.
  */
 import type {
   Catalog,
@@ -23,47 +29,47 @@ import type {
 } from '../../../contract/records/presets/resource-commands.js';
 import { preparationInput } from '../../../contract/records/presets/resource-commands.js';
 import type { ResourceSelector } from '../../../contract/ports/workspace.js';
+import type { FontBinding } from '../../../contract/ports/headless.js';
 import { json, recordId } from '../../../contract/schemas.js';
 import { andThen, success } from '../../../contract/errors.js';
 import { presetResources } from '../../presets/resources.js';
 import { presetRecordId } from '../../workspace/records.js';
-import { selectionRequest, storedCatalog } from './catalog.js';
-import { invalidPreparation } from './refusal.js';
+import { buildSelectionRequest, readStoredCatalog } from './catalog.js';
+import { invalidInputFailure } from './refusal.js';
 
-/** The owners preparation works through. */
-export interface PreparationOwners {
+/** What preparing a preset needs. */
+export interface PreparationDependencies {
+  /** Picks the themes and files the preset uses (selection/select.ts). */
   readonly selector: Pick<ResourceSelector, 'select'>;
-  /** Normalises a theme admission against the catalog and the uploaded font bindings. */
-  normalize(
-    admission: Json,
+  /**
+   * Translates a theme written in source syntax (hex colours, font names) into the form Templates
+   * checks. Anything else comes back unchanged (see core/presets/theme-admission.ts).
+   */
+  translateTheme(
+    preset: Json,
     catalog: Catalog,
-    assets: readonly { readonly alias: string; readonly digest: string }[],
+    fonts: readonly FontBinding[],
   ): ResourceResult<Json>;
-  /** Templates bound to one call's resolved resources. */
+  /** Gives Templates set up with the themes and files one call picked. */
   templates(
     resources: ResolvedResources,
   ): Pick<Templates<LoweredIntent>, 'readCatalog' | 'planAdmission' | 'read'>;
 }
 
 /**
- * Preparation binds codecs to selected resources; no catalog or workspace state is mutated.
- *
- * Steps; the first failure stops the preparation:
- * 1. Decode the input and normalise its admission against the stored catalog (see `normalizeInput`).
- * 2. Select its resources and plan the preset through Templates (see `planPreset`).
- * 3. Build the preparation the preset planner repeats (see `preparation`).
- *
- * Fails with `invalid-input` at `resources` for a malformed input, and with the owner's diagnostic
- * when Templates, theme normalisation or the selector refuses.
+ * Works out exactly what saving one theme or recipe would store, saving nothing. `input` is the
+ * request body as sent (`{ admission, assets }`); it is checked here. Fails with `invalid-input` at
+ * `resources` for a malformed body, or with the mistake of Templates, theme translation or the
+ * selector.
  */
-export function prepare(
-  raw: unknown,
+export function preparePreset(
+  input: unknown,
   snapshot: Snapshot,
-  owners: PreparationOwners,
+  dependencies: PreparationDependencies,
 ): ResourceResult<PresetPreparation> {
-  const normalized = normalizeInput(raw, snapshot, owners);
+  const normalized = normalizeInput(input, snapshot, dependencies);
   if (!normalized.ok) return normalized;
-  const planned = planPreset(normalized.value, snapshot, owners);
+  const planned = planPreset(normalized.value, snapshot, dependencies);
   return andThen(planned, (preset) => preparation(preset, snapshot));
 }
 
@@ -92,13 +98,17 @@ interface PlannedPreset {
 function normalizeInput(
   raw: unknown,
   snapshot: Snapshot,
-  owners: PreparationOwners,
+  dependencies: PreparationDependencies,
 ): ResourceResult<NormalizedInput> {
   const input = preparationInput.safeParse(raw);
-  if (!input.success) return invalidPreparation();
-  const catalog = storedCatalog(snapshot, owners);
+  if (!input.success) return invalidInputFailure();
+  const catalog = readStoredCatalog(snapshot, dependencies);
   if (!catalog.ok) return catalog;
-  const normalized = owners.normalize(input.data.admission, catalog.value, input.data.assets);
+  const normalized = dependencies.translateTheme(
+    input.data.admission,
+    catalog.value,
+    input.data.assets,
+  );
   return andThen(normalized, (admission) => jsonAdmission(input.data, catalog.value, admission));
 }
 
@@ -112,7 +122,7 @@ function jsonAdmission(
   normalized: Json,
 ): ResourceResult<NormalizedInput> {
   const admission = json.safeParse(normalized);
-  if (!admission.success) return invalidPreparation();
+  if (!admission.success) return invalidInputFailure();
   return success({ input, catalog, admission: admission.data });
 }
 
@@ -124,16 +134,16 @@ function jsonAdmission(
 function planPreset(
   normalized: NormalizedInput,
   snapshot: Snapshot,
-  owners: PreparationOwners,
+  dependencies: PreparationDependencies,
 ): ResourceResult<PlannedPreset> {
-  const request = selectionRequest(
+  const request = buildSelectionRequest(
     { ...normalized.input, admission: normalized.admission },
     snapshot,
   );
   if (!request.ok) return request;
-  const selected = owners.selector.select(request.value, snapshot);
+  const selected = dependencies.selector.select(request.value, snapshot);
   if (!selected.ok) return selected;
-  return readPlanned(normalized, owners.templates(selected.value.resources));
+  return readPlanned(normalized, dependencies.templates(selected.value.resources));
 }
 
 /**
@@ -164,7 +174,7 @@ function preparation(
   const admission = normalizedAdmission(planned.admission, planned.preset);
   if (!admission.ok) return admission;
   const record = json.safeParse(planned.preset);
-  if (!record.success) return invalidPreparation();
+  if (!record.success) return invalidInputFailure();
   return andThen(presetKey(planned.pin), (key) =>
     success({
       admission: admission.value,
@@ -188,7 +198,7 @@ function normalizedAdmission(
 ): ResourceResult<AdmissionJson> {
   if (preset.kind !== 'recipe') return success(admission);
   const original = presetFields.safeParse(admission);
-  if (!original.success) return invalidPreparation();
+  if (!original.success) return invalidInputFailure();
   return success({ ...original.data, source: preset.payload.source });
 }
 
@@ -198,7 +208,7 @@ function normalizedAdmission(
  */
 function presetKey(pin: PresetPin): ResourceResult<RecordKey> {
   const id = recordId.safeParse(presetRecordId(pin.digest));
-  if (!id.success) return invalidPreparation();
+  if (!id.success) return invalidInputFailure();
   return success({ kind: 'preset', id: id.data });
 }
 

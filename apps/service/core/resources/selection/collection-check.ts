@@ -1,7 +1,14 @@
 /*
- * Whether a committed collection's pins still match the stored presets and bytes, and which bytes
- * it needs. Pure over Templates and Assets; a mismatch is `missing-asset` and a malformed digest
- * `invalid-input`, both at `resources` (refusal.ts). Authoring owns recovery.
+ * Why this file exists
+ *
+ * A collection records the exact theme version it uses, and each image's digest and media type.
+ * Before it is saved, rendered or exported, those must still match what is stored. For example,
+ * if a logo's stored bytes are a PNG but the collection says SVG, the check stops with
+ * `missing-asset`.
+ *
+ * This file does that check, and lists the digests of the theme's fonts and the images, so the
+ * caller can hold those files. Each step answers a `Result` (contract/errors.ts), and the first
+ * mistake stops the check. It only reads.
  */
 import type {
   Assets,
@@ -15,38 +22,33 @@ import { removeDigestPrefix, type AuthoringDigest } from '../../../contract/bran
 import type { WorkspaceContents } from '../../../contract/records/workspace/contents.js';
 import { andThen, collect, success } from '../../../contract/errors.js';
 import type { AssetBinding } from '../../presets/theme-binding.js';
-import { sortedDigests } from './digests.js';
-import { fromOwner, resourceRefused } from './refusal.js';
+import { checkDigests } from './digests.js';
+import { fromCapability, missingAssetFailure } from './refusal.js';
 
-/** The owners the check reads: Templates for the pinned theme, Assets for the stored bytes. */
-export interface CollectionOwners {
+/** What the check needs. */
+export interface CollectionCheckDependencies {
+  /** Templates, which finds the exact theme version the collection records. */
   readonly templates: Pick<Templates<LoweredIntent>, 'read'>;
+  /** The file store, which says whether each image is stored and what its media type is. */
   readonly assets: Pick<Assets, 'resolve'>;
 }
 
 /**
- * A collection's theme pin must name a stored theme; its fonts and asset bytes are returned
- * sorted.
- *
- * Steps; the first failure stops the check:
- * 1. Read the pinned theme through Templates (see `pinnedTheme`).
- * 2. Check the theme roles, then each asset's media type (see `checkBindings`).
- * 3. Check the font and asset digests.
- *
- * Fails with `missing-asset` at `resources` when Templates or Assets refuses a pin (owner failure
- * in `source`), when the pin is not a theme, or when the theme roles or an asset's media type
- * differ; `invalid-input` at `resources` when a font or asset digest is malformed.
+ * Checks that a collection's theme and images still match what is stored, and lists the digests
+ * of the theme's fonts and the images, sorted. Fails with `missing-asset` at `resources` when the
+ * theme or an image is missing or differs (a capability's failure kept as `source`), or
+ * `invalid-input` at `resources` when a digest is malformed.
  */
-export function collectionResources(
+export function checkCollectionFiles(
   collection: Collection,
-  view: WorkspaceContents,
-  owners: CollectionOwners,
+  contents: WorkspaceContents,
+  dependencies: CollectionCheckDependencies,
 ): AuthoringResult<readonly AuthoringDigest[]> {
-  const theme = pinnedTheme(collection, view, owners);
+  const theme = pinnedTheme(collection, contents, dependencies);
   if (!theme.ok) return theme;
-  const checked = checkBindings(collection, theme.value, owners);
+  const checked = checkBindings(collection, theme.value, dependencies);
   if (!checked.ok) return checked;
-  return sortedDigests([
+  return checkDigests([
     ...theme.value.payload.fonts,
     ...collection.assets.map((item) => removeDigestPrefix(item.digest)),
   ]);
@@ -60,10 +62,10 @@ export function collectionResources(
 function pinnedTheme(
   collection: Collection,
   view: WorkspaceContents,
-  owners: CollectionOwners,
+  dependencies: CollectionCheckDependencies,
 ): AuthoringResult<ThemePreset> {
-  const preset = fromOwner(
-    owners.templates.read(view.presets, {
+  const preset = fromCapability(
+    dependencies.templates.read(view.presets, {
       kind: 'theme',
       id: collection.theme.id,
       version: collection.theme.version,
@@ -72,7 +74,7 @@ function pinnedTheme(
   );
   if (!preset.ok) return preset;
   if (preset.value.kind !== 'theme')
-    return resourceRefused('Collection pin does not identify a theme');
+    return missingAssetFailure('Collection pin does not identify a theme');
   return success(preset.value);
 }
 
@@ -80,10 +82,10 @@ function pinnedTheme(
 function checkBindings(
   collection: Collection,
   theme: ThemePreset,
-  owners: CollectionOwners,
+  dependencies: CollectionCheckDependencies,
 ): AuthoringResult<void> {
   const roles = checkRoles(collection.theme.roles, theme.payload.roles);
-  return andThen(roles, () => checkMediaTypes(collection.assets, owners));
+  return andThen(roles, () => checkMediaTypes(collection.assets, dependencies));
 }
 
 /**
@@ -96,7 +98,7 @@ function checkRoles(
   preset: readonly string[],
 ): AuthoringResult<void> {
   if (!sameRoles(pinned, preset))
-    return resourceRefused('Collection theme roles differ from the pinned preset');
+    return missingAssetFailure('Collection theme roles differ from the pinned preset');
   return success(undefined);
 }
 
@@ -117,9 +119,9 @@ function sameRoles(
  */
 function checkMediaTypes(
   bindings: readonly AssetBinding[],
-  owners: CollectionOwners,
+  dependencies: CollectionCheckDependencies,
 ): AuthoringResult<void> {
-  const checked = collect(bindings, (binding) => checkMediaType(binding, owners));
+  const checked = collect(bindings, (binding) => checkMediaType(binding, dependencies));
   return andThen(checked, () => success(undefined));
 }
 
@@ -130,11 +132,11 @@ function checkMediaTypes(
  */
 function checkMediaType(
   binding: AssetBinding,
-  owners: CollectionOwners,
+  dependencies: CollectionCheckDependencies,
 ): AuthoringResult<void> {
-  const blob = fromOwner(owners.assets.resolve(removeDigestPrefix(binding.digest)));
+  const blob = fromCapability(dependencies.assets.resolve(removeDigestPrefix(binding.digest)));
   if (!blob.ok) return blob;
   if (blob.value.descriptor.mediaType !== binding.mediaType)
-    return resourceRefused(`Asset media type differs: ${binding.id}`);
+    return missingAssetFailure(`Asset media type differs: ${binding.id}`);
   return success(undefined);
 }

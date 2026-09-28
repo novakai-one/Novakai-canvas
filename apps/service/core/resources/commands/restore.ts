@@ -1,27 +1,39 @@
 /*
- * Byte restore: exact normalized bytes written back through an Assets reservation, released on
- * every settlement path. Pure over Assets; failures are returned, never thrown. Assets owns byte
- * recovery, and the caller keeps its local backup bytes.
+ * Why this file exists
+ *
+ * The CLI keeps a copy of each file it uploaded for a change. If it has to send that change again,
+ * the stored file may be gone by then, so it first sends the bytes back:
+ * `POST /api/v1/resources/restore` with `{ digest, base64 }`. While they are written, nothing else
+ * may write that file.
+ *
+ * This file checks the body, holds the file, writes the bytes, and then always lets the hold go.
+ * It never touches the workspace's records.
  */
-import type { Assets, WriteLease } from '../../../contract/records/capability-types.js';
+import type {
+  Assets,
+  AssetResult,
+  WriteLease,
+} from '../../../contract/records/capability-types.js';
 import type { RestoreInput } from '../../../contract/records/presets/resource-commands.js';
 import type { ResourceCommands } from '../../../contract/ports/workspace.js';
 import { restoreInput } from '../../../contract/records/presets/resource-commands.js';
 
-/** The owner a restore writes through. */
-export interface RestoreOwners {
+/** What restoring a file needs. */
+export interface RestoreDependencies {
+  /** The file store, which holds the file while its bytes are written. */
   readonly assets: Pick<Assets, 'reserve'>;
 }
 
 /**
- * Restores one digest's bytes under a reservation. Refuses a malformed body with `invalid-input`
- * at `restore`; otherwise answers Assets' reservation, stage or release outcome unchanged.
+ * Puts one file's bytes back from the CLI's copy. `input` is the request body as sent; it is
+ * checked here. Fails with `invalid-input` at `restore` for a malformed body. Otherwise it answers
+ * the file store's outcome unchanged.
  */
-export async function restore(
-  raw: unknown,
-  owners: RestoreOwners,
-): ReturnType<ResourceCommands['restore']> {
-  const checked = restoreInput.safeParse(raw);
+export async function restoreFile(
+  input: unknown,
+  dependencies: RestoreDependencies,
+): Promise<AssetResult<void>> {
+  const checked = restoreInput.safeParse(input);
   if (!checked.success)
     return {
       ok: false,
@@ -32,15 +44,15 @@ export async function restore(
         recovery: 'Retain the original backup.',
       },
     };
-  return restoreChecked(checked.data, owners);
+  return restoreChecked(checked.data, dependencies);
 }
 
 /** Reservation failure leaves no lease; a successful reservation always reaches release. */
 async function restoreChecked(
   checked: RestoreInput,
-  owners: RestoreOwners,
+  dependencies: RestoreDependencies,
 ): ReturnType<ResourceCommands['restore']> {
-  const lease = owners.assets.reserve([checked.digest]);
+  const lease = dependencies.assets.reserve([checked.digest]);
   if (!lease.ok) return lease;
   return restoreReserved(lease.value, checked);
 }

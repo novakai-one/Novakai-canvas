@@ -1,8 +1,13 @@
 /*
- * The pins record a selection answers: its resolved resources as plain JSON, which Authoring keeps
- * on the lease and hands back to the DSL planner. The planner repeats the selection and compares
- * both records value by value. Pure; a record that is not JSON is `invalid-input` at `resources`
- * (refusal.ts), and Authoring owns recovery.
+ * Why this file exists
+ *
+ * The themes and files picked at preview must be the ones used at save. So Authoring keeps the
+ * pick with the change as plain JSON (`{ resources }`), and at save the DSL planner picks again
+ * and compares. For example, if a newer `paper` theme was saved in between, a change that says
+ * `theme=paper` picks differently the second time, and the save is refused.
+ *
+ * This file writes a pick as that JSON, and compares two of them value by value, in any key
+ * order. It never changes either one.
  */
 import type {
   AuthoringResult,
@@ -11,33 +16,33 @@ import type {
 } from '../../../contract/records/capability-types.js';
 import { json } from '../../../contract/schemas.js';
 import { success } from '../../../contract/errors.js';
-import { undecodable } from './refusal.js';
+import { unreadableRequestFailure } from './refusal.js';
 
 /**
- * The pins record for these resources: `{ resources }` checked as JSON. Fails with
- * `invalid-input` at `resources` when the resources are not JSON.
+ * Writes the picked themes and files as plain JSON: `{ resources }`. Fails with `invalid-input` at
+ * `resources` when they can't be written as JSON.
  */
-export function selectionPins(resources: ResolvedResources): AuthoringResult<Json> {
+export function toResourcesJson(resources: ResolvedResources): AuthoringResult<Json> {
   const pins = json.safeParse({ resources });
-  if (!pins.success) return undecodable();
+  if (!pins.success) return unreadableRequestFailure();
   return success(pins.data);
 }
 
 /**
- * Whether two pins records hold the same values: equal scalars, arrays with equal items in the
- * same order, and objects with the same keys holding equal values, in any key order. Never fails.
+ * Whether two picks written by `toResourcesJson` hold the same values: arrays with the same items
+ * in the same order, objects with the same keys in any order. Never fails.
  */
-export function samePins(
-  admitted: Json,
-  selected: Json,
+export function sameResourcesJson(
+  kept: Json,
+  pickedAgain: Json,
 ): boolean {
-  return sameJson(admitted, selected);
+  return sameJson(kept, pickedAgain);
 }
 
 /** A JSON object. */
 type JsonRecord = { readonly [key: string]: Json };
 
-/** Whether two JSON values are equal (see `samePins`). */
+/** Whether two JSON values are equal (see `sameResourcesJson`). */
 function sameJson(
   left: Json,
   right: Json,

@@ -1,9 +1,13 @@
 /*
- * Resource selection: the theme and asset bindings one request may use, and whether a collection's
- * pins still match the stored presets and bytes. This file composes the steps (intent, themes,
- * asset-bindings, coverage, collection-check); each step returns its refusal as a value
- * (refusal.ts) and the first one stops the selection. Pure over the injected owners; Authoring
- * owns commit and recovery.
+ * Why this file exists
+ *
+ * A change can use themes and files. For example, DSL with `theme=paper` and an image of a logo
+ * needs the `paper` theme and the logo's stored file. Before planning, the service picks exactly
+ * which ones from one snapshot, so every later step sees the same pick. Rendering a saved
+ * collection asks a similar question: which stored files does it use, and do they still match?
+ *
+ * This file builds the selector (`ResourceSelector`) that answers both. Each step answers a
+ * `Result` (contract/errors.ts); the first mistake stops the pick. It only reads; Authoring saves.
  */
 import type {
   Assets,
@@ -21,33 +25,42 @@ import type { ResourceSelection } from '../../../contract/records/planning/selec
 import type { ResourceSelector } from '../../../contract/ports/workspace.js';
 import { andThen, success } from '../../../contract/errors.js';
 import { listLiveRecords } from '../../workspace/records.js';
-import { boundAssets } from './asset-bindings.js';
-import { collectionResources } from './collection-check.js';
-import { coverage, presetReads } from './coverage.js';
-import { declaredResources, decodeIntent, type Intent } from './intent.js';
-import { selectionPins } from './pins.js';
-import { fromOwner } from './refusal.js';
-import { availableThemes, pinnedThemes, type Themes } from './themes.js';
+import { bindAssets } from './asset-bindings.js';
+import { checkCollectionFiles } from './collection-check.js';
+import { listFileDigests, listPresetReads } from './coverage.js';
+import { readDeclaredResources, decodeIntent, type Intent } from './intent.js';
+import { toResourcesJson } from './pins.js';
+import { fromCapability } from './refusal.js';
+import { listAvailableThemes, applyFrozenThemes, type Themes } from './themes.js';
 
-/** The owners selection reads through; compose passes them from ServiceCapabilities and the workspace. */
-export interface ResourceOwners {
+/** The capabilities the selector asks, and the shipped presets. Compose passes them in. */
+export interface ResourceSelectorDependencies {
+  /** Model's check, used on each theme and file binding and on a stored collection. */
   readonly model: Pick<ModelRules, 'validate'>;
+  /** The file store, which says whether a file is stored and what its media type is. */
   readonly assets: Pick<Assets, 'resolve'>;
+  /** Templates, which reads the stored themes and recipes and finds a theme's latest version. */
   readonly templates: Pick<Templates<LoweredIntent>, 'readCatalog' | 'read'>;
+  /** Language's parser, which reads the themes and files a DSL text declares. */
   readonly language: Pick<Language, 'parse'>;
-  /** The fixed installation presets a bootstrap request reads. */
-  readonly installation: Catalog;
+  /**
+   * The shipped themes and recipes. A new workspace's seed request (planner `bootstrap`) picks
+   * from these, because none are stored yet.
+   */
+  readonly builtinPresets: Catalog;
 }
 
 /**
- * Selects a request's resources and checks a collection's pins; Authoring owns commit and recovery.
- * Refuses with `missing-asset` (owner failure kept in `source`) or `invalid-input` (undecodable payload).
+ * Builds the selector (see `ResourceSelector`): `select` picks a request's themes and files, and
+ * `digestsForCollection` checks a saved collection's. Starts nothing.
  */
-export function createResourceSelector(owners: ResourceOwners): ResourceSelector {
+export function createResourceSelector(
+  dependencies: ResourceSelectorDependencies,
+): ResourceSelector {
   return {
-    select: (request, snapshot) => select(request, snapshot, owners),
+    select: (request, snapshot) => select(request, snapshot, dependencies),
     digestsForCollection: (collection, workspace) =>
-      collectionResources(collection, workspace, owners),
+      checkCollectionFiles(collection, workspace, dependencies),
   };
 }
 
@@ -69,47 +82,47 @@ interface ChosenThemes {
 function select(
   request: Request,
   snapshot: Snapshot,
-  owners: ResourceOwners,
+  dependencies: ResourceSelectorDependencies,
 ): AuthoringResult<ResourceSelection> {
-  const catalog = presets(request, snapshot, owners);
+  const catalog = presets(request, snapshot, dependencies);
   if (!catalog.ok) return catalog;
-  const chosen = chooseThemes(request, catalog.value, owners);
+  const chosen = chooseThemes(request, catalog.value, dependencies);
   if (!chosen.ok) return chosen;
-  const resources = resolveResources(request, snapshot, chosen.value, owners);
+  const resources = resolveResources(request, snapshot, chosen.value, dependencies);
   return andThen(resources, (resolved) => selection(request, snapshot, catalog.value, resolved));
 }
 
 /**
  * The themes the catalog offers, then the request's retained pins over them. The payload is
  * decoded after the owner reads, so a broken catalog is still reported before a bad payload.
- * Fails as `availableThemes`, `decodeIntent` or `pinnedThemes` fails.
+ * Fails as `listAvailableThemes`, `decodeIntent` or `applyFrozenThemes` fails.
  */
 function chooseThemes(
   request: Request,
   catalog: Catalog,
-  owners: ResourceOwners,
+  dependencies: ResourceSelectorDependencies,
 ): AuthoringResult<ChosenThemes> {
-  const available = availableThemes(catalog, owners);
+  const available = listAvailableThemes(catalog, dependencies);
   if (!available.ok) return available;
   const intent = decodeIntent(request);
   if (!intent.ok) return intent;
-  const themes = pinnedThemes(intent.value, available.value);
+  const themes = applyFrozenThemes(intent.value, available.value);
   return andThen(themes, (pinned) => success({ intent: intent.value, themes: pinned }));
 }
 
 /**
  * The chosen themes and the asset bindings the request's own source declares. Fails as
- * `declaredResources` or `boundAssets` fails.
+ * `readDeclaredResources` or `bindAssets` fails.
  */
 function resolveResources(
   request: Request,
   snapshot: Snapshot,
   chosen: ChosenThemes,
-  owners: ResourceOwners,
+  dependencies: ResourceSelectorDependencies,
 ): AuthoringResult<ResolvedResources> {
-  const declared = declaredResources(chosen.intent, owners);
+  const declared = readDeclaredResources(chosen.intent, dependencies);
   if (!declared.ok) return declared;
-  const assets = boundAssets(request, declared.value, snapshot, chosen.themes, owners);
+  const assets = bindAssets(request, declared.value, snapshot, chosen.themes, dependencies);
   return andThen(assets, (bound) => success({ themes: chosen.themes, assets: bound }));
 }
 
@@ -124,11 +137,11 @@ function selection(
   catalog: Catalog,
   resources: ResolvedResources,
 ): AuthoringResult<ResourceSelection> {
-  const pins = selectionPins(resources);
+  const pins = toResourcesJson(resources);
   if (!pins.ok) return pins;
-  const covered = coverage(request, snapshot, catalog, resources.assets);
+  const covered = listFileDigests(request, snapshot, catalog, resources.assets);
   if (!covered.ok) return covered;
-  const reads = presetReads(snapshot);
+  const reads = listPresetReads(snapshot);
   return success({ resources, resourcesJson: pins.value, fileDigests: covered.value, reads });
 }
 
@@ -136,11 +149,11 @@ function selection(
 function presets(
   request: Request,
   snapshot: Snapshot,
-  owners: ResourceOwners,
+  dependencies: ResourceSelectorDependencies,
 ): AuthoringResult<Catalog> {
   if (request.intent.kind === 'change' && request.intent.planner === 'bootstrap')
-    return success(owners.installation);
-  return storedPresets(snapshot, owners);
+    return success(dependencies.builtinPresets);
+  return storedPresets(snapshot, dependencies);
 }
 
 /**
@@ -150,9 +163,11 @@ function presets(
  */
 function storedPresets(
   snapshot: Snapshot,
-  owners: ResourceOwners,
+  dependencies: ResourceSelectorDependencies,
 ): AuthoringResult<Catalog> {
-  return fromOwner(
-    owners.templates.readCatalog(listLiveRecords(snapshot, 'preset').map((item) => item.value)),
+  return fromCapability(
+    dependencies.templates.readCatalog(
+      listLiveRecords(snapshot, 'preset').map((item) => item.value),
+    ),
   );
 }
