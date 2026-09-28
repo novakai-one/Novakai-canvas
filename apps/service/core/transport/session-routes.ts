@@ -1,9 +1,13 @@
 /*
- * The session routes: workspace, history, installation and identity reads, render, inspect,
- * receipt and export, each forwarded to the session facade. Render and inspect parse `?id` as a
- * Model collection ID first. Pure over the injected session; no route writes storage. Authoring
- * owns commit and receipt recovery; a refused export body is the caller's to correct. A throw
- * reaches the HTTP server's `receive` (routes.ts).
+ * Why this file exists
+ *
+ * Most of what the web app and the CLI read comes from the open workspace. For example,
+ * `GET /api/v1/render?id=walkthrough-modules` answers that collection laid out, with its nodes
+ * placed and wires routed, and `POST /api/v1/export` answers a PNG or SVG file.
+ *
+ * This file is the eight routes that pass such calls to the workspace session: `workspace`,
+ * `history`, `installation`, `identity`, `render`, `inspect`, `receipt` and `export`. It never
+ * writes storage. An `?id` that isn't a collection ID answers `not-found`, like a missing one.
  */
 import type { ApiCall, RouteKey, RouteOutcome } from '../../contract/records/transport/protocol.js';
 import type { HttpOutcome } from '../../contract/records/transport/http-codes.js';
@@ -13,9 +17,9 @@ import type { CollectionId } from '../../contract/brands.js';
 import { collectionId } from '../../contract/schemas.js';
 import { missingCollection } from '../rendering/collection.js';
 import { historyVersionsOnly } from '../session/history-versions.js';
-import { jsonBody } from './json-body.js';
+import { readJsonBody } from './json-body.js';
 import { readLastValue } from './api-query.js';
-import { answerFile, answerOutcome, answerJson, type RouteHandler } from './route-answer.js';
+import { answerFile, answerJson, jsonRoute, type RouteHandler } from './route-answer.js';
 
 /** A session route, as `METHOD path`. */
 export type SessionRouteKey = Extract<
@@ -30,8 +34,8 @@ export type SessionRouteKey = Extract<
   | 'POST /api/v1/export'
 >;
 
-/** The owner the session routes forward to. */
-export interface SessionRouteOwners {
+/** What the session routes call: the workspace session's read, render and export calls. */
+export interface SessionRouteDependencies {
   readonly session: Pick<
     WorkspaceSession,
     'workspace' | 'builtins' | 'read' | 'history' | 'receipt' | 'render' | 'inspect' | 'exportFile'
@@ -39,31 +43,31 @@ export interface SessionRouteOwners {
 }
 
 /** The session facade, as the session routes read it. */
-type RouteSession = SessionRouteOwners['session'];
+type RouteSession = SessionRouteDependencies['session'];
 
 /**
- * The frozen session route table. `workspace`, `render`, `inspect` and `export` fail as their
- * handlers below; every other route passes the session's outcome through (`installation` and
- * `identity` cannot fail). Export answers its file as bytes; every other answer is JSON.
+ * The eight session routes. `export` answers a file's bytes; the rest answer JSON. The session's
+ * answers pass through. `render` and `inspect` also answer `not-found` when `?id` isn't a
+ * collection ID, and `export` answers `invalid-input` for a body that isn't JSON.
  */
 export function sessionRoutes(
-  owners: SessionRouteOwners,
+  dependencies: SessionRouteDependencies,
 ): Readonly<Record<SessionRouteKey, RouteHandler>> {
-  const { session } = owners;
+  const { session } = dependencies;
   return Object.freeze({
-    'GET /api/v1/workspace': answerJson((call) => workspace(call, session)),
-    'GET /api/v1/history': answerJson(() => session.history()),
-    'GET /api/v1/installation': answerJson(async () =>
+    'GET /api/v1/workspace': jsonRoute((call) => workspace(call, session)),
+    'GET /api/v1/history': jsonRoute(() => session.history()),
+    'GET /api/v1/installation': jsonRoute(async () =>
       success({ fonts: session.builtins.fonts, tokens: session.builtins.tokens }),
     ),
-    'GET /api/v1/identity': answerJson(async () => success({ workspace: session.workspace })),
-    'GET /api/v1/render': answerJson((call) =>
+    'GET /api/v1/identity': jsonRoute(async () => success({ workspace: session.workspace })),
+    'GET /api/v1/render': jsonRoute((call) =>
       withCollection(call, (id) => session.render(id, call.signal)),
     ),
-    'GET /api/v1/inspect': answerJson((call) =>
+    'GET /api/v1/inspect': jsonRoute((call) =>
       withCollection(call, (id) => session.inspect(id, call.signal)),
     ),
-    'GET /api/v1/receipt': answerJson((call) => session.receipt(readLastValue(call.query, 'id'))),
+    'GET /api/v1/receipt': jsonRoute((call) => session.receipt(readLastValue(call.query, 'id'))),
     'POST /api/v1/export': (call) => exportArtifact(call, session),
   });
 }
@@ -85,14 +89,14 @@ async function workspace(
 
 /**
  * Exports the body read as JSON, answering the file as bytes. Fails with `invalid-input` at
- * `content-type` or `body` as `jsonBody` (json-body.ts); export failures pass through as JSON.
+ * `content-type` or `body` as `readJsonBody` (json-body.ts); export failures pass through as JSON.
  */
 async function exportArtifact(
   call: ApiCall,
   session: RouteSession,
 ): Promise<RouteOutcome> {
-  const input = jsonBody(call.body, call.metadata.contentType, 'resource');
-  if (!input.ok) return answerOutcome(input);
+  const input = readJsonBody(call.body, call.metadata.contentType, 'resource');
+  if (!input.ok) return answerJson(input);
   const file = await session.exportFile(input.value, call.signal);
   return answerFile(file);
 }

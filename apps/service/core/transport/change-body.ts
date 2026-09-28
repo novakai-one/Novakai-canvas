@@ -1,27 +1,37 @@
 /*
- * Decodes a mutation body into an admitted Authoring request. Pure; malformed input never reaches
- * Authoring. A changed generation never grants an automatic retry: the caller rereads and
- * reconciles its original receipt first. Authoring owns commit and receipt recovery.
+ * Why this file exists
+ *
+ * A change reaches the service as a JSON body, and nothing in it can be trusted yet. For example,
+ * `{ version: 1, generation, request, preview: true }` must be well formed, made for this server
+ * run, and carry a request its sender may make.
+ *
+ * This file checks the body in that order and gives back the change Authoring may run. It never
+ * runs the change. A body made before a restart is refused (`conflict`), and is never retried for
+ * the caller: the caller rereads its receipt first.
+ *
+ * Each step answers a `Result` (see `contract/errors.ts`); the mistakes are made in the steps here.
  */
 import type { AdmittedChange } from '../../contract/records/transport/protocol.js';
 import type { BodyCheckContext } from '../../contract/ports/transport.js';
 import type { PrepareMode } from '../../contract/records/workspace/session.js';
 import { changeRequestBody } from '../../contract/records/transport/protocol.js';
 import { failure, success, type Result } from '../../contract/errors.js';
-import { jsonBody } from './json-body.js';
+import { readJsonBody } from './json-body.js';
 
 /** A body that passed the version 1 envelope schema. */
 type MutationEnvelope = ReturnType<typeof changeRequestBody.parse>;
 
 /**
- * The body as an admitted mutation. Fails with `invalid-input` at `content-type` or `body` as
- * `jsonBody` (json-body.ts); otherwise as `admitEnvelope`.
+ * Reads the body text, as sent, into a change Authoring may run. Fails with `invalid-input` at
+ * `content-type` or `body` when it isn't a version 1 change request body, `conflict` at
+ * `generation` when it was made for another server run, and otherwise as `admitChange`
+ * (admission.ts).
  */
-export function readCommand(
+export function readChangeBody(
   body: string,
   context: BodyCheckContext,
 ): Result<AdmittedChange> {
-  const decoded = jsonBody(body, context.metadata.contentType, 'mutation');
+  const decoded = readJsonBody(body, context.metadata.contentType, 'change');
   if (!decoded.ok) return decoded;
   return admitEnvelope(decoded.value, context);
 }

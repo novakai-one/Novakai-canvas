@@ -1,7 +1,12 @@
 /*
- * The request head the ingress policy reads (the method and eight headers, still untrusted) and
- * how a check reads one header. Pure. An absent header reads as empty text; a repeated one has no
- * text, so every check refuses it before reading and the caller corrects and resends the request.
+ * Why this file exists
+ *
+ * Deciding who is calling means reading a request's headers, and a header can be missing or sent
+ * twice. For example, a request with two `Authorization` headers must not count as either one.
+ *
+ * This file reads the method and the eight headers the checks use, and marks each header as not
+ * sent, sent once, or sent more than once. It also gives the checks one safe way to read a header.
+ * It trusts nothing it reads; admission.ts makes the decisions.
  */
 import type {
   HeaderLists,
@@ -15,10 +20,10 @@ const ABSENT: HeaderValue = Object.freeze({ kind: 'absent' });
 const REPEATED: HeaderValue = Object.freeze({ kind: 'repeated' });
 
 /**
- * The method (empty when missing) and each header admission checks, from Node's lowercase header
- * lists. Cannot fail.
+ * Reads the method and the headers the checks use, from Node's header lists (lowercase names, every
+ * value sent). A missing method reads as empty text. Never fails.
  */
-export function requestHead(
+export function readHttpMetadata(
   method: string | undefined,
   headers: HeaderLists,
 ): HttpMetadata {
@@ -36,10 +41,13 @@ export function requestHead(
   };
 }
 
-/** A header sent at most once, so its text is unambiguous. */
+/** A header sent at most once, so its text is clear. */
 export type UnambiguousHeader = Exclude<HeaderValue, { readonly kind: 'repeated' }>;
 
-/** Whether the header reads as `text`. Absent reads as empty text; repeated never matches. */
+/**
+ * Whether the header's text is exactly `text`. A header that wasn't sent reads as empty text; one
+ * sent more than once never matches.
+ */
 export function headerMatches(
   header: HeaderValue,
   text: string,
@@ -49,8 +57,8 @@ export function headerMatches(
 }
 
 /**
- * The text of a header sent at most once: empty when absent, its value when sent once. A caller
- * refuses a `repeated` header before asking. Cannot fail.
+ * The text of a header sent at most once: its value, or empty text when it wasn't sent. Callers
+ * refuse a header sent more than once before asking. Never fails.
  */
 export function headerText(header: UnambiguousHeader): string {
   if (header.kind === 'absent') return '';

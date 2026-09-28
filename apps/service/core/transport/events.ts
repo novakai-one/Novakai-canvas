@@ -1,7 +1,13 @@
 /*
- * The server-sent event frames of `GET /api/v1/events`. Pure. Every connection first receives
- * `connected` with the server's generation; `committed` is a hint only, so a client rereads
- * authoritative state and keeps its drafts. Authoring owns commit and receipt recovery.
+ * Why this file exists
+ *
+ * The web app keeps a connection open to hear when a diagram is saved, so it can reread it. For
+ * example, after the CLI applies a change, every open browser receives a `committed` message.
+ *
+ * This file writes the text of those messages (server-sent events): `connected` when a connection
+ * opens, `committed` after each saved change, and a `keepalive` line. It never decides when to send
+ * them. A `committed` message is only a hint: the web app rereads the saved state and keeps its
+ * drafts.
  */
 import type { EventFrames } from '../../contract/ports/transport.js';
 import type { CommittedChange } from '../../contract/ports/notifications.js';
@@ -11,8 +17,9 @@ import type { Generation } from '../../contract/brands.js';
 type EventName = 'connected' | 'committed';
 
 /**
- * The frames of the change stream: `connected` and `committed` carry version 1 and the
- * generation; `keepalive` is a comment line that holds an idle connection open. Cannot fail.
+ * The text of each change stream message. `connected` and `committed` carry version 1 and this
+ * server run's `generation`; `keepalive` is a comment line that keeps an idle connection open.
+ * Never fails.
  */
 export const eventFrames: EventFrames = Object.freeze({
   connected,

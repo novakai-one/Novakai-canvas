@@ -1,18 +1,25 @@
 /*
- * The body of every API request, read before its route: at most `httpBodyLimit` bytes of strict
- * UTF-8. Pure over the injected chunk stream; the socket stays open when reading stops, so the
- * refusal can still be answered. A refused body is the caller's to correct or resend.
+ * Why this file exists
+ *
+ * A request body arrives from the socket in pieces, and it may be too big, cut off, or not text.
+ * For example, a 30 MiB upload must be stopped at 24 MiB, not read to the end.
+ *
+ * This file reads the pieces into the body text: at most `httpBodyLimit` bytes of valid UTF-8. It
+ * stops reading once the body is too big, but leaves the socket open so the refusal can be sent.
+ * It never parses the text; each route does that.
+ *
+ * Each step answers a `Result` (see `contract/errors.ts`); the one mistake is made in
+ * `bodyRefused`.
  */
 import { httpBodyLimit } from '../../contract/records/transport/http.js';
 import { andThen, failure, success, type Result } from '../../contract/errors.js';
 
 /**
- * The chunks as UTF-8 text. Fails with `invalid-input` at `body` ("Request body was interrupted or
- * not valid UTF-8") when a chunk is not bytes, the total passes `httpBodyLimit` (reading stops
- * there), the stream fails (an interrupted upload) or the bytes are not valid UTF-8. The last two
- * are Node throws, caught where they happen (`receivedBytes`, `decodedText`).
+ * Reads the body pieces into text. The text is not checked any further here; each route parses it.
+ * Fails with `invalid-input` at `body` when a piece isn't bytes, the body passes 24 MiB, the upload
+ * is cut off, or the bytes aren't valid UTF-8.
  */
-export async function requestBody(chunks: AsyncIterable<unknown>): Promise<Result<string>> {
+export async function readRequestBody(chunks: AsyncIterable<unknown>): Promise<Result<string>> {
   const bytes = await receivedBytes(chunks);
   return andThen(bytes, decodedText);
 }

@@ -1,8 +1,13 @@
 /*
- * The Language routes: `GET /api/v1/language` answers Language's vocabulary and
- * `GET /api/v1/source` prints one current collection as DSL for a scope. Pure over the injected
- * owners. A refused scope or print is the caller's to correct. A throw, Language's included,
- * reaches the HTTP server's `receive` (routes.ts).
+ * Why this file exists
+ *
+ * An agent can't look at a diagram's picture, so it reads the diagram as DSL text instead. For
+ * example, `GET /api/v1/source?id=walkthrough-modules&section=m-review-map` answers that one
+ * section as DSL.
+ *
+ * This file is the two Language routes: `language` answers the DSL's vocabulary, and `source`
+ * prints one saved collection as DSL, whole or one section or object. Language does the printing
+ * (source-readout.ts); this file never learns the DSL's rules.
  */
 import type { ApiCall, RouteKey } from '../../contract/records/transport/protocol.js';
 import type { HttpOutcome } from '../../contract/records/transport/http-codes.js';
@@ -10,53 +15,60 @@ import type { Scope, Snapshot, StoredRecord } from '../../contract/records/capab
 import type { WorkspaceSession } from '../../contract/types.js';
 import { failure, success, type Result } from '../../contract/errors.js';
 import { liveRecord } from '../workspace/records.js';
-import { sourceScope } from './source-scope.js';
+import { readSourceScope } from './source-scope.js';
 import { readLastValue } from './api-query.js';
-import { answerJson, type RouteHandler } from './route-answer.js';
+import { jsonRoute, type RouteHandler } from './route-answer.js';
 
 /** A Language route, as `METHOD path`. */
 export type SourceRouteKey = Extract<RouteKey, 'GET /api/v1/language' | 'GET /api/v1/source'>;
 
-/** Language's vocabulary and DSL printing, as the source routes read them. */
+/** What the Language routes need from Language: its vocabulary, and a collection printed as DSL. */
 export interface SourceReadout {
+  /** Language's vocabulary, as Language answers it (its own `{ ok, value }`), sent on unchanged. */
   describe(): unknown;
+  /**
+   * Prints the stored collection (unchecked; Language checks it) as DSL for the scope. Answers
+   * Language's readout (`source`, `collection`, `revision`, `scope`), sent on unchanged. Fails
+   * with `invalid-input` at `source` when Language can't print it.
+   */
   print(
     collection: unknown,
     scope: Scope,
   ): Result<unknown>;
 }
 
-/** The owners the Language routes forward to. */
-export interface SourceRouteOwners {
+/** What the Language routes call: the workspace session's `read`, and the readout. */
+export interface SourceRouteDependencies {
   readonly session: Pick<WorkspaceSession, 'read'>;
   readonly source: SourceReadout;
 }
 
 /**
- * The frozen Language route table; both answer JSON. `language` cannot fail; `source` fails as
- * `source` below.
+ * The two Language routes; both answer JSON. `language` never fails. `source` answers
+ * `invalid-input` at `scope` for a bad `section` or `object`, `not-found` at `collection` when
+ * `?id` names no saved collection, and the readout's print failure.
  */
 export function sourceRoutes(
-  owners: SourceRouteOwners,
+  dependencies: SourceRouteDependencies,
 ): Readonly<Record<SourceRouteKey, RouteHandler>> {
   return Object.freeze({
-    'GET /api/v1/language': answerJson(async () => success(owners.source.describe())),
-    'GET /api/v1/source': answerJson((call) => source(call, owners)),
+    'GET /api/v1/language': jsonRoute(async () => success(dependencies.source.describe())),
+    'GET /api/v1/source': jsonRoute((call) => source(call, dependencies)),
   });
 }
 
 /**
  * One current collection printed as DSL for the `section` or `object` scope (all when neither).
- * Fails with `invalid-input` at `scope` as `sourceScope` (source-scope.ts), and as
+ * Fails with `invalid-input` at `scope` as `readSourceScope` (source-scope.ts), and as
  * `readSourceRecord`.
  */
 async function source(
   call: ApiCall,
-  owners: SourceRouteOwners,
+  dependencies: SourceRouteDependencies,
 ): Promise<HttpOutcome> {
-  const scope = sourceScope(call.query);
+  const scope = readSourceScope(call.query);
   if (!scope.ok) return scope;
-  return readSourceRecord(call, owners, scope.value);
+  return readSourceRecord(call, dependencies, scope.value);
 }
 
 /**
@@ -67,14 +79,14 @@ async function source(
  */
 async function readSourceRecord(
   call: ApiCall,
-  owners: SourceRouteOwners,
+  dependencies: SourceRouteDependencies,
   scope: Scope,
 ): Promise<HttpOutcome> {
-  const snapshot = await owners.session.read();
+  const snapshot = await dependencies.session.read();
   if (!snapshot.ok) return snapshot;
   const record = sourceRecord(snapshot.value, readLastValue(call.query, 'id'));
   if (!record) return failure('not-found', 'collection', 'Collection was not found');
-  return owners.source.print(record.value, scope);
+  return dependencies.source.print(record.value, scope);
 }
 
 /** The live collection record for `?id`; `undefined` when `?id` is missing or none is live. */

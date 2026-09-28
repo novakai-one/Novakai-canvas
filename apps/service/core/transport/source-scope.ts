@@ -1,6 +1,14 @@
 /*
- * The print scope of `GET /api/v1/source`, read from its query: the whole collection, one section
- * or one object. Pure. IDs follow Model's ID grammar. A refused scope is the caller's to correct.
+ * Why this file exists
+ *
+ * The source route can print a whole collection, one section, or one object, and the query says
+ * which. For example, `?section=m-review-map` asks for one section, and `?section=a&object=b` is
+ * refused because it asks for two things at once.
+ *
+ * This file reads that choice from the query and checks each ID against Model's ID rules. It never
+ * reads the collection, so it can't tell whether the section exists.
+ *
+ * Each step answers a `Result` (see `contract/errors.ts`); the mistakes are made in the steps here.
  */
 import type { Scope } from '../../contract/records/capability-types.js';
 import type { ApiQuery } from '../../contract/records/transport/protocol.js';
@@ -9,10 +17,11 @@ import { failure, success, type Result } from '../../contract/errors.js';
 import { readAllValues } from './api-query.js';
 
 /**
- * The print scope from the query. Fails with `invalid-input` at `scope` when both `section` and
- * `object` are given, when either is repeated, or when the ID is not canonical.
+ * Reads which part of the collection to print: all of it, one `section`, or one `object`. Fails
+ * with `invalid-input` at `scope` when both are given, either is given twice, or an ID breaks
+ * Model's ID rules.
  */
-export function sourceScope(query: ApiQuery): Result<Scope> {
+export function readSourceScope(query: ApiQuery): Result<Scope> {
   const sections = readAllValues(query, 'section');
   const objects = readAllValues(query, 'object');
   const bothScopes = sections.length > 0 && objects.length > 0;

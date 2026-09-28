@@ -1,18 +1,22 @@
 /*
- * The JSON body policy of the mutation, resource and export routes: `application/json` only, then
- * a JSON parse. Pure. The body reader (request-body.ts) already caps a body at 24 MiB and rejects
- * invalid UTF-8, so no route counts bytes again. A refused body is the caller's to correct and
- * resend.
+ * Why this file exists
+ *
+ * The change, resource and export routes all take a JSON body, and all must refuse the same bad
+ * bodies. For example, a body sent as `text/plain`, or `{"version": 1` cut off, is refused.
+ *
+ * This file checks that `Content-Type` is `application/json`, then parses the text as JSON. It
+ * never checks the JSON's shape; each route does that. The size and UTF-8 were already checked
+ * when the body was read (request-body.ts).
  */
 import type { HeaderValue } from '../../contract/records/transport/http.js';
 import { failure, success, type Result } from '../../contract/errors.js';
 import { headerText } from './request-head.js';
 
 /**
- * Which route family reads the body: `mutation` for the Authoring routes, `resource` for the
- * resource and export routes. Each family keeps its own refusal messages.
+ * Which routes read the body: `change` (preview and apply) or `resource` (resources and export).
+ * Only the refusal messages differ.
  */
-export type JsonBodyPurpose = 'mutation' | 'resource';
+export type JsonBodyPurpose = 'change' | 'resource';
 
 /** The refusal messages of one route family. */
 interface BodyMessages {
@@ -21,7 +25,7 @@ interface BodyMessages {
 }
 
 const messages: Readonly<Record<JsonBodyPurpose, BodyMessages>> = Object.freeze({
-  mutation: Object.freeze({
+  change: Object.freeze({
     contentType: 'Use application/json for a mutation',
     syntax: 'Request body must be valid JSON',
   }),
@@ -32,11 +36,11 @@ const messages: Readonly<Record<JsonBodyPurpose, BodyMessages>> = Object.freeze(
 });
 
 /**
- * The body parsed as JSON. Fails with `invalid-input` at `content-type` unless one Content-Type
- * header names `application/json` (parameters such as `charset` are ignored), and at `body` when
- * the text is not JSON.
+ * Reads the body text, as sent, as JSON. The value is not checked any further; the route checks it.
+ * Fails with `invalid-input` at `content-type` unless one `Content-Type` header names
+ * `application/json` (`charset` is ignored), and at `body` when the text isn't JSON.
  */
-export function jsonBody(
+export function readJsonBody(
   body: string,
   contentType: HeaderValue,
   purpose: JsonBodyPurpose,

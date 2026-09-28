@@ -1,21 +1,22 @@
 /*
- * Access to the built web app: a direct navigation receives the HttpOnly browser session cookie;
- * any other request must already hold that session. Pure over the ingress policy
- * (core/transport/admission.ts) and the server's session secret. A refusal issues nothing; the
- * browser reloads the workspace from its loopback address.
+ * Why this file exists
+ *
+ * The web app's own files need protecting too, and the browser needs a way to get its session
+ * cookie in the first place. For example, opening `http://127.0.0.1:5174` gives the browser the
+ * cookie, and its later request for the app's script must carry it.
+ *
+ * This file decides whether a web app file may be sent, and gives out the cookie only when the
+ * browser opens the page directly. It uses the checks in admission.ts. It never gives the cookie to
+ * any other request.
  */
-import type {
-  HttpAdmission,
-  HttpSecurity,
-  TransportPolicy,
-} from '../../contract/ports/transport.js';
+import type { HttpAdmission, HttpSecurity } from '../../contract/ports/transport.js';
 import type { HttpMetadata } from '../../contract/records/transport/http.js';
 import type { BrowserGrant } from '../../contract/records/transport/server.js';
 import { success, type Result } from '../../contract/errors.js';
 import { headerMatches } from './request-head.js';
 
-/** The ingress checks and the session secret browser access relies on. */
-export interface BrowserAccessOwners {
+/** The admission checks and the session secret that browser access uses. */
+export interface BrowserAccessDependencies {
   readonly admission: Pick<HttpAdmission, 'checkNavigation' | 'authenticate' | 'cookieName'>;
   readonly security: Pick<HttpSecurity, 'browserSession'>;
 }
@@ -24,22 +25,23 @@ export interface BrowserAccessOwners {
 const SESSION_EXISTS: BrowserGrant = Object.freeze({ kind: 'session-exists' });
 
 /**
- * Binds browser access to one server. A navigation (`Sec-Fetch-Mode: navigate`) is granted the
- * session cookie or fails with `unauthorized` at `host` or `navigation` (admission
- * `checkNavigation`). Any other request is granted the existing session or fails with
- * `unauthorized` at `host`, `session` or `credential` (admission `authenticate`).
+ * Builds the check that decides whether a web app file may be sent. A direct page open
+ * (`Sec-Fetch-Mode: navigate`) is given the session cookie (`session-issued`); any other request
+ * must already hold it (`session-exists`). Every refusal is `unauthorized`.
  */
-export function createBrowserAccess(owners: BrowserAccessOwners): TransportPolicy['browserAccess'] {
-  return (metadata) => browserAccess(metadata, owners);
+export function createBrowserAccess(
+  dependencies: BrowserAccessDependencies,
+): (metadata: HttpMetadata) => Result<BrowserGrant> {
+  return (metadata) => browserAccess(metadata, dependencies);
 }
 
 /** A navigation as `issuedSession`; any other request as `existingSession`. */
 function browserAccess(
   metadata: HttpMetadata,
-  owners: BrowserAccessOwners,
+  dependencies: BrowserAccessDependencies,
 ): Result<BrowserGrant> {
-  if (!headerMatches(metadata.mode, 'navigate')) return existingSession(metadata, owners);
-  return issuedSession(metadata, owners);
+  if (!headerMatches(metadata.mode, 'navigate')) return existingSession(metadata, dependencies);
+  return issuedSession(metadata, dependencies);
 }
 
 /**
@@ -48,9 +50,9 @@ function browserAccess(
  */
 function existingSession(
   metadata: HttpMetadata,
-  owners: BrowserAccessOwners,
+  dependencies: BrowserAccessDependencies,
 ): Result<BrowserGrant> {
-  const caller = owners.admission.authenticate(metadata);
+  const caller = dependencies.admission.authenticate(metadata);
   if (!caller.ok) return caller;
   return success(SESSION_EXISTS);
 }
@@ -61,14 +63,14 @@ function existingSession(
  */
 function issuedSession(
   metadata: HttpMetadata,
-  owners: BrowserAccessOwners,
+  dependencies: BrowserAccessDependencies,
 ): Result<BrowserGrant> {
-  const navigation = owners.admission.checkNavigation(metadata);
+  const navigation = dependencies.admission.checkNavigation(metadata);
   if (!navigation.ok) return navigation;
-  return success({ kind: 'session-issued', setCookie: sessionCookie(owners) });
+  return success({ kind: 'session-issued', setCookie: sessionCookie(dependencies) });
 }
 
 /** The `Set-Cookie` value: the session secret, HttpOnly, same-site only, for every path. */
-function sessionCookie(owners: BrowserAccessOwners): string {
-  return `${owners.admission.cookieName}=${owners.security.browserSession}; HttpOnly; SameSite=Strict; Path=/`;
+function sessionCookie(dependencies: BrowserAccessDependencies): string {
+  return `${dependencies.admission.cookieName}=${dependencies.security.browserSession}; HttpOnly; SameSite=Strict; Path=/`;
 }

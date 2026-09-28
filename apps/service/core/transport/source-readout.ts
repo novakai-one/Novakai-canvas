@@ -1,15 +1,21 @@
 /*
- * The source readout behind `GET /api/v1/language` and `GET /api/v1/source`: Language's
- * vocabulary and a collection printed as DSL, so HTTP never learns the diagram syntax. Pure over
- * the injected Language. The caller keeps its draft on a refused print.
+ * Why this file exists
+ *
+ * The source routes answer DSL text, but the HTTP code shouldn't know the DSL's rules. For example,
+ * printing the `m-review-map` section of a collection as DSL is Language's job.
+ *
+ * This file connects the source routes to Language: `describe` passes on Language's vocabulary,
+ * and `print` asks Language to print a collection. If Language can't, the refusal becomes the
+ * service's `invalid-input` at `source`, with Language's own failure kept as evidence. It never
+ * changes what Language prints.
  */
 import type { Language, Scope } from '../../contract/records/capability-types.js';
 import type { SourceReadout } from './source-routes.js';
 import { failure, success, type Result } from '../../contract/errors.js';
 
 /**
- * Binds the readout to Language. `describe` returns Language's vocabulary; `print` behaves as
- * `print` below.
+ * Builds the readout the source routes use, from Language. `print` fails with `invalid-input` at
+ * `source` when Language refuses, keeping Language's failure as the `source` evidence.
  */
 export function createSourceReadout(language: Pick<Language, 'describe' | 'print'>): SourceReadout {
   return {

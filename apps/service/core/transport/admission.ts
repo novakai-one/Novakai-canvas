@@ -1,9 +1,17 @@
 /*
- * The HTTP ingress policy: the loopback host check, the navigation that may bootstrap the browser
- * credential, browser-cookie and agent-bearer authentication, and mutation admission (Authoring's
- * request schema, exact authorship, the caller's planners). Pure; the host owns token storage and
- * constant-time equality (`HttpSecurity`). A refusal performs no owner mutation, so the caller
- * corrects its request and resends it; Authoring owns commit and receipt recovery.
+ * Why this file exists
+ *
+ * Any program on this computer can send requests to `127.0.0.1`, even a web page open in another
+ * tab. For example, a page from another site could try to post a change to
+ * `/api/v1/authoring/apply`. Only the web app and the CLI may get in.
+ *
+ * This file decides who gets in: the browser with its session cookie, the CLI with its token. It
+ * also checks a change request: its author must be the caller, and its planner (the kind of change,
+ * such as `dsl`) must be one that caller may use. It never keeps or compares the secrets itself
+ * (`HttpSecurity` does), and never runs a change.
+ *
+ * Each check answers a `Result` (see `contract/errors.ts`); the refusals are made in the checks
+ * here.
  */
 import type { Caller, HeaderValue, HttpMetadata } from '../../contract/records/transport/http.js';
 import type { HttpAdmission, HttpSecurity } from '../../contract/ports/transport.js';
@@ -31,12 +39,10 @@ const PLANNERS: Readonly<Record<Caller['kind'], readonly PlannerId[]>> = Object.
 const NAVIGATION_SITES: readonly string[] = Object.freeze(['none', 'same-origin']);
 
 /**
- * Binds the ingress policy to one server's security. Every refusal is safe to correct and resend.
- * - `cookieName`: the browser session cookie name for this host.
- * - `checkNavigation`: success for a direct navigation; `unauthorized` at `host` or `navigation`.
- * - `authenticate`: the caller; `unauthorized` at `host`, `session` or `credential`.
- * - `admitChange`: the admitted request; `invalid-input` at `request`, or `unauthorized` at
- *   `actor` or `intent.planner`.
+ * Builds the checks that decide who may use this server, from its address and secrets.
+ * `checkNavigation` admits the browser opening the page directly, `authenticate` names the caller,
+ * and `admitChange` checks a change request. Each refuses with `unauthorized`, except a change
+ * request that isn't a complete Authoring request (`invalid-input` at `request`).
  */
 export function createAdmission(security: HttpSecurity): HttpAdmission {
   return {

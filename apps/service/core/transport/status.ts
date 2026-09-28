@@ -1,7 +1,12 @@
 /*
- * The HTTP answer for an outcome: its status, chosen by the failure's wire code, and its
- * versioned JSON envelope. Pure. Clients branch on the code and status, never on the message; they
- * keep their draft and request ID and reconcile the receipt before retrying.
+ * Why this file exists
+ *
+ * Every API answer needs an HTTP status and the same JSON wrapper, so callers can branch without
+ * reading messages. For example, a `revision-conflict` failure is sent with status 409, inside
+ * `{ version: 1, generation, outcome }`.
+ *
+ * This file picks the status for each failure code and wraps the outcome in that envelope. It
+ * never changes a failure; clients branch on its code and status, never on its message.
  */
 import type { TransportResponse } from '../../contract/records/transport/protocol.js';
 import type {
@@ -14,17 +19,20 @@ import type { Generation } from '../../contract/brands.js';
 /** A status for a refused outcome. */
 type FailureStatus = Exclude<HttpStatus, 200>;
 
-/** 200 for a success; otherwise the status of the failure's wire code (`FAILURE_STATUS`). */
+/**
+ * The HTTP status for the outcome: 200 when it worked, otherwise the status of its failure code
+ * (the `FAILURE_STATUS` table below). Never fails.
+ */
 export function httpStatus(outcome: HttpOutcome): HttpStatus {
   if (outcome.ok) return 200;
   return FAILURE_STATUS[outcome.error.code];
 }
 
 /**
- * The version 1 envelope carrying the server's generation and the outcome. A success with no value
- * (a void owner success) carries an explicit JSON `null`, so the envelope stays valid.
+ * Wraps the outcome in the envelope every answer has: `{ version: 1, generation, outcome }`. A
+ * success with no value is sent with the value `null`, so the envelope stays valid JSON.
  */
-export function transportResponse(
+export function buildTransportResponse(
   outcome: HttpOutcome,
   generation: Generation,
 ): TransportResponse {
