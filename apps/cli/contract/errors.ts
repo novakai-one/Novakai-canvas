@@ -1,12 +1,14 @@
 /*
- * The CLI's failure vocabulary: closed codes, the two failure shapes, the `provider-failed` fault a
- * native throw becomes, and the Result helpers every layer returns. Pure. Nothing throws across a
- * boundary; `cli/canvas.ts` prints the failure and sets the exit code. Consumers branch on the
- * code, never on the message.
+ * The CLI's failure vocabulary: closed codes, the two failure shapes and the Result helpers every
+ * layer returns, plus the builders of render:png's own faults (`faulted`, and `nativeFault` for a
+ * native throw). Pure. Nothing throws across a boundary; `cli/canvas.ts` prints the failure and
+ * sets the exit code. Consumers branch on the code, never on the message. The fault builders are
+ * here, not in records/ (data only) or a file of their own, because render core and the render
+ * adapters both call them and core may import only records/, ports/, brands, schemas and errors.
  */
 import { filePath, type FilePath, type RequestId } from './brands.js';
 import type { FailureSource, OperationSource } from './records/foreign.js';
-import type { NativeDetail, ProviderFault } from './records/provider-fault.js';
+import type { NativeDetail, ProviderFault, RenderFault } from './records/render-fault.js';
 
 /**
  * A failure the CLI found itself.
@@ -216,8 +218,8 @@ export function rejected(
   return { ok: false, error: { code, foreign } };
 }
 
-/** `fault` as a failed Result, typed as its own fault; nothing else is returned with it. */
-export function faulted<F extends { readonly code: string }>(fault: F): Result<never, F> {
+/** Render fault `fault` as a failed Result, typed as its own fault; nothing else is returned. */
+export function faulted<F extends RenderFault>(fault: F): Result<never, F> {
   return { ok: false, error: fault };
 }
 

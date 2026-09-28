@@ -8,7 +8,7 @@ import { prepareResources } from '../resources/stage.js';
 import type { ResourceDependencies } from '../resources/stage.js';
 import { parseSource } from '../shared/parse-source.js';
 import { changeRequest, collectionRecordId } from './change-request.js';
-import { requestIdFor } from './envelope.js';
+import { requestIdFor } from './request-id.js';
 import type { ChangeCommand, ChangeIntent, ChangeMode } from '../../contract/records/command.js';
 import type { CollectionReader } from '../../contract/ports/collection-reader.js';
 import type { LocalFiles } from '../../contract/ports/local-files.js';

@@ -10,7 +10,7 @@ import type { Diagnostic as ExportDiagnostic } from '@novakai/canvas-export';
 import type { ResourceReader } from './resource-reader.js';
 import type { FontRole, ThemeAdmission } from '../records/theme-source.js';
 import type { RenderEvidence } from '../records/render-failure.js';
-import type { ProviderFault } from '../records/provider-fault.js';
+import type { ProviderFault } from '../records/render-fault.js';
 import type { SourceFile } from '../records/source-file.js';
 import type {
   Catalog,

@@ -24,7 +24,8 @@ const appendixIdShape = /^([a-z]+)-5([1-9][0-9]*)$/;
 export function collectAppendices(sections: readonly Declaration[]): Appendix[] {
   return sections.flatMap((section) => {
     const sectionId = id(section);
-    return sectionId === undefined ? [] : appendixOf(section, sectionId);
+    if (sectionId === undefined) return [];
+    return appendixOf(section, sectionId);
   });
 }
 

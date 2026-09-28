@@ -7,7 +7,8 @@
 import type { RenderEnvironment, RenderFiles } from '../../contract/ports/render.js';
 import type { Catalog } from '../../contract/records/foreign.js';
 import type { CollectionSelector } from '../../contract/records/render.js';
-import type { RenderEvidence, RenderFault } from '../../contract/records/render-failure.js';
+import type { RenderEvidence } from '../../contract/records/render-failure.js';
+import type { RenderFault } from '../../contract/records/render-fault.js';
 import type { SourceFile } from '../../contract/records/source-file.js';
 import type { CollectionName } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';

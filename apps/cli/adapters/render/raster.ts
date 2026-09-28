@@ -7,7 +7,7 @@ import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { initializeRaster } from '@novakai/canvas-export';
-import type { ProviderFault } from '../../contract/records/provider-fault.js';
+import type { ProviderFault } from '../../contract/records/render-fault.js';
 import type { FilePath } from '../../contract/brands.js';
 import type { RenderFiles } from '../../contract/ports/render.js';
 import { nativeFault, type Result } from '../../contract/errors.js';

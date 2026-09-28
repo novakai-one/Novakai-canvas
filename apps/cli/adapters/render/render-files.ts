@@ -3,11 +3,12 @@
  * shipped `.theme` and `.canvas` files under resources/, read UTF-8 text, name a recipe family's
  * shipped source, create the output directory and write section files. Read paths and the output
  * directory are resolved against the working directory. Not pure. Every failure is a
- * `provider-failed` value carrying the OS path, code and syscall; nothing throws out of it.
+ * `provider-failed` value, and nothing throws out of it: a native failure carries the OS path, code
+ * and syscall; a path that fails its FilePath check carries only the check's message.
  */
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import type { ProviderFault } from '../../contract/records/provider-fault.js';
+import type { ProviderFault } from '../../contract/records/render-fault.js';
 import type { RenderRequest } from '../../contract/records/render.js';
 import { filePath, type FilePath, type SectionId } from '../../contract/brands.js';
 import type { SourceFile } from '../../contract/records/source-file.js';
@@ -24,8 +25,8 @@ export type RenderTarget = Pick<RenderRequest, 'root' | 'out' | 'format'>;
 export function createRenderFiles(target: RenderTarget): Omit<RenderFiles, 'prepareRaster'> {
   const resources = join(target.root, 'resources');
   return {
-    shippedThemes: () => nativeStep(() => shippedThemes(resources)),
-    shippedCollections: () => nativeStep(() => shippedCollections(resources)),
+    shippedThemes: () => shippedThemes(resources),
+    shippedCollections: () => shippedCollections(resources),
     read: (path) => readSource(path),
     recipeFile: (family) => checkedPath(join(target.root, 'resources/recipes', family + '.canvas')),
     prepareOutput: () => prepareOutput(target.out),
@@ -39,6 +40,13 @@ export function createRenderFiles(target: RenderTarget): Omit<RenderFiles, 'prep
  */
 function checkedPath(path: string): Result<FilePath, ProviderFault> {
   const checked = filePath.safeParse(path);
+  if (!checked.success) return faulted(nativeFault(checked.error));
+  return success(checked.data);
+}
+
+/** Each of `paths` as a FilePath, in order. Fails as {@link checkedPath} does. */
+function checkedPaths(paths: readonly string[]): Result<readonly FilePath[], ProviderFault> {
+  const checked = filePath.array().safeParse(paths);
   if (!checked.success) return faulted(nativeFault(checked.error));
   return success(checked.data);
 }
@@ -57,21 +65,33 @@ async function nativeStep<T>(step: () => Promise<T>): Promise<Result<T, Provider
   }
 }
 
-/** The `.theme` files directly under `resources`, sorted by name. Throws; run as a native step. */
-async function shippedThemes(resources: string): Promise<readonly FilePath[]> {
-  const names = (await readdir(resources)).filter((name) => name.endsWith('.theme')).sort();
-  return names.map((name) => filePath.parse(join(resources, name)));
+/**
+ * The `.theme` files directly under `resources`, sorted by name. Fails with `provider-failed` when
+ * the folder cannot be listed or a path fails its check.
+ */
+async function shippedThemes(
+  resources: string,
+): Promise<Result<readonly FilePath[], ProviderFault>> {
+  const names = await nativeStep(() => readdir(resources));
+  if (!names.ok) return names;
+  const themes = names.value.filter((name) => name.endsWith('.theme')).sort();
+  return checkedPaths(themes.map((name) => join(resources, name)));
 }
 
 /**
  * Every `.canvas` file anywhere under `resources`, sorted by relative path, read in parallel.
- * Throws; run as a native step.
+ * Fails with `provider-failed` when the folder cannot be listed, a path fails its check or a file
+ * cannot be read.
  */
-async function shippedCollections(resources: string): Promise<readonly SourceFile[]> {
-  const names = (await readdir(resources, { recursive: true }))
-    .filter((name) => name.endsWith('.canvas'))
-    .sort();
-  return Promise.all(names.map((name) => readText(filePath.parse(resolve(resources, name)))));
+async function shippedCollections(
+  resources: string,
+): Promise<Result<readonly SourceFile[], ProviderFault>> {
+  const names = await nativeStep(() => readdir(resources, { recursive: true }));
+  if (!names.ok) return names;
+  const canvases = names.value.filter((name) => name.endsWith('.canvas')).sort();
+  const files = checkedPaths(canvases.map((name) => resolve(resources, name)));
+  if (!files.ok) return files;
+  return nativeStep(() => Promise.all(files.value.map(readText)));
 }
 
 /**

@@ -21,7 +21,7 @@ import type { StagingDependencies } from '../resources/stage.js';
 import { submit } from '../authoring/submit.js';
 import type { SubmitDependencies } from '../authoring/submit.js';
 import { presetRequest } from '../authoring/preset-request.js';
-import { requestIdFor } from '../authoring/envelope.js';
+import { requestIdFor } from '../authoring/request-id.js';
 import { readThemeSource } from '../themes/grammar.js';
 import { mapped, unsupported } from '../shared/results.js';
 import { recipeSource } from './recipe-admission.js';
