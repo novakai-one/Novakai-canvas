@@ -12,7 +12,13 @@ import { inspectionReport } from '@novakai/canvas-service';
 import type { HttpTransport, RouteQuery } from '../../contract/ports/http-transport.js';
 import type { ServiceReads } from '../../contract/ports/service-reads.js';
 import type { ReadScope } from '../../contract/records/command.js';
-import type { ServiceAnswer } from '../../contract/records/service-answers.js';
+import type {
+  LanguageDescription,
+  ReadAnswer,
+  ReceiptLookup,
+  ServiceAnswer,
+} from '../../contract/records/service-answers.js';
+import type { InspectionReport, WorkspaceSnapshot } from '../../contract/records/foreign.js';
 import {
   languageDescriptionSchema,
   readAnswerSchema,
@@ -20,8 +26,8 @@ import {
 } from '../../contract/records/service-answers.js';
 import type { Parser } from '../../contract/schemas.js';
 import { snapshotSchema } from '../../contract/schemas.js';
-import type { CollectionId } from '../../contract/brands.js';
-import type { Result } from '../../contract/errors.js';
+import type { CollectionId, RequestId } from '../../contract/brands.js';
+import type { LocalFailure, Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 
 /** The transport's GET; a read never posts. */
@@ -33,76 +39,126 @@ type TransportGet = Pick<HttpTransport, 'get'>;
  */
 export function createServiceReads(transport: TransportGet): ServiceReads {
   return {
-    vocabulary: () =>
-      value(
-        observed(
-          transport.get('/api/v1/language'),
-          languageDescriptionSchema,
-          'Service returned an invalid language description',
-        ),
-      ),
-    workspace: () =>
-      observed(
-        transport.get('/api/v1/workspace'),
-        snapshotSchema,
-        'Service returned an invalid workspace snapshot',
-      ),
-    source: (collection, scope) =>
-      value(
-        observed(
-          transport.get('/api/v1/source', sourceQuery(collection, scope)),
-          readAnswerSchema,
-          'Service returned an invalid source readout',
-        ),
-      ),
-    inspect: (collection) =>
-      value(
-        observed(
-          transport.get('/api/v1/inspect', { id: collection }),
-          inspectionReport,
-          'Service returned an invalid inspection report',
-        ),
-      ),
-    receipt: (request) =>
-      observed(
-        transport.get('/api/v1/receipt', { id: request }),
-        receiptAnswerSchema,
-        'Service returned an invalid receipt',
-      ),
+    vocabulary: () => readVocabulary(transport),
+    workspace: () => readWorkspace(transport),
+    source: (collection, scope) => readSource(transport, collection, scope),
+    inspect: (collection) => readInspection(transport, collection),
+    receipt: (request) => readReceipt(transport, request),
   };
 }
 
-/** `id`, then `section` or `object` when the scope names one. */
+/** Asks for the DSL vocabulary, and checks the answer is a language description. */
+async function readVocabulary(transport: TransportGet): Promise<Result<LanguageDescription>> {
+  const answer = await transport.get('/api/v1/language');
+  if (!answer.ok) {
+    return answer;
+  }
+  return checkAnswerValue(
+    answer.value,
+    languageDescriptionSchema,
+    'Service returned an invalid language description',
+  );
+}
+
+/** Asks for every saved record in the workspace, and checks the answer is a workspace snapshot. */
+async function readWorkspace(
+  transport: TransportGet,
+): Promise<Result<ServiceAnswer<WorkspaceSnapshot>>> {
+  const answer = await transport.get('/api/v1/workspace');
+  if (!answer.ok) {
+    return answer;
+  }
+  return checkAnswer(
+    answer.value,
+    snapshotSchema,
+    'Service returned an invalid workspace snapshot',
+  );
+}
+
+/** Asks for a collection's source, or one section or object of it, and checks the readout. */
+async function readSource(
+  transport: TransportGet,
+  collection: CollectionId,
+  scope: ReadScope,
+): Promise<Result<ReadAnswer>> {
+  const query = sourceQuery(collection, scope);
+  const answer = await transport.get('/api/v1/source', query);
+  if (!answer.ok) {
+    return answer;
+  }
+  return checkAnswerValue(
+    answer.value,
+    readAnswerSchema,
+    'Service returned an invalid source readout',
+  );
+}
+
+/** Asks for the service's layout report on a collection, and checks the answer is one. */
+async function readInspection(
+  transport: TransportGet,
+  collection: CollectionId,
+): Promise<Result<InspectionReport>> {
+  const answer = await transport.get('/api/v1/inspect', { id: collection });
+  if (!answer.ok) {
+    return answer;
+  }
+  return checkAnswerValue(
+    answer.value,
+    inspectionReport,
+    'Service returned an invalid inspection report',
+  );
+}
+
+/** Asks whether a request was saved, and checks the answer is a receipt or none. */
+async function readReceipt(
+  transport: TransportGet,
+  request: RequestId,
+): Promise<Result<ServiceAnswer<ReceiptLookup>>> {
+  const answer = await transport.get('/api/v1/receipt', { id: request });
+  if (!answer.ok) {
+    return answer;
+  }
+  return checkAnswer(answer.value, receiptAnswerSchema, 'Service returned an invalid receipt');
+}
+
+/** Makes the source query: `id`, then `section` or `object` when the scope names one. */
 function sourceQuery(
   collection: CollectionId,
   scope: ReadScope,
 ): RouteQuery {
-  if (scope.kind === 'all') return { id: collection };
+  if (scope.kind === 'all') {
+    return { id: collection };
+  }
   return { id: collection, [scope.kind]: scope.id };
 }
 
-/**
- * The answer's value without its generation, which the caller does not need. Fails as the
- * transport does.
- */
-async function value<T>(pending: Promise<Result<ServiceAnswer<T>>>): Promise<Result<T>> {
-  const answer = await pending;
-  if (!answer.ok) return answer;
-  return success(answer.value.value);
+/** Checks the answer's value has the expected shape, and gives it without its generation. */
+function checkAnswerValue<T>(
+  answer: ServiceAnswer<unknown>,
+  schema: Parser<T>,
+  invalidMessage: string,
+): Result<T> {
+  const checked = schema.safeParse(answer.value);
+  if (!checked.success) {
+    return invalidResponseFailure(invalidMessage);
+  }
+  return success(checked.data);
 }
 
-/**
- * The answer as `schema` checks it, under the generation it came from. Fails as the transport
- * does, or with `invalid-response` and the message `invalid`.
- */
-async function observed<T>(
-  pending: Promise<Result<ServiceAnswer<unknown>>>,
+/** Checks the answer's value has the expected shape, and keeps the generation it came under. */
+function checkAnswer<T>(
+  answer: ServiceAnswer<unknown>,
   schema: Parser<T>,
-  invalid: string,
-): Promise<Result<ServiceAnswer<T>>> {
-  const answer = await pending;
-  if (!answer.ok) return answer;
-  const parsed = schema.safeParse(answer.value.value);
-  if (!parsed.success) return failure({ code: 'invalid-response', message: invalid });
-  return success({ generation: answer.value.generation, value: parsed.data });
+  invalidMessage: string,
+): Result<ServiceAnswer<T>> {
+  const checked = schema.safeParse(answer.value);
+  if (!checked.success) {
+    return invalidResponseFailure(invalidMessage);
+  }
+  return success({ generation: answer.generation, value: checked.data });
+}
+
+/** Makes the mistake for an answer that isn't the expected shape (`invalid-response`). */
+function invalidResponseFailure(message: string): Result<never, LocalFailure> {
+  return failure({ code: 'invalid-response', message });
 }

@@ -29,8 +29,8 @@ import { failure, invalidInputFailure, success } from '../../contract/errors.js'
 /** The transport's POST; this adapter never sends a GET. */
 type TransportPost = Pick<HttpTransport, 'post'>;
 
-/** Checks one answer's value. */
-type Check<T> = (value: unknown) => Result<T>;
+/** Checks what one resource step answered, and gives what the CLI needs from it. */
+type AnswerCheck<T> = (answered: unknown) => Result<T>;
 
 /**
  * Gives core its font, image, theme and recipe calls, made over `transport`. Each fails as the
@@ -39,87 +39,90 @@ type Check<T> = (value: unknown) => Result<T>;
  */
 export function createServiceResources(transport: TransportPost): ServiceResources {
   return {
-    stage: (input) => call(transport, 'stage', input, stagedDigest),
-    blob: (digest) => call(transport, 'blob', digest, blobBackup),
-    freeze: (request, assets) => call(transport, 'freeze', { ...request, assets }, frozenRequest),
-    restore: (backup) => call(transport, 'restore', backup, restored),
-    prepare: (admission, assets) => call(transport, 'prepare', { admission, assets }, preparation),
-    instantiate: (expansion) => call(transport, 'instantiate', expansion, expandedSource),
+    stage: (input) => postResourceStep(transport, 'stage', input, checkStagedDigest),
+    blob: (digest) => postResourceStep(transport, 'blob', digest, checkByteBackup),
+    freeze: (request, assets) =>
+      postResourceStep(transport, 'freeze', { ...request, assets }, checkFrozenRequest),
+    restore: (backup) => postResourceStep(transport, 'restore', backup, acceptAnyAnswer),
+    prepare: (admission, assets) =>
+      postResourceStep(transport, 'prepare', { admission, assets }, checkPresetPreparation),
+    instantiate: (expansion) =>
+      postResourceStep(transport, 'instantiate', expansion, checkExpandedSource),
   };
 }
 
-/**
- * Posts `body` to one resource route and checks the answer's value. Fails as the transport or
- * `check` does.
- */
-async function call<T>(
+/** Posts `body` to one resource step's route, then checks what it answered with `check`. */
+async function postResourceStep<T>(
   transport: TransportPost,
   action: ResourceAction,
   body: unknown,
-  check: Check<T>,
+  check: AnswerCheck<T>,
 ): Promise<Result<T>> {
   const answer = await transport.post(`/api/v1/resources/${action}`, body);
-  if (!answer.ok) return answer;
+  if (!answer.ok) {
+    return answer;
+  }
   return check(answer.value.value);
 }
 
-/** The digest of the bytes Assets admitted. Fails with `invalid-response`. */
-function stagedDigest(value: unknown): Result<AssetDigest> {
-  const parsed = stagedAnswerSchema.safeParse(value);
-  if (!parsed.success) return invalidResponse('Invalid Assets admission');
-  return success(parsed.data.descriptor.digest);
+/** Checks the stage answer, and gives the digest Assets stored the bytes under. */
+function checkStagedDigest(answered: unknown): Result<AssetDigest> {
+  const staged = stagedAnswerSchema.safeParse(answered);
+  if (!staged.success) {
+    return invalidResponseFailure('Invalid Assets admission');
+  }
+  return success(staged.data.descriptor.digest);
 }
 
-/**
- * The normalised bytes and their digest, as the journal keeps them. Fails with `invalid-response`
- * (bad answer, or bad digest).
- */
-function blobBackup(value: unknown): Result<ByteBackup> {
-  const parsed = blobAnswerSchema.safeParse(value);
-  if (!parsed.success) return invalidResponse('Invalid normalized Assets bytes');
-  const checked = byteBackupSchema.safeParse({
-    digest: parsed.data.descriptor.digest,
-    base64: parsed.data.base64,
+/** Checks the blob answer, and gives the stored bytes and digest as the journal keeps them. */
+function checkByteBackup(answered: unknown): Result<ByteBackup> {
+  const blob = blobAnswerSchema.safeParse(answered);
+  if (!blob.success) {
+    return invalidResponseFailure('Invalid normalized Assets bytes');
+  }
+  const backup = byteBackupSchema.safeParse({
+    digest: blob.data.descriptor.digest,
+    base64: blob.data.base64,
   });
-  if (!checked.success) return invalidResponse('Invalid normalized Assets digest');
-  return success(checked.data);
+  if (!backup.success) {
+    return invalidResponseFailure('Invalid normalized Assets digest');
+  }
+  return success(backup.data);
 }
 
-/** The frozen request, checked by Authoring's request schema. Fails with `invalid-input`. */
-function frozenRequest(value: unknown): Result<AuthoringRequest> {
-  const checked = requestSchema.safeParse(value);
-  if (!checked.success) return invalidInputFailure();
-  return success(checked.data);
+/** Checks the frozen request with Authoring's own request check. */
+function checkFrozenRequest(answered: unknown): Result<AuthoringRequest> {
+  const frozen = requestSchema.safeParse(answered);
+  if (!frozen.success) {
+    return invalidInputFailure();
+  }
+  return success(frozen.data);
 }
 
-/** A restore answers nothing the CLI reads. Never fails. */
-function restored(): Result<void> {
+/** Accepts any restore answer: the CLI reads nothing from it. */
+function acceptAnyAnswer(): Result<void> {
   return success(undefined);
 }
 
-/**
- * The preset key; the whole answer, checked as JSON, is kept unchanged as the change payload.
- * Fails with `invalid-response`.
- */
-function preparation(value: unknown): Result<PresetPreparation> {
-  const parsed = preparedAnswerSchema.safeParse(value);
-  const document = presetDocumentSchema.safeParse(value);
-  if (!parsed.success || !document.success)
-    return invalidResponse('Service returned invalid preset preparation');
-  return success({ key: parsed.data.key, document: document.data });
+/** Checks the prepare answer, and gives the preset key, with the whole answer as its document. */
+function checkPresetPreparation(answered: unknown): Result<PresetPreparation> {
+  const prepared = preparedAnswerSchema.safeParse(answered);
+  const presetDocument = presetDocumentSchema.safeParse(answered);
+  if (!prepared.success || !presetDocument.success) {
+    return invalidResponseFailure('Service returned invalid preset preparation');
+  }
+  return success({ key: prepared.data.key, document: presetDocument.data });
 }
 
-/**
- * Recipe expansion is editable DSL text, never structured authoring input. Fails with
- * `invalid-response`.
- */
-function expandedSource(value: unknown): Result<string> {
-  if (typeof value !== 'string')
-    return invalidResponse('Recipe expansion did not return editable DSL');
-  return success(value);
+/** Checks the recipe expansion is DSL text the agent can edit. */
+function checkExpandedSource(answered: unknown): Result<string> {
+  if (typeof answered !== 'string') {
+    return invalidResponseFailure('Recipe expansion did not return editable DSL');
+  }
+  return success(answered);
 }
 
-/** An answer that does not match its schema: always `invalid-response`. */
-function invalidResponse(message: string): Result<never, LocalFailure> {
+/** Makes the mistake for an answer that isn't the expected shape (`invalid-response`). */
+function invalidResponseFailure(message: string): Result<never, LocalFailure> {
   return failure({ code: 'invalid-response', message });
 }

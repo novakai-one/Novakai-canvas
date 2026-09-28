@@ -13,9 +13,13 @@ import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { initializeRaster } from '@novakai/canvas-export';
 import type { ProviderFault } from '../../contract/records/render-fault.js';
+import type { ExportDiagnostic } from '../../contract/records/foreign.js';
 import type { FilePath } from '../../contract/brands.js';
 import type { RasterEngine } from '../../contract/ports/render-files.js';
-import { providerFailure, type Result } from '../../contract/errors.js';
+import { providerFailure, success, type Result } from '../../contract/errors.js';
+
+/** Where resvg's WebAssembly file sits inside its package. */
+const resvgWasmFile = '@resvg/resvg-wasm/index_bg.wasm';
 
 /**
  * Gives the render its PNG engine, loaded from below `repoRoot` when `prepare` runs. `prepare`
@@ -23,25 +27,37 @@ import { providerFailure, type Result } from '../../contract/errors.js';
  * finding if the engine won't start.
  */
 export function createRasterEngine(repoRoot: FilePath): RasterEngine {
-  return {
-    prepare: async () => {
-      const module = await compile(repoRoot);
-      if (!module.ok) return module;
-      return initializeRaster(module.value);
-    },
-  };
+  return { prepare: () => startPngEngine(repoRoot) };
 }
 
-/**
- * Resolve resvg's wasm file from Export's own dependencies and compile it. A resolve, read or
- * compile throw becomes `provider-failed`.
- */
-async function compile(root: FilePath): Promise<Result<WebAssembly.Module, ProviderFault>> {
-  try {
-    const require = createRequire(join(root, 'capability/export/package.json'));
-    const wasm = await readFile(require.resolve('@resvg/resvg-wasm/index_bg.wasm'));
-    return { ok: true, value: await WebAssembly.compile(wasm) };
-  } catch (error) {
-    return providerFailure(error);
+/** Compiles resvg's WebAssembly file, then starts Export's PNG engine with it. */
+async function startPngEngine(
+  repoRoot: FilePath,
+): Promise<Result<void, ProviderFault | ExportDiagnostic>> {
+  const resvgModule = await compileResvg(repoRoot);
+  if (!resvgModule.ok) {
+    return resvgModule;
   }
+  return initializeRaster(resvgModule.value);
+}
+
+/** Finds resvg's WebAssembly file through Export's own packages, reads it and compiles it. */
+async function compileResvg(
+  repoRoot: FilePath,
+): Promise<Result<WebAssembly.Module, ProviderFault>> {
+  try {
+    const wasmPath = findResvgWasm(repoRoot);
+    const wasmBytes = await readFile(wasmPath);
+    const resvgModule = await WebAssembly.compile(wasmBytes);
+    return success(resvgModule);
+  } catch (thrown) {
+    return providerFailure(thrown);
+  }
+}
+
+/** Finds resvg's WebAssembly file the way Export's own code would. Throws if it isn't installed. */
+function findResvgWasm(repoRoot: FilePath): string {
+  const exportPackage = join(repoRoot, 'capability/export/package.json');
+  const requireFromExport = createRequire(exportPackage);
+  return requireFromExport.resolve(resvgWasmFile);
 }

@@ -25,24 +25,44 @@ const sourceByteLimit = 16 * 1024 * 1024;
 export function createLocalFiles(): LocalFiles {
   return { readSource, writeOutput };
 }
-/**
- * The file's text, decoded as strict UTF-8, before any service request. Fails with
- * `source-too-large` (over 16 MiB) or `source-unavailable` (cannot be opened, or is not UTF-8).
- */
+
+/** Reads the source file as UTF-8 text, refusing one over 16 MiB or one that isn't UTF-8. */
 async function readSource(file: FilePath): Promise<Result<string, LocalFailure>> {
+  const bytes = await readSourceBytes(file);
+  if (!bytes.ok) {
+    return bytes;
+  }
+  if (bytes.value.byteLength > sourceByteLimit) {
+    return sourceTooLargeFailure();
+  }
+  return decodeStrictUtf8(file, bytes.value);
+}
+
+/** Reads the source file's bytes. */
+async function readSourceBytes(file: FilePath): Promise<Result<Buffer, LocalFailure>> {
   try {
     const bytes = await readFile(file);
-    if (bytes.byteLength > sourceByteLimit)
-      return failure({ code: 'source-too-large', message: 'DSL source exceeds 16 MiB' });
-    return success(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+    return success(bytes);
   } catch {
     return unreadableSourceFailure(file);
   }
 }
-/**
- * Writes `text` to the explicit --out destination after the command ran. Never changes service
- * data. Fails with `output-unavailable`.
- */
+
+/** Decodes the source file's bytes as UTF-8, refusing any byte that isn't valid UTF-8. */
+function decodeStrictUtf8(
+  file: FilePath,
+  bytes: Buffer,
+): Result<string, LocalFailure> {
+  try {
+    const strictDecoder = new TextDecoder('utf-8', { fatal: true });
+    const text = strictDecoder.decode(bytes);
+    return success(text);
+  } catch {
+    return unreadableSourceFailure(file);
+  }
+}
+
+/** Writes the answer's text to the `--out` file, after the command ran. */
 async function writeOutput(
   path: FilePath,
   text: string,
@@ -53,4 +73,9 @@ async function writeOutput(
   } catch {
     return unwritableOutputFailure(path);
   }
+}
+
+/** Makes the mistake for a source file over 16 MiB (`source-too-large`). */
+function sourceTooLargeFailure(): Result<never, LocalFailure> {
+  return failure({ code: 'source-too-large', message: 'DSL source exceeds 16 MiB' });
 }
