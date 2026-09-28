@@ -1,7 +1,12 @@
 /*
- * The service's read-only calls, each answer already checked. Declaration only;
- * adapters/service-http/reads.ts implements it over the HTTP transport and owns the routes. Nothing
- * is written to the workspace, so the caller recovers by running the command again.
+ * Why this file exists
+ *
+ * Most of what an agent does first is look: `describe`, `list`, `read my-diagram`, `inspect`.
+ * Each asks the service one question and prints the answer. Reading never changes the workspace,
+ * so a failed read can simply be run again.
+ *
+ * This file names those questions and what each gives back, already checked.
+ * `adapters/service-http/reads.ts` asks the service.
  */
 import type { CollectionId, RequestId } from '../brands.js';
 import type { Result } from '../errors.js';
@@ -9,28 +14,28 @@ import type { InspectionReport, Snapshot } from '../records/foreign.js';
 import type { ReadScope } from '../records/command.js';
 import type {
   LanguageDescription,
-  Observed,
+  ServiceAnswer,
   Readout,
   ReceiptLookup,
 } from '../records/service-answers.js';
 
 /**
- * One read of the local service. Every method fails with `connection-uncertain`,
- * `invalid-response` (the answer is not a service envelope, or does not match the checked shape)
- * or `service-rejected` (the service's own failure record, kept whole).
+ * The questions the CLI asks the service. Each fails with `connection-uncertain`,
+ * `invalid-response` (the answer isn't the expected shape) or `service-rejected` (the service
+ * said no).
  */
 export interface ServiceReads {
-  /** The DSL vocabulary, as the service describes it; printed as JSON. */
+  /** Asks for the DSL vocabulary, which `describe` prints as JSON. */
   language(): Promise<Result<LanguageDescription>>;
-  /** Every workspace record, checked by Authoring's snapshot schema, and the generation it came from. */
-  workspace(): Promise<Result<Observed<Snapshot>>>;
-  /** One collection's DSL source, narrowed to a section or object when `scope` names one. */
+  /** Asks for every saved record in the workspace, and the service's generation. */
+  workspace(): Promise<Result<ServiceAnswer<Snapshot>>>;
+  /** Asks for one collection's source, or only the section or object `scope` names. */
   source(
     collection: CollectionId,
     scope: ReadScope,
   ): Promise<Result<Readout>>;
-  /** The service's inspection report of one collection, checked by its schema; printed as JSON. */
+  /** Asks for the service's report on one collection's layout, which `inspect` prints as JSON. */
   inspect(collection: CollectionId): Promise<Result<InspectionReport>>;
-  /** Whether `request` committed, with its receipt when it did, and the generation it came from. */
-  receipt(request: RequestId): Promise<Result<Observed<ReceiptLookup>>>;
+  /** Asks whether `request` was saved, with its receipt if it was, and the service's generation. */
+  receipt(request: RequestId): Promise<Result<ServiceAnswer<ReceiptLookup>>>;
 }

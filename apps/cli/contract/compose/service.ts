@@ -1,9 +1,13 @@
 /*
- * Service-command wiring: the workspace's agent credential, one HTTP transport and the service
- * calls over it, local files, the request journal, the resource reader, Language, Templates' theme
- * grammar, Model's collection check and request IDs. Not pure: reads the credential file, calls
- * HTTP and mints UUIDs. Failures are returned as values, never thrown; recovery after a sent
- * request is `receipt` then `retry`.
+ * Why this file exists
+ *
+ * Core can decide what a service command does, but it can't open a file or a connection. So
+ * `read my-diagram` needs real parts plugged in first: the agent's token from the workspace, an
+ * HTTP connection to `--server`, and the calls made over it. `create` also needs files, the
+ * request journal and fresh request IDs.
+ *
+ * This file builds those parts for one command, then runs it. It reads the credential file and
+ * makes random IDs. Mistakes come back as values, never thrown.
  */
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
@@ -19,7 +23,7 @@ import { createServiceResources } from '../../adapters/service-http/resources.js
 import { runServiceCommand } from '../api.js';
 import type { ServiceCommandDependencies } from '../api.js';
 import type { FailureInput, Result } from '../errors.js';
-import { failure, rejected, success } from '../errors.js';
+import { failure, foreignFailure, success } from '../errors.js';
 import type { ServiceCommand, ServerAndWorkspace } from '../records/command.js';
 import {
   agentToken,
@@ -32,8 +36,8 @@ import { composeLanguage } from './language.js';
 import { composeThemeGrammar } from './theme-grammar.js';
 
 /**
- * Runs one service command against the service at `options.server`. Fails as {@link readToken}
- * or the command does.
+ * Runs one service command against the service at `options.server`, and gives back the text to
+ * print. Fails if the agent's token can't be read, or as the command does.
  */
 export async function runService(
   command: ServiceCommand,
@@ -50,7 +54,7 @@ export async function runService(
  */
 async function readToken(workspace: FilePath): Promise<Result<AgentToken>> {
   const credential = await readAgentCredential(resolve(workspace, 'agent-credential.json'));
-  if (!credential.ok) return rejected('credential-unavailable', credential.error);
+  if (!credential.ok) return foreignFailure('credential-unavailable', credential.error);
   const token = agentToken.safeParse(credential.value);
   if (!token.success)
     return failure({ code: 'invalid-response', message: 'Agent credential holds no token' });

@@ -7,7 +7,7 @@ import { inspectionReport } from '@novakai/canvas-service';
 import type { HttpTransport, RouteQuery } from '../../contract/ports/http-transport.js';
 import type { ServiceReads } from '../../contract/ports/service-reads.js';
 import type { ReadScope } from '../../contract/records/command.js';
-import type { Observed } from '../../contract/records/service-answers.js';
+import type { ServiceAnswer } from '../../contract/records/service-answers.js';
 import {
   languageDescription,
   readoutAnswer,
@@ -80,7 +80,7 @@ function sourceQuery(
  * The answer's value without its generation, which the caller does not need. Fails as the
  * transport does.
  */
-async function value<T>(pending: Promise<Result<Observed<T>>>): Promise<Result<T>> {
+async function value<T>(pending: Promise<Result<ServiceAnswer<T>>>): Promise<Result<T>> {
   const answer = await pending;
   if (!answer.ok) return answer;
   return success(answer.value.value);
@@ -91,10 +91,10 @@ async function value<T>(pending: Promise<Result<Observed<T>>>): Promise<Result<T
  * does, or with `invalid-response` and the message `invalid`.
  */
 async function observed<T>(
-  pending: Promise<Result<Observed<unknown>>>,
+  pending: Promise<Result<ServiceAnswer<unknown>>>,
   schema: Parser<T>,
   invalid: string,
-): Promise<Result<Observed<T>>> {
+): Promise<Result<ServiceAnswer<T>>> {
   const answer = await pending;
   if (!answer.ok) return answer;
   const parsed = schema.safeParse(answer.value.value);

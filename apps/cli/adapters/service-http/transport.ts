@@ -7,10 +7,10 @@
  */
 import { responseEnvelope } from '@novakai/canvas-service';
 import type { HttpTransport, RouteQuery } from '../../contract/ports/http-transport.js';
-import type { Observed } from '../../contract/records/service-answers.js';
+import type { ServiceAnswer } from '../../contract/records/service-answers.js';
 import type { TransportResponse } from '../../contract/records/foreign.js';
 import type { LocalFailure, Result } from '../../contract/errors.js';
-import { failure, rejected, success } from '../../contract/errors.js';
+import { failure, foreignFailure, success } from '../../contract/errors.js';
 import {
   generation,
   type AgentToken,
@@ -53,7 +53,7 @@ async function send(
   path: string,
   method: Method,
   body: string | undefined,
-): Promise<Result<Observed<unknown>>> {
+): Promise<Result<ServiceAnswer<unknown>>> {
   try {
     const response = await fetch(`${origin}${path}`, {
       method,
@@ -75,7 +75,7 @@ async function send(
  * The service envelope's generation, minted, and its value. Fails with `invalid-response` when the
  * body is not a service envelope, or `service-rejected` with the service's failure record.
  */
-function answer(input: unknown): Result<Observed<unknown>> {
+function answer(input: unknown): Result<ServiceAnswer<unknown>> {
   const envelope = responseEnvelope.safeParse(input);
   if (!envelope.success) return invalidEnvelope();
   const sent = generation.safeParse(envelope.data.generation);
@@ -86,8 +86,8 @@ function answer(input: unknown): Result<Observed<unknown>> {
 function observed(
   sent: Generation,
   outcome: TransportResponse['outcome'],
-): Result<Observed<unknown>> {
-  if (!outcome.ok) return rejected('service-rejected', outcome.error);
+): Result<ServiceAnswer<unknown>> {
+  if (!outcome.ok) return foreignFailure('service-rejected', outcome.error);
   return success({ generation: sent, value: outcome.value });
 }
 /** The answer is not a service envelope. */

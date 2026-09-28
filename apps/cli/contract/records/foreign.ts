@@ -1,6 +1,13 @@
 /*
- * Foreign vocabulary: the capability and service records the CLI speaks in. Type-only re-exports
- * keep CLI core, contract ports and the render factories inside every capability's public entry.
+ * Why this file exists
+ *
+ * The CLI works with records other parts own. A `read` answer is about Model's `Collection`, and
+ * a refused change carries the service's failure record. Copying those shapes would let them drift
+ * apart from their owners.
+ *
+ * This file passes those types on from their owners, so CLI core finds them in one place and
+ * never imports a capability package. Where an owner names no type, it takes one from the owner's
+ * own, such as `SourcePosition` from Language's `Span`. It declares types only.
  */
 import type { TransportResponse, createHeadlessBindings } from '@novakai/canvas-service';
 import type { Admission } from '@novakai/canvas-templates';
@@ -15,7 +22,7 @@ export type {
   ResourceRequest,
   Span,
 } from '@novakai/canvas-language';
-/** Language's collection profile records: descriptor, starter names, lint finding and result. */
+/** Language's profile records: what a profile asks for, a starter's ID and title, lint findings. */
 export type {
   ProfileDescriptor,
   ProfileFinding,
@@ -25,7 +32,7 @@ export type {
 export type { InspectionReport, RenderDocument } from '@novakai/canvas-service';
 export type { Assets, StageInput, StoredBlob, SupportedMedia } from '@novakai/canvas-assets';
 export type { Admission, Catalog, ExpansionRequest, ThemePreset } from '@novakai/canvas-templates';
-/** Templates' `.theme` grammar records: a theme file's admission and fonts, and its failure. */
+/** Templates' `.theme` records: what a theme file declares, its fonts, and why one was refused. */
 export type {
   FontRequest,
   FontRole,
@@ -41,7 +48,7 @@ export type {
   Resources,
   Snapshot as ExportSnapshot,
 } from '@novakai/canvas-export';
-/** Owner records: CLI core imports only these local aliases. */
+/** Authoring's records: a workspace snapshot, a change request, its receipt, and a saved record. */
 export type {
   Snapshot,
   Request,
@@ -53,29 +60,28 @@ export type {
 export type { TransportResponse } from '@novakai/canvas-service';
 
 /**
- * A failure record as the service writes it: code, path, message, recovery and any nested
- * evidence. Derived from the service's transport envelope, never copied. The agent credential
- * reader fails with the same shape.
+ * A failure as the service writes it: its code, message, what to do next, and any evidence. Taken
+ * from the service's own answer type, never copied.
  */
 export type OperationSource = Extract<
   TransportResponse['outcome'],
   { readonly ok: false }
 >['error'];
 
-/** Evidence under a failure: Language or Model validation diagnostics, or a nested operation failure. */
+/** Why another part refused, kept whole: Language's or Model's findings, or a service failure. */
 export type FailureSource = NonNullable<OperationSource['source']>;
 
-/** One asset record a collection declares, as Model types it. Model exports no name for it. */
+/** One font or image a collection declares, as Model types it. Model names no type for it. */
 export type CollectionAsset = Collection['assets'][number];
 
-/** A point in a source: offset, 1-based line and column. Language exports no name for it. */
+/** A point in a source file: offset, line and column (from 1). Language names no type for it. */
 export type SourcePosition = Span['start'];
 
-/** A recipe's diagram family, as Templates' admission declares it. */
+/** A recipe's diagram family, such as `er` or `sequence`, as Templates declares it. */
 export type RecipeFamily = Extract<Admission, { readonly kind: 'recipe' }>['family'];
 
 /**
- * The service's headless render bindings: theme preparation, preset codecs, render jobs and the
- * diagram producer. The service declares no type for them yet, so this is derived from its factory.
+ * The service's tools for drawing a diagram without a browser: theme preparation, render jobs and
+ * the diagram producer. The service names no type for them yet, so this is taken from its factory.
  */
 export type HeadlessBindings = Awaited<ReturnType<typeof createHeadlessBindings>>;

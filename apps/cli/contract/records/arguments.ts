@@ -1,11 +1,16 @@
 /*
- * Argv as Node's parser reads it, before any command rule: the flags `pnpm canvas` and
- * `pnpm render:png` declare, and the words, flag values and repeated flags the argv adapter found.
- * Pure declarations. Core's grammars (`core/commands/parse.ts`, `core/render/request.ts`) check
- * every word and value.
+ * Why this file exists
+ *
+ * Node can split a typed line into words and flags, but only if it is told which flags exist and
+ * which ones take text. In `pnpm canvas read my-diagram --section intro`, Node must know that
+ * `--section` takes the word after it, so `intro` isn't read as another word.
+ *
+ * This file lists the flags of both programs, `pnpm canvas` and `pnpm render:png`, and names what
+ * Node hands back: the words, the text after each flag, and any flag typed twice. It never checks
+ * what the words mean; `core/commands/parse.ts` does that.
  */
 
-/** Every `pnpm canvas` flag. */
+/** Every flag `pnpm canvas` has, such as `--server` or `--revision`, without the dashes. */
 export type CanvasFlag =
   | 'help'
   | 'server'
@@ -23,22 +28,25 @@ export type CanvasFlag =
   | 'section'
   | 'object';
 
-/** Every `pnpm render:png` flag. */
+/** Every flag `pnpm render:png` has, without the dashes. */
 export type RenderFlag = 'collection' | 'theme' | 'theme-file' | 'out' | 'format' | 'labels';
 
-/** How Node parses one flag: a text value or a switch, with an optional one-letter alias. */
+/**
+ * How Node reads one flag: `string` takes the text after it, `boolean` stands alone (a switch).
+ * `short` is an optional one-letter name, such as `-h` for `--help`.
+ */
 export interface FlagShape {
   readonly type: 'string' | 'boolean';
   readonly short?: string;
 }
 
-/** One executable's flags: a missing or extra flag is a type error. */
+/** How Node reads each flag of one program. A missing or extra flag doesn't compile. */
 export type FlagSpec<F extends string> = Readonly<Record<F, FlagShape>>;
 
 /** A flag that takes text. Frozen, like every shape in `canvasFlags` and `renderFlags`. */
 const textFlag: FlagShape = Object.freeze({ type: 'string' });
 
-/** `pnpm canvas` flags. Only `--help` (`-h`) is a switch. No flag has a default here; core fills them. */
+/** How Node reads `pnpm canvas`'s flags. Only `--help` (`-h`) stands alone; the rest take text. */
 export const canvasFlags: FlagSpec<CanvasFlag> = Object.freeze({
   help: Object.freeze({ type: 'boolean', short: 'h' }),
   server: textFlag,
@@ -57,7 +65,7 @@ export const canvasFlags: FlagSpec<CanvasFlag> = Object.freeze({
   object: textFlag,
 } satisfies FlagSpec<CanvasFlag>);
 
-/** `pnpm render:png` flags. Only `--labels` is a switch. No flag has a default here; core fills them. */
+/** How Node reads `pnpm render:png`'s flags. Only `--labels` stands alone; the rest take text. */
 export const renderFlags: FlagSpec<RenderFlag> = Object.freeze({
   collection: textFlag,
   theme: textFlag,
@@ -67,20 +75,19 @@ export const renderFlags: FlagSpec<RenderFlag> = Object.freeze({
   labels: Object.freeze({ type: 'boolean' }),
 } satisfies FlagSpec<RenderFlag>);
 
-/** The words and flags Node accepted. */
+/** The words and flags Node read from a typed line, not checked yet. */
 export interface RawArguments<F extends string> {
-  /** Every word that is not a flag, in order. */
+  /** The words that aren't flags, in order: `['read', 'my-diagram']`. */
   readonly positionals: readonly string[];
-  /** Each flag given, by name: text for a text flag, `true` for a switch. A flag given twice keeps its last value. */
+  /** The text typed after each flag, or `true` for a switch. A repeated flag keeps its last. */
   readonly values: ReadonlyMap<F, string | boolean>;
-  /** Each flag given more than once, named once. */
+  /** Each flag typed more than once, named once. */
   readonly repeated: readonly F[];
 }
 
 /**
- * What the argv adapter read. `malformed`: a flag Node's strict mode refuses (an unknown flag, a
- * text flag with no value, a value on a switch), named in `flag` as typed, such as `--nope` or
- * `-c`; core reports it as `invalid-arguments`.
+ * What Node made of a typed line: `read`, with its words and flags, or `malformed`, when a flag
+ * couldn't be read. `flag` is that flag as typed, such as `--nope` or `--out` with no text.
  */
 export type ArgvReading<F extends string> =
   | { readonly kind: 'read'; readonly arguments: RawArguments<F> }

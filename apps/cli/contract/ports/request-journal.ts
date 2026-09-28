@@ -1,24 +1,28 @@
 /*
- * The request journal: the CLI's recovery record for `receipt` then `retry`. Declaration only;
- * adapters/files/request-journal.ts implements it under the workspace `requests` directory. Every
- * method returns its failure as a value.
+ * Why this file exists
+ *
+ * If a change is sent and its answer is lost, the agent needs the exact same request to try
+ * again. So the CLI keeps each request before sending it, in the request journal: the `requests`
+ * folder of the workspace. `canvas retry ID` reads it back from there.
+ *
+ * This file names those two steps, keep and read back. `adapters/files/request-journal.ts` does
+ * the file work.
  */
 import type { RequestId } from '../brands.js';
 import type { LocalFailure, Result } from '../errors.js';
 import type { JournalRecord, RetainedRequest } from '../records/retained-request.js';
 
-/** Retains a request before it is sent, and reads it back for a replay. */
+/** Keeps a request before it is sent, and reads it back for a retry. */
 export interface RequestJournal {
   /**
-   * Retains `retained` durably before its Authoring request is sent. Saving the same request again
-   * succeeds. Fails with `retention-unavailable`, `journal-corrupt` (the ID's retained file is
-   * damaged or holds another ID's request) or `request-reused` (the ID is retained for a different
-   * request). No Authoring request is sent on failure.
+   * Keeps `retained` safely on disk, before it is sent. Keeping the same request twice is fine.
+   * Fails with `retention-unavailable`, `journal-corrupt` or `request-reused` (the ID is already
+   * kept for a different request). The request is never sent after a failure.
    */
   save(retained: RetainedRequest): Promise<Result<void, LocalFailure>>;
   /**
-   * The retained request and its byte backups. Fails with `request-unavailable` (missing or
-   * unreadable) or `journal-corrupt` (the file is not a journal record, or holds another ID's).
+   * Reads back the kept request for `request`, with its byte copies. Fails with
+   * `request-unavailable` (missing or unreadable) or `journal-corrupt` (damaged, or another ID's).
    */
   read(request: RequestId): Promise<Result<JournalRecord, LocalFailure>>;
 }

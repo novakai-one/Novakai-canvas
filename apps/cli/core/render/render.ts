@@ -23,7 +23,7 @@ import type {
 } from '../../contract/records/foreign.js';
 import type { RenderReport, RenderRequest } from '../../contract/records/render.js';
 import type { RenderEvidence, RenderFailure } from '../../contract/records/render-failure.js';
-import { faulted, nativeFault, success, type Result } from '../../contract/errors.js';
+import { renderFaultFailure, nativeFault, success, type Result } from '../../contract/errors.js';
 import { chosenCollection } from './collection.js';
 import { pinResources } from './pins.js';
 import { renderReport } from './report.js';
@@ -102,7 +102,7 @@ function joinPorts(
 
 /** `work`'s own outcome; a rejection becomes `provider-failed` with its native evidence. */
 function guarded<T>(work: Promise<Result<T, RenderEvidence>>): Promise<Result<T, RenderEvidence>> {
-  return work.catch((error: unknown) => faulted(nativeFault(error)));
+  return work.catch((error: unknown) => renderFaultFailure(nativeFault(error)));
 }
 
 /** After the close: the render's own failure first, then the close's; otherwise the report. */

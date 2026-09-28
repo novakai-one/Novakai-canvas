@@ -1,9 +1,13 @@
 /*
- * What one headless render gets injected: an opener for the render's environment, the render's
- * three file ports, confined resource reads and Templates' theme grammar. The environment is four
- * capability ports plus `close`. Declarations only. Adapters in adapters/render/ implement the
- * ports; compose builds the adapters and the capability values and injects them. Every method
- * returns its failure as a value; core/render/render.ts decides what each one means.
+ * Why this file exists
+ *
+ * A render draws a collection into image files without a browser. To do that, core needs files,
+ * fonts, Language, Model, the service's layout and Export, but core may not import any of them.
+ * So compose builds them all and hands them to the render in one bundle.
+ *
+ * This file names that bundle (`RenderPorts`) and the part of it opened fresh for each render
+ * (`RenderEnvironment`). It declares types only; `core/render/render.ts` decides what each
+ * failure means.
  */
 import type { ResourceReader } from './resource-reader.js';
 import type { RenderAssets } from './render-assets.js';
@@ -15,38 +19,38 @@ import type { ThemeGrammar } from './theme-grammar.js';
 import type { RenderEvidence } from '../records/render-failure.js';
 import type { Result } from '../errors.js';
 
-/** Everything compose injects into one headless render. */
+/** Everything compose hands to one render. */
 export interface RenderPorts {
   /**
-   * Make the render's temporary asset store and its capability environment. Fails with
-   * `provider-failed`, Assets' failure or the service's installation failure; nothing is left open.
+   * Opens the render's environment, with its own throwaway font and image store. If it fails, with
+   * `provider-failed` or another part's failure, nothing is left open.
    */
   open(): Promise<Result<RenderEnvironment, RenderEvidence>>;
-  /** Finds shipped themes and collections and reads the render's source files. */
+  /** Finds the shipped themes and collections, and reads the render's source files. */
   readonly inputFiles: InputFiles;
-  /** Starts the PNG raster engine. */
+  /** Starts the engine that makes PNG bytes. */
   readonly raster: RasterEngine;
-  /** Makes the output directory and writes section files into it. */
+  /** Makes the `--out` folder and writes the section images into it. */
   readonly sectionFiles: SectionFiles;
   /** Reads the fonts and images a source or theme file declares. */
   readonly resources: ResourceReader;
-  /** Reads a `.theme` file's text as its theme admission and fonts. */
+  /** Reads a `.theme` file's text into the theme and fonts it declares. */
   readonly themeGrammar: ThemeGrammar;
 }
 
 /**
- * The capability rules of one render, over its temporary asset store. Each failure is the owner's
- * own evidence, returned whole: Language, Model, Assets, Templates, the service or Export.
+ * The parts one render asks, over its own throwaway store. Each part's failure comes back whole:
+ * Language, Model, Assets, Templates, the service or Export.
  */
 export interface RenderEnvironment {
-  /** Language's parse and lowering, and Model's check. */
+  /** Reads `.canvas` text with Language, and checks the collection with Model. */
   readonly sources: RenderSources;
-  /** The temporary asset store: stage bytes, read them back, decode base64. */
+  /** The throwaway font and image store: store bytes, and read them back. */
   readonly assets: RenderAssets;
-  /** The installation's catalog and theme admission. */
+  /** The themes and recipes the render knows, and how it adds a `--theme-file`. */
   readonly themes: RenderThemes;
-  /** The service's drawing and Export's section bytes. */
+  /** The service's layout, and Export's section images. */
   readonly output: RenderOutput;
-  /** Close the asset store and remove its directory. Call once, last. */
+  /** Closes the throwaway store and removes its folder. Call it once, at the end. */
   close(): Promise<Result<void, RenderEvidence>>;
 }

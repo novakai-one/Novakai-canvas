@@ -1,10 +1,14 @@
 /*
- * The CLI's failure vocabulary: closed codes, the two failure shapes and the Result helpers every
- * layer returns, plus the builders of render:png's own faults (`faulted`, and `nativeFault` for a
- * native throw). Pure. Nothing throws across a boundary; `cli/canvas.ts` prints the failure and
- * sets the exit code. Consumers branch on the code, never on the message. The fault builders are
- * here, not in records/ (data only) or a file of their own, because render core and the render
- * adapters both call them and core may import only records/, ports/, brands, schemas and errors.
+ * Why this file exists
+ *
+ * When a command goes wrong, the agent must learn what went wrong and what to do next, the same
+ * way every time. `pnpm canvas read` with no collection prints
+ * `invalid-arguments: read requires 1 operand(s)`, then "Correct the named input and retry."
+ *
+ * This file holds the fixed list of failure codes and the shapes a failure takes. It also holds
+ * `Result`, what every step answers with: `Success` (it worked, here is the value) or `Failure`
+ * (it found a mistake). Code branches on the code, never on the message. Nothing here throws or
+ * prints; `cli/canvas.ts` prints.
  */
 import { filePath, type FilePath, type RequestId, type ResourceAlias } from './brands.js';
 import type {
@@ -16,142 +20,88 @@ import type {
 import type { NativeDetail, ProviderFault, RenderFault } from './records/render-fault.js';
 
 /**
- * A failure in the CLI's local shape (`LocalFailure`). The CLI finds every code itself, except the
- * theme codes at the end, which Templates writes.
- *
- * Arguments (nothing was read or sent; an empty FILE or --out path reports the local-file code its
- * read or write would give):
- * - `invalid-command`: no such command.
- * - `invalid-arguments`: an unknown flag, a wrong operand count, a flag the command does not
- *   take, or a missing or malformed operand or flag value (collection ID, recipe header, pin).
- * - `invalid-mode`: `--mode` is not create, replace or patch.
- * - `invalid-revision`: `--revision` is not a non-negative safe integer.
- * - `invalid-server`: `--server` is not an `http://127.0.0.1` origin.
- * - `invalid-request`: a request ID operand or `--request` is not a valid Authoring request ID.
- * - `unknown-profile`: the profile is not `build-spec@1`.
- *
- * Local files:
- * - `source-unavailable`: a source or resource file cannot be opened or read as UTF-8.
- * - `source-too-large`: the source file is over 16 MiB.
- * - `output-unavailable`: the `--out` file cannot be written. The command already ran, unless the
- *   path was empty.
- *
- * Request journal:
- * - `retention-unavailable`: the request could not be retained. No Authoring request is sent.
- * - `request-unavailable`: the retained request file is missing or cannot be read.
- * - `request-reused`: the request ID is already retained for a different request.
- * - `journal-corrupt`: the request ID's retained file reads, but is not JSON, not a journal
- *   record, or another request ID's record. No Authoring request is sent; check the ID's receipt
- *   before authoring again under a new ID.
- *
- * Resources (`location` names the declaration; printed before the message):
- * - `absolute-path`: the resource path is absolute.
- * - `path-escape`: the resource path leaves the source file's directory.
- * - `unsupported-media`: the file extension is not a supported font or image type.
- * - `resource-mismatch`: a font declaration names an image file, or the reverse.
- * - `resource-too-large`: the resource file is over 16 MiB.
- *
- * Source and preconditions:
- * - `invalid-source`: Language rejected the source; `source` holds its diagnostics.
- * - `invalid-input`: an Authoring request failed its schema. Two sources: the request the CLI
- *   built from the source, or the request the service's `/resources/freeze` answer returned. The
- *   second is a bad service answer, not a user input error.
- * - `not-found`: the collection to change does not exist.
- * - `already-exists`: the collection to create already exists.
- * - `revision-required`: replace or patch without `--revision`.
- * - `revision-conflict`: `--revision` is not the collection's current revision.
- *
- * Profiles: `profile-structure` (lint findings, listed in the message).
- *
- * Transport:
- * - `connection-uncertain`: no confirmed answer. Check the receipt before retrying.
- * - `invalid-response`: an owner's answer broke its own contract. A service answer did not match
- *   its schema or lacks what the command needs, such as a committed receipt; the service's
- *   credential reader returned no token; or Language's parse gave an empty resource alias or an
- *   asset alias that is not Model's asset ID.
- *
- * Setup: `cli-unavailable` and `render-unavailable` (an unexpected throw at the entry point).
- *   `cli-unavailable` also reports a fresh request ID that fails Authoring's grammar; nothing was
- *   sent.
- *
- * Themes (`ThemeSourceCode`): Templates' `.theme` grammar (`readThemeSource`) returns these and
- * the CLI passes them on as written: `invalid-theme` (the file does not match the grammar, or its
- * header @id or version is not a preset ID or version), `duplicate-token` (one token set twice).
+ * A mistake the CLI found itself, grouped by where it happens. The last two codes come from
+ * Templates' `.theme` grammar and are passed on as written.
  */
 export type LocalCode =
-  | 'invalid-command'
-  | 'invalid-arguments'
-  | 'invalid-mode'
-  | 'invalid-revision'
-  | 'invalid-server'
-  | 'invalid-request'
-  | 'unknown-profile'
-  | 'source-unavailable'
-  | 'source-too-large'
-  | 'output-unavailable'
-  | 'retention-unavailable'
-  | 'request-unavailable'
-  | 'request-reused'
-  | 'journal-corrupt'
-  | 'absolute-path'
-  | 'path-escape'
-  | 'unsupported-media'
-  | 'resource-mismatch'
-  | 'resource-too-large'
-  | 'invalid-source'
-  | 'invalid-input'
-  | 'not-found'
-  | 'already-exists'
-  | 'revision-required'
-  | 'revision-conflict'
-  | 'profile-structure'
-  | 'connection-uncertain'
-  | 'invalid-response'
-  | 'cli-unavailable'
-  | 'render-unavailable'
-  | ThemeSourceCode;
+  // Typed wrong. Nothing was read or sent.
+  | 'invalid-command' // No such command.
+  | 'invalid-arguments' // A wrong flag, the wrong number of words, or a badly shaped value.
+  | 'invalid-mode' // `--mode` isn't create, replace or patch.
+  | 'invalid-revision' // `--revision` isn't a whole number from 0 up.
+  | 'invalid-server' // `--server` isn't an `http://127.0.0.1` address.
+  | 'invalid-request' // A request ID isn't one Authoring accepts.
+  | 'unknown-profile' // The profile isn't `build-spec@1`.
+  // Files on this machine.
+  | 'source-unavailable' // A source, font or image file can't be read.
+  | 'source-too-large' // The source file is over 16 MiB.
+  | 'output-unavailable' // The `--out` file can't be written. The command already ran.
+  // The request journal, where a request is saved before it is sent.
+  | 'retention-unavailable' // The request couldn't be saved, so it wasn't sent.
+  | 'request-unavailable' // The saved request is missing or can't be read.
+  | 'request-reused' // The request ID is already saved for a different request.
+  | 'journal-corrupt' // The saved file is damaged or holds another ID's request. Nothing was sent.
+  // A font or image a source declares. The failure's `location` names the declaration.
+  | 'absolute-path' // The path starts at the root of the disk.
+  | 'path-escape' // The path leaves the source file's folder.
+  | 'unsupported-media' // The file isn't a font or image type the CLI knows.
+  | 'resource-mismatch' // A font declaration names an image file, or the reverse.
+  | 'resource-too-large' // The file is over 16 MiB.
+  // The source, and what a change needs.
+  | 'invalid-source' // Language refused the source. The failure's `source` says why.
+  | 'invalid-input' // A request failed Authoring's check, whether built here or sent back.
+  | 'not-found' // The collection to change doesn't exist.
+  | 'already-exists' // The collection to create already exists.
+  | 'revision-required' // `replace` or `patch` without `--revision`.
+  | 'revision-conflict' // `--revision` isn't the collection's current revision.
+  | 'profile-structure' // `profile lint` found problems. The message lists them.
+  // Talking to the service.
+  | 'connection-uncertain' // No sure answer. Check the receipt before trying again.
+  | 'invalid-response' // An answer broke its own contract, such as an apply with no receipt.
+  // The program itself.
+  | 'cli-unavailable' // Something threw unexpectedly, or a fresh request ID failed its check.
+  | 'render-unavailable' // render:png couldn't start.
+  | ThemeSourceCode; // `invalid-theme` or `duplicate-token`.
 
-/**
- * A failure another owner wrote, kept whole in `foreign`.
- * - `service-rejected`: the service answered with a failure.
- * - `credential-unavailable`: the service's credential reader could not read the agent credential.
- */
-export type ForeignCode = 'service-rejected' | 'credential-unavailable';
+/** A failure the service wrote. The CLI keeps its record whole, in `foreign`. */
+export type ForeignCode =
+  | 'service-rejected' // The service answered with a failure.
+  | 'credential-unavailable'; // The agent's credential file couldn't be read.
 
 /** Every code a CLI failure can carry. */
 export type CliErrorCode = LocalCode | ForeignCode;
 
 /**
- * Where a source declares the font or image a failure is about: the file, Language's 1-based line
- * and column, and the alias. Printed as `file:line:column asset @alias` before the message.
+ * Where a source declares the font or image a failure is about. Printed before the message, as
+ * `file:line:column asset @alias`. Lines and columns count from 1.
  */
 export interface SourceLocation extends Pick<SourcePosition, 'line' | 'column'> {
-  /** The DSL or theme file that declares the resource. */
+  /** The `.canvas` or `.theme` file that declares the font or image. */
   readonly file: FilePath;
-  /** The name the declaration gives the resource. */
+  /** The name the declaration gives the font or image. */
   readonly alias: ResourceAlias;
 }
 
-/** A failure the CLI found. */
+/** A mistake the CLI found: its code, a message for people, and what to do next. */
 export interface LocalFailure {
   readonly code: LocalCode;
-  /** Human-readable. Its wording is not part of the contract. */
+  /** For people to read. Its wording may change, so code never branches on it. */
   readonly message: string;
-  /** What to do next. */
+  /** What to do next, such as "Correct the named input and retry." */
   readonly recovery: string;
-  /** The resource declaration a resource failure is about. */
+  /** For a font or image mistake: where the source declares it. */
   readonly location?: SourceLocation;
-  /** Language, Model or service evidence, kept whole. */
+  /** Why Language, Model or the service refused, kept whole (see `records/foreign.ts`). */
   readonly source?: FailureSource;
 }
 
-/** A service failure record, printed exactly as the service wrote it. */
+/** A failure the service wrote, kept whole and printed exactly as written. */
 export interface ForeignFailure {
   readonly code: ForeignCode;
   readonly foreign: OperationSource;
 }
 
-/** Any CLI failure. */
+/** Any CLI failure: a mistake the CLI found, or a failure the service wrote. */
 export type CliFailure = LocalFailure | ForeignFailure;
 
 /** A step that worked. `ok` is true and `value` holds what the step made. */
@@ -167,25 +117,24 @@ export interface Failure<E> {
 }
 
 /**
- * What every CLI step answers with: either it worked, or it found a mistake. Check `ok` to know
- * which. `success(value)` makes the first; `failure(...)` makes the second. A failure never carries
- * a half-finished value.
+ * What every CLI step answers with: it worked, or it found a mistake. Check `ok` to know which.
+ * A failure never carries a half-finished value.
  */
 export type Result<T, E = CliFailure> = Success<T> | Failure<E>;
 
-/** What `failure` needs. `recovery` may be omitted. */
+/** A mistake to hand to `failure`: a `LocalFailure` whose `recovery` may be left out. */
 export type FailureInput = Omit<LocalFailure, 'recovery'> & { readonly recovery?: string };
 
 const correctAndRetry = 'Correct the named input and retry.';
 
-/** Wraps a successful value. */
+/** Wraps a value as a step that worked. */
 export function success<T>(value: T): Result<T, never> {
   return { ok: true, value };
 }
 
 /**
- * Builds a local failure. `recovery` defaults to 'Correct the named input and retry.'; an absent
- * `location` or `source` stays absent.
+ * Makes a failed step from a mistake the CLI found. If `recovery` is left out, it becomes
+ * "Correct the named input and retry."
  */
 export function failure(input: FailureInput): Result<never, LocalFailure> {
   const { code, message, recovery = correctAndRetry, ...context } = input;
@@ -193,33 +142,30 @@ export function failure(input: FailureInput): Result<never, LocalFailure> {
 }
 
 /**
- * `source-unavailable` naming `path`: the FILE cannot be read as UTF-8 text. Core's FILE check (an
- * empty path) and the local-files read report the same text.
+ * The mistake for a source file that can't be read as UTF-8 text (`source-unavailable`). `path`
+ * is the path as typed, which may be empty, so it is plain text.
  */
 export function unreadableSource(path: string): FailureInput {
   return { code: 'source-unavailable', message: `Cannot read UTF-8 source: ${path}` };
 }
 
 /**
- * `output-unavailable` naming `path`: the --out file cannot be written. Core's --out check (an
- * empty path) and the local-files write report the same text.
+ * The mistake for an `--out` file that can't be written (`output-unavailable`). `path` is the
+ * path as typed, which may be empty, so it is plain text.
  */
 export function unwritableOutput(path: string): FailureInput {
   return { code: 'output-unavailable', message: `Cannot write output: ${path}` };
 }
 
-/**
- * `invalid-input`: an Authoring request failed Authoring's schema. Core's DSL request builder and
- * the resources adapter's check of the frozen request report the same text.
- */
+/** The mistake for a request that fails Authoring's own check (`invalid-input`). */
 export const malformedRequest: FailureInput = Object.freeze({
   code: 'invalid-input',
   message: 'Request identity or generated preconditions are invalid',
 });
 
 /**
- * `invalid-response` for an apply answer that does not confirm a commit. The write may have
- * happened, so the recovery checks `request`'s receipt before any retry.
+ * The mistake for an apply answer that doesn't confirm the change was saved (`invalid-response`).
+ * It may have been saved, so the advice is to check `request`'s receipt before trying again.
  */
 export function unconfirmedApply(
   request: RequestId,
@@ -232,28 +178,29 @@ export function unconfirmedApply(
   };
 }
 
-/** Wraps another owner's failure record without changing it. */
-export function rejected(
+/** Wraps a failure the service wrote as a failed step, without changing it. */
+export function foreignFailure(
   code: ForeignCode,
   foreign: OperationSource,
 ): Result<never, ForeignFailure> {
   return { ok: false, error: { code, foreign } };
 }
 
-/** Render fault `fault` as a failed Result, typed as its own fault; nothing else is returned. */
-export function faulted<F extends RenderFault>(fault: F): Result<never, F> {
+/** Wraps one of render:png's own faults as a failed step. It keeps the fault's exact type. */
+export function renderFaultFailure<F extends RenderFault>(fault: F): Result<never, F> {
   return { ok: false, error: fault };
 }
 
 /**
- * A thrown native error as `provider-failed` evidence: its message, path, OS code and syscall.
- * Only data fields are read, never methods; absent evidence stays absent. Cannot fail.
+ * Turns a native error into a `provider-failed` fault. A native error is one Node throws from a
+ * file, temp-folder or wasm step. Keeps its message, and its path, OS code (such as `ENOENT`) and
+ * syscall when they are well formed. Never fails.
  */
-export function nativeFault(error: unknown): ProviderFault {
+export function nativeFault(thrown: unknown): ProviderFault {
   return {
     code: 'provider-failed',
-    message: nativeMessage(error),
-    detail: nativeDetail(error),
+    message: nativeMessage(thrown),
+    detail: nativeDetail(thrown),
   };
 }
 

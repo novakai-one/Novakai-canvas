@@ -18,7 +18,7 @@ import type { RenderEvidence } from '../../contract/records/render-failure.js';
 import type { RenderFault } from '../../contract/records/render-fault.js';
 import type { SourceFile } from '../../contract/records/source-file.js';
 import { assetId, type AssetDigest, type AssetId, type FilePath } from '../../contract/brands.js';
-import { faulted, success, type Result } from '../../contract/errors.js';
+import { renderFaultFailure, success, type Result } from '../../contract/errors.js';
 import { pinOf } from '../resources/digests.js';
 import { altText, credit } from '../resources/provenance.js';
 import { checked } from '../shared/checks.js';
@@ -121,7 +121,7 @@ function uniqueRecords(
 ): Result<readonly CollectionAsset[], RenderFault> {
   const repeated = records.find((record, index) => !isFirstWithId(records, record, index));
   if (repeated === undefined) return success(records);
-  return faulted({ code: 'duplicate-asset', asset: repeated.id });
+  return renderFaultFailure({ code: 'duplicate-asset', asset: repeated.id });
 }
 
 /** Whether `record`, at `index`, is the first of `records` with its ID. */

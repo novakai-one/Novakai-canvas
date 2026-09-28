@@ -15,7 +15,7 @@ import type {
   Resource,
 } from '../../contract/records/foreign.js';
 import type { RenderEvidence } from '../../contract/records/render-failure.js';
-import { faulted, success, type Result } from '../../contract/errors.js';
+import { renderFaultFailure, success, type Result } from '../../contract/errors.js';
 import { assetOfPin } from '../resources/digests.js';
 import { combined, mapped } from '../shared/results.js';
 
@@ -77,7 +77,7 @@ function assetResource(
 ): Result<Resource, RenderEvidence> {
   const digest = assetOfPin(asset.digest);
   if (digest === undefined)
-    return faulted({ code: 'invalid-asset-pin', asset: asset.id, digest: asset.digest });
+    return renderFaultFailure({ code: 'invalid-asset-pin', asset: asset.id, digest: asset.digest });
   return mapped(assets.resolve(digest), (blob) => ({
     kind: 'asset',
     digest: blob.descriptor.digest,

@@ -1,58 +1,62 @@
 /*
- * render:png's request and report: which collection to render, with which theme, into which
- * files, and the JSON a finished render prints. Pure declarations. `core/render/request.ts` mints
- * the choice from argv and compose adds the repo root; the caller corrects the named flag and runs
- * render:png again.
+ * Why this file exists
+ *
+ * render:png draws a collection into image files, one per section. The agent says what to draw
+ * and where: `pnpm render:png --collection states --out out/ --format svg`.
+ *
+ * This file names what those flags ask for once checked, and the JSON a finished render prints:
+ * the files it wrote and the theme it used. It declares types only; `core/render/request.ts`
+ * checks the flags. A render never changes a saved collection.
  */
 import type { CollectionName, FilePath, PresetDigest, PresetId, ThemeName } from '../brands.js';
 import type { Collection, InspectionReport } from './foreign.js';
 
-/** The file format every section is written in. */
+/** The image format every section file is written in. */
 export type RenderFormat = 'svg' | 'png';
 
-/** `all` (`--labels`): wire labels the diagram hides are drawn too. `default`: only the shown ones. */
+/** `all` (`--labels` typed): hidden wire labels are drawn too. `default`: only the shown ones. */
 export type LabelMode = 'all' | 'default';
 
 /**
- * What `--collection` names. Text ending in `.canvas` is a file. Any other text is a name: a
- * recipe ID first, then a shipped collection ID.
+ * What `--collection` names. Text ending in `.canvas` is a file. Any other text is a name, looked
+ * up as a recipe ID first, then as a shipped collection's ID.
  */
 export type CollectionSelector =
   | { readonly kind: 'file'; readonly path: FilePath }
   | { readonly kind: 'named'; readonly name: CollectionName };
 
-/**
- * The theme a render draws with in place of the collection's own: --theme, or else the
- * --theme-file's `@id`.
- */
+/** The theme to draw with, not the collection's own: `--theme`, or the `--theme-file`'s `@id`. */
 export type ThemeChoice = ThemeName | PresetId;
 
-/** What render:png's flags ask for. */
+/** What render:png's flags ask for, checked. */
 export interface RenderChoice {
   readonly collection: CollectionSelector;
-  /** --theme: wins over the --theme-file's `@id`. */
+  /** `--theme`: wins over the `--theme-file`'s `@id`. */
   readonly theme?: ThemeName;
-  /** --theme-file: admitted after the shipped themes. */
+  /** `--theme-file`: a `.theme` file, added to the shipped themes for this render only. */
   readonly themeFile?: FilePath;
-  /** The directory the section files are written to, as given; the render's file adapter resolves it. */
+  /** `--out`: the folder the section files are written to. */
   readonly out: FilePath;
   readonly format: RenderFormat;
   readonly labels: LabelMode;
 }
 
-/** One read-only render: the flags' choice, below the repo root. No stored collection is changed. */
+/** What one render needs: the flags' choice, and the repo folder the shipped files are found in. */
 export interface RenderRequest extends RenderChoice {
-  /** The repo root the executable found. Every shipped file the render reads is found below it. */
+  /** The repo folder. Every shipped theme, collection and wasm file is found below it. */
   readonly root: FilePath;
 }
 
-/** An admitted theme and its content digest. */
+/** A theme the render knew (shipped, or from `--theme-file`), and a hash of its content. */
 export interface ThemeDigest {
   readonly id: PresetId;
   readonly digest: PresetDigest;
 }
 
-/** What a finished render prints: written files, the collection's theme, scene counts, theme digests. */
+/**
+ * What a finished render prints as JSON: the files it wrote, the collection's theme, the service's
+ * inspection report of the drawing, and a content hash for every theme the render knew.
+ */
 export interface RenderReport {
   readonly files: readonly FilePath[];
   readonly theme: Collection['theme'];

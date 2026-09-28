@@ -16,7 +16,7 @@ import type { RequestIds } from '../../contract/ports/request-ids.js';
 import type { ServiceReads } from '../../contract/ports/service-reads.js';
 import type { SourceLanguage } from '../../contract/ports/source-language.js';
 import type { Request, Snapshot } from '../../contract/records/foreign.js';
-import type { Observed } from '../../contract/records/service-answers.js';
+import type { ServiceAnswer } from '../../contract/records/service-answers.js';
 import type { RetainedRequest } from '../../contract/records/retained-request.js';
 import type { CollectionRevision } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
@@ -56,7 +56,7 @@ export async function prepare(
 async function prepareCaptured(
   command: ChangeCommand,
   source: string,
-  current: Observed<Snapshot>,
+  current: ServiceAnswer<Snapshot>,
   dependencies: PrepareDependencies,
 ): Promise<Result<RetainedRequest>> {
   const parsed = parseSource(dependencies.language, source);

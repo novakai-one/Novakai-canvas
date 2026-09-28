@@ -1,7 +1,12 @@
 /*
- * `pnpm render:png`: argv → runRender. A render's result prints as JSON on stdout; an argument
- * failure prints as lines on stderr, like `pnpm canvas`. Any failure exits 1. Read-only: no stored
- * collection is changed, so the caller corrects the input and runs it again.
+ * Why this file exists
+ *
+ * An agent needs to check what a diagram looks like, without a browser.
+ * `pnpm render:png --collection states --out out/` draws a collection to image files.
+ *
+ * This file is that program. It hands the words to `runRender` and prints the result as JSON on
+ * stdout. A typing mistake prints as lines on stderr instead, like `pnpm canvas`. Any failure
+ * exits with 1. It never changes a saved collection.
  */
 import { fileURLToPath } from 'node:url';
 import type { CliFailure, RenderFailure, RenderReport, Result } from '../contract/index.js';

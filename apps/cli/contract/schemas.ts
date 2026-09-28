@@ -1,9 +1,12 @@
 /*
- * Schemas another owner declares that the CLI checks with, and `Parser`, the part of any schema a
- * check uses. Pure declarations. Authoring's request, snapshot and receipt schemas are re-exported,
- * never copied. Templates does not export its family schema, so recipe families are a typed copy
- * that stops compiling when Templates' Admission adds, drops or renames one. A value these schemas
- * reject becomes the failure code its caller names.
+ * Why this file exists
+ *
+ * Some checks the CLI runs belong to other parts. A request the CLI sends must pass Authoring's
+ * own request check, not a copy that could drift from it. And core must run checks without
+ * importing the library the checks are written in.
+ *
+ * This file passes on Authoring's checks, names `Parser` (the one thing core uses from any check),
+ * and checks recipe families. Whoever runs a check decides which failure a refusal becomes.
  */
 import { z } from 'zod';
 import type { RecipeFamily } from './records/foreign.js';
@@ -11,9 +14,8 @@ import type { RecipeFamily } from './records/foreign.js';
 export { receiptSchema, requestSchema, snapshotSchema } from '@novakai/canvas-authoring';
 
 /**
- * The part of a schema a check uses: its `safeParse`, and the checked (often branded) value it
- * gives. Core checks through it without importing the schema library; adapters use it where
- * `z.ZodType<T>` would infer a branded schema's unbranded type.
+ * Any check core can run. `safeParse` gives back the checked value, often as a checked type such
+ * as `FilePath`, or says the input failed.
  */
 export interface Parser<T> {
   safeParse(
@@ -31,5 +33,8 @@ const recipeFamilies = Object.freeze({
   infographic: 'infographic',
 } as const satisfies { readonly [Family in RecipeFamily]: Family });
 
-/** A recipe's diagram family, as Templates' `Admission` declares it. */
+/**
+ * Checks a recipe's diagram family, such as `er`. Templates doesn't share its own check, so this
+ * copy stops compiling if Templates adds, drops or renames a family.
+ */
 export const recipeFamily = z.enum(recipeFamilies);

@@ -1,10 +1,13 @@
 /*
- * Composition root: reads the arguments, then runs the parsed command's family on real
- * infrastructure wired in `compose/`: service commands in `service.ts`, profile commands in
- * `profiles.ts`, the headless render in `render.ts` (imported only when a render runs). Not pure:
- * reads the argv. Failures are returned as values; `cli/canvas.ts` and `cli/render.ts` print them
- * and set the exit code. Recovery after a sent request is `receipt` then `retry`; a render changes
- * nothing.
+ * Why this file exists
+ *
+ * Both programs start with nothing but the typed words. `pnpm canvas list` has to be read,
+ * checked, and then run with real files and a real connection to the service. `pnpm render:png`
+ * has to be read, checked, and then run with real files and drawing parts.
+ *
+ * This file does that for both: it reads the words, lets core check them, and runs the command
+ * with the parts `compose/` builds. Every mistake comes back as a value, never thrown;
+ * `cli/canvas.ts` and `cli/render.ts` print it.
  */
 import { readArguments } from '../adapters/argv/node-args.js';
 import { helpText, parseCommand, parseRenderChoice, renderCollection } from './api.js';
@@ -25,16 +28,18 @@ import { runProfile } from './compose/profiles.js';
 import { runService } from './compose/service.js';
 
 /**
- * `pnpm canvas`: reads and parses the argv, then runs the command on real infrastructure. Fails as
- * the command does, or with `cli-unavailable` when reading, parsing or running the command throws
- * (the one boundary catch). Never rejects.
+ * Runs one `pnpm canvas` command, from the typed words to the text to print.
+ *
+ * `defaultWorkspace` is the folder used when `--workspace` isn't typed, as plain text. Fails as
+ * the command does, or with `cli-unavailable` if that folder is empty or anything throws. Never
+ * rejects.
  */
 export async function runCli(
-  args: readonly string[],
+  argv: readonly string[],
   defaultWorkspace: string,
 ): Promise<Result<string>> {
   try {
-    return await parsedRun(args, defaultWorkspace);
+    return await parsedRun(argv, defaultWorkspace);
   } catch {
     return failure(cliUnavailable);
   }
@@ -48,18 +53,19 @@ const cliUnavailable: FailureInput = {
 };
 
 /**
- * `pnpm render:png`: Node reads the argv with every `--` dropped (pnpm forwards it), core's render
- * grammar checks it, then one read-only render runs below the repo `root`. Fails with
- * `invalid-arguments` before anything is read or made, `render-unavailable` when the render cannot
- * start, or `render-failed` as core's render reports it. Never rejects.
+ * Runs one `pnpm render:png` render, from the typed words to the report to print.
+ *
+ * `repoRoot` is the repo folder the shipped files are in, as plain text. Fails with
+ * `invalid-arguments` before anything is read, `render-unavailable` if the render can't start (or
+ * `repoRoot` is empty), or `render-failed`. Never rejects. It never changes a saved collection.
  */
 export async function runRender(
-  args: readonly string[],
-  root: string,
+  argv: readonly string[],
+  repoRoot: string,
 ): Promise<Result<RenderReport, RenderFailure | CliFailure>> {
-  const choice = parseRenderChoice(readArguments(args.filter(isNotSeparator), renderFlags));
+  const choice = parseRenderChoice(readArguments(argv.filter(isNotSeparator), renderFlags));
   if (!choice.ok) return choice;
-  return renderBelow(choice.value, root);
+  return renderBelow(choice.value, repoRoot);
 }
 
 /** Node reads the argv; core's grammar checks every word and value; then the command runs. */
@@ -115,7 +121,7 @@ async function boundRender(
 ): Promise<Result<RenderReport, RenderFailure | LocalFailure>> {
   try {
     const wiring = await import('./compose/render.js');
-    return await renderCollection(request, await wiring.renderPorts(request));
+    return await renderCollection(request, await wiring.composeRenderPorts(request));
   } catch {
     return failure(renderUnavailable);
   }

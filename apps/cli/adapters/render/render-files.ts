@@ -14,7 +14,7 @@ import type { RenderRequest } from '../../contract/records/render.js';
 import { filePath, type FilePath, type SectionId } from '../../contract/brands.js';
 import type { SourceFile } from '../../contract/records/source-file.js';
 import type { InputFiles, SectionFiles } from '../../contract/ports/render-files.js';
-import { faulted, nativeFault, success, type Result } from '../../contract/errors.js';
+import { renderFaultFailure, nativeFault, success, type Result } from '../../contract/errors.js';
 
 /** Where one render writes its sections, and in which format. */
 export type SectionTarget = Pick<RenderRequest, 'out' | 'format'>;
@@ -47,14 +47,14 @@ export function createSectionFiles(target: SectionTarget): SectionFiles {
  */
 function checkedPath(path: string): Result<FilePath, ProviderFault> {
   const checked = filePath.safeParse(path);
-  if (!checked.success) return faulted(nativeFault(checked.error));
+  if (!checked.success) return renderFaultFailure(nativeFault(checked.error));
   return success(checked.data);
 }
 
 /** Each of `paths` as a FilePath, in order. Fails as {@link checkedPath} does. */
 function checkedPaths(paths: readonly string[]): Result<readonly FilePath[], ProviderFault> {
   const checked = filePath.array().safeParse(paths);
-  if (!checked.success) return faulted(nativeFault(checked.error));
+  if (!checked.success) return renderFaultFailure(nativeFault(checked.error));
   return success(checked.data);
 }
 

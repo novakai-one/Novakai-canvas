@@ -1,7 +1,13 @@
 /*
- * The parsed `pnpm canvas` command: one union member per command, carrying only the fields that
- * command reads, each already checked and branded. Pure declarations. Core's grammar
- * (`core/commands/parse.ts`) builds it from argv; compose routes on `ParsedCommand.kind`.
+ * Why this file exists
+ *
+ * Once a typed line is checked, the rest of the CLI should never look at the raw text again. For
+ * `pnpm canvas read my-diagram --section intro`, the command becomes
+ * `{ name: 'read', collection: 'my-diagram', scope: { kind: 'section', id: 'intro' } }`.
+ *
+ * This file names that checked command: one shape per command, holding only what that command
+ * uses, each value already a checked type. It never checks anything itself;
+ * `core/commands/parse.ts` builds these from the typed line.
  */
 import type {
   CollectionId,
@@ -17,31 +23,37 @@ import type {
 } from '../brands.js';
 import type { ExpansionRequest, RecipeFamily } from './foreign.js';
 
-/** How a DSL source changes a collection. */
+/** How a source file changes a collection: make a new one, replace it whole, or patch it. */
 export type ChangeMode = 'create' | 'replace' | 'patch';
 
-/** What `read` returns: the whole collection, or one section or object as read-only context. */
+/** What `read` prints: a whole collection, or one section (`--section`) or object (`--object`). */
 export type ReadScope =
   | { readonly kind: 'all' }
   | { readonly kind: 'section'; readonly id: SectionId }
   | { readonly kind: 'object'; readonly id: ObjectId };
 
-/** `--out`: write the text answer to this file instead of stdout. */
+/** `--out`: write the answer to this file instead of printing it. Left out, it prints. */
 export interface OutOption {
   readonly out?: FilePath;
 }
 
-/** `--request`: a fixed request ID for scripted receipt lookup. Absent: a fresh one is minted. */
+/**
+ * `--request`: the request ID to send the change under, so a script can look up its receipt.
+ * Left out, the CLI makes a fresh one.
+ */
 export interface RequestOption {
   readonly request?: RequestId;
 }
 
-/** `--revision`: the collection revision the agent read. Absent on replace or patch: `revision-required`. */
+/**
+ * `--revision`: the revision the agent last read, so a change can't overwrite a newer one.
+ * `replace` and `patch` refuse to run without it (`revision-required`).
+ */
 export interface RevisionOption {
   readonly revision?: CollectionRevision;
 }
 
-/** `recipe admit`'s `--id --version --family --title`. */
+/** What `recipe admit` saves a recipe under: its `--id`, `--version`, `--family` and `--title`. */
 export interface RecipeHeader {
   readonly id: PresetId;
   readonly version: Version;
@@ -49,7 +61,7 @@ export interface RecipeHeader {
   readonly title: string;
 }
 
-/** A command the local service answers. */
+/** A command that needs the local service: to read collections, or to change or save something. */
 export type ServiceCommand =
   | ({ readonly name: 'describe' | 'list' } & OutOption)
   | ({
@@ -79,7 +91,7 @@ export type ServiceCommand =
       OutOption)
   | ({ readonly name: 'recipe-instantiate'; readonly expansion: ExpansionRequest } & OutOption);
 
-/** A local build-spec profile command. Each writes its text answer to `--out` when given. */
+/** A `profile` command. It runs on this machine alone and never talks to the service. */
 export type ProfileCommand =
   | ({ readonly name: 'profile-describe'; readonly profile: ProfileId } & OutOption)
   | ({
@@ -94,40 +106,43 @@ export type ProfileCommand =
       readonly file: FilePath;
     } & OutOption);
 
-/** Any `pnpm canvas` command. */
+/** Any `pnpm canvas` command, checked. */
 export type Command = { readonly name: 'help' } | ServiceCommand | ProfileCommand;
 
-/** A command word, after the family words (`theme`, `recipe`, `profile`) are joined to theirs. */
+/** A command's name. Two-word commands are joined with a dash: `recipe admit` is `recipe-admit`. */
 export type CommandName = Command['name'];
 
-/** The commands that send one DSL source to Authoring. */
+/** The commands that send one source file to Authoring to change a collection. */
 export type ChangeCommand = Extract<
   ServiceCommand,
   { readonly name: 'create' | 'replace' | 'patch' | 'preview' }
 >;
 
-/** The commands that admit one preset file. */
+/** The commands that save one theme or recipe file for reuse. */
 export type AdmitCommand = Extract<
   ServiceCommand,
   { readonly name: 'theme-admit' | 'recipe-admit' }
 >;
 
 /**
- * What a DSL change asks Authoring to check: `create` needs the collection absent; `replace` and
- * `patch` need the revision the agent read.
+ * What Authoring must check before a change: for `create`, that the collection doesn't exist yet;
+ * for `replace` and `patch`, that it is still at the revision the agent read.
  */
 export type ChangeIntent =
   { readonly mode: 'create' } | ({ readonly mode: 'replace' | 'patch' } & RevisionOption);
 
 /** Where a service command is sent (`--server`), and the workspace it uses (`--workspace`). */
 export interface ServerAndWorkspace {
-  /** `--server`: the service's loopback origin. */
+  /** `--server`: the service's address, always on this machine. */
   readonly server: LoopbackOrigin;
-  /** `--workspace`: the directory holding the agent credential and the `requests` journal. */
+  /** `--workspace`: the folder holding the agent's credential and the saved requests. */
   readonly workspace: FilePath;
 }
 
-/** The command and what it needs. Compose binds ports by `kind`; routing is decided once, here. */
+/**
+ * A checked command, sorted by what it needs to run: nothing (`help`), this machine alone
+ * (`profile`), or the service (`service`, with where to send it).
+ */
 export type ParsedCommand =
   | { readonly kind: 'help' }
   | { readonly kind: 'profile'; readonly command: ProfileCommand }

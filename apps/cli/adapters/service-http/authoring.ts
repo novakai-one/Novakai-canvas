@@ -9,7 +9,7 @@ import type { ServiceAuthoring } from '../../contract/ports/service-authoring.js
 import type { RetainedRequest } from '../../contract/records/retained-request.js';
 import type {
   ChangePreview,
-  Observed,
+  ServiceAnswer,
   ReceiptLookup,
   SubmitMode,
 } from '../../contract/records/service-answers.js';
@@ -84,7 +84,7 @@ async function send(
   transport: TransportPost,
   retained: RetainedRequest,
   mode: SubmitMode,
-): Promise<Result<Observed<unknown>>> {
+): Promise<Result<ServiceAnswer<unknown>>> {
   const answer = await transport.post(routes[mode], {
     version: 1,
     generation: retained.generation,

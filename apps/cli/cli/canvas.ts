@@ -1,7 +1,12 @@
 /*
- * `pnpm canvas`: argv → runCli. A command's text prints on stdout; a failure prints as lines on
- * stderr. Any failure exits 1. No credential or request envelope is ever printed. After a sent
- * request the caller recovers with `canvas receipt ID`, then `canvas retry ID`.
+ * Why this file exists
+ *
+ * AI agents can't click a canvas, so they type commands: `pnpm canvas read my-diagram`. Something
+ * has to take those words from the terminal and print what comes back.
+ *
+ * This file is that program. It hands the words to `runCli`, prints the answer on stdout or the
+ * failure on stderr, and exits with 1 on any failure. It never prints the agent's token or a
+ * request's contents.
  */
 import { fileURLToPath } from 'node:url';
 import type { Result } from '../contract/index.js';

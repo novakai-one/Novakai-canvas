@@ -11,7 +11,7 @@ import type { RenderEvidence } from '../../contract/records/render-failure.js';
 import type { RenderFault } from '../../contract/records/render-fault.js';
 import type { SourceFile } from '../../contract/records/source-file.js';
 import type { Result } from '../../contract/errors.js';
-import { faulted, success } from '../../contract/errors.js';
+import { renderFaultFailure, success } from '../../contract/errors.js';
 import { mapped } from '../shared/results.js';
 
 /**
@@ -42,7 +42,7 @@ function themedText(
   parsed: ParsedSource,
   theme: ThemeChoice,
 ): Result<string, RenderFault> {
-  if (parsed.kind !== 'canvas') return faulted({ code: 'collection-required' });
+  if (parsed.kind !== 'canvas') return renderFaultFailure({ code: 'collection-required' });
   const field = parsed.declaration.fields.theme;
   if (field === undefined) return inserted(source, theme, parsed.declaration.fields.title?.span);
   return success(replaced(source, field.span, theme));
@@ -66,7 +66,7 @@ function inserted(
   theme: ThemeChoice,
   title: Span | undefined,
 ): Result<string, RenderFault> {
-  if (title === undefined) return faulted({ code: 'collection-title-required' });
+  if (title === undefined) return renderFaultFailure({ code: 'collection-title-required' });
   const offset = title.end.offset;
   return success(
     source.slice(0, offset) + ' theme=' + JSON.stringify(theme) + source.slice(offset),

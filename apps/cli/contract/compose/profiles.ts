@@ -1,7 +1,11 @@
 /*
- * Profile-command wiring: local files, Language and Language's collection profiles. Local only;
- * profile commands need no credential and never reach the service. Failures are returned as
- * values; `cli/canvas.ts` prints them.
+ * Why this file exists
+ *
+ * The `profile` commands run on this machine alone. `profile lint my-spec.canvas --profile
+ * build-spec@1` reads a file, parses it and checks it, with no service and no credential.
+ *
+ * This file plugs in what those commands use (real files, Language and its profiles), then runs
+ * the command. Mistakes come back as values; `cli/canvas.ts` prints them.
  */
 import { describeProfile, lintProfile, scaffoldProfile } from '@novakai/canvas-language';
 import { createLocalFiles } from '../../adapters/files/local-files.js';
@@ -11,7 +15,10 @@ import type { CollectionProfiles } from '../ports/collection-profiles.js';
 import type { ProfileCommand } from '../records/command.js';
 import { composeLanguage } from './language.js';
 
-/** Runs one profile command. Fails as the command does. */
+/**
+ * Runs one `profile` command with real files, and gives back the text to print. Fails as the
+ * command does.
+ */
 export async function runProfile(command: ProfileCommand): Promise<Result<string>> {
   const files = createLocalFiles();
   return runProfileCommand(command, {
@@ -22,7 +29,7 @@ export async function runProfile(command: ProfileCommand): Promise<Result<string
   });
 }
 
-/** Language's collection profiles as the CLI's port. Never fails. */
+/** Language's profiles, in the shape core asks for. Never fails. */
 function composeProfiles(): CollectionProfiles {
   return { describe: describeProfile, scaffold: scaffoldProfile, lint: lintProfile };
 }

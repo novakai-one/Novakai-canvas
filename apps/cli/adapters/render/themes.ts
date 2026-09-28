@@ -9,7 +9,7 @@ import type { LoweredIntent } from '@novakai/canvas-language';
 import type { Templates } from '@novakai/canvas-templates';
 import type { RenderEvidence } from '../../contract/records/render-failure.js';
 import type { FontBinding, RenderThemes } from '../../contract/ports/render-themes.js';
-import { faulted, nativeFault, success, type Result } from '../../contract/errors.js';
+import { renderFaultFailure, nativeFault, success, type Result } from '../../contract/errors.js';
 import type {
   Assets,
   Catalog,
@@ -57,7 +57,7 @@ function admittedTheme(
   input: ThemeInput,
 ): Result<Catalog, RenderEvidence> {
   const admission = z.json().safeParse(input.theme);
-  if (!admission.success) return faulted(nativeFault(admission.error));
+  if (!admission.success) return renderFaultFailure(nativeFault(admission.error));
   const prepared = owners.prepareTheme(admission.data, input.catalog, input.fonts, owners);
   return plannedTheme(owners, input.catalog, prepared);
 }

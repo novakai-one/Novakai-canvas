@@ -9,7 +9,7 @@ import { matchedReceipt } from '../reads/receipt.js';
 import type { ServiceReads } from '../../contract/ports/service-reads.js';
 import type { RequestJournal } from '../../contract/ports/request-journal.js';
 import type { JournalRecord } from '../../contract/records/retained-request.js';
-import type { Observed, ReceiptLookup } from '../../contract/records/service-answers.js';
+import type { ServiceAnswer, ReceiptLookup } from '../../contract/records/service-answers.js';
 import type { RequestId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 
@@ -39,7 +39,7 @@ export async function replayRetainedRequest(
 /** Receipt absence permits explicit caller-requested replay; changed Authoring preconditions remain rejected by the owner. */
 async function reconciled(
   record: JournalRecord,
-  lookup: Observed<ReceiptLookup>,
+  lookup: ServiceAnswer<ReceiptLookup>,
   dependencies: RetryDependencies,
 ): Promise<Result<string>> {
   if (lookup.value.kind === 'committed')

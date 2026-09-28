@@ -18,7 +18,7 @@ import type {
 } from '../../contract/records/foreign.js';
 import type { RetainedRequest } from '../../contract/records/retained-request.js';
 import type { StagedBackup } from '../../contract/records/staged-resource.js';
-import type { Observed, PresetPreparation } from '../../contract/records/service-answers.js';
+import type { ServiceAnswer, PresetPreparation } from '../../contract/records/service-answers.js';
 import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
 import { assetBindings, stageResources } from '../resources/stage.js';
@@ -144,7 +144,7 @@ async function retain(
 function retainedPreset(
   command: AdmitCommand,
   prepared: PreparedPreset,
-  current: Observed<Snapshot>,
+  current: ServiceAnswer<Snapshot>,
   requestIds: RequestIds,
 ): Result<RetainedRequest> {
   const requestId = requestIdFor(command, requestIds);

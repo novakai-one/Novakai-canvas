@@ -1,11 +1,12 @@
 /*
- * `pnpm render:png` wiring: builds the ports of one read-only render and injects them. The
- * service's headless bindings, the resource reader and the render's input files, raster engine and
- * section files are built once; `open` makes the render's temporary asset store, prepares the
- * installation in it, builds Language, the Design System and Templates over it, and joins the
- * environment's sources, assets, themes and output ports from the adapters in adapters/render/.
- * Not pure: the adapters touch the filesystem. Failures are values, and a failed `open` closes the
- * store it made; a render changes nothing stored, so the caller fixes the input and runs it again.
+ * Why this file exists
+ *
+ * render:png's core decides what to draw, but it can't touch a file or import the parts that
+ * draw. Something must build those parts for real: the file readers, the PNG engine, a throwaway
+ * font and image store, Language, the Design System, Templates and the service's layout.
+ *
+ * This file builds them for one render and hands them over as `RenderPorts`. If opening fails
+ * part way, it closes the store it made. A render never changes a saved collection.
  */
 import { join } from 'node:path';
 import {
@@ -32,15 +33,15 @@ import type { RenderOutput } from '../ports/render-output.js';
 import type { RenderRequest } from '../records/render.js';
 import type { RenderEvidence } from '../records/render-failure.js';
 import type { HeadlessBindings, Language } from '../records/foreign.js';
-import { faulted, nativeFault, success, type Result } from '../errors.js';
+import { renderFaultFailure, nativeFault, success, type Result } from '../errors.js';
 import { composeLanguage } from './language.js';
 import { composeThemeGrammar } from './theme-grammar.js';
 
 /**
- * The ports of one render. Rejects when the service's render adapters cannot be imported; the
- * composition root reports that as `render-unavailable`.
+ * Builds everything one render needs. Rejects if the service's drawing code can't be loaded;
+ * `compose.ts` turns that into `render-unavailable`.
  */
-export async function renderPorts(request: RenderRequest): Promise<RenderPorts> {
+export async function composeRenderPorts(request: RenderRequest): Promise<RenderPorts> {
   const service = await createHeadlessBindings();
   return {
     open: () => openEnvironment(request, service),
@@ -106,7 +107,7 @@ async function environmentIn(
 
 /** A step that threw instead of returning its failure, as `provider-failed` with its evidence. */
 function thrown(error: unknown): Result<never, RenderEvidence> {
-  return faulted(nativeFault(error));
+  return renderFaultFailure(nativeFault(error));
 }
 
 /** `error` as the outcome once `store` is closed; a failed close is not reported over it. */

@@ -1,10 +1,17 @@
 /*
- * A UTF-8 source file as read: its checked path and its text. Pure declaration. The adapter that
- * reads the file mints the path; Language checks the text later.
+ * Why this file exists
+ *
+ * render:png draws from `.canvas` files: `--collection walk.canvas`, or the collections that ship
+ * with the repo. It reads each file's text before Language parses it. The path has to stay with
+ * the text, because a font or image the source names, such as `assets/logo.png`, is found next to
+ * that file.
+ *
+ * This file names that pair: the path and the text. It declares one type only; the text isn't
+ * checked here.
  */
 import type { FilePath } from '../brands.js';
 
-/** One file's text and the path it was read from. Its resources resolve against that directory. */
+/** One source file's text, not checked yet, and the path it was read from. */
 export interface SourceFile {
   readonly file: FilePath;
   readonly source: string;

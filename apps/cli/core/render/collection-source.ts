@@ -13,7 +13,7 @@ import type { RenderFault } from '../../contract/records/render-fault.js';
 import type { SourceFile } from '../../contract/records/source-file.js';
 import { presetId, type CollectionName, type PresetId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
-import { faulted, success } from '../../contract/errors.js';
+import { renderFaultFailure, success } from '../../contract/errors.js';
 
 /** What choosing a source uses: the render's file reads and Language's parse. */
 export interface SourceDependencies {
@@ -89,7 +89,7 @@ function onlyMatch(
 ): Result<SourceFile, RenderFault> {
   const [match] = matches;
   if (matches.length !== 1 || match === undefined)
-    return faulted({ code: 'collection-selection', id: name, matches: matches.length });
+    return renderFaultFailure({ code: 'collection-selection', id: name, matches: matches.length });
   return success(match);
 }
 

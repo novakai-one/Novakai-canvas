@@ -1,7 +1,13 @@
 /*
- * The collection profiles the profile commands answer with: Language's `describeProfile`,
- * `scaffoldProfile` and `lintProfile`. Declaration only; compose binds them in
- * `compose/profiles.ts`. Pure: nothing is read or written, and nothing fails.
+ * Why this file exists
+ *
+ * The `profile` commands help an agent write a collection that follows a profile, such as
+ * `build-spec@1`. `profile scaffold build-spec@1 --id my-spec --title "My spec"` prints a starter
+ * source to fill in. Language owns the profiles and does that work.
+ *
+ * This file names the three things the profile commands ask Language for: describe a profile,
+ * start a source from it, and check a source against it. None of them touches a file, and none
+ * can fail.
  */
 import type { ProfileId } from '../brands.js';
 import type {
@@ -11,18 +17,21 @@ import type {
   ProfileStarter,
 } from '../records/foreign.js';
 
-/** Language's collection profiles. */
+/** What Language does for the `profile` commands. */
 export interface CollectionProfiles {
-  /** The profile's descriptor: its required slots, appendix rule, conventions and notes. */
+  /** What the profile asks for: the parts a source must have, and its rules and notes. */
   describe(profile: ProfileId): ProfileDescriptor;
 
-  /** The profile's starter source, named with the starter's collection ID and title. */
+  /** A starter source for the profile, as text, using the starter's collection ID and title. */
   scaffold(
     profile: ProfileId,
     starter: ProfileStarter,
   ): string;
 
-  /** The parsed source checked against the profile: `passed`, `failed` or `unsupported-source`. */
+  /**
+   * Checks a parsed source against the profile: `passed`, `failed` (with findings) or
+   * `unsupported-source`.
+   */
   lint(
     profile: ProfileId,
     source: ParsedSource,

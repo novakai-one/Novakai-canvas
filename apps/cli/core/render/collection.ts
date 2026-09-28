@@ -11,7 +11,7 @@ import type { CollectionSelector, ThemeChoice } from '../../contract/records/ren
 import type { RenderEvidence } from '../../contract/records/render-failure.js';
 import type { SourceFile } from '../../contract/records/source-file.js';
 import type { Result } from '../../contract/errors.js';
-import { faulted, success } from '../../contract/errors.js';
+import { renderFaultFailure, success } from '../../contract/errors.js';
 import { collectionSource, type SourceDependencies } from './collection-source.js';
 import { pinResources } from './pins.js';
 import { sourceAssets, type AssetDependencies } from './source-assets.js';
@@ -81,6 +81,6 @@ function withChoice(
 ): Result<Collection, RenderEvidence> {
   if (choice === undefined) return sources.validate(collection);
   const pin = pins.themes[choice];
-  if (pin === undefined) return faulted({ code: 'missing-theme', theme: choice });
+  if (pin === undefined) return renderFaultFailure({ code: 'missing-theme', theme: choice });
   return sources.validate({ ...collection, theme: pin });
 }
