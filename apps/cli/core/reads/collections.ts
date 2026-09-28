@@ -1,7 +1,12 @@
 /*
- * `list`'s text: one line per live collection in the workspace snapshot. Pure apart from the
- * injected Model check. An invalid stored collection is listed as invalid, never hidden, so an
- * invalid library cannot pass for an empty one.
+ * Why this file exists
+ *
+ * `pnpm canvas list` shows what the workspace holds, one collection per line:
+ * `my-diagram  r3  My diagram  4 sections`. The service sends saved collections as plain data, and
+ * one may not be valid. An invalid one must still show, or a broken library could look empty.
+ *
+ * This file writes those lines, asking Model to check each collection first. It never hides or
+ * repairs a collection.
  */
 import type { CollectionValidator } from '../../contract/ports/collection-validator.js';
 import type { WorkspaceSnapshot, StoredRecord } from '../../contract/records/foreign.js';
@@ -9,12 +14,16 @@ import type { WorkspaceSnapshot, StoredRecord } from '../../contract/records/for
 /** What `list` prints when the workspace holds no live collection. */
 const emptyLibrary = 'No collections yet. Use canvas create diagram.canvas.';
 
-/** One `ID  rN  title  N sections` line per live collection, in snapshot order. */
-export function collectionLines(
+/**
+ * Writes one line per saved collection, as `list` prints: ID, revision, title and section count,
+ * separated by tabs. Deleted collections are left out, and one Model refuses shows as
+ * `Invalid collection`. With none, it writes `No collections yet. Use canvas create diagram.canvas.`
+ */
+export function formatCollectionList(
   snapshot: WorkspaceSnapshot,
-  reader: CollectionValidator,
+  validator: CollectionValidator,
 ): string {
-  const lines = snapshot.records.filter(isLiveCollection).map((record) => line(record, reader));
+  const lines = snapshot.records.filter(isLiveCollection).map((record) => line(record, validator));
   if (lines.length === 0) return emptyLibrary;
   return lines.join('\n');
 }

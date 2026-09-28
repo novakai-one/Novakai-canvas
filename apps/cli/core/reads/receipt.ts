@@ -1,7 +1,12 @@
 /*
- * Receipt text: a receipt lookup, and the committed receipt an apply or retry must end with. Pure.
- * A receipt reports the confirmed request and workspace sequence, never an optimistic saved
- * status.
+ * Why this file exists
+ *
+ * A change is saved only when Authoring writes a receipt for it. `pnpm canvas receipt req-1`
+ * prints `committed: req-1` and `Workspace sequence: 5`, or `No committed receipt found.`
+ * `apply` and `retry` end with the same two lines.
+ *
+ * This file writes that text. First it checks the receipt is for the request asked about: a
+ * receipt for another request proves nothing. It never says a change was saved without a receipt.
  */
 import type { Receipt } from '../../contract/records/foreign.js';
 import type { ReceiptLookup } from '../../contract/records/service-answers.js';
@@ -10,22 +15,24 @@ import type { Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 
 /**
- * `receipt`'s text: no commit is information, not a failure. Fails with `invalid-response` when
- * the receipt names another request.
+ * Writes what `receipt` prints: the receipt, or `No committed receipt found.` when there is none.
+ * Finding none is an answer, not a mistake.
+ * The mistake it can find: a receipt for another request (`invalid-response`).
  */
-export function lookedUpReceipt(
+export function formatReceiptLookup(
   lookup: ReceiptLookup,
   request: RequestId,
 ): Result<string> {
   if (lookup.kind === 'none') return success('No committed receipt found.');
-  return matchedReceipt(lookup.receipt, request);
+  return formatReceipt(lookup.receipt, request);
 }
 
 /**
- * The receipt's outcome, request and workspace sequence. Fails with `invalid-response` when the
- * receipt names another request: it cannot confirm this one.
+ * Checks the receipt is for `request`, then writes it as text: `committed: req-1`, then
+ * `Workspace sequence: 5`.
+ * The mistake it can find: a receipt for another request (`invalid-response`).
  */
-export function matchedReceipt(
+export function formatReceipt(
   receipt: Receipt,
   request: RequestId,
 ): Result<string> {

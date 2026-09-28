@@ -1,6 +1,12 @@
 /*
- * A CLI failure as terminal lines. Pure and display-only: the Result stays structured for
- * machine consumers, and nothing parses these lines back.
+ * Why this file exists
+ *
+ * When a command fails, the agent reads why in the terminal, then fixes it. A source Language
+ * can't parse prints `invalid-source: Language rejected this source`, then a line per problem,
+ * such as `invalid-value 3:11 kind: Unknown enum value`, then what to do next.
+ *
+ * This file turns one failure into those lines. It only makes text: the failure stays a typed
+ * value for code to branch on, and nothing reads these lines back.
  */
 import type { CliFailure, LocalFailure } from '../../contract/errors.js';
 import type { FailureSource, ServiceFailureRecord } from '../../contract/records/foreign.js';
@@ -13,9 +19,10 @@ type ValidationIssue = ValidationSource['diagnostics'][number];
 type RecordIssue = Extract<ValidationIssue, { readonly path: string }>;
 
 /**
- * `code: message`, the evidence lines, then the recovery line. A resource failure puts its
- * declaration's `file:line:column asset @alias` before the message. A foreign failure prints the
- * owner's own code, message, evidence and recovery, exactly as the owner wrote them.
+ * Turns a failure into the lines to print: `code: message`, the lines saying why, then what to do
+ * next.
+ * A font or image mistake names its place first, such as `walk.canvas:4:1 asset @logo: …`.
+ * A failure the service package wrote prints exactly as written.
  */
 export function formatFailure(error: CliFailure): readonly string[] {
   switch (error.code) {

@@ -1,14 +1,25 @@
 /*
- * Parsing one DSL source through the injected Language, for DSL changes, recipe admission and
- * profile lint. Pure apart from the parser. Language's diagnostics are kept whole under
- * `invalid-source`; the caller fixes the source and runs the command again.
+ * Why this file exists
+ *
+ * Some commands must understand `.canvas` text before they do anything else: `create`,
+ * `replace`, `patch`, `preview`, `recipe admit` and `profile lint`. Text Language can't parse
+ * stops there, with Language's reasons. `node @a thing "A"` fails with `invalid-source`, because
+ * `thing` isn't a kind of node.
+ *
+ * This file parses the text the same way for all of them, and keeps Language's reasons whole. It
+ * never reads a file or sends anything.
  */
 import type { SourceParser } from '../../contract/ports/source-parser.js';
 import type { ParsedSource } from '../../contract/records/foreign.js';
 import type { Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 
-/** The parsed source. Fails with `invalid-source`; `source` holds Language's diagnostics. */
+/**
+ * Parses `.canvas` text with Language. `text` is the file's text as read; this is where it is
+ * first checked.
+ * The mistake it can find: text Language can't parse (`invalid-source`; its `source` holds
+ * Language's reasons).
+ */
 export function parseSource(
   language: SourceParser,
   text: string,

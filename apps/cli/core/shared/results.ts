@@ -1,11 +1,18 @@
 /*
- * Combining results. Pure. The first failure wins; the caller reports it and no partial value is
- * returned. The failure type defaults to the CLI's own; render rules combine render evidence.
+ * Why this file exists
+ *
+ * Many CLI steps build one thing from other steps that can each fail. `render:png` needs both a
+ * collection and an output folder. If either was typed wrong, it must stop with that mistake, not
+ * carry on with half a request.
+ *
+ * This file joins steps' `Result`s (`Success` or `Failure`, see `contract/errors.ts`): all the
+ * values, or the first failure, unchanged. The failure type is `CliFailure` unless a caller names
+ * another. It never makes up a value for a step that failed.
  */
 import type { CliFailure, Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 
-/** Preserve the first typed failure without inventing successful values for rejected members. */
+/** Gives back every step's value, in order, or the first failure. */
 export function combined<T, E = CliFailure>(
   results: readonly Result<T, E>[],
 ): Result<readonly T[], E> {
@@ -14,7 +21,7 @@ export function combined<T, E = CliFailure>(
   return { ok: true, value: results.filter((item) => item.ok).map((item) => item.value) };
 }
 
-/** `make(value)` when `result` succeeded; otherwise its failure, unchanged. */
+/** Makes a new value, with `make`, from a step that worked. A failed step is passed on unchanged. */
 export function mapped<T, U, E = CliFailure>(
   result: Result<T, E>,
   make: (value: T) => U,
@@ -23,20 +30,23 @@ export function mapped<T, U, E = CliFailure>(
   return success(make(result.value));
 }
 
-/** `make(a, b)` when both succeeded; otherwise the first failure, `a` before `b`. */
+/**
+ * Makes one value, with `make`, from two steps that both worked. Otherwise gives back the first
+ * failure, checking `first` before `second`.
+ */
 export function joined<A, B, T>(
-  a: Result<A>,
-  b: Result<B>,
-  make: (a: A, b: B) => T,
+  first: Result<A>,
+  second: Result<B>,
+  make: (first: A, second: B) => T,
 ): Result<T> {
-  if (!a.ok) return a;
-  if (!b.ok) return b;
-  return success(make(a.value, b.value));
+  if (!first.ok) return first;
+  if (!second.ok) return second;
+  return success(make(first.value, second.value));
 }
 
 /**
- * The failure for a value of no known kind: `invalid-command`. The `never` type proves every kind
- * is handled, so this is unreachable.
+ * Gives back `invalid-command` for a case a `switch` should never reach. Its `never` parameter
+ * makes the compiler prove every case is handled, so in practice it never runs.
  */
 export function unsupported(value: never): Result<never> {
   void value;

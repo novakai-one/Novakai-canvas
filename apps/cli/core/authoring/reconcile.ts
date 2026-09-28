@@ -5,7 +5,7 @@
  */
 import { submit } from './submit.js';
 import type { SubmitDependencies } from './submit.js';
-import { matchedReceipt } from '../reads/receipt.js';
+import { formatReceipt } from '../reads/receipt.js';
 import type { ServiceReads } from '../../contract/ports/service-reads.js';
 import type { RequestJournal } from '../../contract/ports/request-journal.js';
 import type { JournalRecord } from '../../contract/records/retained-request.js';
@@ -43,6 +43,6 @@ async function reconciled(
   dependencies: RetryDependencies,
 ): Promise<Result<string>> {
   if (lookup.value.kind === 'committed')
-    return matchedReceipt(lookup.value.receipt, record.request.request);
+    return formatReceipt(lookup.value.receipt, record.request.request);
   return submit({ ...record, generation: lookup.generation }, 'apply', dependencies);
 }

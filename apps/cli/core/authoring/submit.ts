@@ -6,7 +6,7 @@
  */
 import { restoreResources } from '../resources/restore.js';
 import type { RestoreDependencies } from '../resources/restore.js';
-import { matchedReceipt } from '../reads/receipt.js';
+import { formatReceipt } from '../reads/receipt.js';
 import { prepare } from './prepare.js';
 import type { PrepareDependencies } from './prepare.js';
 import type { ChangeCommand } from '../../contract/records/command.js';
@@ -103,5 +103,5 @@ async function applied(
 ): Promise<Result<string>> {
   const receipt = await authoring.apply(retained);
   if (!receipt.ok) return receipt;
-  return matchedReceipt(receipt.value, retained.request.request);
+  return formatReceipt(receipt.value, retained.request.request);
 }
