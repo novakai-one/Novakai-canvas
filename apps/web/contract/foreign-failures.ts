@@ -4,7 +4,7 @@
  * owner said. Pure; never throws. Whoever shows the failure owns recovery.
  */
 import type { ErrorCode as AuthoringErrorCode } from '@novakai/canvas-authoring';
-import type { ErrorCode as ServiceErrorCode, OperationSource } from '@novakai/canvas-service';
+import type { ErrorCode as ServiceErrorCode, CapabilityFailure } from '@novakai/canvas-service';
 import type { Diagnostic as CanvasDiagnostic } from '@novakai/canvas-canvas';
 import type { ValidationError as LibraryFailure } from '@novakai/canvas-library';
 import type { Diagnostic as LayoutDiagnostic } from '@novakai/canvas-layout';
@@ -29,7 +29,7 @@ export type OwnerResult<T, E> =
  */
 export function foreignFailure(
   owner: WireOwner,
-  source: OperationSource,
+  source: CapabilityFailure,
 ): ForeignDiagnostic {
   const [first, second] = answerOrder[owner];
   return wireFailure(first, source) ?? wireFailure(second, source) ?? unrecognised(source);
@@ -38,7 +38,7 @@ export function foreignFailure(
 /** A service wire outcome as a web result; a failure goes through {@link foreignFailure}. */
 export function wireOutcome<T>(
   owner: WireOwner,
-  outcome: OwnerResult<T, OperationSource>,
+  outcome: OwnerResult<T, CapabilityFailure>,
 ): Result<T> {
   return ownerResult(outcome, (source) => foreignFailure(owner, source));
 }
@@ -131,7 +131,7 @@ const serviceCodes: Readonly<Record<ServiceErrorCode, true>> = Object.freeze({
 /** `source` as `owner`'s failure; undefined when its code is not one of `owner`'s. */
 function wireFailure(
   owner: WireOwner,
-  source: OperationSource,
+  source: CapabilityFailure,
 ): ForeignDiagnostic | undefined {
   switch (owner) {
     case 'authoring':
@@ -144,21 +144,21 @@ function wireFailure(
 }
 
 /** `source` as an Authoring failure; undefined when its code is not Authoring's. */
-function authoringFailure(source: OperationSource): ForeignDiagnostic | undefined {
+function authoringFailure(source: CapabilityFailure): ForeignDiagnostic | undefined {
   const code = source.code;
   if (!isAuthoringCode(code)) return undefined;
   return { origin: 'authoring', code, source, ...textOf(source) };
 }
 
 /** `source` as a Service failure; undefined when its code is not the Service's. */
-function serviceFailure(source: OperationSource): ForeignDiagnostic | undefined {
+function serviceFailure(source: CapabilityFailure): ForeignDiagnostic | undefined {
   const code = source.code;
   if (!isServiceCode(code)) return undefined;
   return { origin: 'service', code, source, ...textOf(source) };
 }
 
 /** A wire failure whose code no known owner uses. */
-function unrecognised(source: OperationSource): ForeignDiagnostic {
+function unrecognised(source: CapabilityFailure): ForeignDiagnostic {
   return { origin: 'unrecognised', code: 'unrecognised-failure', source, ...textOf(source) };
 }
 

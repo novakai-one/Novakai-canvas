@@ -35,11 +35,8 @@ export interface ServiceLayoutTools {
   readonly inspectDocument: RenderOutput['inspect'];
 }
 
-/** A render lays out from scratch: there is no earlier layout to keep the boxes steady against. */
-const noPreviousScene = null;
-
-/** The ID every headless render job gets. */
-const headlessJobId = 'headless';
+/** Why a headless render job runs; the service names every such job `headless`. */
+const headlessPurpose = 'headless';
 
 /**
  * Gives the render its `layOut` and `inspect` steps, using the service's `tools`. `layOut` fails
@@ -80,7 +77,7 @@ function makeRenderJob(
     return library;
   }
   const view = { collections: [collection], presets: catalog, library: library.value };
-  return renderJobs.create(collection, view, noPreviousScene, headlessJobId);
+  return renderJobs.create(collection, view, headlessPurpose);
 }
 
 /** Makes the empty library a headless render runs against, checked by Library. */

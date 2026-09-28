@@ -12,9 +12,10 @@
 import { join } from 'node:path';
 import {
   createHeadlessBindings,
-  prepareInstallation,
+  hostPath,
+  prepareBuiltins,
   validReport,
-  type BuiltinResources,
+  type PreparedBuiltins,
 } from '@novakai/canvas-service';
 import { composeDesignSystem, type DesignSystem } from '@novakai/canvas-design-system';
 import type { LoweredIntent } from '@novakai/canvas-language';
@@ -78,7 +79,7 @@ async function openEnvironment(
 /** Language, the Design System, Templates and the shipped files one render draws with. */
 interface RenderCapabilities {
   readonly assets: TempAssetStore['assets'];
-  readonly installation: BuiltinResources;
+  readonly installation: PreparedBuiltins;
   readonly system: Pick<DesignSystem, 'resolve' | 'resolveTheme' | 'projectDiagram'>;
   readonly language: Language;
   readonly templates: Pick<Templates<LoweredIntent>, 'read' | 'planAdmission'>;
@@ -113,9 +114,9 @@ async function prepareEnvironment(
   service: HeadlessTools,
   store: TempAssetStore,
 ): Promise<Result<RenderEnvironment, RenderFailureSource>> {
-  const installation = await prepareInstallation(
-    join(request.root, 'resources'),
-    join(request.root, 'capability/design-system'),
+  const installation = await prepareBuiltins(
+    hostPath.parse(join(request.root, 'resources')),
+    hostPath.parse(join(request.root, 'capability/design-system')),
     store.assets,
   );
   if (!installation.ok) {
@@ -142,7 +143,7 @@ async function closeStoreAfterFailure(
 function composeCapabilities(
   service: HeadlessTools,
   assets: TempAssetStore['assets'],
-  installation: BuiltinResources,
+  installation: PreparedBuiltins,
 ): RenderCapabilities {
   const system = composeDesignSystem();
   const language = createLanguageWithModel();
@@ -196,7 +197,9 @@ function createLayoutTools(
   capabilities: RenderCapabilities,
   setup: RenderSetup,
 ): ServiceLayoutTools {
-  const wasmResource = join(setup.request.root, 'resources/vendor/layout/libavoid.wasm');
+  const wasmResource = hostPath.parse(
+    join(setup.request.root, 'resources/vendor/layout/libavoid.wasm'),
+  );
   const renderJobs = setup.service.createRenderJobs({
     ...capabilities,
     sources: capabilities.installation.tokens,

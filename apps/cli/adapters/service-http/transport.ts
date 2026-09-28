@@ -8,7 +8,7 @@
  * This file makes that call and unwraps the envelope. It sends only to the checked `--server`
  * address, never follows a redirect, never retries, and never shows the token.
  */
-import { responseEnvelope } from '@novakai/canvas-service';
+import { transportResponse } from '@novakai/canvas-service';
 import type {
   HttpTransport,
   ReadRoute,
@@ -125,7 +125,7 @@ function fetchOptions(
 
 /** Checks the answer is a service envelope, then reads its generation and outcome. */
 function unwrapEnvelope(answerBody: unknown): Result<ServiceAnswer<unknown>> {
-  const envelope = responseEnvelope.safeParse(answerBody);
+  const envelope = transportResponse.safeParse(answerBody);
   if (!envelope.success) {
     return invalidEnvelopeFailure();
   }

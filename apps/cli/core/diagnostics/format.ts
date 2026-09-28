@@ -16,8 +16,10 @@ import type {
 } from '../../contract/errors.js';
 import type { FailureSource, ServiceFailureRecord } from '../../contract/records/foreign.js';
 
-/** A batch of Language or Model issues: the evidence that is not a service failure. */
-type ValidationSource = Exclude<FailureSource, ServiceFailureRecord>;
+/** A batch of Language or Model issues: the evidence that is not a failure record. */
+type ValidationSource = Extract<FailureSource, { readonly diagnostics: unknown }>;
+/** A failure record kept as evidence: its code, path, message, and its own evidence and cleanup. */
+type SourceFailureRecord = Exclude<FailureSource, ValidationSource>;
 /** One issue in that batch: a Model issue (code, path) or a Language issue (code, span). */
 type ValidationIssue = ValidationSource['diagnostics'][number];
 /** A Model issue, addressed by its path. */
@@ -101,7 +103,7 @@ function isValidationSource(source: FailureSource): source is ValidationSource {
  * Writes a service failure record: its code, path and message, what to do next, then its own
  * evidence and its cleanup failure, in that order.
  */
-function serviceFailureLines(serviceFailure: ServiceFailureRecord): readonly string[] {
+function serviceFailureLines(serviceFailure: SourceFailureRecord): readonly string[] {
   const headline = `${serviceFailure.code} ${serviceFailure.path}: ${serviceFailure.message}`;
   const reasons = reasonLines(serviceFailure.source);
   const cleanupReasons = reasonLines(serviceFailure.cleanup);

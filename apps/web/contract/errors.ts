@@ -5,7 +5,7 @@
  * Declarations and pure constructors that never throw; whoever shows a failure owns recovery.
  */
 import type { ErrorCode as AuthoringErrorCode } from '@novakai/canvas-authoring';
-import type { ErrorCode as ServiceErrorCode, OperationSource } from '@novakai/canvas-service';
+import type { ErrorCode as ServiceErrorCode, CapabilityFailure } from '@novakai/canvas-service';
 import type { Diagnostic as CanvasDiagnostic } from '@novakai/canvas-canvas';
 import type { ValidationError as LibraryFailure } from '@novakai/canvas-library';
 import type { Diagnostic as LayoutDiagnostic } from '@novakai/canvas-layout';
@@ -30,12 +30,12 @@ export type ForeignDiagnostic = Text &
     | {
         readonly origin: 'authoring';
         readonly code: AuthoringErrorCode;
-        readonly source: OperationSource;
+        readonly source: CapabilityFailure;
       }
     | {
         readonly origin: 'service';
         readonly code: ServiceErrorCode;
-        readonly source: OperationSource;
+        readonly source: CapabilityFailure;
       }
     | Owned<'canvas', CanvasDiagnostic>
     | Owned<'layout', LayoutDiagnostic>
@@ -54,7 +54,7 @@ export type ForeignDiagnostic = Text &
     | {
         readonly origin: 'unrecognised';
         readonly code: 'unrecognised-failure';
-        readonly source: OperationSource;
+        readonly source: CapabilityFailure;
       }
   );
 

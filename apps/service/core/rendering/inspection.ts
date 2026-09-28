@@ -75,9 +75,10 @@ function invalidReport(refusal: Diagnostic): InspectionReport {
 
 /**
  * Builds the valid report from the drawn scene: its warnings, how many wires cross, how many
- * layout rules were relaxed, how many sections it has, and the engine versions.
+ * layout rules were relaxed, how many sections it has, and the engine versions. The CLI's headless
+ * render (`pnpm render:png`) reports with it too. Never fails.
  */
-function validReport(document: RenderDocument): InspectionReport {
+export function validReport(document: RenderDocument): InspectionReport {
   const scene = document.scene;
   return {
     valid: true,
