@@ -94,12 +94,7 @@ export async function runProfileCommand(
   return printOrWriteAnswer(answer.value, command, dependencies.writer);
 }
 
-/**
- * Passes the command to the code that does its work, and returns the answer. Reads → service
- * queries; `create`, `replace`, `patch`, `preview` → Authoring; `retry`, `apply` → replay the
- * retained request; `theme admit`, `recipe admit` → preset admission; `recipe instantiate` → one
- * service call. Fails as that code does.
- */
+/** Passes the command to the code that does its work, and returns that code's answer. */
 function answerServiceCommand(
   command: ServiceCommand,
   dependencies: ServiceCommandDependencies,
@@ -133,10 +128,7 @@ function answerServiceCommand(
   }
 }
 
-/**
- * `recipe instantiate`: the service expands the pinned recipe under the namespace, as editable
- * DSL. Nothing is written. Fails as the service call does.
- */
+/** Asks the service to turn the pinned recipe into diagram text, under the new namespace. */
 function instantiateRecipe(
   expansion: ExpansionRequest,
   dependencies: RecipeInstantiateDependencies,

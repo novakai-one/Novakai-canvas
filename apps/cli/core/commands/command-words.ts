@@ -37,30 +37,27 @@ export function pickCommandWords(wellFormed: WellFormedArguments): CommandWords 
   if (asksForHelp(wellFormed)) {
     return helpCommandWords;
   }
-  const typedWords = joinTwoWordCommand(wellFormed.words);
-  return splitCommandWord(typedWords);
+  const joinedWords = joinTwoWordCommand(wellFormed.words);
+  return splitCommandWord(joinedWords);
 }
 
-/** Whether --help (or -h) was given. */
+/** Whether `--help` (or `-h`) was typed. */
 function asksForHelp(wellFormed: WellFormedArguments): boolean {
   return wellFormed.flagValues.get('help') === true;
 }
 
-/**
- * `recipe admit FILE` becomes `recipe-admit FILE`: a leading `theme`, `recipe` or `profile` joins
- * the word after it. Other words, and any of those three typed alone, are returned as given.
- */
+/** Joins a leading `theme`, `recipe` or `profile` to the next word, as in `recipe-admit`. */
 function joinTwoWordCommand(words: readonly string[]): readonly string[] {
-  const [first, second, ...rest] = words;
-  const joinsNextWord = isCommandGroup(first) && second !== undefined;
-  if (!joinsNextWord) {
+  const [firstWord, secondWord, ...laterWords] = words;
+  const startsTwoWordCommand = isCommandGroup(firstWord) && secondWord !== undefined;
+  if (!startsTwoWordCommand) {
     return words;
   }
-  const twoWordCommand = `${first}-${second}`;
-  return [twoWordCommand, ...rest];
+  const twoWordCommand = `${firstWord}-${secondWord}`;
+  return [twoWordCommand, ...laterWords];
 }
 
-/** The first word as the command's word, and the words after it. With no words, it is missing. */
+/** Splits the first word off as the command's word, and keeps the rest as its operand words. */
 function splitCommandWord(words: readonly string[]): CommandWords {
   const [commandWord, ...operandWords] = words;
   return { commandWord, operandWords };

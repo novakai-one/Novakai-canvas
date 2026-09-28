@@ -11,9 +11,8 @@
 import { collectionId } from '../../contract/brands.js';
 import type { CollectionId, FilePath, ProfileId } from '../../contract/brands.js';
 import type { ProfileCommand } from '../../contract/records/command.js';
-import type { Result } from '../../contract/errors.js';
+import type { LocalFailure, Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
-import { checked } from '../shared/checks.js';
 import { lintWithoutProfileFlagFailure } from './failures.js';
 import type { FlagTextAsTyped } from './flags.js';
 import { checkFilePath, checkOutOption, checkProfileId } from './values.js';
@@ -108,7 +107,7 @@ export function buildProfileLintCommand(
   return success({ name: 'profile-lint', ...lintTarget.value, ...outOption.value });
 }
 
-/** The profile, then --id and --title. Fails with `unknown-profile`, then `invalid-arguments`. */
+/** Checks the profile, then `--id` and `--title`. */
 function checkScaffoldTarget(
   profileText: string,
   flags: FlagTextAsTyped,
@@ -124,10 +123,7 @@ function checkScaffoldTarget(
   return success({ profile: profile.value, ...scaffoldName.value });
 }
 
-/**
- * --id and --title, each given and not blank, then --id as a collection ID. Fails with
- * `invalid-arguments`.
- */
+/** Checks `--id` and `--title` were typed, then that `--id` is a valid collection ID. */
 function checkScaffoldName(flags: FlagTextAsTyped): Result<ScaffoldName> {
   const scaffoldText = requireScaffoldText(flags);
   if (!scaffoldText.ok) {
@@ -140,7 +136,7 @@ function checkScaffoldName(flags: FlagTextAsTyped): Result<ScaffoldName> {
   return success({ collection: collection.value, title: scaffoldText.value.title });
 }
 
-/** --id, then --title, each given and not blank. Fails with `invalid-arguments` naming the flag. */
+/** Checks that `--id`, then `--title`, were typed and aren't blank. */
 function requireScaffoldText(flags: FlagTextAsTyped): Result<ScaffoldText> {
   const idText = requireScaffoldFlag(flags.id, 'id');
   if (!idText.ok) {
@@ -153,26 +149,27 @@ function requireScaffoldText(flags: FlagTextAsTyped): Result<ScaffoldText> {
   return success({ idText: idText.value, title: title.value });
 }
 
-/** A scaffold flag's text, kept as given. Fails with `invalid-arguments` when missing or blank. */
+/** Checks one scaffold flag was typed and isn't blank, and keeps its text as typed. */
 function requireScaffoldFlag(
-  text: string | undefined,
+  flagText: string | undefined,
   flag: ScaffoldFlag,
 ): Result<string> {
-  if (!hasText(text)) {
-    return failure({ code: 'invalid-arguments', message: `Scaffold requires --${flag}.` });
+  if (!hasText(flagText)) {
+    return missingScaffoldFlagFailure(flag);
   }
-  return success(text);
+  return success(flagText);
 }
 
-/** The scaffold's --id as a collection ID, in Model's grammar. Fails with `invalid-arguments`. */
+/** Checks the scaffold's `--id` is a valid collection ID, such as `my-plan`. */
 function checkScaffoldId(idText: string): Result<CollectionId> {
-  return checked(collectionId, idText, {
-    code: 'invalid-arguments',
-    message: 'Scaffold --id must be a simple collection ID.',
-  });
+  const collection = collectionId.safeParse(idText);
+  if (!collection.success) {
+    return badScaffoldIdFailure();
+  }
+  return success(collection.data);
 }
 
-/** --profile, then the FILE. Fails as `checkLintProfile` does, then with `source-unavailable`. */
+/** Checks the `--profile` for `profile lint`, then the path of the file to check. */
 function checkLintTarget(
   fileText: string,
   profileText: string | undefined,
@@ -189,8 +186,8 @@ function checkLintTarget(
 }
 
 /**
- * lint's --profile. Fails with `unknown-profile`; a missing --profile is `invalid-arguments`, which
- * rule 2 in `accepted-flags.ts` already reported, so this case only keeps the check total.
+ * Checks the `--profile` for `profile lint`. (A missing `--profile` was already refused by rule 2
+ * in `accepted-flags.ts`; the check here only keeps the types honest.)
  */
 function checkLintProfile(profileText: string | undefined): Result<ProfileId> {
   if (profileText === undefined) {
@@ -199,7 +196,20 @@ function checkLintProfile(profileText: string | undefined): Result<ProfileId> {
   return checkProfileId(profileText);
 }
 
-/** Whether a scaffold flag was given with more than whitespace. */
-function hasText(text: string | undefined): text is string {
-  return text !== undefined && text.trim() !== '';
+/** Whether a scaffold flag was typed with text that isn't only spaces, tabs or line breaks. */
+function hasText(flagText: string | undefined): flagText is string {
+  return flagText !== undefined && flagText.trim() !== '';
+}
+
+/** Makes the mistake for `--id` or `--title` missing or blank (`invalid-arguments`). */
+function missingScaffoldFlagFailure(flag: ScaffoldFlag): Result<never, LocalFailure> {
+  return failure({ code: 'invalid-arguments', message: `Scaffold requires --${flag}.` });
+}
+
+/** Makes the mistake for a scaffold `--id` that isn't a collection ID (`invalid-arguments`). */
+function badScaffoldIdFailure(): Result<never, LocalFailure> {
+  return failure({
+    code: 'invalid-arguments',
+    message: 'Scaffold --id must be a simple collection ID.',
+  });
 }

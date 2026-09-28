@@ -101,7 +101,7 @@ export function unacceptedFlagFailure(
   return invalidArgumentsFailure(`--${flag} is not valid with ${commandAsTyped(name)}`);
 }
 
-/** The `invalid-arguments` mistake with `message`. */
+/** Makes an `invalid-arguments` mistake with this message. */
 function invalidArgumentsFailure(message: string): Result<never, LocalFailure> {
   return failure({ code: 'invalid-arguments', message });
 }
