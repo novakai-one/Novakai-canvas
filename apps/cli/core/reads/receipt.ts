@@ -44,12 +44,11 @@ export function formatReceipt(
   if (receipt.request !== request) {
     return otherRequestReceiptFailure();
   }
-  const receiptText = receiptLines(receipt);
-  return success(receiptText);
+  return success(receiptText(receipt));
 }
 
 /** Writes the receipt as two lines: its status and request, then the workspace sequence. */
-function receiptLines(receipt: Receipt): string {
+function receiptText(receipt: Receipt): string {
   const statusLine = `${receipt.outcome.status}: ${receipt.request}`;
   const sequenceLine = `Workspace sequence: ${receipt.sequence}`;
   return `${statusLine}\n${sequenceLine}`;

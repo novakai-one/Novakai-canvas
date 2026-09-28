@@ -16,14 +16,14 @@ import type {
 } from '../../contract/errors.js';
 import type { FailureSource, ServiceFailureRecord } from '../../contract/records/foreign.js';
 
-/** A validation batch: the evidence that is not an operation failure. */
+/** A batch of Language or Model issues: the evidence that is not a service failure. */
 type ValidationSource = Exclude<FailureSource, ServiceFailureRecord>;
-/** One validation diagnostic: a record issue (code, path) or a Language issue (code, span). */
+/** One issue in that batch: a Model issue (code, path) or a Language issue (code, span). */
 type ValidationIssue = ValidationSource['diagnostics'][number];
-/** A Model record issue addressed by its path. */
-type RecordIssue = Extract<ValidationIssue, { readonly path: string }>;
-/** A Language issue addressed by its place in the text. */
-type LanguageIssue = Exclude<ValidationIssue, RecordIssue>;
+/** A Model issue, addressed by its path. */
+type ModelIssue = Extract<ValidationIssue, { readonly path: string }>;
+/** A Language issue, addressed by its place in the text. */
+type LanguageIssue = Exclude<ValidationIssue, ModelIssue>;
 
 /**
  * Turns a failure into the lines to print: `code: message`, the lines saying why, then what to do
@@ -40,7 +40,7 @@ export function formatFailure(error: CliFailure): readonly string[] {
 
 /** Whether the failure is a record the service package wrote, rather than a mistake the CLI found. */
 function isForeignFailure(error: CliFailure): error is ForeignFailure {
-  return error.code === 'service-rejected' || error.code === 'credential-unavailable';
+  return 'foreign' in error;
 }
 
 /** Writes a failure record the service package wrote, with the service's own code and message. */
@@ -60,7 +60,7 @@ function failureLines(
   message: string,
 ): readonly string[] {
   const headline = `${failureRecord.code}: ${message}`;
-  const reasons = sourceLines(failureRecord.source);
+  const reasons = reasonLines(failureRecord.source);
   return [headline, ...reasons, failureRecord.recovery];
 }
 
@@ -80,19 +80,19 @@ function declarationPlace(location: SourceLocation): string {
 
 /**
  * Writes the lines saying why: nothing when there is no evidence, one block per Language or Model
- * finding, or the lines of a service failure record.
+ * issue, or the lines of a service failure record.
  */
-function sourceLines(source: FailureSource | undefined): readonly string[] {
+function reasonLines(source: FailureSource | undefined): readonly string[] {
   if (source === undefined) {
     return [];
   }
   if (isValidationSource(source)) {
-    return source.diagnostics.flatMap(diagnosticLines);
+    return source.diagnostics.flatMap(issueLines);
   }
   return serviceFailureLines(source);
 }
 
-/** Whether the evidence is a batch of Language or Model findings, rather than a service failure. */
+/** Whether the evidence is a batch of Language or Model issues, rather than a service failure. */
 function isValidationSource(source: FailureSource): source is ValidationSource {
   return 'diagnostics' in source;
 }
@@ -103,44 +103,44 @@ function isValidationSource(source: FailureSource): source is ValidationSource {
  */
 function serviceFailureLines(serviceFailure: ServiceFailureRecord): readonly string[] {
   const headline = `${serviceFailure.code} ${serviceFailure.path}: ${serviceFailure.message}`;
-  const reasons = sourceLines(serviceFailure.source);
-  const cleanupReasons = sourceLines(serviceFailure.cleanup);
+  const reasons = reasonLines(serviceFailure.source);
+  const cleanupReasons = reasonLines(serviceFailure.cleanup);
   return [headline, serviceFailure.recovery, ...reasons, ...cleanupReasons];
 }
 
-/** Writes one finding: a Model finding by its path, a Language finding by its place in the text. */
-function diagnosticLines(issue: ValidationIssue): readonly string[] {
-  if (isRecordIssue(issue)) {
-    return [recordIssueLine(issue)];
+/** Writes one issue: a Model issue by its path, a Language issue by its place in the text. */
+function issueLines(issue: ValidationIssue): readonly string[] {
+  if (isModelIssue(issue)) {
+    return [modelIssueLine(issue)];
   }
   return languageIssueLines(issue);
 }
 
-/** Whether the finding is Model's, addressed by a path rather than a place in the text. */
-function isRecordIssue(issue: ValidationIssue): issue is RecordIssue {
+/** Whether the issue is Model's, addressed by a path rather than a place in the text. */
+function isModelIssue(issue: ValidationIssue): issue is ModelIssue {
   return 'path' in issue;
 }
 
-/** Writes a Model finding as one line: its code, path and message. */
-function recordIssueLine(issue: RecordIssue): string {
+/** Writes a Model issue as one line: its code, path and message. */
+function modelIssueLine(issue: ModelIssue): string {
   return `${issue.code} ${issue.path}: ${issue.message}`;
 }
 
 /**
- * Writes a Language finding: its code, line and column, target and message, then what was
- * expected, what to do next, and the Model finding behind it when Language kept one.
+ * Writes a Language issue: its code, line and column, target and message, then what was
+ * expected, what to do next, and the original Model issue behind it when Language kept one.
  */
 function languageIssueLines(issue: LanguageIssue): readonly string[] {
   const start = issue.span.start;
   const headline = `${issue.code} ${start.line}:${start.column} ${issue.target}: ${issue.message}`;
-  const modelReasons = modelIssueLines(issue.source);
+  const modelReasons = originalModelIssueLines(issue.source);
   return [headline, `Expected: ${issue.expected}`, issue.recovery, ...modelReasons];
 }
 
-/** Writes the Model finding behind a Language finding, or nothing when Language kept none. */
-function modelIssueLines(modelIssue: RecordIssue | undefined): readonly string[] {
-  if (modelIssue === undefined) {
+/** Writes the original Model issue behind a Language issue, or nothing when Language kept none. */
+function originalModelIssueLines(original: ModelIssue | undefined): readonly string[] {
+  if (original === undefined) {
     return [];
   }
-  return [recordIssueLine(modelIssue)];
+  return [modelIssueLine(original)];
 }

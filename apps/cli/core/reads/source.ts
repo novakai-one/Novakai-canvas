@@ -12,7 +12,7 @@ import type { ReadScope } from '../../contract/records/command.js';
 import type { ManualTarget, ReadAnswer } from '../../contract/records/service-answers.js';
 
 /** The notice printed above a section or object read. */
-const partialNotice =
+const partialReadNotice =
   '# Read-only partial context; referenced objects/views and manual geometry may be omitted. Read those IDs separately or use the full collection.';
 
 /**
@@ -20,7 +20,7 @@ const partialNotice =
  * The comments name the collection and revision, a partial read, and any hand-placed objects.
  */
 export function formatReadAnswer(answer: ReadAnswer): string {
-  const partialReadLines = scopeNoticeLines(answer.scope);
+  const partialReadLines = partialReadNoticeLines(answer.scope);
   const revisionLine = `# ${answer.collection} revision=${answer.revision}`;
   const manualLines = manualNoteLines(answer.manual);
   const lines = [...partialReadLines, revisionLine, ...manualLines, answer.source];
@@ -28,21 +28,21 @@ export function formatReadAnswer(answer: ReadAnswer): string {
 }
 
 /** Writes the partial-read notice for a section or object read, and nothing for a whole one. */
-function scopeNoticeLines(scope: ReadScope): readonly string[] {
+function partialReadNoticeLines(scope: ReadScope): readonly string[] {
   if (scope.kind === 'all') {
     return [];
   }
-  return [partialNotice];
+  return [partialReadNotice];
 }
 
 /**
  * Writes a note counting the objects and wires placed by hand, or nothing when there are none.
  * `replace` keeps them where they are, so the note says how to let layout move them again.
  */
-function manualNoteLines(manual: readonly ManualTarget[]): readonly string[] {
-  if (manual.length === 0) {
+function manualNoteLines(manualTargets: readonly ManualTarget[]): readonly string[] {
+  if (manualTargets.length === 0) {
     return [];
   }
-  const manualNote = `# manual geometry: ${manual.length} target(s) — replace preserves these; reset layout @section / reset route @section/@wire to reflow`;
+  const manualNote = `# manual geometry: ${manualTargets.length} target(s) — replace preserves these; reset layout @section / reset route @section/@wire to reflow`;
   return [manualNote];
 }
