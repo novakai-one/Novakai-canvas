@@ -20,7 +20,7 @@ import type { TokenFileBindings } from '@novakai/canvas-design-system';
 import type { RecipePayload } from '@novakai/canvas-templates';
 import type { BuiltinFonts, BuiltinSources } from '../../contract/records/presets/builtins.js';
 import type { HostPath } from '../../contract/brands.js';
-import { andThen, collect, failure, success, type Result } from '../../contract/errors.js';
+import { collect, failure, success, type Result } from '../../contract/errors.js';
 
 /** The part of Assets a shipped font is stored through (`stage`) and read back from (`resolve`). */
 export type FontStore = Pick<Assets, 'stage' | 'resolve'>;
@@ -30,6 +30,17 @@ export type TokenSourceReader = Pick<TokenFileBindings, 'source'>;
 
 /** One shipped recipe starter: its family and DSL source. */
 type ShippedRecipe = BuiltinSources['recipes'][number];
+
+/** The shipped fonts and design token sources, once both were read. */
+type ShippedAppearance = Pick<BuiltinSources, 'fonts' | 'tokens'>;
+
+/** What Assets is asked to store for one shipped font. */
+interface FontUpload {
+  readonly base64: string;
+  readonly mediaType: 'font/woff2';
+  readonly alt: string;
+  readonly provenance: { readonly source: string; readonly license: string };
+}
 
 /** The files the installation ships, by kind. */
 interface ShippedManifest {
@@ -83,11 +94,14 @@ export async function loadBuiltinSources(
   try {
     return await readShippedSources(resourceRoot, assets, tokens);
   } catch {
-    return builtinsUnavailable();
+    return builtinsFailure();
   }
 }
 
-/** Reads the fonts, token sources and recipes together (see `loadBuiltinSources`). */
+/**
+ * Reads the fonts, token sources and recipe starters at the same time, then puts them together.
+ * The first mistake, in that order, is the answer.
+ */
 async function readShippedSources(
   resourceRoot: HostPath,
   assets: FontStore,
@@ -98,87 +112,114 @@ async function readShippedSources(
     readTokenSources(tokens),
     readRecipes(resourceRoot),
   ]);
-  if (!fonts.ok) return fonts;
-  if (!tokenSources.ok) return tokenSources;
-  return andThen(recipes, (starters) =>
-    success({ fonts: fonts.value, tokens: tokenSources.value, recipes: starters }),
-  );
+  const appearance = checkAppearance(fonts, tokenSources);
+  if (!appearance.ok) {
+    return appearance;
+  }
+  if (!recipes.ok) {
+    return recipes;
+  }
+  const sources: BuiltinSources = { ...appearance.value, recipes: recipes.value };
+  return success(sources);
+}
+
+/** Puts the fonts and token sources together, once both were read. Fonts' mistake comes first. */
+function checkAppearance(
+  fonts: Result<FontSet>,
+  tokenSources: Result<BuiltinSources['tokens']>,
+): Result<ShippedAppearance> {
+  if (!fonts.ok) {
+    return fonts;
+  }
+  if (!tokenSources.ok) {
+    return tokenSources;
+  }
+  const appearance: ShippedAppearance = { fonts: fonts.value, tokens: tokenSources.value };
+  return success(appearance);
 }
 
 /**
- * Stages every shipped font together (see `stageFont`), then checks them, in wire order, as
- * Presentation's font set. Fails as `stageFont` fails (the first failure in wire order), or with
- * the builtins failure when Presentation rejects the set.
+ * Stores every shipped font through Assets at the same time, then checks them, in wire order, as
+ * Presentation's font set.
  */
 async function stageFonts(
   root: HostPath,
   assets: FontStore,
 ): Promise<Result<FontSet>> {
-  const staged = await Promise.all(
-    FONT_WIRE_ORDER.map((role) => stageFont(root, SHIPPED_MANIFEST.fonts[role], assets)),
-  );
-  const inWireOrder = collect(staged, (font) => font);
-  return andThen(inWireOrder, (fonts) => parseShipped(fontSet, fonts));
+  const fontFiles = FONT_WIRE_ORDER.map((role) => SHIPPED_MANIFEST.fonts[role]);
+  const stagedFonts = await Promise.all(fontFiles.map((file) => stageFont(root, file, assets)));
+  const fontSources = collectValues(stagedFonts);
+  if (!fontSources.ok) {
+    return fontSources;
+  }
+  return parseShipped(fontSet, fontSources.value);
 }
 
-/**
- * Stages the font file's exact bytes through Assets' font codec, then reads the stored font back
- * (see `readStagedFont`). Fails with the builtins failure when the file cannot be read or Assets
- * rejects the bytes.
- */
+/** Stores one font file's exact bytes through Assets, then reads the stored font back. */
 async function stageFont(
   root: HostPath,
   file: string,
   assets: FontStore,
 ): Promise<Result<FontSource>> {
   const bytes = await readShippedFile(join(root, 'fonts', file));
-  if (!bytes.ok) return bytes;
-  const admission = fromOwner(
-    await assets.stage({
-      base64: bytes.value.toString('base64'),
-      mediaType: 'font/woff2',
-      alt: file,
-      provenance: { source: `bundled:fonts/${file}`, license: FONT_LICENSE },
-    }),
-  );
-  return andThen(admission, (admitted) => readStagedFont(admitted.descriptor.digest, assets));
+  if (!bytes.ok) {
+    return bytes;
+  }
+  const staged = await assets.stage(fontUpload(file, bytes.value));
+  if (!staged.ok) {
+    return builtinsFailure();
+  }
+  return readStagedFont(staged.value.descriptor.digest, assets);
 }
 
-/**
- * The staged font as a Presentation font source: digest, family, media type and bytes as Assets
- * stored them. Fails with the builtins failure when Assets cannot resolve the digest or
- * Presentation rejects the source.
- */
+/** Describes one shipped font for Assets: its bytes, media type, name, origin and licence. */
+function fontUpload(
+  file: string,
+  bytes: Buffer,
+): FontUpload {
+  return {
+    base64: bytes.toString('base64'),
+    mediaType: 'font/woff2',
+    alt: file,
+    provenance: { source: `bundled:fonts/${file}`, license: FONT_LICENSE },
+  };
+}
+
+/** Reads the stored font back from Assets as Presentation's font source. */
 function readStagedFont(
   digest: Digest,
   assets: FontStore,
 ): Result<FontSource> {
-  const blob = fromOwner(assets.resolve(digest));
-  return andThen(blob, (stored) =>
-    parseShipped(fontSource, {
-      digest: stored.descriptor.digest,
-      family: stored.descriptor.fontFamily,
-      mediaType: stored.descriptor.mediaType,
-      base64: stored.base64,
-    }),
-  );
+  const stored = assets.resolve(digest);
+  if (!stored.ok) {
+    return builtinsFailure();
+  }
+  const { descriptor, base64 } = stored.value;
+  const storedFont = {
+    digest: descriptor.digest,
+    family: descriptor.fontFamily,
+    mediaType: descriptor.mediaType,
+    base64,
+  };
+  return parseShipped(fontSource, storedFont);
 }
 
-/** The Design System token sources. Fails with the builtins failure when it cannot read them. */
+/** Reads the design token source files through the Design System. */
 async function readTokenSources(
   tokens: TokenSourceReader,
 ): Promise<Result<BuiltinSources['tokens']>> {
-  return fromOwner(await tokens.source.read());
+  const tokenSources = await tokens.source.read();
+  if (!tokenSources.ok) {
+    return builtinsFailure();
+  }
+  return success(tokenSources.value);
 }
 
-/**
- * Every shipped recipe starter, read together, in catalog order (the manifest's key order). Fails
- * as `readRecipe` fails (the first failure in catalog order).
- */
+/** Reads every recipe starter at the same time, and keeps them in catalog order. */
 async function readRecipes(root: HostPath): Promise<Result<readonly ShippedRecipe[]>> {
   const families = Object.keys(SHIPPED_MANIFEST.recipes).filter(isRecipeFamily);
   const recipes = await Promise.all(families.map((family) => readRecipe(root, family)));
-  return collect(recipes, (recipe) => recipe);
+  return collectValues(recipes);
 }
 
 /**
@@ -189,50 +230,49 @@ function isRecipeFamily(key: string): key is RecipePayload['family'] {
   return Object.hasOwn(SHIPPED_MANIFEST.recipes, key);
 }
 
-/**
- * The family's starter file (see `SHIPPED_MANIFEST`) as UTF-8 text. Fails with the builtins
- * failure when the file cannot be read.
- */
+/** Reads one family's starter file (see `SHIPPED_MANIFEST`) as UTF-8 text. */
 async function readRecipe(
   root: HostPath,
   family: RecipePayload['family'],
 ): Promise<Result<ShippedRecipe>> {
-  const bytes = await readShippedFile(join(root, 'recipes', SHIPPED_MANIFEST.recipes[family]));
-  return andThen(bytes, (source) => success({ family, source: source.toString('utf8') }));
+  const file = join(root, 'recipes', SHIPPED_MANIFEST.recipes[family]);
+  const bytes = await readShippedFile(file);
+  if (!bytes.ok) {
+    return bytes;
+  }
+  const recipe: ShippedRecipe = { family, source: bytes.value.toString('utf8') };
+  return success(recipe);
 }
 
-/**
- * The shipped file's bytes. Fails with the builtins failure when it cannot be read (Node's throw,
- * caught here).
- */
+/** Reads one shipped file's bytes. */
 async function readShippedFile(path: string): Promise<Result<Buffer>> {
   try {
-    return success(await readFile(path));
+    const bytes = await readFile(path);
+    return success(bytes);
   } catch {
-    return builtinsUnavailable();
+    return builtinsFailure();
   }
 }
 
-/** The owner's value. An owner rejection becomes the builtins failure. */
-function fromOwner<T>(
-  outcome: { readonly ok: true; readonly value: T } | { readonly ok: false },
-): Result<T> {
-  if (!outcome.ok) return builtinsUnavailable();
-  return success(outcome.value);
+/** Gives back every value, in order, or the first mistake among them. */
+function collectValues<T>(outcomes: readonly Result<T>[]): Result<readonly T[]> {
+  return collect(outcomes, (outcome) => outcome);
 }
 
-/** The input as the schema reads it. Fails with the builtins failure when the schema rejects it. */
+/** Checks a shipped part with its schema. */
 function parseShipped<T>(
   schema: z.ZodType<T>,
   input: unknown,
 ): Result<T> {
   const parsed = schema.safeParse(input);
-  if (!parsed.success) return builtinsUnavailable();
+  if (!parsed.success) {
+    return builtinsFailure();
+  }
   return success(parsed.data);
 }
 
-/** The one shipped-resource failure: `unavailable` at `builtins`. */
-function builtinsUnavailable(): Result<never> {
+/** Makes the one mistake for shipped files: a file, or an owner's check of it, failed. */
+function builtinsFailure(): Result<never> {
   return failure(
     'unavailable',
     'builtins',

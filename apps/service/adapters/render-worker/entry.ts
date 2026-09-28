@@ -9,11 +9,11 @@
  * start), then answers each job it is sent. It never cancels a job itself: the server stops a job
  * by ending the thread.
  */
-import { parentPort } from 'node:worker_threads';
+import { parentPort, type MessagePort } from 'node:worker_threads';
 import type { Diagnostic, Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 import type { DiagramProducer } from '../../contract/ports/rendering.js';
-import type { RenderingJob } from '../../contract/records/rendering/job.js';
+import type { RenderDocument, RenderingJob } from '../../contract/records/rendering/job.js';
 import { READY_HANDSHAKE, type WorkerHandshake } from '../../contract/records/rendering/worker.js';
 
 /** What the worker thread answers jobs with. compose/worker.ts passes them. */
@@ -39,11 +39,10 @@ export async function serveRenderWorker(
   dependencies: RenderWorkerDependencies,
 ): Promise<Result<void>> {
   const port = parentPort;
-  if (port === null)
-    return failure('invalid-input', 'worker', 'Rendering entry requires a worker realm');
-  port.on('message', async (input: unknown) => {
-    port.postMessage(await rendered(dependencies.readJob(input), dependencies.producer));
-  });
+  if (port === null) {
+    return outsideWorkerFailure();
+  }
+  answerJobs(port, dependencies);
   port.postMessage(READY_HANDSHAKE);
   return success(undefined);
 }
@@ -55,16 +54,37 @@ export async function serveRenderWorker(
  */
 export function reportStartupFailure(reason: Diagnostic): void {
   const port = parentPort;
-  if (port === null) return;
-  const refused: WorkerHandshake = { ready: false, error: reason };
-  port.postMessage(refused);
+  if (port === null) {
+    return;
+  }
+  const refusal: WorkerHandshake = { ready: false, error: reason };
+  port.postMessage(refusal);
 }
 
-/** The produced document, or the job's decode failure without invoking native measurement. */
-async function rendered(
-  job: Result<RenderingJob>,
-  producer: DiagramProducer,
-): Promise<Result<unknown>> {
-  if (!job.ok) return job;
-  return producer.produce(job.value, WORKER_REALM_SIGNAL);
+/** Answers each job message the server sends with the drawn document, or the mistake found. */
+function answerJobs(
+  port: MessagePort,
+  dependencies: RenderWorkerDependencies,
+): void {
+  port.on('message', async (message: unknown) => {
+    const answer = await drawJob(message, dependencies);
+    port.postMessage(answer);
+  });
+}
+
+/** Checks the job message, then draws it. A bad job answers its mistake and is never drawn. */
+async function drawJob(
+  message: unknown,
+  dependencies: RenderWorkerDependencies,
+): Promise<Result<RenderDocument>> {
+  const job = dependencies.readJob(message);
+  if (!job.ok) {
+    return job;
+  }
+  return dependencies.producer.produce(job.value, WORKER_REALM_SIGNAL);
+}
+
+/** Makes the mistake for a worker entry that runs outside a worker thread (a bug). */
+function outsideWorkerFailure(): Result<never> {
+  return failure('invalid-input', 'worker', 'Rendering entry requires a worker realm');
 }
