@@ -3,7 +3,8 @@
  *
  * A font or image declaration can say more than where its file is: alt text, a license, and who
  * to credit. `asset @logo image source="./logo.png" alt="Company logo" license="CC-BY-4.0"`.
- * Storing the bytes and render:png both need these, and must read them the same way.
+ * Storing the bytes and `pnpm render:png` (which draws a diagram to a PNG) both need these, and
+ * must read them the same way.
  *
  * This file reads them from one declaration. A declaration with no alt text uses its name
  * instead. Nothing here can fail, and it never reads a file.

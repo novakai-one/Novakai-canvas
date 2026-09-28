@@ -47,21 +47,22 @@ export async function sendSourceChange(
 }
 
 /**
- * Keeps `retained` in the journal, stores its font and image bytes again, then sends it to preview
- * or apply. Gives back the text to print: the preview, or the receipt.
- * The mistakes it can find: it can't be kept (then it is never sent), its bytes can't be stored,
- * or the send fails. A lost answer's advice is to run `receipt`, then `retry`.
+ * Writes `prepared` to the journal, stores its font and image bytes again, then sends it to
+ * preview or apply. Gives back the text to print: the preview, or the receipt.
+ * The mistakes it can find: it can't be written (then it is never sent), its bytes can't be
+ * stored, or the send fails. If the answer is lost, the failure tells the agent to run `receipt`,
+ * then `retry`.
  */
 export async function submitRequest(
-  retained: RetainedRequest,
+  prepared: RetainedRequest,
   mode: SubmitMode,
   dependencies: SubmitDependencies,
 ): Promise<Result<string>> {
-  const saved = await dependencies.journal.save(retained);
+  const saved = await dependencies.journal.save(prepared);
   if (!saved.ok) return saved;
-  const restored = await restoreResources(retained.backups, dependencies);
+  const restored = await restoreResources(prepared.backups, dependencies);
   if (!restored.ok) return restored;
-  return send(retained, mode, dependencies.authoring);
+  return send(prepared, mode, dependencies.authoring);
 }
 
 /** `preview` previews; `create`, `replace` and `patch` apply. */

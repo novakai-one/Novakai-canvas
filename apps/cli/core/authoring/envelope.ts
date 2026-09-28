@@ -1,12 +1,13 @@
 /*
  * Why this file exists
  *
- * Every request the CLI sends to Authoring has the same outer parts: who sends it (`agent:cli`),
- * the request format's version, and which records it may write. Only the inside differs:
- * `create` sends source text, and `theme admit` sends a prepared theme.
+ * Every request the CLI sends to Authoring has the same parts, whether `create` sends source text
+ * or `theme admit` sends a prepared theme.
+ * - Added here, the same on every request: the sender (`agent:cli`) and the format's version.
+ * - Given by the caller: workspace, request ID, records it expects, fonts and images, the change.
  *
- * This file adds the outer parts, then runs Authoring's own check on the whole request, so a bad
- * request is caught before it leaves. It never sends anything.
+ * This file puts them together and runs Authoring's own check, so a bad request is caught before
+ * it leaves. It never sends anything.
  */
 import type { ChangeMode } from '../../contract/records/command.js';
 import type { ReadVersion, AuthoringRequest } from '../../contract/records/foreign.js';
@@ -31,7 +32,7 @@ export type PlannedChange =
   | { readonly planner: 'dsl'; readonly payload: SourceChange }
   | { readonly planner: 'preset'; readonly payload: PresetDocument };
 
-/** The parts of an Authoring request that differ from one CLI request to the next. */
+/** The parts of an Authoring request the caller gives. The sender and version are added here. */
 export interface AuthoringRequestDraft {
   readonly workspace: WorkspaceId;
   readonly request: RequestId;

@@ -84,7 +84,8 @@ export async function stageResources(
 
 /**
  * Reads one declared font or image. A `sha256:` pin is used as it is; anything else is read as a
- * file from the folder of `file`, the source that declares it. Nothing is stored yet.
+ * file from the folder of `file`, the source that declares it. Gives back the resource ready to
+ * stage: its name and its bytes or pin. Nothing is stored yet.
  * The mistakes it can find: no name (`invalid-response`), or a file outside that folder, missing,
  * of the wrong type or too large (the failure names the declaration's line).
  */

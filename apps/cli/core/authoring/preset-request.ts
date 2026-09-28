@@ -24,7 +24,10 @@ import { buildAuthoringRequest } from './envelope.js';
 
 /** One prepared theme or recipe, before it is checked against the workspace. */
 export interface PresetDraft {
-  /** The service's answer to preparing it: the key it will be saved under, and the whole answer. */
+  /**
+   * The service's answer to preparing it: the key it will be saved under, and the prepared preset
+   * itself (sent on unchanged).
+   */
   readonly preparation: PresetPreparation;
   /** The staged fonts and images, bound under the aliases the preset file declares. */
   readonly assets: readonly NamedAssetDigest[];

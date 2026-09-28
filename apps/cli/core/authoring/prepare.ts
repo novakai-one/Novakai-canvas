@@ -38,9 +38,10 @@ export interface PrepareDependencies extends ResourceDependencies {
 }
 
 /**
- * Prepares the request for one change command: reads the source file and the workspace, builds
- * the request, and stages its fonts and images. Gives back the request, not yet kept or sent.
- * The mistakes it can find: a file or the workspace can't be read, the source doesn't parse
+ * Builds the request for one change command, and stages the fonts and images its source names.
+ * Gives back the request with copies of those bytes, in the form the journal keeps
+ * (`RetainedRequest`). Nothing is kept or sent yet.
+ * The mistakes it can find: the file or workspace can't be read, the source doesn't parse
  * (`invalid-source`), the change doesn't fit the workspace, or a font or image can't be staged.
  */
 export async function prepareChangeRequest(
