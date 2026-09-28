@@ -2,7 +2,13 @@ import type { Snapshot, Request, Receipt } from './owners.js';
 import type { RecoveredSource } from './editor-recovery.js';
 import type { ActiveDiagram } from './active-diagram.js';
 import type { Submission } from './submission.js';
-import type { GestureId, PlannerId, TransportGeneration, WorkspaceId } from '../brands.js';
+import type {
+  GestureId,
+  PlannerId,
+  SourceEdit,
+  TransportGeneration,
+  WorkspaceId,
+} from '../brands.js';
 import type { Result, Diagnostic } from '../errors.js';
 import type { WorkspaceDecoders } from '../ports/workspace-decoders.js';
 import type { RequestBuilders } from '../ports/request-builders.js';
@@ -14,7 +20,7 @@ export interface SourceView {
   readonly source: string;
   readonly sourceDirty: boolean;
   readonly sourceBase: SourceBase;
-  readonly sourceEdit: number;
+  readonly sourceEdit: SourceEdit;
 }
 /**
  * What the source text was printed from or restored with: nothing before the first readout, or
@@ -54,7 +60,7 @@ export interface SourceCallbacks {
   submit(
     request: Request,
     generation: TransportGeneration,
-    sourceEdit: number,
+    sourceEdit: SourceEdit,
     gesture: GestureId | null,
   ): Promise<Result<Receipt>>;
 }

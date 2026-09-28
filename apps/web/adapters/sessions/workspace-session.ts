@@ -21,6 +21,7 @@ import type {
   GestureId,
   RequestId,
   SectionId,
+  SourceEdit,
   TransportGeneration,
 } from '../../contract/brands.js';
 import type { WorkspaceBindings } from '../../contract/ports/workspace.js';
@@ -931,7 +932,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   async function submit(
     request: Request,
     generation: TransportGeneration,
-    sourceEdit: number,
+    sourceEdit: SourceEdit,
     gesture: GestureId | null,
   ): Promise<Result<Receipt>> {
     const allowed = rejectBlocked(request, gesture);

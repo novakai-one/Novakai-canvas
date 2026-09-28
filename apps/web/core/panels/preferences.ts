@@ -4,7 +4,7 @@
  * here. The panel store (`adapters/sessions/panel-session.ts`) saves the result and reports a
  * storage failure.
  */
-import type { WorkspaceId } from '../../contract/brands.js';
+import type { PanelSectionId, WorkspaceId } from '../../contract/brands.js';
 import type {
   PanelId,
   PanelPreferences,
@@ -15,7 +15,7 @@ import type {
 /** Moving removes the stable ID from both sides first, preventing duplicate sections after repeated moves. */
 export function movePanelSection(
   preferences: PanelPreferences,
-  id: string,
+  id: PanelSectionId,
   side: PanelId,
   index: number,
 ): PanelPreferences {
@@ -35,14 +35,17 @@ export function movePanelSection(
 }
 /** Membership operations are idempotent and retain all other preference dimensions. */
 export function panelMembership(
-  ids: readonly string[],
-  id: string,
+  ids: readonly PanelSectionId[],
+  id: PanelSectionId,
   present: boolean,
-): readonly string[] {
+): readonly PanelSectionId[] {
   const remaining = ids.filter((item) => item !== id);
   return present ? [...remaining, id] : remaining;
 }
-/** Unknown/removed saved IDs are ignored; newly registered sections appear in their declared default location. */
+/**
+ * Saved sections that are not registered are ignored; newly registered sections appear in their
+ * declared default location.
+ */
 export function reconcilePanelPreferences(
   saved: PanelPreferences,
   definitions: readonly PanelSectionDefinition[],
@@ -98,7 +101,7 @@ export function storedPanels(
 export function sectionsOnSide(
   definitions: readonly PanelSectionDefinition[],
   side: PanelId,
-): readonly string[] {
+): readonly PanelSectionId[] {
   return definitions.filter((item) => item.defaultSide === side).map((item) => item.id);
 }
 /** Nonfinite values retain the declared default; valid requests are clamped to the same bounds used by the shared resize control. */

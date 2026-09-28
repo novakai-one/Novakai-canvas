@@ -1,5 +1,5 @@
 import type { PanelBindings, PanelController } from '../../contract/panel-types.js';
-import type { WorkspaceId } from '../../contract/brands.js';
+import type { PanelSectionId, WorkspaceId } from '../../contract/brands.js';
 import type { Diagnostic } from '../../contract/errors.js';
 import { diagnostic } from '../../contract/errors.js';
 import type { WorkspaceScope } from '../../contract/records/workspace-scope.js';
@@ -89,7 +89,7 @@ export function createPanelController(bindings: PanelBindings): PanelController 
   }
   /** Only trusted registered section IDs may change preference membership. */
   function membership(
-    id: string,
+    id: PanelSectionId,
     kind: 'collapsed' | 'hidden',
     present: boolean,
   ): void {
@@ -98,7 +98,7 @@ export function createPanelController(bindings: PanelBindings): PanelController 
   }
   /** Numeric layout inputs are bounded; invalid reorder indices cannot move or duplicate a section. */
   function move(
-    id: string,
+    id: PanelSectionId,
     side: PanelId,
     index: number,
   ): void {

@@ -11,6 +11,7 @@ import { collectionId, validate } from '@novakai/canvas-model';
 import { transportGeneration } from '@novakai/canvas-service';
 import type { Collection } from '@novakai/canvas-model';
 import type { CollectionId } from '../../contract/brands.js';
+import { sourceEdit } from '../../contract/brands.js';
 import type { WorkspaceDecoders } from '../../contract/ports/workspace-decoders.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
@@ -65,7 +66,7 @@ const currentSource = z.strictObject({
   base: capturedCollectionBaseSchema,
   generation: transportGeneration,
   collection: collectionId,
-  edit: z.number().int().nonnegative(),
+  edit: sourceEdit,
 });
 
 /** A stored source draft from before the tag: untagged, with a full snapshot. */
@@ -74,7 +75,7 @@ const legacySource = z.strictObject({
   snapshot: snapshotSchema,
   generation: transportGeneration,
   collection: collectionId,
-  edit: z.number().int().nonnegative(),
+  edit: sourceEdit,
 });
 
 /**

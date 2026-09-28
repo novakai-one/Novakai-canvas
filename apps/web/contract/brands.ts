@@ -55,8 +55,10 @@ export type VisitTime = RecentVisit['openedAt'];
 const count = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 
 /**
- * Source-editor keystrokes. Advanced only by the source machine; parsed from storage only by the
- * source and journal readers (from B6b).
+ * Source-editor keystrokes. Starts at {@link firstSourceEdit} and is advanced with
+ * {@link nextCount} only by the source editor. Parsed from storage only by the source-draft
+ * decoder (`adapters/edge/workspace-decoders.ts`) and the journal reader
+ * (`adapters/readers/submission-readers.ts`).
  */
 export const sourceEdit = count.brand<'SourceEdit'>();
 
@@ -134,8 +136,10 @@ export type RetentionSlot =
   | 'ui-preferences';
 
 /**
- * Every side-panel section, in the default order. From B6b the panel defaults file and stored
- * preferences are parsed with `z.enum(panelSectionIds)`.
+ * Every side-panel section, in the default order. The shipped panel defaults and stored panel
+ * preferences are parsed with `z.enum(panelSectionIds)`
+ * (`adapters/preferences/panel-preferences.ts`), so removing an ID here makes a stored layout that
+ * names it invalid: that workspace gets the default layout instead.
  */
 export const panelSectionIds = [
   'creation',

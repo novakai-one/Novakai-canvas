@@ -139,7 +139,7 @@ async function mount(
   });
   const sizing = panelSizing(element);
   const panels: PanelController = createPanelController({
-    definitions: panelDefinitions(sections),
+    definitions: accepted(panelDefinitions(sections)),
     sizing,
     initialWidth: element.getBoundingClientRect().width,
     retention,

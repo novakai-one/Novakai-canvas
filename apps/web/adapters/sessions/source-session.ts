@@ -14,7 +14,8 @@ import type {
 import type { Submission } from '../../contract/records/submission.js';
 import type { RetentionPlace } from '../../contract/ports/draft-retention.js';
 import type { WorkspaceScope } from '../../contract/records/workspace-scope.js';
-import type { TransportGeneration, WorkspaceId } from '../../contract/brands.js';
+import type { SourceEdit, TransportGeneration, WorkspaceId } from '../../contract/brands.js';
+import { firstSourceEdit, nextCount, sourceEdit } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import {
   encodeSourceRecovery,
@@ -32,7 +33,7 @@ export function createSourceController(bindings: SourceBindings): SourceControll
     source: '',
     sourceDirty: false,
     sourceBase: { kind: 'none' },
-    sourceEdit: 0,
+    sourceEdit: firstSourceEdit,
   };
   let sourceReceipt: Receipt | null = null;
   let admitted: WorkspaceScope = unrestoredWorkspace;
@@ -68,13 +69,16 @@ export function createSourceController(bindings: SourceBindings): SourceControll
     sourceReceipt = null;
     retainSource();
   }
-  /** Geometry and creation receipts cannot clear an unrelated source draft. */
+  /**
+   * Whether the source draft is still dirty after `request` was confirmed at `confirmedEdit`: only
+   * when typing continued after that edit. Geometry and creation receipts cannot clear it.
+   */
   function remainingSourceDraft(
     request: Request,
-    sourceEdit: number,
+    confirmedEdit: SourceEdit,
   ): boolean {
     if (!isSourceSubmission(request)) return state.sourceDirty;
-    return state.sourceDirty && state.sourceEdit !== sourceEdit;
+    return state.sourceDirty && state.sourceEdit !== confirmedEdit;
   }
   /** Source confirmation applies only to the collection whose editor owns the captured draft. */
   function isSourceSubmission(request: Request): boolean {
@@ -129,7 +133,7 @@ export function createSourceController(bindings: SourceBindings): SourceControll
   }
   /** Form typing remains local and durable; it never triggers an implicit Authoring apply. */
   function editSource(source: string): void {
-    update({ source, sourceDirty: true, sourceEdit: state.sourceEdit + 1 });
+    update({ source, sourceDirty: true, sourceEdit: nextCount(sourceEdit, state.sourceEdit) });
     retainSource();
   }
   /** One checked recovery record includes the exact source base and edit generation. */

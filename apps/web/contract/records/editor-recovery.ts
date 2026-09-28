@@ -5,6 +5,7 @@ import type {
   ObjectId,
   RelationshipId,
   SectionId,
+  SourceEdit,
   TransportGeneration,
   WireDraftKey,
 } from '../brands.js';
@@ -27,7 +28,7 @@ export interface RecoveredSource {
   readonly base: EditingBase;
   readonly generation: TransportGeneration;
   readonly collection: CollectionId;
-  readonly edit: number;
+  readonly edit: SourceEdit;
 }
 
 export interface SourceRecoveryV1 {
@@ -37,7 +38,7 @@ export interface SourceRecoveryV1 {
   readonly collection: CollectionId;
   readonly source: string;
   readonly generation: TransportGeneration;
-  readonly edit: number;
+  readonly edit: SourceEdit;
 }
 
 export interface ObjectRecoveryV1 {

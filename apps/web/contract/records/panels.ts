@@ -1,10 +1,10 @@
 /*
- * Panel state vocabulary: which side panels are open, their tabs, sizes and sections, the panel
- * preferences and the record stored for a workspace, and which interface controls show. Records
- * only: no behaviour, no I/O. Web core reads them to lay out the shell; `panel-types.ts` names
- * them in the panel controller.
+ * Panel state vocabulary: which side panels are open, their tabs, sizes and sections, the shipped
+ * default layout, the panel preferences and the record stored for a workspace, and which interface
+ * controls show. Records only: no behaviour, no I/O. Web core reads them to lay out the shell;
+ * `panel-types.ts` names them in the panel controller.
  */
-import type { WorkspaceId } from '../brands.js';
+import type { PanelSectionId, WorkspaceId } from '../brands.js';
 
 /** The two side panels. */
 export type PanelId = 'left' | 'right';
@@ -20,10 +20,19 @@ export type InterfaceControl = 'tools' | 'zoom' | 'minimap' | 'outline' | 'roads
 
 /** Definitions describe trusted features; persisted layout contains only stable IDs and preferences. */
 export interface PanelSectionDefinition {
-  readonly id: string;
+  readonly id: PanelSectionId;
   readonly title: string;
   readonly defaultSide: PanelId;
   readonly defaultExpanded: boolean;
+}
+
+/**
+ * The shipped default layout (`resources/ui/panels.default.json`) after its reader checked it:
+ * each side's sections in order, and the sections that start collapsed.
+ */
+export interface PanelDefaults {
+  readonly sections: Readonly<Record<PanelId, readonly PanelSectionId[]>>;
+  readonly collapsed: readonly PanelSectionId[];
 }
 
 /** Breakpoints and per-side widths, resolved from the Design System's variables. */
@@ -49,9 +58,9 @@ export interface InterfaceVisibility {
 
 /** The panel layout a person chose: section order and state, panel widths and each panel's tab. */
 export interface PanelPreferences {
-  readonly sections: Readonly<Record<PanelId, readonly string[]>>;
-  readonly collapsed: readonly string[];
-  readonly hidden: readonly string[];
+  readonly sections: Readonly<Record<PanelId, readonly PanelSectionId[]>>;
+  readonly collapsed: readonly PanelSectionId[];
+  readonly hidden: readonly PanelSectionId[];
   readonly widths: Readonly<Record<PanelId, number>>;
   readonly tabs: Readonly<{ left: 'add' | 'browse'; right: 'inspect' | 'settings' }>;
 }

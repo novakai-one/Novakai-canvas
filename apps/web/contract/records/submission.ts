@@ -1,5 +1,11 @@
 import type { Request, Receipt, Snapshot, Collection } from './owners.js';
-import type { GestureId, RequestId, TransportGeneration, WorkspaceId } from '../brands.js';
+import type {
+  GestureId,
+  RequestId,
+  SourceEdit,
+  TransportGeneration,
+  WorkspaceId,
+} from '../brands.js';
 import type { Result, Diagnostic } from '../errors.js';
 import type { ServiceClient } from '../ports/client.js';
 import type { DraftRetention } from '../ports/draft-retention.js';
@@ -8,7 +14,7 @@ import type { DraftRetention } from '../ports/draft-retention.js';
 export interface Submission {
   readonly request: Request;
   readonly generation: TransportGeneration;
-  readonly sourceEdit: number;
+  readonly sourceEdit: SourceEdit;
   readonly gesture: GestureId | null;
   readonly state: 'sending' | 'uncertain' | 'retryable' | 'rejected';
 }

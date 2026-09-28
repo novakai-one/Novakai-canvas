@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { requestSchema, receiptSchema } from '@novakai/canvas-authoring';
 import { transportGeneration } from '@novakai/canvas-service';
 import { gestureId } from '@novakai/canvas-canvas';
+import { sourceEdit } from '../../contract/brands.js';
 import type { AppliedCommit, SubmissionReaders } from '../../contract/records/submission.js';
 import type { WorkspaceDecoders } from '../../contract/ports/workspace-decoders.js';
 import type { Receipt, Request } from '../../contract/records/owners.js';
@@ -10,7 +11,7 @@ import { failure } from '../../contract/errors.js';
 const submission = z.strictObject({
   request: requestSchema,
   generation: transportGeneration,
-  sourceEdit: z.number().int().nonnegative(),
+  sourceEdit,
   gesture: gestureId.nullable(),
   state: z.enum(['sending', 'uncertain', 'retryable', 'rejected']),
 });

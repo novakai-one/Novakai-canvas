@@ -3,7 +3,7 @@
  * Declarations only; `adapters/sessions/panel-session.ts` implements the controller. The panel
  * records it names live in `records/panels.ts`, so Web core can read them.
  */
-import type { WorkspaceId } from './brands.js';
+import type { PanelSectionId, WorkspaceId } from './brands.js';
 import type { Diagnostic, Result } from './errors.js';
 import type { DraftRetention } from './ports/draft-retention.js';
 import type {
@@ -32,15 +32,15 @@ export interface PanelController {
     width: number,
   ): void;
   expand(
-    id: string,
+    id: PanelSectionId,
     expanded: boolean,
   ): void;
   hide(
-    id: string,
+    id: PanelSectionId,
     hidden: boolean,
   ): void;
   move(
-    id: string,
+    id: PanelSectionId,
     side: PanelId,
     index: number,
   ): void;

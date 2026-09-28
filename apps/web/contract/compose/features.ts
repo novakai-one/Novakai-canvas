@@ -1,20 +1,22 @@
 /*
  * Declarative feature registration: the side-panel sections each tab offers, and the panel
- * definitions that give each section its default placement. Feature components do not import
- * each other; adding a feature registers its renderer and default ID placement here. Pure
- * assembly: no I/O and no page globals; composition hands in the ID source for new definition
- * and content IDs.
+ * definitions that give each section its default placement from the checked shipped defaults.
+ * Feature components do not import each other; adding a feature registers its renderer and default
+ * ID placement here. Pure assembly: no I/O and no page globals; composition hands in the ID source
+ * for new definition and content IDs.
  */
 import { createElement, type ComponentType, type ReactElement } from 'react';
 import type { FeatureProps, ThemeSelectorProps } from '../react-types.js';
 import type { LibraryBrowserProps } from '../library-react.js';
 import type { PreferenceController } from '../records/preferences.js';
 import type { PanelController } from '../panel-types.js';
-import type { PanelSectionDefinition } from '../records/panels.js';
+import type { PanelDefaults, PanelId, PanelSectionDefinition } from '../records/panels.js';
+import type { Result } from '../errors.js';
 import type { RegisteredSection } from '../../adapters/react/WorkspaceSidePanel.js';
 import type { IdSource } from '../ports/ids.js';
 import type { ReactBindings as DesignBindings } from '@novakai/canvas-design-system';
-import panelDefaults from '../../../../resources/ui/panels.default.json' with { type: 'json' };
+import shippedPanelDefaults from '../../../../resources/ui/panels.default.json' with { type: 'json' };
+import { readPanelDefaults } from '../../adapters/preferences/panel-preferences.js';
 import { createAddTools } from '../../adapters/react/AddTools.js';
 import { createAddForms } from '../../adapters/react/AddForms.js';
 import { createAddFields } from '../../adapters/react/AddFields.js';
@@ -114,21 +116,36 @@ export function featureSections({
   ];
 }
 
-/** Declarative resource order is authoritative; adding a feature registers its renderer and default ID placement. */
+/**
+ * Each registered section's default side and whether it starts expanded, in the order the shipped
+ * defaults (`resources/ui/panels.default.json`) list them; that order is authoritative. A
+ * registered section the defaults do not list is not offered. Fails with `initialization-failed`
+ * when the shipped defaults are not a valid layout.
+ */
 export function panelDefinitions(
   sections: readonly RegisteredSection[],
-): readonly PanelSectionDefinition[] {
+): Result<readonly PanelSectionDefinition[]> {
+  const defaults = readPanelDefaults(shippedPanelDefaults);
+  if (!defaults.ok) return defaults;
   const sides = ['left', 'right'] as const;
-  return sides.flatMap((side) =>
-    panelDefaults.panels[side].sectionIds.flatMap((id) =>
-      sections
-        .filter((item) => item.id === id)
-        .map((item) => ({
-          id,
-          title: item.title,
-          defaultSide: side,
-          defaultExpanded: !panelDefaults.collapsedSectionIds.includes(id),
-        })),
-    ),
+  const definitions = sides.flatMap((side) => definitionsOnSide(sections, defaults.value, side));
+  return { ok: true, value: definitions };
+}
+
+/** The definitions of the registered sections the defaults place on `side`, in listed order. */
+function definitionsOnSide(
+  sections: readonly RegisteredSection[],
+  defaults: PanelDefaults,
+  side: PanelId,
+): readonly PanelSectionDefinition[] {
+  return defaults.sections[side].flatMap((id) =>
+    sections
+      .filter((item) => item.id === id)
+      .map((item) => ({
+        id,
+        title: item.title,
+        defaultSide: side,
+        defaultExpanded: !defaults.collapsed.includes(id),
+      })),
   );
 }

@@ -7,13 +7,14 @@ import type {
   PanelTabsProps,
 } from '../../contract/react-types.js';
 import type { PanelController } from '../../contract/panel-types.js';
+import type { PanelSectionId } from '../../contract/brands.js';
 import type { PanelSizing, PanelMode, PanelId, PanelTab } from '../../contract/records/panels.js';
 import { panelGeometry } from '../../contract/api.js';
 import styles from './WorkspaceSidePanel.module.css';
 /** Definitions and renderers are trusted registration data; user preferences can arrange IDs but cannot supply code. */
 export interface RegisteredSection {
   readonly tab: PanelTab;
-  readonly id: string;
+  readonly id: PanelSectionId;
   readonly title: string;
   readonly Content: ComponentType<FeatureProps>;
 }
