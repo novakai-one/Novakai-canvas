@@ -31,10 +31,10 @@ export interface TextOwners extends LeaseOwners {
 /**
  * Canonical DSL covers the whole collection only. Fails with `invalid-input` at `scope` for any
  * other scope. Every other refusal is an Export diagnostic, answered as `exportRouteFailure`
- * (`cancelled` stays `cancelled`, the rest is `invalid-input`): `acquireSnapshot`'s refusals,
- * `cancelled` at `export` when the request aborted, `invalid-input` at `source` when Language
- * cannot print, `encoding-failed` at `export.dsl` when Language throws, and `cleanup-failed` at
- * `export.release` when the release fails.
+ * (`cancelled` stays, an input refusal is `invalid-input`, a fault is `unavailable`):
+ * `acquireSnapshot`'s refusals, `cancelled` at `export` when the request aborted,
+ * `invalid-input` at `source` when Language cannot print, `encoding-failed` at `export.dsl` when
+ * Language throws, and `cleanup-failed` at `export.release` when the release fails.
  */
 export async function exportDsl(
   request: ExportRequest,

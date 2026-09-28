@@ -29,8 +29,9 @@ export interface ExportRouteOwners extends TextOwners, DocumentOwners {
  * The export route of one workspace; starts no I/O. `invoke` answers one file, or fails with
  * `invalid-input` for a refused request (see `readExportRequest`) or a DSL scope other than the
  * whole collection (at `scope`), `unavailable` at `export.png` when the rasterizer cannot start,
- * and otherwise as `exportRouteFailure`: an Export refusal is `cancelled` or `invalid-input`,
- * with Export's diagnostic kept as source. Every export only reads; the caller owns the retry.
+ * and otherwise as `exportRouteFailure`: an Export refusal is `cancelled`, `invalid-input` or
+ * `unavailable`, with Export's diagnostic kept as source. Every export only reads; the caller
+ * owns the retry.
  */
 export function createExportRoute(owners: ExportRouteOwners): ExportHandler {
   return { invoke: (input, signal) => invokeExport(input, signal, owners) };
@@ -96,8 +97,9 @@ async function prepareFormat(
 
 /**
  * Export encodes the artifact from a snapshot it acquires through this route. Fails as
- * `exportRouteFailure` of Export's diagnostic: `cancelled` stays `cancelled`, the rest (including
- * `acquireSnapshot`'s refusals and a provider throw as `encoding-failed`) is `invalid-input`.
+ * `exportRouteFailure` of Export's diagnostic (including `acquireSnapshot`'s refusals):
+ * `cancelled` stays `cancelled`, an input refusal is `invalid-input`, and `encoding-failed`
+ * (also a provider throw), `cleanup-failed` or `resource-rejected` is `unavailable`.
  */
 async function encodeNative(
   request: ExportRequest,

@@ -70,8 +70,9 @@ export function settledFailure<T>(
 }
 
 /**
- * The service failure of an export: its code mapped by `ROUTE_CODE` (`cancelled` or
- * `invalid-input`), with Export's diagnostic kept as source.
+ * The service failure of an export: its code mapped by `ROUTE_CODE`, with Export's diagnostic
+ * kept as source. `cancelled` stays `cancelled`, an input refusal is `invalid-input`, and
+ * `encoding-failed`, `cleanup-failed` or `resource-rejected` is `unavailable`.
  */
 export function exportRouteFailure(result: ExportFailure): Result<never> {
   const { code, path, message } = result.error;
@@ -79,9 +80,14 @@ export function exportRouteFailure(result: ExportFailure): Result<never> {
 }
 
 /** The service codes an Export refusal becomes. */
-type RouteCode = Extract<ErrorCode, 'invalid-input' | 'cancelled'>;
+type RouteCode = Extract<ErrorCode, 'invalid-input' | 'cancelled' | 'unavailable'>;
 
-/** The service code of each Export code: `cancelled` stays; every other is `invalid-input`. */
+/**
+ * The service code of each Export code. An input refusal is `invalid-input` (422): the caller
+ * corrects the request. A storage, lease, render or stored-data fault is `unavailable` (503):
+ * the caller cannot correct it, so the dependency is restored and the export retried.
+ * `cancelled` stays `cancelled` (409).
+ */
 const ROUTE_CODE: Readonly<Record<ExportErrorCode, RouteCode>> = Object.freeze({
   'invalid-input': 'invalid-input',
   'snapshot-mismatch': 'invalid-input',
@@ -90,9 +96,9 @@ const ROUTE_CODE: Readonly<Record<ExportErrorCode, RouteCode>> = Object.freeze({
   'invalid-bundle': 'invalid-input',
   'invalid-import': 'invalid-input',
   cancelled: 'cancelled',
-  'encoding-failed': 'invalid-input',
-  'cleanup-failed': 'invalid-input',
-  'resource-rejected': 'invalid-input',
+  'encoding-failed': 'unavailable',
+  'cleanup-failed': 'unavailable',
+  'resource-rejected': 'unavailable',
 });
 
 /** The diagnostic as source evidence; an absent cleanup stays an explicit undefined key. */
