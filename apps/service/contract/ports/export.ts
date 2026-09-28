@@ -27,9 +27,11 @@ export type LeaseRead = (digest: unknown, path: string) => AssetResult<StoredBlo
 /** The export route: unknown input in, a file or a typed failure out; the HTTP route sends it. */
 export interface ExportHandler {
   /**
-   * Answers one export file. Fails with `invalid-input` for a refused request or an Export
-   * refusal, `cancelled` when the request is cancelled (Export's diagnostic kept as source), and
-   * `unavailable` at `export.png` when the rasterizer cannot start.
+   * Answers one export file. Fails with `invalid-input` for a refused request, `unavailable` at
+   * `export.png` when the rasterizer cannot start, and otherwise as `exportRouteFailure` of
+   * Export's refusal (Export's diagnostic kept as source): `cancelled` stays `cancelled`, an input
+   * refusal is `invalid-input`, and `encoding-failed`, `cleanup-failed` or `resource-rejected` is
+   * `unavailable`.
    */
   invoke(
     input: unknown,

@@ -2,7 +2,8 @@
  * Export failure vocabulary: every refusal the export route builds is an Export diagnostic with
  * one recovery text. Owner failures are translated by code, never by message; a cleanup failure
  * never hides the primary outcome; and the route turns the final diagnostic into the service
- * outcome, keeping the diagnostic as structured source evidence.
+ * outcome, keeping the diagnostic as structured source evidence. Pure; the caller corrects its
+ * request, or retries once the failed dependency is restored.
  */
 import { failure, type ErrorCode, type Result } from '../../contract/errors.js';
 import type { OperationSource } from '../../contract/records/transport/failure-source.js';
@@ -45,18 +46,14 @@ export function ownerRejection(
   error: OwnerFailure,
   path: string,
 ): ExportResult<never> {
-  return exportRejection(
-    error.code === 'cancelled' ? 'cancelled' : 'encoding-failed',
-    path,
-    error.message,
-  );
+  if (error.code === 'cancelled') return exportRejection('cancelled', path, error.message);
+  return exportRejection('encoding-failed', path, error.message);
 }
 
 /** A lease release in Export's vocabulary; a refused release is a cleanup failure. */
-export function releaseOutcome(result: AssetResult<void>): ExportResult<void> {
-  return result.ok
-    ? result
-    : exportRejection('cleanup-failed', 'export.release', result.error.message);
+export function releaseOutcome(release: AssetResult<void>): ExportResult<void> {
+  if (release.ok) return release;
+  return exportRejection('cleanup-failed', 'export.release', release.error.message);
 }
 
 /** The primary outcome; a failed cleanup replaces a success or nests under a primary failure. */
@@ -74,9 +71,9 @@ export function settledFailure<T>(
  * kept as source. `cancelled` stays `cancelled`, an input refusal is `invalid-input`, and
  * `encoding-failed`, `cleanup-failed` or `resource-rejected` is `unavailable`.
  */
-export function exportRouteFailure(result: ExportFailure): Result<never> {
-  const { code, path, message } = result.error;
-  return failure(ROUTE_CODE[code], path, message, exportSource(result.error));
+export function exportRouteFailure(refusal: ExportFailure): Result<never> {
+  const { code, path, message } = refusal.error;
+  return failure(ROUTE_CODE[code], path, message, exportSource(refusal.error));
 }
 
 /** The service codes an Export refusal becomes. */
@@ -102,12 +99,18 @@ const ROUTE_CODE: Readonly<Record<ExportErrorCode, RouteCode>> = Object.freeze({
 });
 
 /** The diagnostic as source evidence; an absent cleanup stays an explicit undefined key. */
-function exportSource(error: ExportDiagnostic): OperationSource {
+function exportSource(diagnostic: ExportDiagnostic): OperationSource {
   return {
-    code: error.code,
-    path: error.path,
-    message: error.message,
-    recovery: error.recovery,
-    cleanup: error.cleanup === undefined ? undefined : exportSource(error.cleanup),
+    code: diagnostic.code,
+    path: diagnostic.path,
+    message: diagnostic.message,
+    recovery: diagnostic.recovery,
+    cleanup: cleanupSource(diagnostic.cleanup),
   };
+}
+
+/** A nested cleanup failure as source evidence; undefined when the cleanup succeeded. */
+function cleanupSource(cleanup: ExportDiagnostic | undefined): OperationSource | undefined {
+  if (cleanup === undefined) return undefined;
+  return exportSource(cleanup);
 }
