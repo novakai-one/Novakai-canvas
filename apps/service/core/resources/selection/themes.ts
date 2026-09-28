@@ -20,7 +20,11 @@ import type {
 } from '../../../contract/records/capability-types.js';
 import { addDigestPrefix } from '../../../contract/brands.js';
 import { andThen, collect, success } from '../../../contract/errors.js';
-import { themeBinding, type BindingModel, type ThemeBinding } from '../../presets/theme-binding.js';
+import {
+  checkThemeBinding,
+  type BindingModel,
+  type ThemeBinding,
+} from '../../presets/theme-binding.js';
 import { formatThemePin, type ThemePinText } from '../../presets/theme-pin.js';
 import type { Intent } from './intent.js';
 import { fromCapability, missingAssetFailure } from './refusal.js';
@@ -88,7 +92,7 @@ function exactEntry(
   preset: ThemePreset,
   dependencies: ThemeDependencies,
 ): AuthoringResult<ThemeEntry> {
-  const binding = fromCapability(themeBinding(preset, dependencies.model));
+  const binding = fromCapability(checkThemeBinding(preset, dependencies.model));
   return andThen(binding, (bound) => success([presetPin(preset), bound] as const));
 }
 
@@ -125,7 +129,7 @@ function latestBinding(
 ): AuthoringResult<ThemeBinding> {
   const read = fromCapability(dependencies.templates.read(catalog, { kind: 'theme', id }));
   const latest = andThen(read, selectedTheme);
-  return andThen(latest, (preset) => fromCapability(themeBinding(preset, dependencies.model)));
+  return andThen(latest, (preset) => fromCapability(checkThemeBinding(preset, dependencies.model)));
 }
 
 /**

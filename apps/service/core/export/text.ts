@@ -1,11 +1,13 @@
 /*
- * Text exports: canonical DSL and Markdown, produced from a leased snapshot. Both formats share
- * one settle step: acquire the lease, produce the text, release the lease exactly once on every
- * path, then answer with the file or the failure; a release failure never hides the primary one.
- * A print or format throw becomes an Export `encoding-failed` refusal at the format's path
- * (`export.dsl`, `export.markdown`). Pure over the owners compose injects; the caller owns retry.
- * A lease still held when the process dies stops protecting its bytes: Assets' collection ignores
- * leases whose owner process is gone.
+ * Why this file exists
+ *
+ * Not every export is a picture. An agent can ask for `my-diagram` at revision 3 as DSL (the
+ * `.canvas` text it could edit) or as Markdown. The service writes that text itself, not Export.
+ *
+ * This file does both: it holds the collection's files (lease.ts), writes the text, lets go, and
+ * answers the file. It lets go exactly once, even when writing throws, and a failure to let go
+ * never hides the export's own mistake. Mistakes come from faults.ts, as `Result`s
+ * (contract/errors.ts). It never changes the workspace.
  */
 import { failure, success, type Result } from '../../contract/errors.js';
 import type { SentFile } from '../../contract/records/transport/server.js';
@@ -17,55 +19,60 @@ import type {
 } from '../../contract/records/capability-types.js';
 import type { ExportRules } from '../../contract/ports/capabilities.js';
 import type { ExportRequest } from '../../contract/records/export/request.js';
-import { cancelledExport, exportRejection, exportRouteFailure, settledFailure } from './faults.js';
-import { dslFile, markdownFile } from './files.js';
-import { markdownText, printedSource } from './documents.js';
-import { acquireSnapshot, type LeaseOwners } from './lease.js';
+import {
+  cancelledFailure,
+  exportFailure,
+  exportRouteFailure,
+  combineWithCleanup,
+} from './faults.js';
+import { buildDslFile, buildMarkdownFile } from './files.js';
+import { formatCollectionMarkdown, printCollectionDsl } from './documents.js';
+import { acquireSnapshot, type LeaseDependencies } from './lease.js';
 
-/** The owners text exports lease, print and format through. */
-export interface TextOwners extends LeaseOwners {
+/** What the DSL and Markdown exports use, besides what holding the collection needs. */
+export interface TextExportDependencies extends LeaseDependencies {
+  /** Language, which writes a collection as DSL text. */
   readonly language: Pick<Language, 'print'>;
+  /** Export's rules; only its Markdown formatter is used here. */
   readonly export: Pick<ExportRules, 'formatMarkdown'>;
 }
 
 /**
- * Canonical DSL covers the whole collection only. Fails with `invalid-input` at `scope` for any
- * other scope. Every other refusal is an Export diagnostic, answered as `exportRouteFailure`
- * (`cancelled` stays, an input refusal is `invalid-input`, a fault is `unavailable`):
- * `acquireSnapshot`'s refusals, `cancelled` at `export` when the request aborted,
- * `invalid-input` at `source` when Language cannot print, `encoding-failed` at `export.dsl` when
- * Language throws, and `cleanup-failed` at `export.release` when the release fails.
+ * Exports the whole collection as a DSL (`.canvas`) file.
+ * Fails with `invalid-input` at `scope` when one section is asked for, or at `source` when
+ * Language can't print the collection; `unavailable` when printing throws or letting go fails;
+ * otherwise as `acquireSnapshot` fails, in the service's codes (see `exportRouteFailure`).
  */
 export async function exportDsl(
   request: ExportRequest,
-  owners: TextOwners,
+  dependencies: TextExportDependencies,
   signal: AbortSignal,
 ): Promise<Result<SentFile>> {
   if (request.scope.kind !== 'all')
     return failure('invalid-input', 'scope', 'Canonical DSL export requires the whole collection');
-  return exportText(request.identity, owners, signal, {
+  return exportText(request.identity, dependencies, signal, {
     name: 'dsl',
-    produce: (collection) => printedDsl(collection, owners.language, signal),
-    file: (source) => dslFile(request.identity, source),
+    produce: (collection) => printedDsl(collection, dependencies.language, signal),
+    file: (source) => buildDslFile(request.identity, source),
   });
 }
 
 /**
- * Markdown of the requested scope from the leased collection. Every refusal is an Export
- * diagnostic, answered as `exportRouteFailure`: `acquireSnapshot`'s refusals, `cancelled` at
- * `export` when the request aborted, `invalid-input` at `scope` for a missing section,
- * `encoding-failed` at `export.markdown` when the formatter throws, and `cleanup-failed` at
- * `export.release` when the release fails.
+ * Exports the collection, or one section of it, as a Markdown (`.md`) file.
+ * Fails with `invalid-input` at `scope` for a missing section; `unavailable` when formatting
+ * throws or letting go fails; otherwise as `acquireSnapshot` fails, in the service's codes (see
+ * `exportRouteFailure`).
  */
 export async function exportMarkdown(
   request: ExportRequest,
-  owners: TextOwners,
+  dependencies: TextExportDependencies,
   signal: AbortSignal,
 ): Promise<Result<SentFile>> {
-  return exportText(request.identity, owners, signal, {
+  return exportText(request.identity, dependencies, signal, {
     name: 'markdown',
-    produce: (collection) => markdownText(signal, collection, request.scope, owners.export),
-    file: (source) => markdownFile(request, source),
+    produce: (collection) =>
+      formatCollectionMarkdown(signal, collection, request.scope, dependencies.export),
+    file: (source) => buildMarkdownFile(request, source),
   });
 }
 
@@ -88,7 +95,7 @@ interface TextFormat {
  */
 async function exportText(
   identity: ExportRequest['identity'],
-  owners: LeaseOwners,
+  owners: LeaseDependencies,
   signal: AbortSignal,
   format: TextFormat,
 ): Promise<Result<SentFile>> {
@@ -110,7 +117,7 @@ async function settleText(
 ): Promise<ExportResult<string>> {
   const produced = producedText(format, lease.snapshot.collection);
   const released = await lease.release();
-  return settledFailure(produced, released);
+  return combineWithCleanup(produced, released);
 }
 
 /**
@@ -126,7 +133,7 @@ function producedText(
     return format.produce(collection);
   } catch {
     const fault = PRODUCTION_FAULT[format.name];
-    return exportRejection('encoding-failed', fault.path, fault.message);
+    return exportFailure('encoding-failed', fault.path, fault.message);
   }
 }
 
@@ -154,6 +161,6 @@ function printedDsl(
   language: Pick<Language, 'print'>,
   signal: AbortSignal,
 ): ExportResult<string> {
-  if (signal.aborted) return cancelledExport();
-  return printedSource(language, collection);
+  if (signal.aborted) return cancelledFailure();
+  return printCollectionDsl(language, collection);
 }

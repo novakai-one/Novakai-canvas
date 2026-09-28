@@ -1,8 +1,13 @@
 /*
- * Export snapshot decisions: a workspace read settles into a snapshot or a refusal; the requested
- * collection must exist at its exact revision; a rendered document is kept or its failure
- * translated; and the export snapshot pins identity, scene, paint and every retained resource.
- * Cancellation is checked after each owner await. Pure; the adapter calls the owners.
+ * Why this file exists
+ *
+ * Before an export holds any files, it must know the collection is really there at the asked-for
+ * revision. For example, asking for `my-diagram` at revision 2 after it was saved as revision 3
+ * must be refused, not quietly answered with revision 3.
+ *
+ * This file checks each answer on the way (the workspace read, the collection found, the render)
+ * and builds the final export snapshot. Each step answers an Export `Result` (mistakes made in
+ * faults.ts). It calls nothing itself; lease.ts does the reading and rendering.
  */
 import type { Result } from '../../contract/errors.js';
 import type {
@@ -19,45 +24,63 @@ import type {
   SelectedCollection,
   SnapshotIdentity,
 } from '../../contract/records/export/snapshot.js';
-import { cancelledExport, exportRejection, ownerRejection } from './faults.js';
-import { retainedResources } from './resources.js';
+import { cancelledFailure, exportFailure, readOrRenderFailure } from './faults.js';
+import { gatherExportResources } from './resources.js';
 
-/** The workspace read: an owner failure is translated at `workspace`; a late abort cancels. */
-export function workspaceSnapshot(
+/**
+ * Checks Authoring's answer to reading the workspace. Fails with `cancelled` or `encoding-failed`
+ * at `workspace` when the read failed, and `cancelled` at `export` when the export was stopped
+ * meanwhile.
+ */
+export function checkWorkspaceRead(
   current: AuthoringResult<Snapshot>,
   signal: AbortSignal,
 ): ExportResult<Snapshot> {
-  if (!current.ok) return ownerRejection(current.error, 'workspace');
-  return signal.aborted ? cancelledExport() : current;
+  if (!current.ok) return readOrRenderFailure(current.error, 'workspace');
+  return signal.aborted ? cancelledFailure() : current;
 }
 
-/** The requested collection from the workspace view; refused when missing or at another revision. */
-export function selectedCollection(
-  view: AuthoringResult<WorkspaceContents>,
+/**
+ * Finds the collection `identity` names in the workspace's checked contents, at exactly that
+ * revision. Fails with `encoding-failed` at `workspace` when the contents couldn't be read,
+ * `invalid-input` at `identity.collectionId` when there is no such collection, and
+ * `snapshot-mismatch` at `identity.revision` when the collection is at another revision.
+ */
+export function selectCollection(
+  contents: AuthoringResult<WorkspaceContents>,
   identity: SnapshotIdentity,
 ): ExportResult<SelectedCollection> {
-  if (!view.ok) return exportRejection('encoding-failed', 'workspace', view.error.message);
-  const collection = view.value.collections.find((item) => item.id === identity.collectionId);
+  if (!contents.ok) return exportFailure('encoding-failed', 'workspace', contents.error.message);
+  const collection = contents.value.collections.find((item) => item.id === identity.collectionId);
   if (collection === undefined)
-    return exportRejection('invalid-input', 'identity.collectionId', 'Collection does not exist');
-  return matchingRevision(collection, identity.revision, view.value);
+    return exportFailure('invalid-input', 'identity.collectionId', 'Collection does not exist');
+  return matchingRevision(collection, identity.revision, contents.value);
 }
 
-/** The rendered document, or its owner failure translated at `render`. */
-export function renderedDocument(document: Result<RenderDocument>): ExportResult<RenderDocument> {
-  return document.ok ? document : ownerRejection(document.error, 'render');
+/**
+ * Checks the renderer's answer. Fails with `cancelled` or `encoding-failed` at `render` when
+ * rendering failed.
+ */
+export function checkRenderedDocument(
+  rendered: Result<RenderDocument>,
+): ExportResult<RenderDocument> {
+  return rendered.ok ? rendered : readOrRenderFailure(rendered.error, 'render');
 }
 
-/** The immutable export snapshot, unless the request aborted or a resource was not retained. */
-export function exportSnapshot(
+/**
+ * Builds the snapshot Export makes its file from: the collection, its drawn scene, its colours,
+ * and its theme, images and fonts read with `readHeldFile`. Fails with `cancelled` at `export`
+ * when the export was stopped, or as `gatherExportResources` fails.
+ */
+export function buildExportSnapshot(
   selected: SelectedCollection,
   document: RenderDocument,
-  read: LeaseRead,
+  readHeldFile: LeaseRead,
   signal: AbortSignal,
 ): ExportResult<ExportSnapshot> {
-  if (signal.aborted) return cancelledExport();
-  const resources = retainedResources(
-    read,
+  if (signal.aborted) return cancelledFailure();
+  const resources = gatherExportResources(
+    readHeldFile,
     selected.collection,
     document,
     selected.contents.presets,
@@ -91,7 +114,7 @@ function matchingRevision(
   view: WorkspaceContents,
 ): ExportResult<SelectedCollection> {
   if (collection.revision !== revision)
-    return exportRejection(
+    return exportFailure(
       'snapshot-mismatch',
       'identity.revision',
       'Requested revision is no longer available',

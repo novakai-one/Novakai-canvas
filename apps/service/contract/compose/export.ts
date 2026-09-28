@@ -53,7 +53,7 @@ export async function buildExporter(
       export: inputs.capabilities.export,
       presentation: presentation.value,
       assets: inputs.stores.assets,
-      views: reader,
+      reader,
       resources,
       renderer,
       pngEncoder: createPngEncoder(),

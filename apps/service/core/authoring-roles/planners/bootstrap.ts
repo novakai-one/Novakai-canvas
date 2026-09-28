@@ -21,7 +21,7 @@ import { initializeCommand } from '../../../contract/records/planning/commands.j
 import { actorId, plannerId, requestSchema } from '../../../contract/schemas.js';
 import { andThen, authoringFailure, success } from '../../../contract/errors.js';
 import { MAIN_CATALOG_ID, METADATA_RECORD_ID, presetRecordId } from '../../workspace/records.js';
-import { presetResources } from '../../presets/resources.js';
+import { listPresetFileDigests } from '../../presets/resources.js';
 import { readChangePayload, checkProposal } from './change-payload.js';
 
 /** The actor that signs the installation request. Parsed once at module load; the ID is valid. */
@@ -139,6 +139,6 @@ function presetWrite(preset: Preset): unknown {
     kind: 'put',
     key: { kind: 'preset', id: presetRecordId(preset.digest) },
     value: preset,
-    resources: presetResources(preset),
+    resources: listPresetFileDigests(preset),
   };
 }

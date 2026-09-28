@@ -1,8 +1,13 @@
 /*
- * Export resource retention: the snapshot retains its pinned theme preset, every collection asset
- * and every document font, byte-for-byte through the lease. A missing theme refuses before any
- * read; otherwise every asset and font is read, and the first failure — assets before fonts —
- * refuses the snapshot. Pure; the guarded lease read is injected.
+ * Why this file exists
+ *
+ * Export draws an SVG or PNG only from what it is handed: the collection, its theme, and the bytes
+ * of every image and font it shows. For example, a diagram with a logo needs the logo's bytes and
+ * the font its text uses, exactly as stored.
+ *
+ * This file gathers those from the held files: the theme first, then the images, then the fonts.
+ * A missing theme or a file that can't be read refuses the export (`resource-rejected`); an image
+ * mistake is reported before a font mistake. It only reads.
  */
 import type {
   AssetResult,
@@ -18,29 +23,33 @@ import type { ExportFailure } from '../../contract/records/export/snapshot.js';
 import type { LeaseRead } from '../../contract/ports/export.js';
 import type { RenderDocument } from '../../contract/records/rendering/job.js';
 import { removeDigestPrefix } from '../../contract/brands.js';
-import { exportRejection } from './faults.js';
+import { exportFailure } from './faults.js';
 
-/** Every retained resource: the theme preset, then collection assets, then document fonts. */
-export function retainedResources(
-  read: LeaseRead,
+/**
+ * Gathers the collection's theme, images and fonts, in that order, for Export. The theme comes
+ * from `presets`; images and fonts are read with `readHeldFile`.
+ * Mistakes: `resource-rejected` at `resources.theme` when the pinned theme isn't in `presets`, or
+ * at the file's path when an image or font can't be read.
+ */
+export function gatherExportResources(
+  readHeldFile: LeaseRead,
   collection: Collection,
   document: RenderDocument,
   presets: Catalog,
 ): ExportResult<readonly Resource[]> {
   const theme = themeResource(collection, presets);
   if (theme === undefined)
-    return exportRejection(
-      'resource-rejected',
-      'resources.theme',
-      'The pinned theme is unavailable',
-    );
-  const assets = assetResources(read, collection);
-  const fonts = fontResources(read, document);
+    return exportFailure('resource-rejected', 'resources.theme', 'The pinned theme is unavailable');
+  const assets = assetResources(readHeldFile, collection);
+  const fonts = fontResources(readHeldFile, document);
   return combineResources(theme, assets, fonts);
 }
 
-/** The resource port Export inspects through; it admits the retained resources as given. */
-export function resourceInspector(): Resources {
+/**
+ * Builds the resources helper Export asks for. It accepts the gathered resources as they are:
+ * this file already checked them. Never fails.
+ */
+export function createResourceInspector(): Resources {
   return {
     inspect: async (items) => ({ ok: true, value: items }),
   };
@@ -128,7 +137,7 @@ function resourceFromBlob(
           metadata,
         },
       }
-    : exportRejection('resource-rejected', blob.error.path, blob.error.message);
+    : exportFailure('resource-rejected', blob.error.path, blob.error.message);
 }
 
 /** The first failed read, or every resource in order. */

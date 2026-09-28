@@ -1,7 +1,12 @@
 /*
- * Export files: a finished artifact, Markdown text or canonical DSL becomes one download named
- * <collection>-<revision>[-<scope>].<extension> and stamped with the exported revision; an
- * artifact also carries its digest. A failed artifact becomes the route failure. Pure.
+ * Why this file exists
+ *
+ * Every export comes back as one file to download, and its name should say what it holds. For
+ * example, `my-diagram` at revision 3 as a PNG downloads as `my-diagram-3-all.png`.
+ *
+ * This file wraps a finished SVG or PNG, or Markdown or DSL text, into that file. Each file is
+ * named after the collection and revision, and says its revision in the `X-Novakai-Export-Revision`
+ * header. It never reads the workspace.
  */
 import { success, type Result } from '../../contract/errors.js';
 import type { SentFile } from '../../contract/records/transport/server.js';
@@ -9,33 +14,40 @@ import type { ExportRequest } from '../../contract/records/export/request.js';
 import type { Artifact, ExportResult } from '../../contract/records/capability-types.js';
 import { exportRouteFailure } from './faults.js';
 
-/** The artifact as a download, or its failure as the route failure (`exportRouteFailure`). */
-export function artifactOutcome(artifact: ExportResult<Artifact>): Result<SentFile> {
+/**
+ * Builds the download for Export's finished SVG or PNG (its "artifact"), such as
+ * `my-diagram-3-all.svg`, with the file's digest in the `X-Novakai-Export-Digest` header.
+ * When Export found a mistake instead, answers it as the service's failure (`exportRouteFailure`).
+ */
+export function buildArtifactFile(artifact: ExportResult<Artifact>): Result<SentFile> {
   if (!artifact.ok) return exportRouteFailure(artifact);
   return success(artifactFile(artifact.value));
 }
 
-/** Markdown as a UTF-8 download named by collection, revision and scope. Never fails. */
-export function markdownFile(
+/**
+ * Builds the UTF-8 download for Markdown text, such as `my-diagram-3-all.md` for the whole
+ * collection or `my-diagram-3-intro.md` for the `intro` section. Never fails.
+ */
+export function buildMarkdownFile(
   request: Pick<ExportRequest, 'identity' | 'scope'>,
-  source: string,
+  markdown: string,
 ): SentFile {
   const scope = request.scope.kind === 'all' ? 'all' : request.scope.id;
   return {
-    bytes: UTF8.encode(source),
+    bytes: UTF8.encode(markdown),
     mediaType: 'text/markdown; charset=utf-8',
     filename: `${request.identity.collectionId}-${request.identity.revision}-${scope}.md`,
     headers: revisionHeaders(request.identity),
   };
 }
 
-/** Canonical DSL as a UTF-8 `.canvas` download named by collection and revision. Never fails. */
-export function dslFile(
+/** Builds the UTF-8 download for DSL text, such as `my-diagram-3.canvas`. Never fails. */
+export function buildDslFile(
   identity: ExportRequest['identity'],
-  source: string,
+  dsl: string,
 ): SentFile {
   return {
-    bytes: UTF8.encode(source),
+    bytes: UTF8.encode(dsl),
     mediaType: 'text/plain; charset=utf-8',
     filename: `${identity.collectionId}-${identity.revision}.canvas`,
     headers: revisionHeaders(identity),

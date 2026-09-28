@@ -1,16 +1,21 @@
 /*
- * How the recipe and theme codecs refuse: one Templates `invalid-input` at `preset`, with a fixed
- * message for an identity or token value that is not a Templates brand. Pure. The caller keeps the
- * source, corrects it and prepares again; Authoring owns commit.
+ * Why this file exists
+ *
+ * Templates saves themes and recipes, and asks two codecs (recipe-codec.ts, theme-codec.ts) to read
+ * them. When a codec can't, Templates needs the mistake in its own form. For example, a recipe
+ * whose DSL has a typo is refused as `invalid-input` at `preset`.
+ *
+ * This file makes that one kind of mistake for both codecs, as a Templates `Result`. The caller
+ * keeps its source, fixes it and prepares again. It never throws.
  */
 import type { FailureSource } from '../../contract/records/transport/failure-source.js';
 import type { TemplatesResult } from '../../contract/records/capability-types.js';
 
 /**
- * The codec failure: `invalid-input` at `preset` with this message and the owner's failure, if
- * any.
+ * Makes the codecs' mistake: `invalid-input` at `preset`, with `message`. `source` keeps the
+ * failure of the capability that refused, such as Language's.
  */
-export function rejected<T>(
+export function codecFailure<T>(
   message: string,
   source?: FailureSource,
 ): TemplatesResult<T> {
@@ -27,9 +32,9 @@ export function rejected<T>(
 }
 
 /**
- * The failure for an identity or token value that does not match its Templates schema:
- * `invalid-input` at `preset` ("Preset provider returned invalid identity or token data").
+ * Makes the mistake for an ID, version, digest or token that fails Templates' check:
+ * `invalid-input` at `preset`, "Preset provider returned invalid identity or token data".
  */
-export function invalidIdentity<T>(): TemplatesResult<T> {
-  return rejected('Preset provider returned invalid identity or token data');
+export function invalidIdentityFailure<T>(): TemplatesResult<T> {
+  return codecFailure('Preset provider returned invalid identity or token data');
 }

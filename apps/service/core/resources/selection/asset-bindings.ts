@@ -21,7 +21,7 @@ import type {
 import { removeDigestPrefix, hasDigestPrefix, addDigestPrefix } from '../../../contract/brands.js';
 import { andThen, collect, success } from '../../../contract/errors.js';
 import {
-  assetBindings,
+  checkAssetBindings,
   type AssetBinding,
   type BindingModel,
   type ThemeBinding,
@@ -200,7 +200,7 @@ function newAsset(
     alt: metadata.alt ?? upload.alias,
     ...optionalMetadata(metadata),
   };
-  const checked = fromCapability(assetBindings([draft], theme, dependencies.model));
+  const checked = fromCapability(checkAssetBindings([draft], theme, dependencies.model));
   return andThen(checked, firstBinding);
 }
 

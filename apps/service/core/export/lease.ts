@@ -1,11 +1,14 @@
 /*
- * The export snapshot lease: read the current Authoring snapshot, select the collection at its
- * exact revision (a stale one is refused), lease its resources, render it and hand back an
- * immutable snapshot with its release. Every failure after the lease releases it once, and a
- * release failure never hides the primary one. A throw from the Authoring read, the workspace
- * view, selection or `acquire` escapes before any lease is held: Export answers it
- * `encoding-failed` (SVG, PNG); for DSL and Markdown the HTTP server's `receive` answers it
- * `unavailable` at `request`. Pure over the owners compose injects; the caller owns retry.
+ * Why this file exists
+ *
+ * Every export starts from one collection at one revision, for example `my-diagram` at revision 3.
+ * While the file is made, the diagram's theme, images and fonts must stay stored: clean-up must not
+ * remove them halfway.
+ *
+ * This file finds that collection, refuses a revision that is no longer current, holds its stored
+ * files (a "lease"), renders it and hands back the snapshot with a `release` to let go. After any
+ * mistake it lets go at once. Each step answers an Export `Result` (mistakes made in faults.ts).
+ * It only reads; it never changes the workspace.
  */
 import type {
   AssetResult,
@@ -25,49 +28,47 @@ import type {
   SnapshotIdentity,
 } from '../../contract/records/export/snapshot.js';
 import type { WorkspaceId } from '../../contract/brands.js';
-import { cancelledExport, exportRejection, releaseOutcome, settledFailure } from './faults.js';
+import { cancelledFailure, exportFailure, translateRelease, combineWithCleanup } from './faults.js';
 import {
-  exportSnapshot,
-  renderedDocument,
-  selectedCollection,
-  workspaceSnapshot,
+  buildExportSnapshot,
+  checkRenderedDocument,
+  selectCollection,
+  checkWorkspaceRead,
 } from './snapshot.js';
 
-/** The owners one snapshot lease reads, leases and renders through. */
-export interface LeaseOwners {
+/** What one export reads, holds and renders through. */
+export interface LeaseDependencies {
+  /** The workspace to read. */
   readonly workspace: WorkspaceId;
+  /** Assets, which holds stored files until they are let go. */
   readonly assets: Pick<Assets, 'acquire'>;
-  readonly views: Pick<WorkspaceReader, 'read'>;
+  /** Reads the checked collections and presets out of a workspace snapshot. */
+  readonly reader: Pick<WorkspaceReader, 'read'>;
+  /** Lists the digests of the stored files a collection uses. */
   readonly resources: Pick<ResourceSelector, 'digestsForCollection'>;
+  /** Renders the collection. */
   readonly renderer: CollectionRenderer;
+  /** Makes Authoring for one request; only its `read` of the workspace is used. */
   readonly authoring: (signal: AbortSignal) => Pick<Authoring, 'read'>;
 }
 
 /**
- * Read the workspace, select the exact revision, then lease and prepare its snapshot. The lease
- * is held until the returned `release`. Fails with:
- * - `cancelled` at `export` when the request aborted;
- * - `cancelled` or `encoding-failed` at `workspace` when Authoring's read fails, and
- *   `encoding-failed` at `workspace` when the workspace view is refused;
- * - `invalid-input` at `identity.collectionId` for a missing collection, and `snapshot-mismatch`
- *   at `identity.revision` for a stale revision;
- * - `resource-rejected` at `resources` when selection or the lease is refused, at
- *   `resources.theme` when the pinned theme is missing, and at the resource's path when a
- *   retained resource cannot be read;
- * - `cancelled` or `encoding-failed` at `render`, and `encoding-failed` at `snapshot` when
- *   preparation throws.
- * A failed release after a failure nests `cleanup-failed` at `export.release` under `cleanup`.
+ * Finds the collection `identity` names at that exact revision, holds its files and renders it.
+ * The files stay held until the answer's `release` is called.
+ * Mistakes: `cancelled`; `invalid-input` for a missing collection; `snapshot-mismatch` for an old
+ * revision; `resource-rejected` when the theme or a file can't be found, held or read;
+ * `encoding-failed` when reading the workspace or rendering fails.
  */
 export async function acquireSnapshot(
   identity: SnapshotIdentity,
-  owners: LeaseOwners,
+  dependencies: LeaseDependencies,
   signal: AbortSignal,
 ): Promise<ExportResult<SnapshotLease>> {
-  const current = await readWorkspace(owners, signal);
+  const current = await readWorkspace(dependencies, signal);
   if (!current.ok) return current;
-  const selected = selectedCollection(owners.views.read(current.value), identity);
+  const selected = selectCollection(dependencies.reader.read(current.value), identity);
   if (!selected.ok) return selected;
-  return retainSnapshot(selected.value, owners, signal);
+  return retainSnapshot(selected.value, dependencies, signal);
 }
 
 /**
@@ -76,11 +77,11 @@ export async function acquireSnapshot(
  * Authoring's read fails.
  */
 async function readWorkspace(
-  owners: LeaseOwners,
+  owners: LeaseDependencies,
   signal: AbortSignal,
 ): Promise<ExportResult<Snapshot>> {
-  if (signal.aborted) return cancelledExport();
-  return workspaceSnapshot(await owners.authoring(signal).read(owners.workspace), signal);
+  if (signal.aborted) return cancelledFailure();
+  return checkWorkspaceRead(await owners.authoring(signal).read(owners.workspace), signal);
 }
 
 /**
@@ -89,13 +90,13 @@ async function readWorkspace(
  */
 async function retainSnapshot(
   selected: SelectedCollection,
-  owners: LeaseOwners,
+  owners: LeaseDependencies,
   signal: AbortSignal,
 ): Promise<ExportResult<SnapshotLease>> {
   const digests = owners.resources.digestsForCollection(selected.collection, selected.contents);
-  if (!digests.ok) return exportRejection('resource-rejected', 'resources', digests.error.message);
+  if (!digests.ok) return exportFailure('resource-rejected', 'resources', digests.error.message);
   const lease = owners.assets.acquire(digests.value);
-  if (!lease.ok) return exportRejection('resource-rejected', 'resources', lease.error.message);
+  if (!lease.ok) return exportFailure('resource-rejected', 'resources', lease.error.message);
   return finishLease(selected, owners, signal, lease.value);
 }
 
@@ -106,13 +107,13 @@ async function retainSnapshot(
  */
 async function finishLease(
   selected: SelectedCollection,
-  owners: LeaseOwners,
+  owners: LeaseDependencies,
   signal: AbortSignal,
   lease: ReadLease,
 ): Promise<ExportResult<SnapshotLease>> {
-  if (signal.aborted) return settledFailure(cancelledExport(), releaseLease(lease));
+  if (signal.aborted) return combineWithCleanup(cancelledFailure(), releaseLease(lease));
   const prepared = await prepareSnapshot(selected, owners, lease, signal);
-  if (!prepared.ok) return settledFailure(prepared, releaseLease(lease));
+  if (!prepared.ok) return combineWithCleanup(prepared, releaseLease(lease));
   return {
     ok: true,
     value: { snapshot: prepared.value, release: async () => releaseLease(lease) },
@@ -127,23 +128,23 @@ async function finishLease(
  */
 async function prepareSnapshot(
   selected: SelectedCollection,
-  owners: LeaseOwners,
+  owners: LeaseDependencies,
   lease: ReadLease,
   signal: AbortSignal,
 ): Promise<ExportResult<ExportSnapshot>> {
   try {
-    const document = renderedDocument(
+    const document = checkRenderedDocument(
       await owners.renderer.render(selected.collection, selected.contents, signal),
     );
     if (!document.ok) return document;
-    return exportSnapshot(
+    return buildExportSnapshot(
       selected,
       document.value,
       (digest, path) => readLease(lease, digest, path),
       signal,
     );
   } catch {
-    return exportRejection(
+    return exportFailure(
       'encoding-failed',
       'snapshot',
       'The retained export snapshot could not be prepared',
@@ -175,9 +176,9 @@ function readLease(
 /** Release the lease; fails with `cleanup-failed` at `export.release` when it refuses or throws. */
 function releaseLease(lease: ReadLease): ExportResult<void> {
   try {
-    return releaseOutcome(lease.release());
+    return translateRelease(lease.release());
   } catch {
-    return exportRejection(
+    return exportFailure(
       'cleanup-failed',
       'export.release',
       'The export resource lease could not be released',

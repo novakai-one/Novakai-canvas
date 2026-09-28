@@ -1,9 +1,13 @@
 /*
- * The workspace export route: a read-only projection over one current Authoring snapshot. A
- * checked request is dispatched by format: DSL and Markdown are printed from a leased snapshot
- * (text.ts); SVG and PNG are encoded by Export, which acquires its snapshot through the route's
- * lease (lease.ts). Every path releases its lease once, also when a DSL print or Markdown
- * format throws (text.ts). Pure over the owners compose injects; the caller owns retry.
+ * Why this file exists
+ *
+ * `POST /api/v1/export` asks for one saved collection as a file, for example `my-diagram` at
+ * revision 3 as a PNG. There are four formats, and they are made in two different ways.
+ *
+ * This file builds the exporter behind that route. It checks the request (request.ts), then sends
+ * DSL and Markdown to text.ts, and SVG and PNG to Export (the capability), which gets its snapshot
+ * from lease.ts. Every answer is a `Result` (contract/errors.ts); Export's own mistakes are kept as
+ * the source. An export only reads; it never changes the workspace.
  */
 import type { Result } from '../../contract/errors.js';
 import type { SentFile } from '../../contract/records/transport/server.js';
@@ -12,29 +16,31 @@ import type { ExportRules } from '../../contract/ports/capabilities.js';
 import type { Exporter, PngEncoder } from '../../contract/ports/export.js';
 import type { ExportRequest } from '../../contract/records/export/request.js';
 import { readExportRequest } from './request.js';
-import { resourceInspector } from './resources.js';
-import { artifactOutcome } from './files.js';
-import { exportDocuments, type DocumentOwners } from './documents.js';
+import { createResourceInspector } from './resources.js';
+import { buildArtifactFile } from './files.js';
+import { createDocumentsForExport, type DocumentDependencies } from './documents.js';
 import { acquireSnapshot } from './lease.js';
-import { exportDsl, exportMarkdown, type TextOwners } from './text.js';
+import { exportDsl, exportMarkdown, type TextExportDependencies } from './text.js';
 
-/** Everything one export reads through: the text and lease owners, plus Export's documents port. */
-export interface ExportRouteOwners extends TextOwners, DocumentOwners {
+/** What one exporter uses: all that the text exports and the documents helper need, plus these. */
+export interface ExporterDependencies extends TextExportDependencies, DocumentDependencies {
+  /** Export's rules: `compose` builds Export, `formatMarkdown` writes Markdown. */
   readonly export: Pick<ExportRules, 'compose' | 'formatMarkdown'>;
+  /** Presentation, which Export draws the SVG and PNG with. */
   readonly presentation: PresentationBindings;
+  /** Starts on the first PNG request and turns the SVG into PNG bytes. */
   readonly pngEncoder: PngEncoder;
 }
 
 /**
- * The exporter of one workspace; starts no I/O. `exportFile` answers one file, or fails with
- * `invalid-input` for a refused request (see `readExportRequest`) or a DSL scope other than the
- * whole collection (at `scope`), `unavailable` at `export.png` when the PNG encoder cannot start,
- * and otherwise as `exportRouteFailure`: an Export refusal is `cancelled`, `invalid-input` or
- * `unavailable`, with Export's diagnostic kept as source. Every export only reads; the caller
- * owns the retry.
+ * Builds the exporter of one workspace. Its `exportFile` turns one request, as sent, into one file.
+ * Nothing is read until a request arrives.
+ * Mistakes: `invalid-input` for a bad request, a missing collection, an old revision or a DSL
+ * export of one section; `unavailable` when the PNG encoder can't start or a file can't be made;
+ * and `cancelled` when the export was stopped. Export's own mistake is kept as the source.
  */
-export function createExporter(owners: ExportRouteOwners): Exporter {
-  return { exportFile: (input, signal) => invokeExport(input, signal, owners) };
+export function createExporter(dependencies: ExporterDependencies): Exporter {
+  return { exportFile: (input, signal) => invokeExport(input, signal, dependencies) };
 }
 
 /**
@@ -44,7 +50,7 @@ export function createExporter(owners: ExportRouteOwners): Exporter {
 async function invokeExport(
   input: unknown,
   signal: AbortSignal,
-  owners: ExportRouteOwners,
+  owners: ExporterDependencies,
 ): Promise<Result<SentFile>> {
   const request = readExportRequest(input);
   if (!request.ok) return request;
@@ -57,7 +63,7 @@ async function invokeExport(
  */
 async function dispatchExport(
   request: ExportRequest,
-  owners: ExportRouteOwners,
+  owners: ExporterDependencies,
   signal: AbortSignal,
 ): Promise<Result<SentFile>> {
   switch (request.format) {
@@ -76,7 +82,7 @@ async function dispatchExport(
  */
 async function nativeExport(
   request: ExportRequest,
-  owners: ExportRouteOwners,
+  owners: ExporterDependencies,
   signal: AbortSignal,
 ): Promise<Result<SentFile>> {
   const prepared = await prepareFormat(request.format, owners);
@@ -90,7 +96,7 @@ async function nativeExport(
  */
 async function prepareFormat(
   format: ExportRequest['format'],
-  owners: ExportRouteOwners,
+  owners: ExporterDependencies,
 ): Promise<Result<void>> {
   return format === 'png' ? owners.pngEncoder.prepare() : { ok: true, value: undefined };
 }
@@ -103,15 +109,15 @@ async function prepareFormat(
  */
 async function encodeNative(
   request: ExportRequest,
-  owners: ExportRouteOwners,
+  owners: ExporterDependencies,
   signal: AbortSignal,
 ): Promise<Result<SentFile>> {
   const exporter = owners.export.compose({
     presentation: owners.presentation,
     readerCss: '',
     snapshots: { acquire: (identity) => acquireSnapshot(identity, owners, signal) },
-    documents: exportDocuments(owners),
-    resources: resourceInspector(),
+    documents: createDocumentsForExport(owners),
+    resources: createResourceInspector(),
   });
-  return artifactOutcome(await exporter.service.exportArtifact(request, signal));
+  return buildArtifactFile(await exporter.service.exportArtifact(request, signal));
 }

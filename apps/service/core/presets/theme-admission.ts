@@ -1,10 +1,13 @@
 /*
- * Theme admission: translates a theme written in source syntax (a base name or exact pin, hex
- * colours, font aliases) into the exact admission Templates and Design System check. The base
- * becomes an exact preset pin, each font alias the family Assets verified, each hex colour an
- * sRGB record. Any other admission passes through unchanged. Pure over the injected owners; every
- * refusal is a returned Result. Authoring keeps the draft on every failure and owns commit and
- * retry.
+ * Why this file exists
+ *
+ * A theme file is written for people: `base=ink`, colours such as `"#72dbe8"`, and fonts by name,
+ * such as `font body source="./fonts/inter.woff2"`. Templates and Design System need the exact
+ * form: the base as an exact pin, each font as a checked font file, each colour as numbers.
+ *
+ * This file rewrites a theme into that exact form. It finds the base with Templates and checks each
+ * font with Assets. Any other preset comes back unchanged. Mistakes are an Authoring `Result`
+ * (contract/errors.ts). It never saves; Authoring does.
  */
 import type {
   Assets,
@@ -24,7 +27,7 @@ import { presetFields } from '../../contract/records/presets/preparation.js';
 import { chromeName } from '../../contract/schemas.js';
 import { authoringFailure, collect, success } from '../../contract/errors.js';
 import type { FontBinding, ThemeSavingInputs } from '../../contract/ports/headless.js';
-import { parseThemePin } from './theme-pin.js';
+import { parseThemeSelection } from './theme-pin.js';
 
 /** One font alias bound to the family Assets verified and the digest of its bytes. */
 type FontEntry = readonly [
@@ -33,27 +36,23 @@ type FontEntry = readonly [
 ];
 
 /**
- * Prepares one admission: selects the exact base through Templates, then binds fonts and rewrites
- * the raw block (see `withFonts`). An admission that is not a source-syntax theme is returned
- * unchanged. Fails with `invalid-input` at Templates' path when the base theme cannot be selected
- * (Templates' failure kept as source), `missing-asset` at Assets' path for any failure of Assets
- * to resolve a font digest, such as bytes not stored or a malformed digest (Assets' failure kept
- * as source), `invalid-input` at the font alias when the bytes are not a verified font, and
- * `invalid-input` at `theme` ("Theme preparation failed") for a malformed admission header,
- * chrome name or hex colour.
+ * Readies one preset for saving: a theme written for people comes back in the exact form Templates
+ * saves; any other preset comes back unchanged. The base is looked up in `catalog`, the saved
+ * presets. Mistakes: `invalid-input` when the base can't be found, a font file isn't a checked
+ * font, or the theme is malformed; `missing-asset` when Assets can't find a font file.
  */
 export function prepareTheme(
-  admission: Json,
+  preset: Json,
   catalog: Catalog,
-  bindings: readonly FontBinding[],
-  owners: ThemeSavingInputs,
+  fontBindings: readonly FontBinding[],
+  inputs: ThemeSavingInputs,
 ): AuthoringResult<Json> {
-  const parsed = sourceTheme.safeParse(admission);
-  if (!parsed.success) return success(admission);
-  const base = owners.templates.read(catalog, selection(parsed.data.raw.base));
+  const parsed = sourceTheme.safeParse(preset);
+  if (!parsed.success) return success(preset);
+  const base = inputs.templates.read(catalog, selection(parsed.data.raw.base));
   if (!base.ok)
     return authoringFailure('invalid-input', base.error.path, base.error.message, [], base.error);
-  return withFonts(admission, parsed.data.raw, base.value, bindings, owners.assets);
+  return withFonts(preset, parsed.data.raw, base.value, fontBindings, inputs.assets);
 }
 
 /**
@@ -62,7 +61,7 @@ export function prepareTheme(
  * parses the selection and refuses what it does not store.
  */
 function selection(base: string): unknown {
-  const pin = parseThemePin(base);
+  const pin = parseThemeSelection(base);
   if (pin.kind === 'latest') return { kind: 'theme', id: pin.id };
   return { kind: 'theme', id: pin.id, version: pin.version, digest: pin.digest };
 }

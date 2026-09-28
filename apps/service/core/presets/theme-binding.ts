@@ -1,9 +1,13 @@
 /*
- * Theme and asset bindings in Model's checked form. Model checks each binding inside the smallest
- * possible collection, so no caller copies Model's rules; only the checked `theme` or `assets` is
- * read back. Pure over Model. Each function returns Model's own refusal: resource selection turns
- * it into `missing-asset`, built-in preparation into `invalid-input` at `builtins`. Authoring owns
- * recovery.
+ * Why this file exists
+ *
+ * A diagram names its theme and images through "bindings" that Model must accept: for example the
+ * `ink` theme with its version and `sha256:` digest, or a logo image with its alt text. Model only
+ * checks a binding inside a whole collection, and the service must not copy Model's rules.
+ *
+ * This file puts the bindings in the smallest collection Model accepts, lets Model check it, and
+ * answers only the checked bindings. A refusal is Model's own failure, unchanged; the caller picks
+ * the code it answers. It never saves anything.
  */
 import type { Collection, ThemePreset } from '../../contract/records/capability-types.js';
 import type { FailureSource } from '../../contract/records/transport/failure-source.js';
@@ -11,16 +15,18 @@ import type { ModelRules } from '../../contract/ports/capabilities.js';
 import { success, type Result } from '../../contract/errors.js';
 import { addDigestPrefix, type PrefixedDigest } from '../../contract/brands.js';
 
-/** The one Model rule a binding needs. */
+/** The one Model check a binding needs. */
 export type BindingModel = Pick<ModelRules, 'validate'>;
-/** A collection's theme binding, as Model checks it. */
+/** A collection's theme binding (ID, version, `sha256:` digest and roles), as Model checked it. */
 export type ThemeBinding = Collection['theme'];
-/** One asset binding of a collection, as Model checks it. */
+/** One of a collection's image bindings, as Model checked it. */
 export type AssetBinding = Collection['assets'][number];
 
-/** An asset binding before Model checks it; `digest` is pinned as `sha256:<hex>`. */
+/** An image binding before Model checks it. The text fields are as sent; Model checks them. */
 export interface AssetDraft {
+  /** The image's name in the DSL, such as `logo`. */
   readonly id: string;
+  /** The digest of the stored bytes, as `sha256:<hex>`. */
   readonly digest: PrefixedDigest;
   readonly mediaType: string;
   readonly alt: string;
@@ -29,10 +35,10 @@ export interface AssetDraft {
 }
 
 /**
- * A theme preset as Model's checked theme binding: its ID, version, `sha256:`-pinned digest and
- * roles. Fails with Model's `validation-failed` when Model rejects the pin.
+ * Makes a theme preset's binding (its ID, version, digest with `sha256:`, and roles) and has Model
+ * check it. Fails with Model's own failure when Model refuses it.
  */
-export function themeBinding(
+export function checkThemeBinding(
   preset: ThemePreset,
   model: BindingModel,
 ): Result<ThemeBinding, FailureSource> {
@@ -48,14 +54,14 @@ export function themeBinding(
 }
 
 /**
- * Asset drafts as Model's checked asset bindings, in draft order, each checked against one
- * admitted theme binding. Fails with Model's `validation-failed` when Model rejects a draft.
+ * Has Model check image bindings, in order, next to a theme binding Model already accepted.
+ * Fails with Model's own failure when Model refuses one.
  */
-export function assetBindings(
+export function checkAssetBindings(
   drafts: readonly AssetDraft[],
   theme: ThemeBinding,
   model: BindingModel,
-): Result<Collection['assets'], FailureSource> {
+): Result<readonly AssetBinding[], FailureSource> {
   const checked = bindingCollection({ title: 'Asset binding', theme, assets: drafts }, model);
   if (!checked.ok) return checked;
   return success(checked.value.assets);

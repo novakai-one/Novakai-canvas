@@ -19,7 +19,7 @@ import type {
 import type { WorkspaceContents } from '../../../contract/records/workspace/contents.js';
 import { workspaceMetadata, assetMetadata } from '../../../contract/records/workspace/metadata.js';
 import { andThen } from '../../../contract/errors.js';
-import { presetResources } from '../../presets/resources.js';
+import { listPresetFileDigests } from '../../presets/resources.js';
 import {
   assetRecordId,
   listLiveRecords,
@@ -80,7 +80,7 @@ function checkPreset(
 ): AuthoringResult<void> {
   const slot = requireRecord(snapshot, 'preset', presetRecordId(preset.digest));
   if (!slot.ok) return slot;
-  const expected = presetResources(preset);
+  const expected = listPresetFileDigests(preset);
   const retained = requireExactFiles(slot.value, expected);
   return andThen(retained, () => checkPresetBytes(expected, dependencies));
 }

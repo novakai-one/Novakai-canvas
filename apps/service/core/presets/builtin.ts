@@ -1,7 +1,12 @@
 /*
- * The installation's built-in presets: the Paper and Ink themes and one recipe per shipped
- * starter, admitted through Templates into one catalog. Nothing is written here. Pure over the
- * injected owners; startup submits the catalog through Authoring, which owns commit and recovery.
+ * Why this file exists
+ *
+ * Every new workspace starts with the same presets: the Paper (light) and Ink (dark) themes, and
+ * one recipe per shipped starter, such as `er`. They are made from the fonts, design tokens and
+ * recipe DSL shipped in `resources/`, and must pass the same checks as a preset a user saves.
+ *
+ * This file makes that catalog through Design System, Model and Templates, as a `Result`
+ * (contract/errors.ts). It saves nothing: start-up saves the catalog through Authoring.
  */
 import type { FailureSource } from '../../contract/records/transport/failure-source.js';
 import type {
@@ -20,36 +25,35 @@ import type {
 } from '../../contract/records/presets/builtins.js';
 import { andThen, collect, failure, success, type Result } from '../../contract/errors.js';
 import { EMPTY_RESOURCES } from '../../contract/ports/capabilities.js';
-import { themeBinding, type BindingModel } from './theme-binding.js';
+import { checkThemeBinding, type BindingModel } from './theme-binding.js';
 
-/** The slice of ServiceCapabilities builtin preparation uses: theme binding, UI token resolution and preset admission. */
-export interface BuiltinPresetOwners {
+/** What making the built-in presets uses. The service's capabilities fit it. */
+export interface BuiltinPresetDependencies {
+  /** Model's check of a theme binding, so the recipes can use the new themes. */
   readonly model: BindingModel;
+  /** Design System, which works out the UI tokens each built-in theme starts from. */
   readonly system: Pick<DesignSystem, 'resolve'>;
+  /** Makes Templates for a set of themes and files; only its `planAdmission` is used. */
   templates(resources: ResolvedResources): Pick<Templates<LoweredIntent>, 'planAdmission'>;
 }
 
 /**
- * Prepares the complete installation preset set.
- *
- * Steps; the first failure stops the preparation:
- * 1. Name the shipped fonts by role (see `fontRoles`).
- * 2. Admit Paper (light) and Ink (dark) with those fonts (see `addThemes`).
- * 3. Admit each shipped recipe against those two themes (see `addRecipes`).
- *
- * Returns the sources, unchanged, with the admitted catalog. Fails with `invalid-input` at
- * `builtins` when a shipped font is missing or an owner rejects a shipped input (the owner's
- * failure kept as source).
+ * Makes the built-in preset catalog, and answers the shipped sources with it (`presets`).
+ * 1. Names the shipped fonts by role: body, mono, strong.
+ * 2. Adds Paper (light) and Ink (dark) with those fonts.
+ * 3. Adds each shipped recipe, which may use those two themes.
+ * Fails with `invalid-input` at `builtins` when a shipped font is missing or a capability refuses
+ * a shipped input (its failure kept as the source).
  */
 export function prepareBuiltinPresets(
   sources: BuiltinSources,
-  owners: BuiltinPresetOwners,
+  dependencies: BuiltinPresetDependencies,
 ): Result<PreparedBuiltins> {
   const fonts = fontRoles(sources.fonts);
   if (!fonts.ok) return fonts;
-  const themes = addThemes({ tokens: sources.tokens, fonts: fonts.value }, owners);
+  const themes = addThemes({ tokens: sources.tokens, fonts: fonts.value }, dependencies);
   if (!themes.ok) return themes;
-  const presets = addRecipes(themes.value, sources.recipes, owners);
+  const presets = addRecipes(themes.value, sources.recipes, dependencies);
   return andThen(presets, (catalog) => success({ ...sources, presets: catalog }));
 }
 
@@ -84,7 +88,7 @@ const bundledThemes: Readonly<Record<Scheme, { readonly id: string; readonly tit
 /** Admits Paper, then Ink, into an empty catalog. Fails as `addTheme` fails. */
 function addThemes(
   sources: ThemeSources,
-  owners: BuiltinPresetOwners,
+  owners: BuiltinPresetDependencies,
 ): Result<Catalog> {
   const light = addTheme([], 'light', sources, owners);
   return andThen(light, (catalog) => addTheme(catalog, 'dark', sources, owners));
@@ -99,7 +103,7 @@ function addTheme(
   catalog: Catalog,
   scheme: Scheme,
   sources: ThemeSources,
-  owners: BuiltinPresetOwners,
+  owners: BuiltinPresetDependencies,
 ): Result<Catalog> {
   const raw = themeInput(sources, scheme, owners);
   if (!raw.ok) return raw;
@@ -128,7 +132,7 @@ function addTheme(
 function themeInput(
   sources: ThemeSources,
   scheme: Scheme,
-  owners: BuiltinPresetOwners,
+  owners: BuiltinPresetDependencies,
 ): Result<unknown> {
   const ui = fromOwner(
     owners.system.resolve({
@@ -180,7 +184,7 @@ type ShippedRecipe = BuiltinSources['recipes'][number];
 function addRecipes(
   themes: Catalog,
   recipes: readonly ShippedRecipe[],
-  owners: BuiltinPresetOwners,
+  owners: BuiltinPresetDependencies,
 ): Result<Catalog> {
   // `addNext` passes the first failure along unchanged, so later recipes are skipped.
   const addNext = (catalog: Result<Catalog>, recipe: ShippedRecipe): Result<Catalog> =>
@@ -197,7 +201,7 @@ function addRecipes(
 function addRecipe(
   catalog: Catalog,
   recipe: ShippedRecipe,
-  owners: BuiltinPresetOwners,
+  owners: BuiltinPresetDependencies,
 ): Result<Catalog> {
   const themes = catalogThemes(catalog, owners);
   if (!themes.ok) return themes;
@@ -223,7 +227,7 @@ function addRecipe(
  */
 function catalogThemes(
   catalog: Catalog,
-  owners: BuiltinPresetOwners,
+  owners: BuiltinPresetDependencies,
 ): Result<ResolvedResources['themes']> {
   const themes = catalog.filter((item) => item.kind === 'theme');
   const bound = collect(themes, (theme) => boundTheme(theme, owners));
@@ -233,9 +237,9 @@ function catalogThemes(
 /** One theme under its ID, bound as Model checks it. Fails as `catalogThemes` names. */
 function boundTheme(
   preset: ThemePreset,
-  owners: BuiltinPresetOwners,
+  owners: BuiltinPresetDependencies,
 ): Result<readonly [string, ResolvedResources['themes'][string]]> {
-  const binding = fromOwner(themeBinding(preset, owners.model));
+  const binding = fromOwner(checkThemeBinding(preset, owners.model));
   return andThen(binding, (bound) => success([preset.id, bound] as const));
 }
 

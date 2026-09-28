@@ -1,8 +1,12 @@
 /*
- * The theme codec Templates admits themes with. Design System resolves the theme against an exact
- * base; Templates brands are minted after Design System has checked the tokens. Pure over the
- * injected context. Every failure is Templates' `invalid-input` at `preset` (codec-refusal.ts):
- * the caller keeps the source, corrects it and prepares again; Authoring owns commit.
+ * Why this file exists
+ *
+ * Templates saves themes but can't work out their colours, sizes and fonts. A theme only lists what
+ * it changes: for example, `walkthrough` is `ink` with a different accent colour. Design System
+ * works out every value from the base theme plus those changes, and checks the result.
+ *
+ * This file is that theme codec. Every mistake is `invalid-input` at `preset` (codec-refusal.ts),
+ * with Design System's own failure kept as the source when it refused. It never saves.
  */
 import type {
   DesignSystem,
@@ -15,18 +19,22 @@ import type {
 import type { PresetCodecs } from '../../contract/records/presets/codecs.js';
 import { exactTheme, type ExactTheme } from '../../contract/records/presets/theme-input.js';
 import { andThen, collect, success } from '../../contract/errors.js';
-import { rejected } from './codec-refusal.js';
-import { brandedDigest, brandedThemePin } from './branded-pin.js';
+import { codecFailure } from './codec-refusal.js';
+import { checkPresetDigest, checkThemePin } from './branded-pin.js';
 
-/** What the theme codec reads: Design System to resolve a theme, and the token sources. */
+/** What the theme codec uses. */
 export interface ThemeCodecContext {
+  /** Design System, which works out a theme's full values from its base and its changes. */
   readonly system: Pick<DesignSystem, 'resolveTheme'>;
-  /** The raw token source envelope; Design System revalidates it on every call. */
+  /** The design token sources, as read from disk; Design System checks them on every call. */
   readonly sources: unknown;
 }
 
 /**
- * Binds the theme codec to one context. `resolve` fails as listed on `theme` and never throws.
+ * Builds the theme codec Templates uses. Its `resolve` works out a theme's full values from its
+ * changes and its base, which must be a UI base or exactly one of the `available` themes.
+ * Mistakes: `invalid-input` at `preset` when the input isn't a theme, the base isn't available,
+ * Design System refuses the theme, or an ID, version or digest fails Templates' check.
  */
 export function createThemeCodec(context: ThemeCodecContext): PresetCodecs['theme'] {
   return { resolve: (raw, available) => theme(raw, available, context) };
@@ -43,7 +51,7 @@ function theme(
   context: ThemeCodecContext,
 ): TemplatesResult<ThemePayload> {
   const input = exactTheme.safeParse(raw);
-  if (!input.success) return rejected('Theme admission requires a base, fonts and overrides');
+  if (!input.success) return codecFailure('Theme admission requires a base, fonts and overrides');
   return resolvedTheme(input.data, available, context);
 }
 
@@ -64,7 +72,7 @@ function resolvedTheme(
     sources: context.sources,
     theme: { ...input, base: base.value },
   });
-  if (!result.ok) return rejected(result.error.message, result.error);
+  if (!result.ok) return codecFailure(result.error.message, result.error);
   return checkedThemePayload(result.value);
 }
 
@@ -85,7 +93,7 @@ function selectedBase(
       item.version === input.pin.version &&
       item.digest === input.pin.digest,
   );
-  if (!found) return rejected('The exact base theme is unavailable');
+  if (!found) return codecFailure('The exact base theme is unavailable');
   return success({
     kind: 'preset',
     pin: input.pin,
@@ -114,7 +122,7 @@ type TokenEntry = readonly [string, ThemePayload['tokens'][string]];
 function checkedThemePayload(resolved: PortableTheme): TemplatesResult<ThemePayload> {
   const tokens = collect(Object.entries(resolved.tokens), tokenEntry);
   if (!tokens.ok) return tokens;
-  const fonts = collect(resolved.fonts, brandedDigest);
+  const fonts = collect(resolved.fonts, checkPresetDigest);
   if (!fonts.ok) return fonts;
   return andThen(basePin(resolved.base), (base) =>
     success({
@@ -137,7 +145,7 @@ function tokenEntry([id, entry]: readonly [string, PortableToken]): TemplatesRes
  */
 function token(entry: PortableToken): TemplatesResult<ThemePayload['tokens'][string]> {
   if (entry.type !== 'font') return success(entry);
-  return andThen(brandedDigest(entry.digest), (digest) => success({ ...entry, digest }));
+  return andThen(checkPresetDigest(entry.digest), (digest) => success({ ...entry, digest }));
 }
 
 /**
@@ -146,5 +154,5 @@ function token(entry: PortableToken): TemplatesResult<ThemePayload['tokens'][str
  */
 function basePin(base: PortableTheme['base']): TemplatesResult<ThemePayload['base']> {
   if (base === null) return success(null);
-  return brandedThemePin(base);
+  return checkThemePin(base);
 }

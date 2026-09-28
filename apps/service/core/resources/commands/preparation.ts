@@ -32,7 +32,7 @@ import type { ResourceSelector } from '../../../contract/ports/workspace.js';
 import type { FontBinding } from '../../../contract/ports/headless.js';
 import { json, recordId } from '../../../contract/schemas.js';
 import { andThen, success } from '../../../contract/errors.js';
-import { presetResources } from '../../presets/resources.js';
+import { listPresetFileDigests } from '../../presets/resources.js';
 import { presetRecordId } from '../../workspace/records.js';
 import { buildSelectionRequest, readStoredCatalog } from './catalog.js';
 import { invalidInputFailure } from './refusal.js';
@@ -181,7 +181,7 @@ function preparation(
       record: record.data,
       pin: planned.pin,
       key,
-      resources: presetResources(planned.preset),
+      resources: listPresetFileDigests(planned.preset),
       reads: catalogReads(snapshot),
     }),
   );
