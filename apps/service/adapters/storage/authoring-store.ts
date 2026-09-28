@@ -2,9 +2,9 @@
  * Why this file exists
  *
  * Authoring saves every change, but it doesn't know about SQLite. It asks for three things: read
- * the workspace, find a request's receipt, and commit a change. Persistence does the storing, and
- * has its own mistake codes. For example, Persistence says `missing-resource` where Authoring says
- * `missing-asset`.
+ * the workspace, find a request's receipt (the saved record of a finished request), and commit a
+ * change. Persistence does the storing, and has its own mistake codes. For example, Persistence
+ * says `missing-resource` where Authoring says `missing-asset`.
  *
  * This file joins the two: it gives Authoring those three roles, backed by Persistence, and turns
  * each storage mistake into Authoring's code, keeping Persistence's detail. It never decides
@@ -29,8 +29,9 @@ import type { AuthoringStore, ConditionalStorage } from '../../contract/ports/st
 /**
  * Gives Authoring its three storage roles (read the workspace, find a receipt, commit), backed by
  * `storage`. Finding a receipt answers `null` when none is stored.
- * Mistakes: `permission-denied` at `workspace` for another workspace, `corrupt-record` at
- * `receipt` for a stored receipt that can't be read, and Persistence's mistakes as Authoring codes.
+ * `storage` holds one workspace, and the store serves only that one: asking for any other gives
+ * `permission-denied` at `workspace`. A stored receipt that can't be read gives `corrupt-record`
+ * at `receipt`. Persistence's own mistakes come back as Authoring codes.
  */
 export function createAuthoringStore(storage: ConditionalStorage): AuthoringStore {
   const bridge: StoreBridge = { storage, views: new WeakMap() };

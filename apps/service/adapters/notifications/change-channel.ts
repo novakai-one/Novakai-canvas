@@ -15,8 +15,8 @@ import type { Result } from '@novakai/canvas-authoring';
 /**
  * Makes an empty change channel. `publish` tells every listener about one saved change,
  * `subscribe` adds a listener, and `close` removes them all.
- * `publish` fails with `storage-unavailable` at `subscription` when a listener throws; the change
- * stays saved.
+ * When a listener throws, `publish` fails with `storage-unavailable` at `subscription`: Authoring
+ * has no code for a listener failure. The change stays saved.
  */
 export function createChangeChannel(): ChangeChannel {
   const emitter = new EventEmitter();

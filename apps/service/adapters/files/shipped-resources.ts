@@ -7,7 +7,8 @@
  *
  * This file reads those shipped files at start-up. Each font is stored through Assets and read
  * back. It reads only the fixed list of files below, so no diagram can name another path. It never
- * admits a preset; start-up does that through Authoring.
+ * saves a theme or recipe to the workspace: start-up makes those from these files and saves them
+ * through Authoring.
  */
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';

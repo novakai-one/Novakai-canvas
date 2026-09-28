@@ -29,8 +29,8 @@ const MEDIA_TYPES: Readonly<Record<string, string>> = Object.freeze({
 /**
  * Makes the reader of the built web app's files in `webRoot`. A request picks a path, never the
  * folder. `read('/')` answers `index.html`.
- * Fails with `not-found` at `file` when the path leaves the folder, doesn't exist, can't be read or
- * isn't a served file type.
+ * `read` fails with `not-found` at `file` when the path leaves the folder, doesn't exist, can't be
+ * read or isn't a served file type.
  */
 export function createStaticFiles(webRoot: HostPath): StaticFiles {
   return { read: (path) => read(webRoot, path) };

@@ -40,9 +40,9 @@ interface MeasuredCollection {
 
 /**
  * Draws the job's collection: Presentation measures it, then Layout places and routes it.
- * Mistakes: `invalid-input` at `render` when Model, Presentation or Layout refuses the job, or
- * `signal` aborts (their mistake kept as the source); `unavailable` at `render` when measuring or
- * layout crashes. It never answers part of a drawing.
+ * Mistakes: `invalid-input` at `render` when Model, Presentation or Layout refuses the job, and
+ * `unavailable` at `render` when measuring or layout crashes. An aborted `signal` would also give
+ * `invalid-input`, but callers never abort it: the worker pool cancels a job by ending its thread.
  */
 export async function produceDiagram(
   job: RenderingJob,
