@@ -13,8 +13,8 @@ import type { SourceParser } from '../../contract/ports/source-parser.js';
 import type { RecipeHeader } from '../../contract/records/command.js';
 import type { Admission, ResourceRequest } from '../../contract/records/foreign.js';
 import type { Result } from '../../contract/errors.js';
+import { success } from '../../contract/errors.js';
 import { parseSource } from '../shared/parse-source.js';
-import { mapped } from '../shared/results.js';
 
 /** A recipe to save, in the form Templates accepts. Templates calls this an admission. */
 export type RecipeAdmission = Extract<Admission, { readonly kind: 'recipe' }>;
@@ -36,16 +36,19 @@ export function parseRecipe(
   recipeText: string,
   language: SourceParser,
 ): Result<RecipeSource> {
-  return mapped(parseSource(language, recipeText), (parsed) => ({
-    admission: recipeAdmission(header, recipeText),
-    resources: parsed.resources,
-  }));
+  const parsedRecipe = parseSource(language, recipeText);
+  if (!parsedRecipe.ok) {
+    return parsedRecipe;
+  }
+  const admission = recipeAdmission(header, recipeText);
+  return success({ admission, resources: parsedRecipe.value.resources });
 }
 
-/** The admission record: the header, no description, and the source exactly as written. */
+/** Builds the recipe to save: the typed header, no description, and the text exactly as written. */
 function recipeAdmission(
   header: RecipeHeader,
-  source: string,
+  recipeText: string,
 ): RecipeAdmission {
-  return { schemaVersion: 1, kind: 'recipe', ...header, description: '', source };
+  // `schemaVersion: 1` is the only admission format Templates accepts.
+  return { schemaVersion: 1, kind: 'recipe', ...header, description: '', source: recipeText };
 }
