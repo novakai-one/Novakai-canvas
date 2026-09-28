@@ -14,10 +14,6 @@ import type { OutOption } from '../../contract/records/command.js';
 import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
 
-/** Where the answer goes: the terminal, or the --out file. */
-type AnswerDestination =
-  { readonly kind: 'terminal' } | { readonly kind: 'file'; readonly path: FilePath };
-
 /** Writes the answer to the `--out` file: `writeOutput(path, text)`. */
 export type OutFileWriter = Pick<LocalFiles, 'writeOutput'>;
 
@@ -33,22 +29,13 @@ export async function printOrWriteAnswer(
   outOption: OutOption,
   writer: OutFileWriter,
 ): Promise<Result<string>> {
-  const destination = chooseDestination(outOption);
-  if (destination.kind === 'terminal') {
+  if (outOption.out === undefined) {
     return success(answer);
   }
-  return writeAnswer(answer, destination.path, writer);
+  return writeAnswer(answer, outOption.out, writer);
 }
 
-/** Where the command asked for its answer: the --out file when given, otherwise the terminal. */
-function chooseDestination(outOption: OutOption): AnswerDestination {
-  if (outOption.out === undefined) {
-    return { kind: 'terminal' };
-  }
-  return { kind: 'file', path: outOption.out };
-}
-
-/** Writes the answer to the --out file, then says so. Fails with `output-unavailable`. */
+/** Writes the answer to the `--out` file, and returns a line saying where it went. */
 async function writeAnswer(
   answer: string,
   path: FilePath,

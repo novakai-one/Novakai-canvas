@@ -236,10 +236,7 @@ export function buildRecipeInstantiateCommand(
   return success({ name: 'recipe-instantiate', expansion: expansion.value, ...outOption.value });
 }
 
-/**
- * `recipe admit`'s FILE, then its header flags. Fails with `source-unavailable`, then
- * `invalid-arguments`.
- */
+/** Checks `recipe admit`'s file path, then its four recipe flags. */
 function checkRecipeSource(
   fileText: string,
   flags: FlagTextAsTyped,
@@ -255,7 +252,7 @@ function checkRecipeSource(
   return success({ file: file.value, recipe: recipe.value });
 }
 
-/** --request, then --out. Fails with `invalid-request`, then `output-unavailable`. */
+/** Checks `--request`, then `--out`. */
 function checkRequestAndOutOptions(flags: FlagTextAsTyped): Result<RequestAndOutOptions> {
   const requestOption = checkRequestOption(flags);
   if (!requestOption.ok) {

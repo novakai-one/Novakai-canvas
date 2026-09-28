@@ -31,7 +31,7 @@ export function checkOperandCount(
   return requireOneOperand(name, operandWords, flags);
 }
 
-/** The command and its flags, when no word follows it. Fails with `invalid-arguments`. */
+/** Checks that no word follows the command. */
 function requireNoOperand(
   name: NoOperandCommand,
   operandWords: readonly string[],
@@ -43,18 +43,14 @@ function requireNoOperand(
   return success({ kind: 'no-operand', name, flags });
 }
 
-/**
- * The command, its one operand and its flags. Fails with `invalid-arguments` for no word, or two
- * or more.
- */
+/** Checks that exactly one word follows the command, and keeps it as the operand. */
 function requireOneOperand(
   name: OneOperandCommand,
   operandWords: readonly string[],
   flags: TypedFlags,
 ): Result<CommandWithRightOperandCount> {
   const [operand, ...extraWords] = operandWords;
-  const hasExactlyOne = operand !== undefined && extraWords.length === 0;
-  if (!hasExactlyOne) {
+  if (operand === undefined || extraWords.length > 0) {
     return operandCountFailure(name, 1);
   }
   return success({ kind: 'one-operand', name, operand, flags });

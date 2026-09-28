@@ -12,7 +12,6 @@ import {
   collectionId,
   collectionRevision,
   filePath,
-  loopbackOrigin,
   objectId,
   profileId,
   requestId,
@@ -22,7 +21,6 @@ import type {
   CollectionId,
   CollectionRevision,
   FilePath,
-  LoopbackOrigin,
   ProfileId,
   RequestId,
 } from '../../contract/brands.js';
@@ -33,23 +31,15 @@ import type {
   ReadScope,
   RequestOption,
   RevisionOption,
-  ServerAndWorkspace,
 } from '../../contract/records/command.js';
-import type { FailureInput, Result } from '../../contract/errors.js';
+import type { LocalFailure, Result } from '../../contract/errors.js';
 import {
   failure,
   success,
   unreadableSourceFailure,
   unwritableOutputFailure,
 } from '../../contract/errors.js';
-import { checked } from '../shared/checks.js';
 import type { FlagTextAsTyped } from './flags.js';
-
-/** The service origin when --server is absent: the local service's default port. */
-const defaultServer = 'http://127.0.0.1:5174';
-
-/** The workspace when --workspace is empty: Node resolves `''` and `.` to the same directory. */
-const currentDirectory = '.';
 
 /** The change mode when --mode is absent. */
 const defaultMode: ChangeMode = 'create';
@@ -62,19 +52,7 @@ const changeModes: Readonly<Record<ChangeMode, ChangeMode>> = Object.freeze({
 });
 
 /** Digits only: the text a revision may be written as. */
-const wholeNumberText = /^[0-9]+$/;
-
-/** A --section or --object ID that is not a canonical ID. */
-const invalidScopeId: FailureInput = Object.freeze({
-  code: 'invalid-arguments',
-  message: 'Read scope IDs must be non-empty canonical IDs.',
-});
-
-/** A --revision that is not a whole number within the safe-integer range. */
-const invalidRevision: FailureInput = Object.freeze({
-  code: 'invalid-revision',
-  message: 'Revision must be a non-negative safe integer',
-});
+const digitsOnly = /^[0-9]+$/;
 
 /**
  * Works out which part of a collection `read` returns: one section, one object, or all of it.
@@ -109,7 +87,7 @@ export function checkChangeMode(
   }
   const modeText = flags.mode ?? defaultMode;
   if (!isChangeMode(modeText)) {
-    return failure({ code: 'invalid-mode', message: 'Mode must be create, replace or patch' });
+    return invalidModeFailure();
   }
   return success(modeText);
 }
@@ -139,10 +117,11 @@ export function checkRevisionOption(
  * The mistake it can find: an ID that isn't a letter followed by letters, digits, `_` or `-`.
  */
 export function checkCollectionId(typedCollectionId: string): Result<CollectionId> {
-  return checked(collectionId, typedCollectionId, {
-    code: 'invalid-arguments',
-    message: 'Collection IDs must be canonical IDs: a letter, then letters, digits, _ or -.',
-  });
+  const collection = collectionId.safeParse(typedCollectionId);
+  if (!collection.success) {
+    return invalidCollectionIdFailure();
+  }
+  return success(collection.data);
 }
 
 /**
@@ -153,10 +132,11 @@ export function checkCollectionId(typedCollectionId: string): Result<CollectionI
  * starting with a letter or digit (`invalid-request`).
  */
 export function checkRequestId(typedRequestId: string): Result<RequestId> {
-  return checked(requestId, typedRequestId, {
-    code: 'invalid-request',
-    message: 'Request ID is invalid',
-  });
+  const request = requestId.safeParse(typedRequestId);
+  if (!request.success) {
+    return invalidRequestIdFailure();
+  }
+  return success(request.data);
 }
 
 /**
@@ -213,107 +193,46 @@ export function checkOutOption(flags: Pick<FlagTextAsTyped, 'out'>): Result<OutO
  * The mistake it can find: a profile the CLI doesn't know (`unknown-profile`).
  */
 export function checkProfileId(typedProfileId: string): Result<ProfileId> {
-  return checked(profileId, typedProfileId, {
-    code: 'unknown-profile',
-    message: `Unknown profile: ${typedProfileId}`,
-    recovery: 'Use build-spec@1.',
-  });
+  const profile = profileId.safeParse(typedProfileId);
+  if (!profile.success) {
+    return unknownProfileFailure(typedProfileId);
+  }
+  return success(profile.data);
 }
 
-/**
- * Checks where to send the command (`--server`) and which workspace folder to use (`--workspace`).
- *
- * Left out, they are the local service's usual address and `defaultWorkspace`.
- * The mistake it can find: a `--server` not on this machine, such as `http://example.com`, so the
- * agent's access token is never sent anywhere else (`invalid-server`).
- */
-export function checkServerAndWorkspace(
-  flags: Pick<FlagTextAsTyped, 'server' | 'workspace'>,
-  defaultWorkspace: FilePath,
-): Result<ServerAndWorkspace> {
-  const server = checkServer(flags.server ?? defaultServer);
-  if (!server.ok) {
-    return server;
-  }
-  const workspace = chooseWorkspace(flags.workspace, defaultWorkspace);
-  if (!workspace.ok) {
-    return workspace;
-  }
-  return success({ server: server.value, workspace: workspace.value });
-}
-
-/** The typed `--workspace`, checked; or `defaultWorkspace` when it wasn't typed. */
-function chooseWorkspace(
-  typedWorkspace: string | undefined,
-  defaultWorkspace: FilePath,
-): Result<FilePath> {
-  if (typedWorkspace === undefined) {
-    return success(defaultWorkspace);
-  }
-  return checkWorkspace(typedWorkspace);
-}
-
-/** A --section ID as a section scope. Fails with `invalid-arguments`. */
+/** Checks a `--section` ID, and limits the read to that section. */
 function checkSectionScope(sectionText: string): Result<ReadScope> {
-  const id = checked(sectionId, sectionText, invalidScopeId);
-  if (!id.ok) {
-    return id;
+  const section = sectionId.safeParse(sectionText);
+  if (!section.success) {
+    return invalidScopeIdFailure();
   }
-  return success({ kind: 'section', id: id.value });
+  return success({ kind: 'section', id: section.data });
 }
 
-/** An --object ID as an object scope. Fails with `invalid-arguments`. */
+/** Checks an `--object` ID, and limits the read to that object. */
 function checkObjectScope(objectText: string): Result<ReadScope> {
-  const id = checked(objectId, objectText, invalidScopeId);
-  if (!id.ok) {
-    return id;
+  const object = objectId.safeParse(objectText);
+  if (!object.success) {
+    return invalidScopeIdFailure();
   }
-  return success({ kind: 'object', id: id.value });
+  return success({ kind: 'object', id: object.data });
 }
 
-/**
- * --revision text as a revision: digits only, within the safe-integer range. Fails with
- * `invalid-revision`.
- */
+/** Checks `--revision` is digits only, and a whole number small enough to count exactly. */
 function checkRevision(revisionText: string): Result<CollectionRevision> {
-  if (!wholeNumberText.test(revisionText)) {
-    return failure(invalidRevision);
+  if (!isDigitsOnly(revisionText)) {
+    return invalidRevisionFailure();
   }
-  return checked(collectionRevision, Number(revisionText), invalidRevision);
+  const revision = collectionRevision.safeParse(Number(revisionText));
+  if (!revision.success) {
+    return invalidRevisionFailure();
+  }
+  return success(revision.data);
 }
 
-/**
- * The origin the agent token may go to: an `http://127.0.0.1` origin, never a remote host. Fails
- * with `invalid-server`: text that is not a URL first, then a URL that is not a loopback origin.
- */
-function checkServer(serverText: string): Result<LoopbackOrigin> {
-  if (!URL.canParse(serverText)) {
-    return failure({ code: 'invalid-server', message: 'Server URL is invalid' });
-  }
-  return checked(loopbackOrigin, serverText, {
-    code: 'invalid-server',
-    message: 'Server must be an IPv4 loopback HTTP origin',
-  });
-}
-
-/**
- * The directory holding the agent credential and the request journal. Every text is accepted: an
- * empty one is the current directory. Fails with `invalid-arguments` only if that were empty.
- */
-function checkWorkspace(workspaceText: string): Result<FilePath> {
-  const directoryText = fillEmptyWorkspace(workspaceText);
-  return checked(filePath, directoryText, {
-    code: 'invalid-arguments',
-    message: 'Workspace must be a directory path.',
-  });
-}
-
-/** An empty --workspace becomes `.`: Node resolves `''` to the current directory too. */
-function fillEmptyWorkspace(workspaceText: string): string {
-  if (workspaceText === '') {
-    return currentDirectory;
-  }
-  return workspaceText;
+/** Whether the text is digits only, such as `3` (so not `-1`, `1.5` or `3e2`). */
+function isDigitsOnly(revisionText: string): boolean {
+  return digitsOnly.test(revisionText);
 }
 
 /** Whether the command is `create`, `replace` or `patch`: its name is also its change mode. */
@@ -321,7 +240,50 @@ function isChangeCommand(name: CommandName): name is 'create' | 'replace' | 'pat
   return isChangeMode(name);
 }
 
-/** Whether `text` is one of the three change modes. */
-function isChangeMode(text: string): text is ChangeMode {
-  return Object.hasOwn(changeModes, text);
+/** Whether the text is one of the three change modes. */
+function isChangeMode(modeText: string): modeText is ChangeMode {
+  return Object.hasOwn(changeModes, modeText);
+}
+
+/** Makes the mistake for a `--mode` that isn't `create`, `replace` or `patch` (`invalid-mode`). */
+function invalidModeFailure(): Result<never, LocalFailure> {
+  return failure({ code: 'invalid-mode', message: 'Mode must be create, replace or patch' });
+}
+
+/** Makes the mistake for a `--revision` that isn't a whole number from 0 up. */
+function invalidRevisionFailure(): Result<never, LocalFailure> {
+  return failure({
+    code: 'invalid-revision',
+    message: 'Revision must be a non-negative safe integer',
+  });
+}
+
+/** Makes the mistake for a `--section` or `--object` ID that isn't valid (`invalid-arguments`). */
+function invalidScopeIdFailure(): Result<never, LocalFailure> {
+  return failure({
+    code: 'invalid-arguments',
+    message: 'Read scope IDs must be non-empty canonical IDs.',
+  });
+}
+
+/** Makes the mistake for a collection ID that isn't valid (`invalid-arguments`). */
+function invalidCollectionIdFailure(): Result<never, LocalFailure> {
+  return failure({
+    code: 'invalid-arguments',
+    message: 'Collection IDs must be canonical IDs: a letter, then letters, digits, _ or -.',
+  });
+}
+
+/** Makes the mistake for a request ID that isn't valid (`invalid-request`). */
+function invalidRequestIdFailure(): Result<never, LocalFailure> {
+  return failure({ code: 'invalid-request', message: 'Request ID is invalid' });
+}
+
+/** Makes the mistake for a profile the CLI doesn't know, naming it (`unknown-profile`). */
+function unknownProfileFailure(typedProfileId: string): Result<never, LocalFailure> {
+  return failure({
+    code: 'unknown-profile',
+    message: `Unknown profile: ${typedProfileId}`,
+    recovery: 'Use build-spec@1.',
+  });
 }

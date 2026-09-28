@@ -43,13 +43,9 @@ import {
   buildRecipeInstantiateCommand,
   buildReplaceOrPatchCommand,
 } from './service-commands.js';
+import { checkServerAndWorkspace } from './server-and-workspace.js';
 import type { OneOperandCommand } from './table.js';
-import {
-  checkChangeMode,
-  checkReadScope,
-  checkRevisionOption,
-  checkServerAndWorkspace,
-} from './values.js';
+import { checkChangeMode, checkReadScope, checkRevisionOption } from './values.js';
 
 /** The commands that run locally with a build-spec profile. */
 type ProfileCommandName = ProfileCommand['name'];
@@ -99,10 +95,7 @@ export function assembleCommand(
   return buildCommand(accepted, scopeModeAndRevision.value, defaultWorkspace);
 }
 
-/**
- * The read scope, then --mode and --revision. Fails with `invalid-arguments`, then `invalid-mode`,
- * then `invalid-revision`.
- */
+/** Checks the read scope, then `--mode` and `--revision`, and keeps all three. */
 function checkScopeModeAndRevision(
   name: CommandName,
   flags: FlagTextAsTyped,
@@ -118,10 +111,7 @@ function checkScopeModeAndRevision(
   return success({ scope: scope.value, ...modeAndRevision.value });
 }
 
-/**
- * --mode (the command's own mode for `create`, `replace` and `patch`), then --revision. Fails
- * with `invalid-mode`, then `invalid-revision`.
- */
+/** Checks `--mode` (or takes the command's own mode), then `--revision`. */
 function checkModeAndRevision(
   name: CommandName,
   flags: FlagTextAsTyped,
@@ -137,10 +127,7 @@ function checkModeAndRevision(
   return success({ mode: mode.value, revisionOption: revisionOption.value });
 }
 
-/**
- * The command built by whether it takes an operand. Fails as its builder does, then with
- * `invalid-server`.
- */
+/** Builds the command, by whether it takes a word after it. */
 function buildCommand(
   accepted: AcceptedCommand,
   scopeModeAndRevision: ScopeModeAndRevision,
@@ -156,10 +143,7 @@ function buildCommand(
   }
 }
 
-/**
- * `help`, which carries no values; or `describe` or `list`, sent with --out. Fails with
- * `output-unavailable`, then `invalid-server`.
- */
+/** Builds `help`, which needs nothing more, or `describe` or `list`, which go to the service. */
 function buildNoOperandCommand(
   accepted: AcceptedNoOperandCommand,
   defaultWorkspace: FilePath,
@@ -169,13 +153,13 @@ function buildNoOperandCommand(
     return success({ kind: 'help' });
   }
   const serviceCommand = buildDescribeOrListCommand(name, flags);
-  return addServerAndWorkspace(serviceCommand, flags, defaultWorkspace);
+  if (!serviceCommand.ok) {
+    return serviceCommand;
+  }
+  return addServerAndWorkspace(serviceCommand.value, flags, defaultWorkspace);
 }
 
-/**
- * A command with its operand: a profile command runs locally; any other is a service command,
- * sent with its --server and --workspace. Fails as its builder does, then with `invalid-server`.
- */
+/** Builds a command with its word: a profile command runs here, any other goes to the service. */
 function buildOperandCommand(
   accepted: AcceptedOneOperandCommand,
   scopeModeAndRevision: ScopeModeAndRevision,
@@ -183,14 +167,29 @@ function buildOperandCommand(
 ): Result<ParsedCommand> {
   const { name, operand, flags } = accepted;
   if (isProfileCommandName(name)) {
-    const profileCommand = buildProfileCommand(name, operand, flags);
-    return routeLocally(profileCommand);
+    return buildLocalProfileCommand(name, operand, flags);
   }
   const serviceCommand = buildServiceCommand(name, operand, flags, scopeModeAndRevision);
-  return addServerAndWorkspace(serviceCommand, flags, defaultWorkspace);
+  if (!serviceCommand.ok) {
+    return serviceCommand;
+  }
+  return addServerAndWorkspace(serviceCommand.value, flags, defaultWorkspace);
 }
 
-/** The profile command its name picks, from its operand and flags. Fails as that builder does. */
+/** Builds a profile command, and marks it to run on this machine. */
+function buildLocalProfileCommand(
+  name: ProfileCommandName,
+  operand: string,
+  flags: FlagTextAsTyped,
+): Result<ParsedCommand> {
+  const profileCommand = buildProfileCommand(name, operand, flags);
+  if (!profileCommand.ok) {
+    return profileCommand;
+  }
+  return success({ kind: 'profile', command: profileCommand.value });
+}
+
+/** Builds the profile command its name picks, from its word and flags. */
 function buildProfileCommand(
   name: ProfileCommandName,
   operand: string,
@@ -208,15 +207,7 @@ function buildProfileCommand(
   }
 }
 
-/** The built profile command, routed to run locally. Passes its builder's failure on unchanged. */
-function routeLocally(profileCommand: Result<ProfileCommand>): Result<ParsedCommand> {
-  if (!profileCommand.ok) {
-    return profileCommand;
-  }
-  return success({ kind: 'profile', command: profileCommand.value });
-}
-
-/** The service command its name picks, from its operand and flags. Fails as that builder does. */
+/** Builds the service command its name picks, from its word, flags and the values checked first. */
 function buildServiceCommand(
   name: OperandServiceCommandName,
   operand: string,
@@ -250,27 +241,20 @@ function buildServiceCommand(
   }
 }
 
-/**
- * The built service command with its --server, then --workspace. Passes its builder's failure on
- * unchanged, then fails with `invalid-server`.
- */
+/** Checks `--server` and `--workspace`, and adds them to the service command. */
 function addServerAndWorkspace(
-  serviceCommand: Result<ServiceCommand>,
+  command: ServiceCommand,
   flags: FlagTextAsTyped,
   defaultWorkspace: FilePath,
 ): Result<ParsedCommand> {
-  if (!serviceCommand.ok) {
-    return serviceCommand;
+  const options = checkServerAndWorkspace(flags, defaultWorkspace);
+  if (!options.ok) {
+    return options;
   }
-  const serverAndWorkspace = checkServerAndWorkspace(flags, defaultWorkspace);
-  if (!serverAndWorkspace.ok) {
-    return serverAndWorkspace;
-  }
-  const command = serviceCommand.value;
-  return success({ kind: 'service', command, options: serverAndWorkspace.value });
+  return success({ kind: 'service', command, options: options.value });
 }
 
-/** Whether the command runs locally with a build-spec profile. */
+/** Whether the command is one of the three profile commands, which run on this machine. */
 function isProfileCommandName(name: OneOperandCommand): name is ProfileCommandName {
   return Object.hasOwn(profileCommands, name);
 }

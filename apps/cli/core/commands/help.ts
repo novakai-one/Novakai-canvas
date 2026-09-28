@@ -31,7 +31,7 @@ const commandUsage: readonly string[] = commandRows().flatMap(usageLinesOf);
 /** The whole `--help` text: a title, every command's lines, then the notes. No final line break. */
 export const helpText = [title, blankLine, ...commandUsage, blankLine, ...notes].join('\n');
 
-/** One command's lines in `canvas --help`, as its table row gives them. */
+/** Returns one command's lines in `canvas --help`, as its table row gives them. */
 function usageLinesOf(row: CommandRow): readonly string[] {
   return row.usage;
 }

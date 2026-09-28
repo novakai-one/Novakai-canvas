@@ -8,7 +8,7 @@
  * This file checks every typed flag against the flags its command accepts (its row in `table.ts`).
  * It never checks the text typed after a flag.
  */
-import type { LocalFailure, Result } from '../../contract/errors.js';
+import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
 import type { AcceptedCommand, CommandWithRightOperandCount } from './command-stages.js';
 import {
@@ -22,11 +22,11 @@ import {
 import type { TextFlag } from './flags.js';
 import { acceptsFlag } from './table.js';
 
-/** A rule's verdict: `true` when the command passes it; otherwise the mistake it found. */
-type RuleVerdict = Result<true, LocalFailure>;
-
-/** One flag rule, checked against the command and its flags. */
-type FlagRule = (command: CommandWithRightOperandCount) => RuleVerdict;
+/**
+ * One flag rule. It passes the command on unchanged when the command keeps the rule, or returns
+ * the mistake it found.
+ */
+type FlagRule = (command: CommandWithRightOperandCount) => Result<CommandWithRightOperandCount>;
 
 /** The flag rules, checked in this order. Only the first mistake is reported. */
 const flagRules: readonly FlagRule[] = Object.freeze([
@@ -46,7 +46,7 @@ const flagRules: readonly FlagRule[] = Object.freeze([
  * `profile lint` without `--profile`.
  */
 export function checkAcceptedFlags(command: CommandWithRightOperandCount): Result<AcceptedCommand> {
-  // `checkNextRule` passes the first failure along unchanged, so later rules are skipped.
+  // `checkNextRule` passes the first mistake along unchanged, so later rules are skipped.
   const checked = flagRules.reduce(checkNextRule, success(command));
   if (!checked.ok) {
     return checked;
@@ -55,79 +55,87 @@ export function checkAcceptedFlags(command: CommandWithRightOperandCount): Resul
   return success(accepted);
 }
 
-/** Checks the command against the next rule, or passes an earlier failure on unchanged. */
+/** Checks the command against the next rule, or passes an earlier mistake on unchanged. */
 function checkNextRule(
-  checked: Result<CommandWithRightOperandCount>,
+  checkedSoFar: Result<CommandWithRightOperandCount>,
   rule: FlagRule,
 ): Result<CommandWithRightOperandCount> {
-  if (!checked.ok) {
-    return checked;
+  if (!checkedSoFar.ok) {
+    return checkedSoFar;
   }
-  const verdict = rule(checked.value);
-  if (!verdict.ok) {
-    return verdict;
-  }
-  return checked;
+  return rule(checkedSoFar.value);
 }
 
-/** The checked command with its flags' text only: their order was needed only by rule 6. */
+/** Keeps only the text of each flag, since their order was needed only by rule 6. */
 function keepFlagText(checked: CommandWithRightOperandCount): AcceptedCommand {
   const flags = checked.flags.text;
   return { ...checked, flags };
 }
 
-/** Rule 1: `--profile` only with `profile lint`. */
-function checkProfileFlag(command: CommandWithRightOperandCount): RuleVerdict {
+/** Rule 1: refuses `--profile` with any command but `profile lint`. */
+function checkProfileFlag(
+  command: CommandWithRightOperandCount,
+): Result<CommandWithRightOperandCount> {
   if (hasMisplacedFlag(command, ['profile'])) {
     return misplacedProfileFlagFailure();
   }
-  return success(true);
+  return success(command);
 }
 
-/** Rule 2: `profile lint` needs `--profile`. Checked before the scope flags. */
-function checkLintHasProfile(command: CommandWithRightOperandCount): RuleVerdict {
+/** Rule 2: refuses `profile lint` typed without `--profile`. */
+function checkLintHasProfile(
+  command: CommandWithRightOperandCount,
+): Result<CommandWithRightOperandCount> {
   if (isLintWithoutProfile(command)) {
     return lintWithoutProfileFlagFailure();
   }
-  return success(true);
+  return success(command);
 }
 
-/** Rule 3: `--id` and `--title` only with `profile scaffold` and `recipe admit`. */
-function checkIdAndTitleFlags(command: CommandWithRightOperandCount): RuleVerdict {
+/** Rule 3: refuses `--id` or `--title` except with `profile scaffold` or `recipe admit`. */
+function checkIdAndTitleFlags(
+  command: CommandWithRightOperandCount,
+): Result<CommandWithRightOperandCount> {
   if (hasMisplacedFlag(command, ['id', 'title'])) {
     return misplacedIdOrTitleFailure();
   }
-  return success(true);
+  return success(command);
 }
 
-/** Rule 4: `--section` and `--object` never together, whichever command is given them. */
-function checkSectionOrObject(command: CommandWithRightOperandCount): RuleVerdict {
+/** Rule 4: refuses `--section` and `--object` typed together, whatever the command. */
+function checkSectionOrObject(
+  command: CommandWithRightOperandCount,
+): Result<CommandWithRightOperandCount> {
   if (hasSectionAndObject(command)) {
     return sectionWithObjectFailure();
   }
-  return success(true);
+  return success(command);
 }
 
-/** Rule 5: `--section` and `--object` only with `read`. */
-function checkScopeFlags(command: CommandWithRightOperandCount): RuleVerdict {
+/** Rule 5: refuses `--section` or `--object` with any command but `read`. */
+function checkScopeFlags(
+  command: CommandWithRightOperandCount,
+): Result<CommandWithRightOperandCount> {
   if (hasMisplacedFlag(command, ['section', 'object'])) {
     return misplacedScopeFlagFailure();
   }
-  return success(true);
+  return success(command);
 }
 
-/** Rule 6: every flag is one the command accepts. Names the first typed one that isn't. */
-function checkEveryFlagAccepted(command: CommandWithRightOperandCount): RuleVerdict {
+/** Rule 6: refuses any flag the command doesn't accept, naming the first one typed. */
+function checkEveryFlagAccepted(
+  command: CommandWithRightOperandCount,
+): Result<CommandWithRightOperandCount> {
   const unacceptedFlag = firstUnacceptedFlag(command);
   if (unacceptedFlag !== undefined) {
     return unacceptedFlagFailure(unacceptedFlag, command.name);
   }
-  return success(true);
+  return success(command);
 }
 
 /**
- * Whether any of `flags` was typed with a command that doesn't accept it. Rules 1, 3 and 5 are
- * rule 6 for their flags, checked earlier so they get their own message.
+ * Whether any of these flags was typed with a command that doesn't accept it. (Rules 1, 3 and 5
+ * are rule 6 for their own flags, checked first so each gets its own message.)
  */
 function hasMisplacedFlag(
   command: CommandWithRightOperandCount,
@@ -136,7 +144,7 @@ function hasMisplacedFlag(
   return flags.some((flag) => isTypedButNotAccepted(command, flag));
 }
 
-/** Whether `flag` was typed with a command that doesn't accept it. */
+/** Whether the flag was typed with a command that doesn't accept it. */
 function isTypedButNotAccepted(
   command: CommandWithRightOperandCount,
   flag: TextFlag,
@@ -156,7 +164,7 @@ function hasSectionAndObject(command: CommandWithRightOperandCount): boolean {
   return section !== undefined && object !== undefined;
 }
 
-/** The first flag, in the order typed, that the command doesn't accept. Missing if none. */
+/** Finds the first flag, in the order typed, that the command doesn't accept. */
 function firstUnacceptedFlag(command: CommandWithRightOperandCount): TextFlag | undefined {
   return command.flags.order.find((flag) => !acceptsFlag(command.name, flag));
 }

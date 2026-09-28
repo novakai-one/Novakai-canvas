@@ -39,107 +39,107 @@ export interface CommandRow {
   readonly usage: readonly string[];
 }
 
-/** Where a service command is sent: --server and --workspace. */
-const sent: readonly TextFlag[] = Object.freeze(['server', 'workspace']);
+/** The flags every service command accepts: where to send it, `--server` and `--workspace`. */
+const serverFlags: readonly TextFlag[] = Object.freeze(['server', 'workspace']);
 
-/** A service command whose text answer --out may write. */
-const answered: readonly TextFlag[] = Object.freeze(['out', ...sent]);
+/** The flags of a service command whose answer `--out` can write to a file. */
+const answerFlags: readonly TextFlag[] = Object.freeze(['out', ...serverFlags]);
 
-/** A service command that retains its request under --request. */
-const retained: readonly TextFlag[] = Object.freeze(['request', ...answered]);
+/** The flags of a service command that saves something: `--request` names what it sends. */
+const requestFlags: readonly TextFlag[] = Object.freeze(['request', ...answerFlags]);
 
 /**
  * `--help` added to a real command line still prints usage: `help` accepts and ignores every flag
  * but five (--profile, --id, --title, --section, --object).
  */
-const besideHelp: readonly TextFlag[] = Object.freeze([
+const flagsHelpIgnores: readonly TextFlag[] = Object.freeze([
   'revision',
   'mode',
   'namespace',
   'version',
   'family',
-  ...retained,
+  ...requestFlags,
 ]);
 
 /** Every command, in `--help` order: a missing, extra or misspelt name is a type error. */
 const commandTable: Readonly<Record<CommandName, CommandRow>> = Object.freeze({
-  help: row({ accepted: besideHelp, usage: [] }),
-  describe: row({
-    accepted: answered,
+  help: freezeRow({ accepted: flagsHelpIgnores, usage: [] }),
+  describe: freezeRow({
+    accepted: answerFlags,
     usage: ['canvas describe                         Read the DSL vocabulary'],
   }),
-  list: row({
-    accepted: answered,
+  list: freezeRow({
+    accepted: answerFlags,
     usage: ['canvas list                             List collection IDs and revisions'],
   }),
-  read: row({
-    accepted: ['section', 'object', ...answered],
+  read: freezeRow({
+    accepted: ['section', 'object', ...answerFlags],
     usage: [
       'canvas read ID [--section ID | --object ID] [--out FILE]',
       '                                        Read full or read-only partial context',
     ],
   }),
-  inspect: row({
-    accepted: answered,
+  inspect: freezeRow({
+    accepted: answerFlags,
     usage: [
       'canvas inspect ID                        Scene quality report: validity, warnings, crossing/relaxed counts',
     ],
   }),
-  create: row({
-    accepted: retained,
+  create: freezeRow({
+    accepted: requestFlags,
     usage: ['canvas create FILE                      Create a collection from DSL'],
   }),
-  replace: row({
-    accepted: ['revision', ...retained],
+  replace: freezeRow({
+    accepted: ['revision', ...requestFlags],
     usage: ['canvas replace FILE --revision N        Replace semantics at the revision you read'],
   }),
-  patch: row({
-    accepted: ['revision', ...retained],
+  patch: freezeRow({
+    accepted: ['revision', ...requestFlags],
     usage: ['canvas patch FILE --revision N          Apply an ordered DSL patch'],
   }),
-  preview: row({
-    accepted: ['mode', 'revision', ...retained],
+  preview: freezeRow({
+    accepted: ['mode', 'revision', ...requestFlags],
     usage: [
       'canvas preview FILE [--mode MODE]        Preview; use --revision N for existing collections',
     ],
   }),
-  'theme-admit': row({
-    accepted: retained,
+  'theme-admit': freezeRow({
+    accepted: requestFlags,
     usage: ['canvas theme admit FILE                 Admit a semantic theme config'],
   }),
-  'recipe-admit': row({
-    accepted: ['id', 'version', 'family', 'title', ...retained],
+  'recipe-admit': freezeRow({
+    accepted: ['id', 'version', 'family', 'title', ...requestFlags],
     usage: ['canvas recipe admit FILE                Requires --id --version --family --title'],
   }),
-  'recipe-instantiate': row({
-    accepted: ['namespace', ...answered],
+  'recipe-instantiate': freezeRow({
+    accepted: ['namespace', ...answerFlags],
     usage: [
       'canvas recipe instantiate PIN           Requires --namespace ID; --out FILE emits editable DSL',
     ],
   }),
-  apply: row({
-    accepted: answered,
+  apply: freezeRow({
+    accepted: answerFlags,
     usage: ['canvas apply REQUEST_ID                 Apply a retained preview'],
   }),
-  receipt: row({
-    accepted: answered,
+  receipt: freezeRow({
+    accepted: answerFlags,
     usage: ['canvas receipt REQUEST_ID               Check a committed receipt'],
   }),
-  retry: row({
-    accepted: answered,
+  retry: freezeRow({
+    accepted: answerFlags,
     usage: [
       'canvas retry REQUEST_ID                 Reconcile, then retry the identical retained request',
     ],
   }),
-  'profile-describe': row({
+  'profile-describe': freezeRow({
     accepted: ['out'],
     usage: ['canvas profile describe build-spec@1    Show the build-spec conventions'],
   }),
-  'profile-scaffold': row({
+  'profile-scaffold': freezeRow({
     accepted: ['id', 'title', 'out'],
     usage: ['canvas profile scaffold build-spec@1 --id ID --title "Title" [--out FILE]'],
   }),
-  'profile-lint': row({
+  'profile-lint': freezeRow({
     accepted: ['profile', 'out'],
     usage: ['canvas profile lint FILE --profile build-spec@1'],
   }),
@@ -198,10 +198,10 @@ export function commandRows(): readonly CommandRow[] {
   return Object.values(commandTable);
 }
 
-/** `spec` frozen with its flags and usage lines, so no reader can change a row. */
-function row(spec: CommandRow): CommandRow {
+/** Freezes a row and its two lists, so nothing can change them while the CLI runs. */
+function freezeRow(row: CommandRow): CommandRow {
   return Object.freeze({
-    accepted: Object.freeze([...spec.accepted]),
-    usage: Object.freeze([...spec.usage]),
+    accepted: Object.freeze([...row.accepted]),
+    usage: Object.freeze([...row.usage]),
   });
 }
