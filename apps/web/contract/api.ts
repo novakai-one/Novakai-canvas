@@ -13,6 +13,7 @@ export {
   observeRefusals,
   supersededRefusal,
 } from '../core/editing/submissions.js';
+export { requestForGesture } from '../core/editing/gesture-request.js';
 export { refused } from '../core/workspace/rules/refusal-classes.js';
 
 export {
@@ -115,7 +116,7 @@ export {
   type ConnectionCapture,
   type ConnectionReview,
 } from '../core/editing/connection/draft.js';
-export { connectionRequest } from '../core/editing/connection/request.js';
+export { connectionRequest, type ConnectionIds } from '../core/editing/connection/request.js';
 export type { ConnectionPolicy, IdGrammar } from '../core/editing/connection/types.js';
 export {
   connectionProblem,
@@ -198,7 +199,6 @@ export {
   moveSubmissionBlocked,
   offeredOption,
   recoveryPhase,
-  requestedIn,
   savingRequest,
   sendingMove,
   withOption,

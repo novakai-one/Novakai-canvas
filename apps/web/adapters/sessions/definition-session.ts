@@ -22,7 +22,7 @@
  * - #17 The subscribe cleanup returns Set.delete's boolean.
  */
 import type { Result, Diagnostic } from '../../contract/errors.js';
-import type { WorkspaceId } from '../../contract/brands.js';
+import type { RequestId, WorkspaceId } from '../../contract/brands.js';
 import type { Request } from '../../contract/records/owners.js';
 import type { WorkspaceScope } from '../../contract/records/workspace-scope.js';
 import type {
@@ -154,7 +154,7 @@ export function createDefinitionSession(bindings: DefinitionBindings): Definitio
   }
   /** A receipt or refusal settles the draft holding its request; the key unlocks after it. */
   function settleRequest(
-    requestId: string,
+    requestId: RequestId,
     outcome: RequestOutcome,
   ): void {
     const settled = settledRequest(state.drafts, requestId, outcome);

@@ -2,7 +2,7 @@ import type { Snapshot, Request, Receipt } from './owners.js';
 import type { RecoveredSource } from './editor-recovery.js';
 import type { ActiveDiagram } from './active-diagram.js';
 import type { Submission } from './submission.js';
-import type { TransportGeneration, WorkspaceId } from '../brands.js';
+import type { RequestId, TransportGeneration, WorkspaceId } from '../brands.js';
 import type { Result, Diagnostic } from '../errors.js';
 import type { WorkspaceDecoders } from '../ports/workspace-decoders.js';
 import type { RequestBuilders } from '../ports/request-builders.js';
@@ -62,6 +62,7 @@ export interface SourceBindings extends SourceCallbacks {
   readonly inputs: Pick<WorkspaceDecoders, 'sourceRecovery'> &
     Pick<RequestBuilders, 'source' | 'dsl'>;
   readonly retention: DraftRetention;
-  nextId(): string;
+  /** A new request ID from the ID source. Fails with `id-unavailable`; nothing is sent. */
+  nextRequestId(): Result<RequestId>;
 }
 export type SourceFactory = (callbacks: SourceCallbacks) => SourceController;

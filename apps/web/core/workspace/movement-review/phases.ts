@@ -95,7 +95,7 @@ export function withOption(
   return { capture: held.capture, shown: { ...held.shown, optionId } };
 }
 
-/** The review sending this option as the gesture's request. */
+/** The review sending this option; the send gets its own request ID, apart from the gesture's. */
 export function sendingMove(
   held: MovementHeld,
   optionId: string,
@@ -107,29 +107,17 @@ export function sendingMove(
       review: capture.review,
       optionId,
       phase: 'sending',
-      requestId: capture.intent.id,
       document: capture.active.document,
     },
   };
 }
 
-/** The review in another phase; any request it names stays. */
+/** The review in another phase. */
 export function inPhase(
   held: MovementHeld,
   phase: MovementPhase,
 ): MovementHeld {
   return { capture: held.capture, shown: { ...held.shown, phase } };
-}
-
-/** The review in another phase, naming the gesture's request. */
-export function requestedIn(
-  held: MovementHeld,
-  phase: 'uncertain' | 'rejected',
-): MovementHeld {
-  return {
-    capture: held.capture,
-    shown: { ...held.shown, phase, requestId: held.capture.intent.id },
-  };
 }
 
 /** The request may still land: it is sending, or its outcome is unknown. */

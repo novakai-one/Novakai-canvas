@@ -12,7 +12,13 @@ import type { CreationKind } from '../../contract/records/creation.js';
 import type { Collection, Request, Snapshot } from '../../contract/records/owners.js';
 import type { Submission } from '../../contract/records/submission.js';
 import type { ActiveDiagram } from '../../contract/records/active-diagram.js';
-import type { GroupId, ObjectId, SectionId, TransportGeneration } from '../../contract/brands.js';
+import type {
+  GroupId,
+  ObjectId,
+  RequestId,
+  SectionId,
+  TransportGeneration,
+} from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 
 /** The ID type each form adds. */
@@ -96,7 +102,7 @@ export function released(
 /** A confirmed request releases every capture that sent it; `cleared` names those forms. */
 export function settledCaptures(
   captures: CreationCaptures,
-  requestId: string,
+  requestId: RequestId,
 ): { readonly captures: CreationCaptures; readonly cleared: readonly CreationKind[] } {
   const cleared = creationKinds.filter((kind) => sentRequest(captures, kind, requestId));
   return { captures: cleared.reduce(released, captures), cleared };
@@ -105,7 +111,7 @@ export function settledCaptures(
 /** A dismissed request releases the first capture that sent it; null when none did. */
 export function dismissedCaptures(
   captures: CreationCaptures,
-  requestId: string,
+  requestId: RequestId,
 ): CreationCaptures | null {
   const kind = creationKinds.find((item) => sentRequest(captures, item, requestId));
   return kind === undefined ? null : released(captures, kind);
@@ -171,7 +177,7 @@ function hasRequest(capture: CreationCapture<unknown> | null): boolean {
 function sentRequest(
   captures: CreationCaptures,
   kind: CreationKind,
-  requestId: string,
+  requestId: RequestId,
 ): boolean {
   return captures[kind]?.request?.request === requestId;
 }

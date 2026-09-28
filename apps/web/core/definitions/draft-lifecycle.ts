@@ -3,7 +3,7 @@
  * draft holds a submitted request. A receipt removes the draft; a refusal keeps it and clears the
  * request. Each function returns the next state or drafts; the session writes and publishes them.
  */
-import type { WorkspaceId } from '../../contract/brands.js';
+import type { RequestId, WorkspaceId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
 import type { DefinitionDraft, DefinitionState } from '../../contract/records/definitions.js';
@@ -63,7 +63,7 @@ export function boundDrafts(
 /** The draft holding a settled request, and the drafts it leaves; null when no draft holds it. */
 export function settledRequest(
   drafts: readonly DefinitionDraft[],
-  requestId: string,
+  requestId: RequestId,
   outcome: RequestOutcome,
 ): SettledRequest | null {
   const draft = drafts.find((item) => item.request?.request === requestId);

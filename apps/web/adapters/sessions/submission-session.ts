@@ -6,7 +6,7 @@ import type {
 } from '../../contract/records/submission.js';
 import type { Receipt } from '../../contract/records/owners.js';
 import type { WorkspaceScope } from '../../contract/records/workspace-scope.js';
-import type { TransportGeneration, WorkspaceId } from '../../contract/brands.js';
+import type { RequestId, TransportGeneration, WorkspaceId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import type { Diagnostic } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
@@ -26,7 +26,7 @@ import {
 export function createSubmissionSession(bindings: SubmissionBindings): SubmissionSession {
   let scope: WorkspaceScope = unrestoredWorkspace;
   let pending: readonly Submission[] = [];
-  const recovering = new Set<string>();
+  const recovering = new Set<RequestId>();
   /**
    * Save the recovery journal before publishing its immutable view. A proven refusal changed
    * nothing, so it is not kept across reload. With no restored workspace nothing is kept
@@ -163,7 +163,7 @@ export function createSubmissionSession(bindings: SubmissionBindings): Submissio
     }
   }
   /** Lookup is scoped to a retained request; arbitrary receipt IDs cannot clear another draft. */
-  async function reconcile(id: string): Promise<Result<Receipt | null>> {
+  async function reconcile(id: RequestId): Promise<Result<Receipt | null>> {
     const item = pending.find((item) => item.request.request === id);
     if (!item) return failure('unknown-request', 'There is no retained request with this ID');
     if (occupied(item)) return failure('pending-request', 'Wait for the current request to settle');
@@ -199,7 +199,7 @@ export function createSubmissionSession(bindings: SubmissionBindings): Submissio
   }
   /** Explicit retry rechecks the receipt first, then resends the exact body under the current transport generation. */
   async function retry(
-    id: string,
+    id: RequestId,
     generation: TransportGeneration,
   ): Promise<Result<Receipt>> {
     const item = pending.find((item) => item.request.request === id);
@@ -236,7 +236,7 @@ export function createSubmissionSession(bindings: SubmissionBindings): Submissio
     return item.state === 'sending' || recovering.has(item.request.request);
   }
   /** Only a proven refusal can be dismissed. Uncertain edits retain their request and recovery path. */
-  function dismiss(id: string): Result<void> {
+  function dismiss(id: RequestId): Result<void> {
     const item = pending.find((entry) => entry.request.request === id);
     if (!item) return failure('unknown-request', 'There is no retained request with this ID');
     if (item.state !== 'rejected')

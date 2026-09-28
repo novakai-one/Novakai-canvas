@@ -146,16 +146,17 @@ async function mount(
     read: readPanelPreferences,
     report: (problem) => runtime.report(problem),
   });
-  const runtime: WorkspaceController = composeWorkspace({
-    element,
-    client,
-    panels,
-    retention,
-    navigation: createWorkspaceNavigation(globals.window.location, globals.window.history),
-    ids,
-    random: globals.random,
-    now: globals.now,
-  });
+  const runtime: WorkspaceController = accepted(
+    composeWorkspace({
+      element,
+      client,
+      panels,
+      retention,
+      navigation: createWorkspaceNavigation(globals.window.location, globals.window.history),
+      ids,
+      now: globals.now,
+    }),
+  );
   const stopWidth = observeWorkspaceWidth(element, panels.viewport);
   const Workspace = createWorkspaceShell({
     panels,

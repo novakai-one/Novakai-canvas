@@ -16,7 +16,12 @@ import type { Receipt } from '../../contract/records/owners.js';
 import type { WorkspaceController, WorkspaceView } from '../../contract/records/workspace.js';
 import type { ActiveDiagram } from '../../contract/records/active-diagram.js';
 import type { WorkspaceScope } from '../../contract/records/workspace-scope.js';
-import type { CollectionId, SectionId, TransportGeneration } from '../../contract/brands.js';
+import type {
+  CollectionId,
+  RequestId,
+  SectionId,
+  TransportGeneration,
+} from '../../contract/brands.js';
 import type { WorkspaceBindings } from '../../contract/ports/workspace.js';
 import type {
   Request,
@@ -119,7 +124,7 @@ import {
   previewGone,
   previewRefused,
   recoveryPhase,
-  requestedIn,
+  requestForGesture,
   reviewableMovement,
   reviewOutcome,
   savingRequest,
@@ -138,6 +143,7 @@ import {
   type CaptureIds,
   type CollectionDraft,
   type ConnectionCapture,
+  type ConnectionIds,
   type ConnectionReview,
   type CreationCapture,
   type CreationCaptures,
@@ -247,7 +253,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
       ...(connection === undefined ? {} : { connection }),
     });
     updateMutationAvailability();
-    if (movementSlot !== null) updateMovementRecovery(movementSlot.capture.intent.id);
+    updateMovementRecovery();
   }
   /** The connection draft following its request's journal state; undefined when it has no request there. */
   function pendingConnectionView(pending: readonly Submission[]): ConnectionDraft | undefined {
@@ -277,7 +283,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     // The error bar carries the reason; the status line only points to it.
     update({ problem: error, status: 'Action failed. See the error above.' });
   }
-  function dismissRequest(id: string): void {
+  function dismissRequest(id: RequestId): void {
     const result = submissions.dismiss(id);
     if (!result.ok) return report(result.error);
     releaseDismissedCreation(id);
@@ -812,7 +818,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     start: number,
   ): void {
     const { intent } = held.capture;
-    const retained = state.pending.find((item) => item.request.request === intent.id);
+    const retained = requestForGesture(state.pending, intent.id);
     if (savingRequest(retained)) return retainUncertainMovement(held);
     settleFailedMovement(held, active, preview, start, retained?.state === 'rejected');
   }
@@ -846,10 +852,9 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     const preview = movementPreview(active, intent, changes, acceptedPreview);
     if (!preview.ok) return rejectPreview(active, intent, preview);
     const submission = submitCanvas(active, intent, changes);
-    const retainedAtStart = state.pending.find(
-      (item) => item.request.request === intent.id && item.state === 'sending',
-    );
-    if (retainedAtStart !== undefined) retainInitialPreview(active, intent, preview.value, start);
+    const sentAtStart = requestForGesture(state.pending, intent.id);
+    if (sentAtStart?.state === 'sending')
+      retainInitialPreview(active, intent, preview.value, start);
     const result = await submission;
     updateMovementAfterSubmission(result, intent, active, preview.value, start);
     return result;
@@ -887,23 +892,29 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     });
     return true;
   }
-  /** Capture the snapshot shown with the gesture; changing versions later is never part of retry. */
+  /** Capture the snapshot shown with the gesture; changing versions later is never part of retry.
+   * Each send gets a new request ID; the journal entry keeps the gesture's ID beside it (I2). */
   async function submitCanvas(
     active: ActiveDiagram,
     intent: EditIntent,
     changes: readonly import('../../contract/records/owners.js').Change[],
   ): Promise<Result<Receipt>> {
-    const request = bindings.inputs.model(
-      active.base,
-      active.document.collection.id,
-      changes,
-      intent.id,
+    const collection = active.document.collection.id;
+    const request = newRequest((requestId) =>
+      bindings.inputs.model(active.base, collection, changes, requestId),
     );
     if (!request.ok) {
       report(request.error);
       return request;
     }
     return submit(request.value, active.generation, state.sourceEdit, intent.id);
+  }
+  /** Builds a request under a new request ID from the ID source. Fails with `id-unavailable`
+   * (nothing is built) or as `build` does. */
+  function newRequest<T>(build: (request: RequestId) => Result<T>): Result<T> {
+    const id = bindings.ids.requestId();
+    if (!id.ok) return id;
+    return build(id.value);
   }
   function rejectBlocked(
     request: Request,
@@ -951,7 +962,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     gesture: string,
   ): void {
     const held = heldFor(movementSlot, gesture);
-    const retained = state.pending.find((item) => item.request.request === gesture);
+    const retained = requestForGesture(state.pending, gesture);
     if (held !== null && savingRequest(retained)) return retainUncertainMovement(held);
     rejectGesture(gesture, error.message);
     settleGestureFailure(held, retained?.state === 'rejected');
@@ -966,7 +977,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     updateMutationAvailability();
   }
   function retainUncertainMovement(held: MovementHeld): void {
-    showMovement(requestedIn(held, 'uncertain'));
+    showMovement(inPhase(held, 'uncertain'));
   }
   function rejectGesture(
     gesture: string,
@@ -989,7 +1000,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     finishConfirmedSubmission(submission, receipt, carriedSnapshot);
   }
   /** A confirmed request empties the Add forms that sent it; the connection it sent closes too. */
-  function settleConfirmedCreation(requestId: string): void {
+  function settleConfirmedCreation(requestId: RequestId): void {
     const settled = settledCaptures(creationCaptures, requestId);
     creationCaptures = settled.captures;
     settleConnectionCapture(requestId);
@@ -997,7 +1008,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     const locked = creationLocked(creationCaptures);
     update({ creation: settledCreation(state.creation, settled.cleared, locked) });
   }
-  function settleConnectionCapture(requestId: string): void {
+  function settleConnectionCapture(requestId: RequestId): void {
     if (connectionCapture?.request?.request !== requestId) return;
     connectionCapture = null;
     update({ connection: null });
@@ -1061,7 +1072,9 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     title: string,
   ): Promise<void> {
     const source = bindings.inputs.newSource(id, title);
-    const request = bindings.inputs.dsl(snapshot, id, source, 'create', bindings.nextId());
+    const request = newRequest((requestId) =>
+      bindings.inputs.dsl(snapshot, id, source, 'create', requestId),
+    );
     if (!request.ok) return report(request.error);
     await createSubmitted(request.value, id);
   }
@@ -1090,8 +1103,13 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     if (!retained.ok) return retained;
     return { ok: true, value: request };
   }
+  /** The draft's own request when it holds one; otherwise a new request under a new request ID. */
+  function definitionRequestFor(draft: DefinitionDraft): Result<Request> {
+    if (draft.request !== undefined) return { ok: true, value: draft.request };
+    return newRequest((requestId) => definitionRequest(draft, bindings.inputs, requestId));
+  }
   async function applyDefinition(draft: DefinitionDraft): Promise<Result<Receipt>> {
-    const request = definitionRequest(draft, bindings);
+    const request = definitionRequestFor(draft);
     if (!request.ok) {
       definitions.unlockWithoutRequest(draft.key);
       return request;
@@ -1108,11 +1126,9 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     draft: Pick<ObjectDraft | DefinitionDraft, 'base' | 'collection' | 'generation'>,
     changes: readonly import('../../contract/records/owners.js').Change[],
   ): Promise<Result<Receipt>> {
-    const request = bindings.inputs.model(
-      draft.base,
-      draft.collection.id,
-      changes,
-      bindings.nextId(),
+    const collection = draft.collection.id;
+    const request = newRequest((requestId) =>
+      bindings.inputs.model(draft.base, collection, changes, requestId),
     );
     if (!request.ok) return request;
     return submit(request.value, draft.generation, state.sourceEdit, null);
@@ -1180,13 +1196,22 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     capture: CreationCapture<unknown>,
     changes: readonly Change[],
   ): Promise<Result<Receipt>> {
-    const request =
-      capture.request === null
-        ? bindings.inputs.model(capture.base, capture.collection.id, changes, bindings.nextId())
-        : { ok: true as const, value: capture.request };
+    const request = creationRequest(capture, changes);
     if (!request.ok) return retainCreationFailure(request);
     creationCaptures = withRequest(creationCaptures, kind, request.value);
     return submit(request.value, capture.generation, state.sourceEdit, null);
+  }
+  /** The capture's kept request, or a new one under a new request ID. Fails with
+   * `id-unavailable` or as the model builder does. */
+  function creationRequest(
+    capture: CreationCapture<unknown>,
+    changes: readonly Change[],
+  ): Result<Request> {
+    if (capture.request !== null) return { ok: true, value: capture.request };
+    const collection = capture.collection.id;
+    return newRequest((requestId) =>
+      bindings.inputs.model(capture.base, collection, changes, requestId),
+    );
   }
   /** The capture's collection is read before settling, since settling may release the capture. */
   function finishCreation(
@@ -1306,14 +1331,22 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
       });
     return result;
   }
-  /** The reviewed connection's create request with a new relationship ID from the ID source.
-   * Fails with `id-unavailable` or as `connectionRequest` does. */
+  /** The reviewed connection's create request under new request and relationship IDs from the ID
+   * source. Fails with `id-unavailable` or as `connectionRequest` does. */
   function reviewedConnectionRequest(review: ConnectionReview): Result<Request> {
-    const relationship = bindings.ids.relationshipId();
-    if (!relationship.ok) return relationship;
+    const ids = connectionIds();
+    if (!ids.ok) return ids;
     const draft = review.capture.draft;
     const builders = bindings.inputs;
-    return connectionRequest(connectionPolicy, builders, draft, review.label, relationship.value);
+    return connectionRequest(connectionPolicy, builders, draft, review.label, ids.value);
+  }
+  /** A new request ID and relationship ID for one connection send. Fails with `id-unavailable`. */
+  function connectionIds(): Result<ConnectionIds> {
+    const request = bindings.ids.requestId();
+    if (!request.ok) return request;
+    const relationship = bindings.ids.relationshipId();
+    if (!relationship.ok) return relationship;
+    return { ok: true, value: { request: request.value, relationship: relationship.value } };
   }
   function cancelConnection(): void {
     if (connectionCapture?.request !== null) return;
@@ -1321,19 +1354,19 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     update({ connection: null, problem: null, status: editStatus() });
   }
   /** A dismissed add or connection request unlocks the Add forms; the connection is tried only when no add sent it. */
-  function releaseDismissedCreation(requestId: string): void {
+  function releaseDismissedCreation(requestId: RequestId): void {
     if (releaseCreationRequest(requestId) || releaseConnectionRequest(requestId))
       clearDismissedCreationView();
   }
   /** Releases the add capture that sent this request; false when none did. */
-  function releaseCreationRequest(requestId: string): boolean {
+  function releaseCreationRequest(requestId: RequestId): boolean {
     const dismissed = dismissedCaptures(creationCaptures, requestId);
     if (dismissed === null) return false;
     creationCaptures = dismissed;
     return true;
   }
   /** Returns the connection that sent this request to editing; false when it did not send it. */
-  function releaseConnectionRequest(requestId: string): boolean {
+  function releaseConnectionRequest(requestId: RequestId): boolean {
     const releasedCapture = releasedConnection(connectionCapture, requestId);
     if (releasedCapture === null) return false;
     connectionCapture = releasedCapture;
@@ -1379,7 +1412,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     base: import('../../contract/records/owners.js').Snapshot,
     changes: readonly import('@novakai/canvas-library').OrganisationChange[],
   ): Promise<Result<Receipt>> {
-    const request = bindings.inputs.library(base, changes, bindings.nextId());
+    const request = newRequest((requestId) => bindings.inputs.library(base, changes, requestId));
     if (!request.ok) return request;
     return submitCurrent(request.value);
   }
@@ -1479,7 +1512,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     wires.restore(state.snapshot.workspace);
   }
   /** Human-triggered reconciliation is read-only and makes missing confirmation explicit. */
-  async function reconcileRequest(id: string): Promise<void> {
+  async function reconcileRequest(id: RequestId): Promise<void> {
     const result = await submissions.reconcile(id);
     if (!result.ok) {
       report(result.error);
@@ -1489,7 +1522,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   }
   function handleReconciliationResult(
     receipt: Receipt | null,
-    id: string,
+    id: RequestId,
   ): void {
     clearSettledUncertainty();
     if (receipt === null) update({ status: 'No receipt found — retry remains an explicit action' });
@@ -1507,33 +1540,33 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
       : state.creation;
   }
   /** Retry retains the exact request body while using the current authenticated transport session. */
-  async function retryRequest(id: string): Promise<void> {
+  async function retryRequest(id: RequestId): Promise<void> {
     const result = await retryCurrent(id);
     if (!result.ok) report(result.error);
     else settleRetried(id);
-    updateMovementRecovery(id);
+    updateMovementRecovery();
   }
   /** Resends under the latest read generation; before the first read nothing is sent (`not-read`). */
-  async function retryCurrent(id: string): Promise<Result<Receipt>> {
+  async function retryCurrent(id: RequestId): Promise<Result<Receipt>> {
     const generation = currentGeneration(state.generation);
     if (!generation.ok) return generation;
     return submissions.retry(id, generation.value);
   }
-  function settleRetried(id: string): void {
+  function settleRetried(id: RequestId): void {
     clearSettledUncertainty();
     settleConfirmedCreation(id);
   }
-  function updateMovementRecovery(requestId: string): void {
-    const held = heldFor(movementSlot, requestId);
-    if (held !== null) recoverMovement(held);
+  /** The held review, if any, follows its gesture's journal entry. */
+  function updateMovementRecovery(): void {
+    if (movementSlot !== null) recoverMovement(movementSlot);
   }
   /** The journal moves the held review; a refusal releases edits again. */
   function recoverMovement(held: MovementHeld): void {
     const { intent } = held.capture;
-    const pending = state.pending.find((item) => item.request.request === intent.id);
-    const phase = recoveryPhase(pending);
+    const sent = requestForGesture(state.pending, intent.id);
+    const phase = recoveryPhase(sent);
     if (phase === null) return;
-    showMovement(requestedIn(held, phase));
+    showMovement(inPhase(held, phase));
     if (phase === 'rejected') updateMutationAvailability();
   }
   /** Status reads never change navigation; stale responses cannot replace newer status. */
@@ -1596,7 +1629,9 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     status: unknown,
     direction: 'undo' | 'redo',
   ): Promise<void> {
-    const request = bindings.inputs.history(status, direction, bindings.nextId());
+    const request = newRequest((requestId) =>
+      bindings.inputs.history(status, direction, requestId),
+    );
     if (!request.ok) return report(request.error);
     if (request.value !== null) await applyHistoryRequest(request.value);
   }

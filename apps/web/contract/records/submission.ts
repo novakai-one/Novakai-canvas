@@ -1,5 +1,5 @@
 import type { Request, Receipt, Snapshot, Collection } from './owners.js';
-import type { TransportGeneration, WorkspaceId } from '../brands.js';
+import type { RequestId, TransportGeneration, WorkspaceId } from '../brands.js';
 import type { Result, Diagnostic } from '../errors.js';
 import type { ServiceClient } from '../ports/client.js';
 import type { DraftRetention } from '../ports/draft-retention.js';
@@ -36,11 +36,11 @@ export interface SubmissionReaders {
 /** Browser owns recovery; the service receipt is the only evidence of success. No network retry is automatic. */
 export interface SubmissionSession {
   restore(workspace: WorkspaceId): void;
-  dismiss(id: string): Result<void>;
+  dismiss(id: RequestId): Result<void>;
   submit(input: Omit<Submission, 'state'>): Promise<Result<Receipt>>;
-  reconcile(id: string): Promise<Result<Receipt | null>>;
+  reconcile(id: RequestId): Promise<Result<Receipt | null>>;
   retry(
-    id: string,
+    id: RequestId,
     generation: TransportGeneration,
   ): Promise<Result<Receipt>>;
 }

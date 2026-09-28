@@ -1,29 +1,36 @@
 /*
- * Connection request assembly: a reviewed draft becomes one relationship record (the ID the caller
- * took from the ID source, cardinalities on associations only) and the create request built by
- * the model request builder — one relationship, one wire appearance. Pure; the session takes the
- * ID, sends the request and owns its recovery.
+ * Connection request assembly: a reviewed draft becomes one relationship record (cardinalities on
+ * associations only) and the create request built by the model request builder — one
+ * relationship, one wire appearance — under the request and relationship IDs the caller took from
+ * the ID source. Pure; the session takes the IDs, sends the request and owns its recovery.
  */
 import type { Result } from '../../../contract/errors.js';
 import type { RequestBuilders } from '../../../contract/ports/request-builders.js';
 import type { Change, Relationship, Request, Section } from '../../../contract/records/owners.js';
 import type { Cardinality, ConnectionDraft } from '../../../contract/records/connection.js';
-import type { RelationshipId } from '../../../contract/brands.js';
+import type { RelationshipId, RequestId } from '../../../contract/brands.js';
 import type { ConnectionPolicy, RelationshipEndpoints } from './types.js';
 import { relationshipEndpoint } from './endpoints.js';
 
+/** The new IDs one connection send needs: its request's and its relationship's. */
+export interface ConnectionIds {
+  readonly request: RequestId;
+  readonly relationship: RelationshipId;
+}
+
 /**
- * Builds the create request for a reviewed draft: one relationship with the ID `id`, one wire
- * appearance. Fails as the endpoint checks do (`invalid-edit`) or as the model builder does.
+ * Builds the create request for a reviewed draft under `ids.request`: one relationship with the ID
+ * `ids.relationship`, one wire appearance. Fails as the endpoint checks do (`invalid-edit`) or as
+ * the model builder does.
  */
 export function connectionRequest(
   policy: ConnectionPolicy,
   builders: Pick<RequestBuilders, 'model'>,
   draft: ConnectionDraft,
   label: string,
-  id: RelationshipId,
+  ids: ConnectionIds,
 ): Result<Request> {
-  const relationship = relationshipFor(policy, draft, label, id);
+  const relationship = relationshipFor(policy, draft, label, ids.relationship);
   if (!relationship.ok) {
     return relationship;
   }
@@ -31,7 +38,7 @@ export function connectionRequest(
     draft.base,
     draft.collection.id,
     relationshipChanges(draft, relationship.value),
-    draft.id,
+    ids.request,
   );
 }
 

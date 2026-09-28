@@ -6,7 +6,7 @@ import type { SourceView } from './source.js';
 import type { Collection, Snapshot, RenderDocument } from './owners.js';
 import type { ActiveDiagram } from './active-diagram.js';
 import type { ReadGeneration } from './read-generation.js';
-import type { CollectionId } from '../brands.js';
+import type { CollectionId, RequestId } from '../brands.js';
 import type { Submission } from './submission.js';
 import type { Diagnostic } from '../errors.js';
 import type { MoveReview } from './movement.js';
@@ -35,7 +35,6 @@ export interface MovementReviewState {
   readonly optionId: string;
   readonly phase: 'review' | 'sending' | 'uncertain' | 'rejected';
   readonly document: RenderDocument;
-  readonly requestId?: string;
 }
 export interface WorkspaceView extends SourceView {
   readonly history?: {
@@ -78,11 +77,11 @@ export interface WorkspaceController {
   editSource(source: string): void;
   applySource(): Promise<void>;
   closeSource(decision: 'keep' | 'discard' | 'stay'): void;
-  reconcileRequest(id: string): Promise<void>;
-  dismissRequest(id: string): void;
+  reconcileRequest(id: RequestId): Promise<void>;
+  dismissRequest(id: RequestId): void;
   /** Hide the problem bar; the underlying drafts and pending requests are unchanged. */
   dismissProblem(): void;
-  retryRequest(id: string): Promise<void>;
+  retryRequest(id: RequestId): Promise<void>;
   create(title: string): Promise<void>;
   addDiagram(draft: AddDiagramDraft): Promise<Result<Receipt>>;
   addObject(draft: AddObjectDraft): Promise<Result<Receipt>>;

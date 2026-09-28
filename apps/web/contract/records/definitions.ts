@@ -16,6 +16,7 @@ import type {
   DefinitionId,
   DescendantId,
   ObjectId,
+  RequestId,
   TransportGeneration,
   WorkspaceId,
 } from '../brands.js';
@@ -141,8 +142,8 @@ export interface DefinitionSession {
     key: string,
     request: Request,
   ): Result<void>;
-  confirmed(requestId: string): void;
-  released(requestId: string): void;
+  confirmed(requestId: RequestId): void;
+  released(requestId: RequestId): void;
   /** Clears only a temporary Apply lock when no request was retained. */
   unlockWithoutRequest(key: string): void;
 }

@@ -1,9 +1,9 @@
 /*
  * The workspace controller assembly: the Canvas and Language owners, the decoders and request
- * builders, every editor session factory and the submission session, joined into one workspace
- * session. Called once by compose.ts before rendering, which supplies every browser handle (draft
- * storage, navigation, clock, random text) and the ID source, so nothing here reads a browser
- * global. The session it returns owns recovery.
+ * builders (with the request identity checked here), every editor session factory and the
+ * submission session, joined into one workspace session. Called once by compose.ts before
+ * rendering, which supplies every browser handle (draft storage, navigation, clock) and the ID
+ * source, so nothing here reads a browser global. The session it returns owns recovery.
  */
 import { createCanvas } from '@novakai/canvas-canvas';
 import { createLanguage } from '@novakai/canvas-language';
@@ -32,8 +32,11 @@ import type { IdSource } from '../ports/ids.js';
 import type { WorkspaceBindings } from '../ports/workspace.js';
 import type { PanelController } from '../panel-types.js';
 import type { WorkspaceController } from '../records/workspace.js';
+import type { RequestIdentity } from '../ports/request-builders.js';
 import type { VisitTime } from '../brands.js';
+import type { Result } from '../errors.js';
 import { createMovementReviewBinding } from './movement-review.js';
+import { requestIdentity } from './request-identity.js';
 import { createInspectorSession, createWireSession } from './sessions.js';
 
 /** What the workspace is assembled from: its mount element, the service, the panels and browser handles. */
@@ -43,10 +46,8 @@ export interface WorkspaceParts {
   readonly panels: SidePanels;
   readonly retention: DraftRetention;
   readonly navigation: WorkspaceNavigation;
-  /** The one ID source: collection, folder, diagram, object, group and relationship IDs. */
+  /** The one ID source: request, collection, folder, diagram, object, group and relationship IDs. */
   readonly ids: IdSource;
-  /** Fresh random text (a UUID) for request IDs until they come from `ids` (plan B4). */
-  readonly random: () => string;
   /** The current time in epoch milliseconds, for Library visits. */
   readonly now: () => VisitTime;
 }
@@ -56,14 +57,26 @@ type SidePanels = Pick<PanelController, 'restore' | 'open' | 'selectTab'>;
 
 /**
  * The workspace controller. Native adapters receive narrow roles; every human mutation uses
- * captured Authoring preconditions. Cannot fail: new IDs come from the ID source, which answers
+ * captured Authoring preconditions. Fails with `initialization-failed` only when Authoring refuses
+ * the browser's request identity; new IDs come from the ID source, which answers
  * `id-unavailable` instead of throwing.
  */
-export function composeWorkspace(parts: WorkspaceParts): WorkspaceController {
-  const { element, client, retention, ids, random } = parts;
+export function composeWorkspace(parts: WorkspaceParts): Result<WorkspaceController> {
+  const identity = requestIdentity();
+  if (!identity.ok) return identity;
+  return { ok: true, value: workspaceController(parts, identity.value) };
+}
+
+/** The workspace session over the owners, readers, builders and editor factories. Cannot fail. */
+function workspaceController(
+  parts: WorkspaceParts,
+  identity: RequestIdentity,
+): WorkspaceController {
+  const { element, client, retention, ids } = parts;
   const canvas = createCanvas({ sceneAdmission: createSceneAdmission() });
   const language = createLanguage({ reader: { validate }, planner: { plan }, stage: { stage } });
-  const inputs = { ...createWorkspaceDecoders(readDiagram), ...createRequestBuilders(language) };
+  const builders = createRequestBuilders(language, identity);
+  const inputs = { ...createWorkspaceDecoders(readDiagram), ...builders };
   return createWorkspaceController({
     client,
     panels: sidePanels(parts.panels),
@@ -86,7 +99,7 @@ export function composeWorkspace(parts: WorkspaceParts): WorkspaceController {
       createSourceController({
         inputs,
         retention,
-        nextId: random,
+        nextRequestId: ids.requestId,
         ...callbacks,
       }),
     sessions: createCanvasSessions(canvas, () => viewport(element)),
@@ -102,7 +115,6 @@ export function composeWorkspace(parts: WorkspaceParts): WorkspaceController {
         ...callbacks,
       }),
     ids,
-    nextId: random,
   });
 }
 

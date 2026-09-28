@@ -1,12 +1,13 @@
 /*
  * Request builders seam: builds Authoring requests, and the DSL text a source request carries,
- * from a base the caller captured. Declarations only; `adapters/edge/request-builders.ts`
- * implements it with Authoring's request schema and Language's printer. Nothing is sent here:
- * builders answer a `Result` and never throw, and the caller that sends owns recovery.
+ * from a base the caller captured, under a request ID the caller took from the ID source.
+ * Declarations only; `adapters/edge/request-builders.ts` implements it with Authoring's request
+ * schema and Language's printer. Nothing is sent here: builders answer a `Result` and never throw,
+ * and the caller that sends owns recovery.
  */
 import type { OrganisationChange } from '@novakai/canvas-library';
 import type { Result } from '../errors.js';
-import type { CollectionId } from '../brands.js';
+import type { CollectionId, Direction, PlannerId, RequestId } from '../brands.js';
 import type { EditingBase } from '../records/editor-recovery.js';
 import type { Collection, Snapshot, Request, Change } from '../records/owners.js';
 
@@ -20,7 +21,7 @@ export interface RequestBuilders {
     snapshot: EditingBase,
     collection: CollectionId,
     changes: readonly Change[],
-    request: string,
+    request: RequestId,
   ): Result<Request>;
   /**
    * Builds a DSL request that creates or replaces collection `id` with `source`. Fails with
@@ -31,13 +32,13 @@ export interface RequestBuilders {
     id: CollectionId,
     source: string,
     mode: 'create' | 'replace',
-    request: string,
+    request: RequestId,
   ): Result<Request>;
   /** Builds a Library catalog request scoped to the catalog in `snapshot`. Fails with `invalid-library-request`. */
   library(
     snapshot: Snapshot,
     changes: readonly OrganisationChange[],
-    request: string,
+    request: RequestId,
   ): Result<Request>;
   /**
    * Builds the undo or redo request from Authoring's history status, or `null` when there is
@@ -45,8 +46,8 @@ export interface RequestBuilders {
    */
   history(
     input: unknown,
-    direction: 'undo' | 'redo',
-    id: string,
+    direction: Direction,
+    request: RequestId,
   ): Result<Request | null>;
   /** Prints `collection` as DSL source. Fails with `source-unavailable`. */
   source(collection: Collection): Result<string>;
@@ -55,4 +56,16 @@ export interface RequestBuilders {
     id: CollectionId,
     title: string,
   ): string;
+}
+
+/** The Authoring planners the browser's change requests name. */
+export type PlannerKind = 'model' | 'dsl' | 'library';
+
+/**
+ * Who sends the browser's requests and the planner each kind of change names. Checked once at
+ * composition with Authoring's schemas (`contract/compose/request-identity.ts`).
+ */
+export interface RequestIdentity {
+  readonly actor: Request['actor'];
+  readonly planners: Readonly<Record<PlannerKind, PlannerId>>;
 }

@@ -8,6 +8,7 @@ import type { Diagnostic } from '../../../contract/errors.js';
 import type { ConnectionDraft } from '../../../contract/records/connection.js';
 import type { Request } from '../../../contract/records/owners.js';
 import type { Submission } from '../../../contract/records/submission.js';
+import type { RequestId } from '../../../contract/brands.js';
 import type { ConnectionCapture } from './draft.js';
 
 /** The capture following its request's journal state; null when it has no request in the journal. */
@@ -22,7 +23,7 @@ export function withRequestState(
 /** The capture back in editing once its request is dismissed; null when it did not send it. */
 export function releasedConnection(
   capture: ConnectionCapture | null,
-  requestId: string,
+  requestId: RequestId,
 ): ConnectionCapture | null {
   if (capture === null || capture.request?.request !== requestId) return null;
   return { draft: { ...capture.draft, problem: null, requestState: 'draft' }, request: null };

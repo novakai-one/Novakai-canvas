@@ -1,5 +1,6 @@
 import type { Submission } from '../../contract/records/submission.js';
 import type { Request } from '../../contract/records/owners.js';
+import type { RequestId } from '../../contract/brands.js';
 
 /** One in-flight request per collection prevents overlapping browser edits; different collections remain independent. */
 export function blocksSubmission(
@@ -23,7 +24,7 @@ function sameCollection(
 /** Replace a status by immutable identity; this never changes request contents or captured versions. */
 export function submissionStatus(
   pending: readonly Submission[],
-  id: string,
+  id: RequestId,
   state: Submission['state'],
 ): readonly Submission[] {
   return pending.map((item) => (item.request.request === id ? { ...item, state } : item));
@@ -32,8 +33,8 @@ export function submissionStatus(
 /** When each retained request first appeared and when it was refused, on one increasing counter. */
 export interface RefusalOrder {
   readonly tick: number;
-  readonly started: ReadonlyMap<string, number>;
-  readonly refused: ReadonlyMap<string, number>;
+  readonly started: ReadonlyMap<RequestId, number>;
+  readonly refused: ReadonlyMap<RequestId, number>;
 }
 export const emptyRefusalOrder: RefusalOrder = { tick: 0, started: new Map(), refused: new Map() };
 /** Stamp new requests and new refusals; requests that left the journal are forgotten. */
@@ -54,7 +55,7 @@ export function observeRefusals(
   return { tick, started, refused };
 }
 /** Only the most recent refusal is shown, and only until another request starts after it. */
-export function supersededRefusal(order: RefusalOrder): string | undefined {
+export function supersededRefusal(order: RefusalOrder): RequestId | undefined {
   const newest = Math.max(0, ...order.refused.values());
   const latestStart = Math.max(0, ...order.started.values());
   return [...order.refused].find(([, at]) => at < newest || latestStart > at)?.[0];
