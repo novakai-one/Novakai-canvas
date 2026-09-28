@@ -1,8 +1,13 @@
 /*
- * Authoring preview and apply over the HTTP transport: the mutation envelope, one route per mode,
- * and the apply answer's receipt check. Network I/O through the injected transport; each failure
- * is returned as a value. Authoring owns the commit. The request was retained before it was sent,
- * so an unconfirmed answer names it: `canvas receipt ID`, then `canvas retry ID`.
+ * Why this file exists
+ *
+ * `canvas create my-diagram.canvas` ends by sending the change to Authoring, inside the service,
+ * as `POST /api/v1/authoring/apply`. If that answer is lost, the agent must not send a new
+ * request: it checks `canvas receipt ID`, then runs `canvas retry ID` only if nothing was saved.
+ *
+ * This file sends a kept request to preview or apply, and checks the answer. When an answer is
+ * lost or unreadable, its advice names that receipt. It never retries, and never saves anything
+ * itself; Authoring does. Mistakes come back as values.
  */
 import type { HttpTransport, WriteRoute } from '../../contract/ports/http-transport.js';
 import type { ServiceAuthoring } from '../../contract/ports/service-authoring.js';
@@ -33,8 +38,9 @@ const routes: Readonly<Record<SubmitMode, WriteRoute>> = Object.freeze({
 });
 
 /**
- * Binds preview and apply to `transport`. Both fail with `service-rejected`, or with
- * `connection-uncertain` / `invalid-response` whose recovery names the request's receipt.
+ * Gives core its preview and apply sends, made over `transport`. Both fail with
+ * `service-rejected`, or with `connection-uncertain` or `invalid-response`, whose advice names the
+ * request's receipt.
  */
 export function createServiceAuthoring(transport: TransportPost): ServiceAuthoring {
   return {

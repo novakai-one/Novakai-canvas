@@ -1,8 +1,12 @@
 /*
- * Argv → RawArguments with Node's `parseArgs`, for any executable's flag spec. Knows no command,
- * default or placement rule: core's grammar checks every word and value. Pure apart from Node's
- * parser; nothing is read or sent. A refused flag is `malformed`, named as typed; the caller
- * reports it.
+ * Why this file exists
+ *
+ * Both programs start from the words Node hands over (argv), such as
+ * `['read', 'my-diagram', '--section', 'intro']`. Those must be split into plain words and flags,
+ * and a flag that can't be read, such as `--nope` or `--out` with nothing after it, must be caught.
+ *
+ * This file does that split with Node's own parser, for whichever flags a program has. It never
+ * decides what the words mean: core works out the command and checks every value.
  */
 import { parseArgs } from 'node:util';
 import type {
@@ -35,25 +39,25 @@ const valueFits: Readonly<Record<FlagShape['type'], ValueCheck>> = Object.freeze
 });
 
 /**
- * The words, flag values and repeated flags in `argv`. Returns `malformed`, naming the first
- * refused flag as typed, for the flags Node's strict mode refuses: an undeclared flag, a text flag
- * with no value or with a separate value that starts with `-`, or a switch given a value. Node's
- * parser runs non-strict, so it refuses nothing itself and does not throw.
+ * Splits argv into its plain words, the text after each flag, and the flags typed more than once.
+ * `knownFlags` lists the program's flags and whether each takes text.
+ * Gives back `malformed`, naming the first bad flag as typed: a flag the program doesn't have, a
+ * flag missing its text (a next word starting with `-` isn't text), or a switch given text.
  */
 export function readArguments<F extends string>(
   argv: readonly string[],
-  spec: FlagSpec<F>,
+  knownFlags: FlagSpec<F>,
 ): ArgvReading<F> {
   const parsed = parseArgs({
     args: [...argv],
-    options: { ...spec },
+    options: { ...knownFlags },
     allowPositionals: true,
     strict: false,
     tokens: true,
   });
-  const refused = refusedFlag(parsed.tokens, spec);
+  const refused = refusedFlag(parsed.tokens, knownFlags);
   if (refused !== undefined) return { kind: 'malformed', flag: refused.rawName };
-  return { kind: 'split', arguments: rawArguments(parsed, spec) };
+  return { kind: 'split', arguments: rawArguments(parsed, knownFlags) };
 }
 
 /** The first flag token Node's strict mode would refuse; absent when every flag is accepted. */

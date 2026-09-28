@@ -1,7 +1,12 @@
 /*
- * PNG raster start-up for the headless render: compile the resvg wasm module that ships with
- * Export and initialise Export's raster runtime. Not pure: reads the wasm file. Failures are
- * values: `provider-failed` for the file or compile step, Export's own diagnostic for start-up.
+ * Why this file exists
+ *
+ * `--format png` needs an engine that turns a drawn SVG into PNG pixels. Export uses resvg for
+ * that, built from a WebAssembly file that ships with Export. Loading it can fail, and SVG output
+ * doesn't need it, so it waits until a PNG render asks for it.
+ *
+ * This file finds that file below the repo folder, compiles it, and starts Export's PNG engine.
+ * It only reads; it never writes a file. Mistakes come back as values, never thrown.
  */
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -12,11 +17,15 @@ import type { FilePath } from '../../contract/brands.js';
 import type { RasterEngine } from '../../contract/ports/render-files.js';
 import { providerFailure, type Result } from '../../contract/errors.js';
 
-/** Build the raster engine for one repo root. Touches nothing until `prepare` runs. */
-export function createRaster(root: FilePath): RasterEngine {
+/**
+ * Gives the render its PNG engine, loaded from below `repoRoot` when `prepare` runs. `prepare`
+ * fails with `provider-failed` if the file can't be found, read or compiled, or with Export's own
+ * finding if the engine won't start.
+ */
+export function createRasterEngine(repoRoot: FilePath): RasterEngine {
   return {
     prepare: async () => {
-      const module = await compile(root);
+      const module = await compile(repoRoot);
       if (!module.ok) return module;
       return initializeRaster(module.value);
     },

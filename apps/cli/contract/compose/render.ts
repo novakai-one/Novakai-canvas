@@ -22,11 +22,11 @@ import { composeTemplates, type Templates } from '@novakai/canvas-templates';
 import { createResourceReader } from '../../adapters/files/resource-reader.js';
 import { createRenderAssets } from '../../adapters/render/assets.js';
 import { createExporter, type ExportChoices } from '../../adapters/render/exporter.js';
-import { createProduction, type Production } from '../../adapters/render/production.js';
-import { createRaster } from '../../adapters/render/raster.js';
+import { createServiceLayout, type ServiceLayoutTools } from '../../adapters/render/production.js';
+import { createRasterEngine } from '../../adapters/render/raster.js';
 import { createInputFiles, createSectionFiles } from '../../adapters/render/render-files.js';
-import { createRenderSources, exportDocuments } from '../../adapters/render/sources.js';
-import { openTempAssets } from '../../adapters/render/temp-assets.js';
+import { createExportDocuments, createRenderSources } from '../../adapters/render/sources.js';
+import { openTempAssetStore } from '../../adapters/render/temp-assets.js';
 import { createRenderThemes } from '../../adapters/render/themes.js';
 import type { RenderEnvironment, RenderPorts } from '../ports/render.js';
 import type { TempAssetStore } from '../ports/render-assets.js';
@@ -47,7 +47,7 @@ export async function createRenderPorts(request: RenderRequest): Promise<RenderP
   return {
     open: () => openEnvironment(request, service),
     inputFiles: createInputFiles(request.root),
-    raster: createRaster(request.root),
+    raster: createRasterEngine(request.root),
     sectionFiles: createSectionFiles(request),
     resources: createResourceReader(),
     themeReader: createThemeReader(),
@@ -64,7 +64,7 @@ async function openEnvironment(
   request: RenderRequest,
   service: HeadlessTools,
 ): Promise<Result<RenderEnvironment, RenderFailureSource>> {
-  const store = await openTempAssets();
+  const store = await openTempAssetStore();
   if (!store.ok) return store;
   const environment = await environmentIn(request, service, store.value).catch(thrown);
   if (!environment.ok) return closedAfter(store.value, environment.error);
@@ -165,7 +165,7 @@ function renderOutput(
   owners: PortOwners,
 ): RenderOutput {
   return {
-    ...createProduction(serviceProduction(environment, owners)),
+    ...createServiceLayout(serviceLayoutTools(environment, owners)),
     ...createExporter(exportChoices(environment, owners.request)),
   };
 }
@@ -174,10 +174,10 @@ function renderOutput(
  * The service's render jobs over `environment`, with the layout engine's wasm below the repo root,
  * and the service's inspection report of a rendered document.
  */
-function serviceProduction(
+function serviceLayoutTools(
   environment: Environment,
   owners: PortOwners,
-): Production {
+): ServiceLayoutTools {
   const jobs = owners.service.createRenderJobs({
     ...environment,
     sources: environment.installation.tokens,
@@ -194,6 +194,6 @@ function exportChoices(
   return {
     format: request.format,
     labels: request.labels,
-    documentsFor: (pins) => exportDocuments(environment.language, pins),
+    documentsFor: (pins) => createExportDocuments(environment.language, pins),
   };
 }

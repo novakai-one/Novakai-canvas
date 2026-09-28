@@ -1,9 +1,12 @@
 /*
- * HTTP transport to the local service: one checked loopback origin, a bearer token, and the
- * service's response envelope; a rejection in it becomes `service-rejected`, the service's record
- * kept whole. Network I/O; each failure is returned as a value. A lost answer is
- * `connection-uncertain`; for a write, `adapters/service-http/authoring.ts` names the retained
- * request so `receipt` then `retry` recover it. This file never retries.
+ * Why this file exists
+ *
+ * Every service command is one HTTP call to the local service, carrying the agent's token. The
+ * answer comes wrapped in the service's envelope, `{ generation, outcome }`. The agent must tell
+ * apart three ways a call goes wrong: no sure answer, an answer that isn't the service's, or a no.
+ *
+ * This file makes that call and unwraps the envelope. It sends only to the checked `--server`
+ * address, never follows a redirect, never retries, and never shows the token.
  */
 import { responseEnvelope } from '@novakai/canvas-service';
 import type { HttpTransport, RouteQuery } from '../../contract/ports/http-transport.js';
@@ -25,10 +28,11 @@ const answerTimeoutMs = 35_000;
 type Method = 'GET' | 'POST';
 
 /**
- * Binds the transport to `server`, an `http://127.0.0.1` origin core checked from --server. The
- * token comes from protected local storage and never appears in command output or failure details.
+ * Gives core its HTTP calls to `server` (`http://127.0.0.1`, checked from `--server`), each sent
+ * with `token`. A call fails with `connection-uncertain` (no sure answer within 35 seconds),
+ * `invalid-response` (the answer isn't the service's) or `service-rejected` (the service said no).
  */
-export function createTransport(
+export function createHttpTransport(
   server: LoopbackOrigin,
   token: AgentToken,
 ): HttpTransport {

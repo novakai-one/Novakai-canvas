@@ -1,11 +1,13 @@
 /*
- * The headless render's file I/O, as two ports. Input files, bound to the repo root: list the
- * shipped `.theme` and `.canvas` files under resources/, read UTF-8 text, name a recipe family's
- * shipped source. Section files, bound to the output directory and format: create the directory
- * and write section files. Read paths and the output directory are resolved against the working
- * directory. Not pure. Every failure is a `provider-failed` value, and nothing throws out of it: a
- * native failure carries the OS path, code and syscall; a path that fails its FilePath check
- * carries only the check's message.
+ * Why this file exists
+ *
+ * A render reads and writes files. `--collection states --out out/` reads the shipped `.canvas`
+ * files to find `states`, then writes `out/<section>.svg` for each section. Core decides which
+ * files, but can't touch the disk.
+ *
+ * This file does that reading, below the repo folder, and that writing, only into `--out`. A
+ * relative path is taken from the folder the command runs in. Every mistake is `provider-failed`,
+ * with Node's details of what went wrong, given back as a value.
  */
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -16,23 +18,23 @@ import type { SourceFile } from '../../contract/records/source-file.js';
 import type { InputFiles, SectionFiles } from '../../contract/ports/render-files.js';
 import { providerFailure, success, type Result } from '../../contract/errors.js';
 
-/** Where one render writes its sections, and in which format. */
+/** Where one render writes its section images (`--out`), and in which format (`--format`). */
 export type SectionTarget = Pick<RenderRequest, 'out' | 'format'>;
 
-/** Build the input files of one render below `root`. Touches nothing and cannot fail. */
-export function createInputFiles(root: FilePath): InputFiles {
-  const resources = join(root, 'resources');
+/** Gives the render its file reads; shipped files are found below `repoRoot`. Reads nothing yet. */
+export function createInputFiles(repoRoot: FilePath): InputFiles {
+  const resources = join(repoRoot, 'resources');
   return {
     shippedThemes: () => shippedThemes(resources),
     shippedCollections: () => shippedCollections(resources),
     read: (path) => readSource(path),
-    recipeFile: (family) => checkedPath(join(root, 'resources/recipes', family + '.canvas')),
+    recipeFile: (family) => checkedPath(join(repoRoot, 'resources/recipes', family + '.canvas')),
   };
 }
 
 /**
- * Build the section files of one render. Touches nothing and cannot fail. Output paths are made
- * absolute, so the report names absolute files.
+ * Gives the render its section image writer, for `target`'s folder and format. Section `intro`
+ * becomes `<out>/intro.svg`; each written path comes back absolute. Writes nothing yet.
  */
 export function createSectionFiles(target: SectionTarget): SectionFiles {
   return {

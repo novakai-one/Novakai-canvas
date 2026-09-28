@@ -1,10 +1,13 @@
 /*
- * The retained-request journal: one JSON file per request ID under the workspace `requests`
- * directory, created exclusively and fsynced before the Authoring request is sent. Filesystem I/O;
- * each failure is returned as a value. The journal is the CLI's recovery record for `receipt` then
- * `retry`. A file that cannot be read keeps its I/O code; a file that reads but is not a journal
- * record, or holds another request's record, is `journal-corrupt`, and its request's receipt is
- * checked before authoring again.
+ * Why this file exists
+ *
+ * If a change is sent and its answer is lost, `canvas retry ID` must send the exact same request
+ * again. So each request is kept on disk before it is sent, as `requests/<ID>.json` in the
+ * workspace folder, and read back from there.
+ *
+ * This file does that keeping and reading back. It writes each file once, synced to disk, and
+ * never rewrites or deletes it. A file that holds something else, or another request, is
+ * `journal-corrupt`. Mistakes come back as values, never thrown.
  */
 import { readFile, mkdir, open } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -28,8 +31,8 @@ const unavailable: FailureInput = Object.freeze({
 });
 
 /**
- * Binds the `requests` directory of `workspace`; each operation reports its own I/O failure and
- * recovery.
+ * Gives core the request journal kept in the `requests` folder of `workspace`. Makes no folder
+ * until the first request is kept.
  */
 export function createRequestJournal(workspace: FilePath): RequestJournal {
   const root = resolve(workspace, 'requests');

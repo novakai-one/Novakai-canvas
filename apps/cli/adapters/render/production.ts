@@ -1,9 +1,13 @@
 /*
- * The output port's `layOut` and `inspect`: the service's drawing of one collection for the
- * headless render, and the service's inspection report of that drawing. A render job over the
- * collection, the admitted catalog and an empty headless library, run by the service's diagram
- * producer. Reads only the layout engine's wasm file; nothing stored is changed. Failures are
- * values; core/render/render.ts owns recovery.
+ * Why this file exists
+ *
+ * Before a section can be drawn, its collection must be laid out: where each box and wire goes.
+ * The service does that for the web app, and a render reuses the same code with no server. It
+ * needs a render job: the collection, the themes and recipes the render knows, and an empty
+ * library, since a render has no saved workspace.
+ *
+ * This file makes that job and has the service lay it out. It reads only the layout engine's
+ * WebAssembly file, and never changes anything saved. Mistakes come back as values.
  */
 import {
   validateLibrarySnapshot,
@@ -21,24 +25,26 @@ import type {
 } from '../../contract/records/foreign.js';
 import type { Result } from '../../contract/errors.js';
 
-/**
- * The service's render job factory, bound to one render's capability values, its producer and its
- * inspection of a produced document.
- */
-export interface Production {
+/** The service's layout code, already set up with this render's parts and layout engine. */
+export interface ServiceLayoutTools {
+  /** Makes a render job for one collection. */
   readonly jobs: ReturnType<HeadlessTools['createRenderJobs']>;
+  /** Lays a render job out as a document. */
   readonly produceDiagram: HeadlessTools['produceDiagram'];
+  /** The service's report on a laid-out document, such as how many wires cross. */
   readonly inspectDocument: RenderOutput['inspect'];
 }
 
 /**
- * The output port's drawing and inspection over `production`. Builds nothing and cannot fail;
- * `layOut` fails as {@link producedDiagram}, `inspect` cannot fail.
+ * Gives the render its `layOut` and `inspect` steps, using the service's `tools`. `layOut` fails
+ * if the empty library or the job can't be made, or as the service's layout does.
  */
-export function createProduction(production: Production): Pick<RenderOutput, 'layOut' | 'inspect'> {
+export function createServiceLayout(
+  tools: ServiceLayoutTools,
+): Pick<RenderOutput, 'layOut' | 'inspect'> {
   return {
-    layOut: (collection, catalog) => producedDiagram(production, collection, catalog),
-    inspect: production.inspectDocument,
+    layOut: (collection, catalog) => producedDiagram(tools, collection, catalog),
+    inspect: tools.inspectDocument,
   };
 }
 
@@ -48,18 +54,18 @@ export function createProduction(production: Production): Pick<RenderOutput, 'la
  * render.
  */
 async function producedDiagram(
-  production: Production,
+  tools: ServiceLayoutTools,
   collection: Collection,
   catalog: Catalog,
 ): Promise<Result<RenderDocument, RenderFailureSource>> {
-  const job = renderJob(production.jobs, collection, catalog);
+  const job = renderJob(tools.jobs, collection, catalog);
   if (!job.ok) return job;
-  return production.produceDiagram(job.value, new AbortController().signal);
+  return tools.produceDiagram(job.value, new AbortController().signal);
 }
 
 /** The job over one collection, the catalog and the headless library. Fails as either does. */
 function renderJob(
-  jobs: Production['jobs'],
+  jobs: ServiceLayoutTools['jobs'],
   collection: Collection,
   catalog: Catalog,
 ): Result<RenderingJob, RenderFailureSource> {

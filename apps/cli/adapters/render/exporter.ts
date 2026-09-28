@@ -1,9 +1,12 @@
 /*
- * Export for one headless render: Presentation's React drawing over the document's fonts, and
- * Export composed over a lease that always hands back the one snapshot, the injected documents
- * port and the snapshot's resource inspector. Each section exports in the request's format and
- * label mode. Pure apart from Presentation's font loading. Failures are values;
- * core/render/render.ts owns recovery.
+ * Why this file exists
+ *
+ * Once the service has laid a collection out, each section still has to become image bytes:
+ * `--format svg` makes one SVG per section. Export does that, and it draws each box and wire with
+ * Presentation, which must load the drawing's fonts first.
+ *
+ * This file sets Export up for one render: its format, its `--labels` choice and its one
+ * collection. It writes no file; `core/render/sections.ts` does. Mistakes come back as values.
  */
 import { createReactBindings } from '@novakai/canvas-presentation';
 import { composeExport, type ExportBindings, type SnapshotReader } from '@novakai/canvas-export';
@@ -22,15 +25,21 @@ import type {
 import type { SectionId } from '../../contract/brands.js';
 import { success, type Result } from '../../contract/errors.js';
 
-/** What Export needs from the render besides one snapshot. */
+/** What Export needs from the render: the image format, which labels to draw, and `Documents`. */
 export interface ExportChoices {
   readonly format: RenderFormat;
   readonly labels: LabelMode;
-  /** The documents port Export reads, prints and parses collections through, over `pins`. */
-  documentsFor(pins: ResolvedResources): Documents;
+  /**
+   * Gives Export its way to read, print and parse collections (`Documents`), using
+   * `resolvedResources` for the source's font, image and theme names.
+   */
+  documentsFor(resolvedResources: ResolvedResources): Documents;
 }
 
-/** The output port's Export. Cannot fail; `prepareExporter` fails as {@link openExporter}. */
+/**
+ * Gives the render its `prepareExporter` step, which sets Export up with `choices` for one
+ * drawing. That step fails only if Presentation can't load one of the drawing's fonts.
+ */
 export function createExporter(choices: ExportChoices): Pick<RenderOutput, 'prepareExporter'> {
   return { prepareExporter: (input) => openExporter(input, choices) };
 }

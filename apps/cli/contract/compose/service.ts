@@ -16,7 +16,7 @@ import { validate } from '@novakai/canvas-model';
 import { createLocalFiles } from '../../adapters/files/local-files.js';
 import { createRequestJournal } from '../../adapters/files/request-journal.js';
 import { createResourceReader } from '../../adapters/files/resource-reader.js';
-import { createTransport } from '../../adapters/service-http/transport.js';
+import { createHttpTransport } from '../../adapters/service-http/transport.js';
 import { createServiceReads } from '../../adapters/service-http/reads.js';
 import { createServiceAuthoring } from '../../adapters/service-http/authoring.js';
 import { createServiceResources } from '../../adapters/service-http/resources.js';
@@ -67,7 +67,7 @@ function servicePorts(
   serverAndWorkspace: ServerAndWorkspace,
   token: AgentToken,
 ): ServiceCommandDependencies {
-  const transport = createTransport(serverAndWorkspace.server, token);
+  const transport = createHttpTransport(serverAndWorkspace.server, token);
   const files = createLocalFiles();
   return {
     reads: createServiceReads(transport),

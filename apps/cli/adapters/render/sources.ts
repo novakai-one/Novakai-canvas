@@ -1,11 +1,12 @@
 /*
- * DSL to collections and back for one headless render. The environment's sources port: Language
- * parses and lowers a source as a new collection with no snapshot, and Model checks a collection.
- * Export's documents port, which Export reads, prints and parses collections through: Model
- * validates, Language prints and lowers the same way. Only bundle exports call the documents port;
- * render:png writes SVG and PNG sections, so today nothing does. Pure. A refusal is returned,
- * never thrown: the sources port returns the owner's diagnostics, the documents port Export's own
- * diagnostic. The caller fixes the source and reruns.
+ * Why this file exists
+ *
+ * A render starts from `.canvas` text but can only draw a checked collection. Language turns the
+ * text into a collection, and Model checks it. Export asks for the same jobs, plus printing a
+ * collection back to text, through its own `Documents` shape and its own kind of mistake.
+ *
+ * This file answers both from Language and Model. A source is always read as a new collection,
+ * never as a change to a saved one. Mistakes come back as values; nothing is read from disk.
  */
 import { validate } from '@novakai/canvas-model';
 import type { Result as LanguageResult } from '@novakai/canvas-language';
@@ -20,8 +21,8 @@ import type {
 import { success, type Result } from '../../contract/errors.js';
 
 /**
- * The sources port over `language` and Model. Builds nothing and cannot fail; `parse` fails with
- * Language's diagnostics, `lower` as {@link lowerAsNew}, `validate` with Model's diagnostics.
+ * Gives core its Language and Model steps: parse text, turn it into a collection, check a
+ * collection. Each step fails with Language's or Model's own findings.
  */
 export function createRenderSources(language: Pick<Language, 'parse' | 'lower'>): RenderSources {
   return {
@@ -32,18 +33,19 @@ export function createRenderSources(language: Pick<Language, 'parse' | 'lower'>)
 }
 
 /**
- * Export's documents port over `language` and `pins`. Export's diagnostic carries the owner's
- * first message: read → `invalid-input` at `collection`, print → `invalid-input` at `source`,
- * parse → `invalid-import` at `source`.
+ * Gives Export its way to read, print and parse collections, using `resolvedResources` for the
+ * source's font, image and theme names. Export needs it to start, though render:png never uses it.
+ * A mistake becomes Export's `invalid-input` (read, print) or `invalid-import` (parse).
  */
-export function exportDocuments(
+export function createExportDocuments(
   language: Pick<Language, 'lower' | 'print'>,
-  pins: ResolvedResources,
+  resolvedResources: ResolvedResources,
 ): Documents {
   return {
     read: (value) => document(validate(value), 'invalid-input', 'collection'),
     print: (collection) => printed(language, collection),
-    parse: (source) => document(lowerAsNew(language, source, pins), 'invalid-import', 'source'),
+    parse: (source) =>
+      document(lowerAsNew(language, source, resolvedResources), 'invalid-import', 'source'),
   };
 }
 

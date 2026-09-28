@@ -1,7 +1,12 @@
 /*
- * The service's read routes over the HTTP transport, each answer checked at this seam. Network I/O
- * through the injected transport; each failure is returned as a value. Nothing is written, so the
- * caller recovers by running the command again.
+ * Why this file exists
+ *
+ * `read my-diagram` becomes `GET /api/v1/source?id=my-diagram`, and the answer is whatever came
+ * back over the wire. Before core prints it, it must be checked to be the shape expected: a
+ * source readout, a layout report, a receipt.
+ *
+ * This file asks the service each read question and checks each answer. Reading never changes
+ * the workspace, so a failed read can simply be run again. Mistakes come back as values.
  */
 import { inspectionReport } from '@novakai/canvas-service';
 import type { HttpTransport, RouteQuery } from '../../contract/ports/http-transport.js';
@@ -23,8 +28,8 @@ import { failure, success } from '../../contract/errors.js';
 type TransportGet = Pick<HttpTransport, 'get'>;
 
 /**
- * Binds the read routes to `transport`. Every method fails as the transport does, or with
- * `invalid-response` when the answer does not match its schema.
+ * Gives core its read questions, asked over `transport`. Each fails as the transport does, or
+ * with `invalid-response` when the answer isn't the expected shape.
  */
 export function createServiceReads(transport: TransportGet): ServiceReads {
   return {

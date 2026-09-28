@@ -1,8 +1,12 @@
 /*
- * The render environment's theme rules: the installation's catalog, and theme admission through
- * the service's theme preparation and Templates' plan. Pure apart from reading the render's
- * temporary asset store; a catalog value grows and nothing stored is changed. Every method returns
- * the owner's failure as a value; core/render/render.ts owns recovery.
+ * Why this file exists
+ *
+ * `--theme-file my.theme` draws with a theme that isn't shipped. Before it can be used, the
+ * service must prepare it with its fonts, and Templates must check it against the themes the
+ * render already knows (the catalog). Core asks for this through `RenderThemes`.
+ *
+ * This file answers with the shipped catalog and that one step, "admitting" the theme. Admitting
+ * gives back a bigger catalog for this render only; nothing saved changes.
  */
 import { z } from 'zod';
 import type { LoweredIntent } from '@novakai/canvas-language';
@@ -17,23 +21,27 @@ import type {
   ThemeAdmission,
 } from '../../contract/records/foreign.js';
 
-/** What theme admission runs over: the installation's presets, the asset store and Templates. */
-export interface ThemeOwners {
+/** The parts admitting a theme uses: the shipped catalog, the render's store and Templates. */
+export interface ThemeDependencies {
+  /** The shipped themes and recipes. */
   readonly presets: Catalog;
+  /** The render's throwaway store, where the theme's fonts are read back from. */
   readonly assets: Pick<Assets, 'resolve'>;
+  /** Templates: reads the theme's base from the catalog, then checks the prepared theme fits. */
   readonly templates: Pick<Templates<LoweredIntent>, 'read' | 'planAdmission'>;
   /** The service's theme preparation, which admission runs before Templates plans the theme. */
   readonly prepareTheme: HeadlessTools['prepareTheme'];
 }
 
 /**
- * The theme rules over `owners`. Builds nothing and cannot fail; `admit` fails as
- * {@link admittedTheme} does.
+ * Gives core the shipped catalog, and the step that admits a `--theme-file` theme into a catalog.
+ * Admitting fails when the service or Templates refuses the theme, or when a number in it is too
+ * large for JSON (`provider-failed`).
  */
-export function createRenderThemes(owners: ThemeOwners): RenderThemes {
+export function createRenderThemes(dependencies: ThemeDependencies): RenderThemes {
   return {
-    catalog: owners.presets,
-    admit: (catalog, theme, fonts) => admittedTheme(owners, { catalog, theme, fonts }),
+    catalog: dependencies.presets,
+    admit: (catalog, theme, fonts) => admittedTheme(dependencies, { catalog, theme, fonts }),
   };
 }
 
@@ -53,7 +61,7 @@ interface ThemeInput {
  * JSON check's message; otherwise fails as the preparation or the plan does.
  */
 function admittedTheme(
-  owners: ThemeOwners,
+  owners: ThemeDependencies,
   input: ThemeInput,
 ): Result<Catalog, RenderFailureSource> {
   const admission = z.json().safeParse(input.theme);
@@ -64,7 +72,7 @@ function admittedTheme(
 
 /** The prepared theme planned into the catalog. Fails as the preparation or the plan does. */
 function plannedTheme(
-  owners: ThemeOwners,
+  owners: ThemeDependencies,
   catalog: Catalog,
   prepared: PreparedTheme,
 ): Result<Catalog, RenderFailureSource> {

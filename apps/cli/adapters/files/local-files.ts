@@ -1,11 +1,11 @@
 /*
- * Local text files named on the command line: the UTF-8 source a command reads and the --out file
- * it writes. Both paths are checked (non-empty) before the command runs. Filesystem I/O; each
- * failure is returned as a value.
- * `readSource` fails before anything is sent: fix the path and run the command again.
- * `writeOutput` fails after the command already ran, so a write may have changed the workspace:
- * fix the path, then fetch the result with `read ID` or `receipt REQUEST` (the --request value, or
- * the file name in the workspace `requests` folder). Do not re-run a write command.
+ * Why this file exists
+ *
+ * `create my-diagram.canvas --out result.txt` reads the source from disk, then writes the answer
+ * to `result.txt` instead of printing it. Core decides when each happens, but can't touch the disk.
+ *
+ * This file does that reading and writing with Node. A source must be UTF-8 text of at most
+ * 16 MiB. It never touches the workspace folder. Mistakes come back as values, never thrown.
  */
 import { readFile, writeFile } from 'node:fs/promises';
 import type { LocalFiles } from '../../contract/ports/local-files.js';
@@ -21,7 +21,7 @@ import type { FilePath } from '../../contract/brands.js';
 /** The largest source file a command reads. */
 const sourceByteLimit = 16 * 1024 * 1024;
 
-/** Source reads and --out writes; neither needs the workspace directory. */
+/** Gives core its source file reader and `--out` file writer. Neither uses the workspace folder. */
 export function createLocalFiles(): LocalFiles {
   return { readSource, writeOutput };
 }

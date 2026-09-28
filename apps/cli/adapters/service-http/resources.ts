@@ -1,8 +1,12 @@
 /*
- * The service's Assets and Templates steps over the HTTP transport: one `/api/v1/resources/ACTION`
- * route per method, each answer checked at this seam. Network I/O through the injected transport;
- * each failure is returned as a value. Nothing here commits: staged bytes left by a failed
- * command are collectable Assets orphans, and the caller runs the command again.
+ * Why this file exists
+ *
+ * A source that names `./assets/logo.png` needs the logo's bytes stored in the service before the
+ * change is sent. That, and preparing a theme or recipe to save, are calls to
+ * `POST /api/v1/resources/<step>`, such as `/api/v1/resources/stage`.
+ *
+ * This file makes those calls and checks each answer. None saves a change: bytes stored by a
+ * command that then fails are simply left unused, and the command can be run again.
  */
 import type { HttpTransport, ResourceAction } from '../../contract/ports/http-transport.js';
 import type { ServiceResources } from '../../contract/ports/service-resources.js';
@@ -28,8 +32,9 @@ type TransportPost = Pick<HttpTransport, 'post'>;
 type Check<T> = (value: unknown) => Result<T>;
 
 /**
- * Binds the resource routes to `transport`. Every method fails as the transport does, or with
- * `invalid-response` when the answer does not match its schema (`invalid-input` for `freeze`).
+ * Gives core its font, image, theme and recipe steps, made over `transport`. Each fails as the
+ * transport does, or with `invalid-response` when the answer isn't the expected shape
+ * (`invalid-input` for `freeze`).
  */
 export function createServiceResources(transport: TransportPost): ServiceResources {
   return {

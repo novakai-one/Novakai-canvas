@@ -1,9 +1,13 @@
 /*
- * Confined, bounded reads of the fonts and images a source declares: the path stays inside the
- * source file's directory, the extension matches the declared kind, and at most 16 MiB is read.
- * Filesystem I/O; core decides pinned digests before calling it and adds the declaration's
- * `location` to a failure. Each failure is a value; the caller fixes that declaration or file and
- * runs the command again.
+ * Why this file exists
+ *
+ * A source can name a font or image next to it: `asset @logo image source="./assets/logo.png"`.
+ * Reading that file must not let a source reach anything else on the machine, such as
+ * `../../secrets` or a link that points outside its folder.
+ *
+ * This file reads such a file only from inside the source's folder, only when its extension fits
+ * what was declared (a font or an image), and at most 16 MiB. It never checks the bytes
+ * themselves; Assets does that later. Mistakes come back as values, never thrown.
  */
 import { open, realpath } from 'node:fs/promises';
 import type { FileHandle } from 'node:fs/promises';
@@ -35,7 +39,10 @@ const media: Readonly<Record<Extension, SupportedMedia>> = Object.freeze({
   '.woff2': 'font/woff2',
 });
 
-/** Files remain local preparation inputs; retry uses retained normalized bytes and never calls this reader. */
+/**
+ * Gives core its careful font and image file reader. A retry never uses it: it sends the bytes
+ * kept in the request journal instead.
+ */
 export function createResourceReader(): ResourceReader {
   return { read };
 }

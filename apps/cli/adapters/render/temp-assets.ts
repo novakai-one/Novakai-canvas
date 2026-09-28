@@ -1,8 +1,12 @@
 /*
- * One render's temporary asset store: a fresh `canvas-render-*` directory under the OS temp root
- * with the Assets store opened inside it. Closing it closes the store and removes the directory.
- * Not pure: creates and removes directories. Failures are values; a directory is never left behind
- * by a failed open, and the render closes an opened store once, last.
+ * Why this file exists
+ *
+ * A render must store its fonts and images somewhere, but never in the saved workspace. So each
+ * render gets its own Assets store in a fresh temp folder, such as `/tmp/canvas-render-a1B2c3`,
+ * and the folder is removed when the store is closed.
+ *
+ * This file opens and closes that store. If opening fails, the folder is removed at once, so
+ * nothing is left behind. It never touches any other folder. Mistakes come back as values.
  */
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -17,10 +21,10 @@ import { providerFailure, success, type Result } from '../../contract/errors.js'
 type StoreFailure = ProviderFault | AssetError;
 
 /**
- * A fresh directory with the Assets store opened in it. Fails with `provider-failed` when the
- * directory cannot be made, or Assets' own failure (the directory is then removed).
+ * Makes a fresh temp folder and opens an Assets store in it. Fails with `provider-failed` if the
+ * folder can't be made, or with Assets' own failure (the folder is then removed).
  */
-export async function openTempAssets(): Promise<Result<TempAssetStore, StoreFailure>> {
+export async function openTempAssetStore(): Promise<Result<TempAssetStore, StoreFailure>> {
   const directory = await created();
   if (!directory.ok) return directory;
   return opened(directory.value);
