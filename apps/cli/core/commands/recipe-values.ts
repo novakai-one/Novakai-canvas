@@ -98,7 +98,7 @@ function requireHeaderFlags(flags: FlagTextAsTyped): Result<HeaderText> {
   const { id, version, family, title } = flags;
   const hasEveryFlag = isFilled(id) && isFilled(version) && isFilled(family) && isFilled(title);
   if (!hasEveryFlag) {
-    return recipeHeaderFailure();
+    return recipeAdmitUsageFailure();
   }
   return success({ id, version, family, title });
 }
@@ -151,7 +151,7 @@ function checkHeaderVersion(versionText: string): Result<Version> {
 function checkHeaderFamily(familyText: string): Result<RecipeFamily> {
   const family = recipeFamilySchema.safeParse(familyText);
   if (!family.success) {
-    return recipeHeaderFailure();
+    return recipeAdmitUsageFailure();
   }
   return success(family.data);
 }
@@ -248,8 +248,11 @@ function isFilled(flagText: string | undefined): flagText is string {
   return flagText !== undefined && flagText !== '';
 }
 
-/** Makes the mistake for a missing or empty recipe flag, or an unknown `--family`. */
-function recipeHeaderFailure(): Result<never, LocalFailure> {
+/**
+ * Makes the mistake that repeats what `recipe admit` needs: for a missing or empty flag, or an
+ * unknown `--family`.
+ */
+function recipeAdmitUsageFailure(): Result<never, LocalFailure> {
   return failure({
     code: 'invalid-arguments',
     message: 'recipe admit requires --id --version --family --title',

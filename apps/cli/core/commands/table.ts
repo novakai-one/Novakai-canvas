@@ -45,7 +45,10 @@ const serverFlags: readonly TextFlag[] = Object.freeze(['server', 'workspace']);
 /** The flags of a service command whose answer `--out` can write to a file. */
 const answerFlags: readonly TextFlag[] = Object.freeze(['out', ...serverFlags]);
 
-/** The flags of a service command that saves something: `--request` names what it sends. */
+/**
+ * The flags of a service command that sends a change: `--request` names it, so `receipt`, `retry`
+ * or `apply` can find it later.
+ */
 const requestFlags: readonly TextFlag[] = Object.freeze(['request', ...answerFlags]);
 
 /**

@@ -45,14 +45,14 @@ export function checkServerAndWorkspace(
   return success({ server: server.value, workspace: workspace.value });
 }
 
-/** Checks the server's address is a web address on this machine: `http://127.0.0.1`. */
+/** Checks the server's address is plain `http://127.0.0.1`, with or without a port. */
 function checkServer(serverText: string): Result<LoopbackOrigin> {
   if (!URL.canParse(serverText)) {
     return badServerAddressFailure();
   }
   const server = loopbackOrigin.safeParse(serverText);
   if (!server.success) {
-    return remoteServerFailure();
+    return notPlainLoopbackServerFailure();
   }
   return success(server.data);
 }
@@ -91,8 +91,11 @@ function badServerAddressFailure(): Result<never, LocalFailure> {
   return failure({ code: 'invalid-server', message: 'Server URL is invalid' });
 }
 
-/** Makes the mistake for a `--server` that isn't on this machine (`invalid-server`). */
-function remoteServerFailure(): Result<never, LocalFailure> {
+/**
+ * Makes the mistake for a `--server` that isn't plain `http://127.0.0.1:PORT`, such as
+ * `http://example.com` or `http://localhost:5174` (`invalid-server`).
+ */
+function notPlainLoopbackServerFailure(): Result<never, LocalFailure> {
   return failure({
     code: 'invalid-server',
     message: 'Server must be an IPv4 loopback HTTP origin',
