@@ -137,9 +137,10 @@ export type RetentionSlot =
 
 /**
  * Every side-panel section, in the default order. The shipped panel defaults and stored panel
- * preferences are parsed with `z.enum(panelSectionIds)`
- * (`adapters/preferences/panel-preferences.ts`), so removing an ID here makes a stored layout that
- * names it invalid: that workspace gets the default layout instead.
+ * preferences are checked with `z.enum(panelSectionIds)`
+ * (`adapters/preferences/panel-preferences.ts`). Removing an ID here: the shipped defaults must
+ * drop it too or the web does not start; a stored layout that names it drops that ID and keeps the
+ * rest.
  */
 export const panelSectionIds = [
   'creation',
