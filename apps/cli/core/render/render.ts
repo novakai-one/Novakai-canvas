@@ -30,7 +30,7 @@ import { providerFailure, success, type Result } from '../../contract/errors.js'
 import { loadCollection } from './collection.js';
 import { pinResources } from './pins.js';
 import { buildRenderReport } from './report.js';
-import { allowOnlyRetained } from './retained-resources.js';
+import { retainedResourceCheck } from './retained-resources.js';
 import { exportSections } from './sections.js';
 import { buildExportSnapshot } from './snapshot.js';
 import { admitThemes } from './themes.js';
@@ -180,7 +180,7 @@ async function exported(
     document: produced.document,
     snapshot: produced.snapshot,
     resolvedResources: pinResources(produced.catalog, produced.snapshot.collection.assets),
-    resources: allowOnlyRetained(produced.snapshot.resources),
+    resources: retainedResourceCheck(produced.snapshot.resources),
   });
   if (!exporter.ok) return exporter;
   const files = await exportSections(request.format, ports, exporter.value, produced.document);

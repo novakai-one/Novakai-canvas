@@ -29,8 +29,8 @@ export interface SourceDependencies {
 type RecipePreset = Extract<Catalog[number], { readonly kind: 'recipe' }>;
 
 /**
- * Finds the source text `selector` names, with the file its fonts and images are read relative to.
- * An ID is looked up as a recipe in `catalog` first.
+ * Finds the source text `selector` names, and the path of its file. Fonts and images the text
+ * names are found relative to that path. An ID is looked up as a recipe in `catalog` first.
  * Mistakes: a file that can't be read (`provider-failed`), or an ID that is no recipe and matches
  * no `.canvas` file, or more than one (`collection-selection`).
  */

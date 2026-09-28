@@ -5,7 +5,7 @@
  * They must be exactly ones the render kept in its snapshot: same kind, hash, type, bytes, details.
  * A font with the right hash but a different family is refused, so nothing can pass as another.
  *
- * This file makes that check for Export, over the snapshot's list. A refusal is Export's own
+ * This file builds that checker for Export from the snapshot's list. A refusal is Export's own
  * `resource-rejected` record. It reads and writes nothing.
  */
 import type { ExportDiagnostic, Resource, Resources } from '../../contract/records/foreign.js';
@@ -20,10 +20,11 @@ const unretained: ExportDiagnostic = Object.freeze({
 });
 
 /**
- * Makes the check Export runs before using any bytes. It passes a batch only when each one equals
- * a resource in `retained`, the snapshot's list; otherwise it answers `resource-rejected`.
+ * Gives back the checker Export calls before using any bytes (Export's `Resources`). It passes a
+ * batch only when each one equals a resource in `retained`, the snapshot's list; otherwise it
+ * answers `resource-rejected`.
  */
-export function allowOnlyRetained(retained: readonly Resource[]): Resources {
+export function retainedResourceCheck(retained: readonly Resource[]): Resources {
   return {
     async inspect(items) {
       if (!items.every((item) => isRetained(item, retained)))
