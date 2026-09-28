@@ -102,7 +102,10 @@ async function prepareWorkspace(
   }
 }
 
-/** Runs Authoring's check of a whole workspace on the stored workspace; nothing is written. */
+/**
+ * Runs Authoring's whole-workspace check on the stored workspace, as both the before and the after,
+ * because start-up changes nothing. Nothing is written.
+ */
 async function checkExistingWorkspace(
   snapshot: Snapshot,
   dependencies: StartupDependencies,

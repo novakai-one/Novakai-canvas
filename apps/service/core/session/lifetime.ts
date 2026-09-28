@@ -67,6 +67,8 @@ async function trackRunningCall<T>(
   runningCalls: Set<Promise<unknown>>,
   operation: () => Promise<T>,
 ): Promise<T> {
+  // Started through a promise so a call that throws at once still becomes a rejected promise,
+  // tracked and cleaned up like any other.
   const call = Promise.resolve().then(operation);
   runningCalls.add(call);
   try {

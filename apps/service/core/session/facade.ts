@@ -81,7 +81,10 @@ type AuthoringCalls = Pick<WorkspaceSession, 'history' | 'read' | 'prepare' | 'a
 /** The session calls the service answers itself, with its own `Result` and codes. */
 type RenderAndExportCalls = Pick<WorkspaceSession, 'render' | 'inspect' | 'exportFile'>;
 
-/** What Authoring's `prepare` answers: the preparation, or the receipt of an earlier save. */
+/**
+ * A promise of Authoring's answer to `prepare`: the preparation, or the receipt if the request was
+ * already saved.
+ */
 type PrepareAnswer = ReturnType<Authoring['prepare']>;
 
 /** Authoring's `preview` flag for each prepare mode. */
@@ -162,7 +165,10 @@ function applyChange(
   return commitThenRead(authoring, dependencies.workspace, request, options);
 }
 
-/** Finds the receipt of a request saved earlier, through Authoring. */
+/**
+ * Finds the receipt of a request saved earlier, through Authoring. `requestId` is the `id` query
+ * text as sent, or `undefined` when none was sent; Authoring checks it.
+ */
 function findReceipt(
   dependencies: SessionDependencies,
   requestId: string | undefined,
@@ -181,7 +187,11 @@ function closedRenderFailure(): Result<never> {
   return failure('unavailable', 'session', CLOSED_MESSAGE);
 }
 
-/** Makes the closed-session mistake for export: `unavailable`, advising to reconnect and retry. */
+/**
+ * Makes the closed-session mistake for export: `unavailable` at `session`. Built by hand because
+ * `failure()` would add the shared recovery text, and export tells the caller to reconnect and
+ * retry.
+ */
 function closedExportFailure(): Result<never> {
   return {
     ok: false,
