@@ -33,7 +33,7 @@ export const changeRequestBody = z.strictObject({
  * A change request that admission accepted: the request, whether to render previews, the apply
  * options.
  */
-export interface AdmittedMutation {
+export interface AdmittedChange {
   readonly request: Request;
   readonly mode: PrepareMode;
   /** Untrusted apply options; Authoring parses them. */

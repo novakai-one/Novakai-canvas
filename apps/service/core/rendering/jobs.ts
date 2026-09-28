@@ -21,7 +21,7 @@ import {
 } from '../../contract/schemas.js';
 import { andThen, collect, success } from '../../contract/errors.js';
 import { removeDigestPrefix } from '../../contract/brands.js';
-import type { RenderResourceOwners } from '../../contract/ports/headless.js';
+import type { RenderJobInputs } from '../../contract/ports/headless.js';
 import type { WorkspaceContents } from '../../contract/records/workspace/contents.js';
 import type { RenderingJob, RenderPurpose } from '../../contract/records/rendering/job.js';
 import type { RenderJobs } from '../../contract/ports/rendering.js';
@@ -35,7 +35,7 @@ import { fromOwner, resourceRefused, undecodable } from './job-refusal.js';
  * theme, and with `invalid-input` at `render-resources` when a resource does not fit its
  * Presentation or Layout schema.
  */
-export function createRenderJobs(owners: RenderResourceOwners): RenderJobs {
+export function createRenderJobs(owners: RenderJobInputs): RenderJobs {
   return { create: (collection, view, purpose) => create(collection, view, purpose, owners) };
 }
 
@@ -58,7 +58,7 @@ function create(
   collection: Collection,
   view: WorkspaceContents,
   purpose: RenderPurpose,
-  owners: RenderResourceOwners,
+  owners: RenderJobInputs,
 ): AuthoringResult<RenderingJob> {
   const styled = styledTheme(collection, view, owners);
   return andThen(styled, (theme) => assembleJob(collection, purpose, theme, owners));
@@ -72,7 +72,7 @@ function create(
 function styledTheme(
   collection: Collection,
   view: WorkspaceContents,
-  owners: RenderResourceOwners,
+  owners: RenderJobInputs,
 ): AuthoringResult<StyledTheme> {
   const preset = pinnedTheme(collection, view, owners);
   if (!preset.ok) return preset;
@@ -91,7 +91,7 @@ function assembleJob(
   collection: Collection,
   purpose: RenderPurpose,
   theme: StyledTheme,
-  owners: RenderResourceOwners,
+  owners: RenderJobInputs,
 ): AuthoringResult<RenderingJob> {
   const id = jobId(purpose, collection);
   if (!id.ok) return id;
@@ -119,7 +119,7 @@ function assembleJob(
 function pinnedTheme(
   collection: Collection,
   view: WorkspaceContents,
-  owners: RenderResourceOwners,
+  owners: RenderJobInputs,
 ): AuthoringResult<ThemePreset> {
   const preset = fromOwner(
     owners.templates.read(view.presets, {
@@ -140,7 +140,7 @@ function pinnedTheme(
  */
 function themeFonts(
   preset: ThemePreset,
-  owners: RenderResourceOwners,
+  owners: RenderJobInputs,
 ): AuthoringResult<RenderingJob['fonts']> {
   const fonts = collect(preset.payload.fonts, (digest) => font(digest, owners));
   if (!fonts.ok) return fonts;
@@ -159,7 +159,7 @@ function themeFonts(
 function diagramStyle(
   preset: ThemePreset,
   fonts: RenderingJob['fonts'],
-  owners: RenderResourceOwners,
+  owners: RenderJobInputs,
 ): AuthoringResult<RenderingJob['style']> {
   const tokens = fromOwner(
     owners.system.resolve({
@@ -209,7 +209,7 @@ function scaledOptions(style: RenderingJob['style']): AuthoringResult<RenderingJ
  */
 function font(
   digest: string,
-  owners: RenderResourceOwners,
+  owners: RenderJobInputs,
 ): AuthoringResult<FontSource> {
   const blob = fromOwner(owners.assets.resolve(digest));
   if (!blob.ok) return blob;
@@ -230,7 +230,7 @@ function font(
  */
 function asset(
   digest: string,
-  owners: RenderResourceOwners,
+  owners: RenderJobInputs,
 ): AuthoringResult<VisualAsset> {
   const blob = fromOwner(owners.assets.resolve(digest));
   if (!blob.ok) return blob;

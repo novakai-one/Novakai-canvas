@@ -16,7 +16,7 @@ import type {
 import type {
   BuiltinFonts,
   BuiltinSources,
-  BuiltinResources,
+  PreparedBuiltins,
 } from '../../contract/records/presets/builtins.js';
 import { andThen, collect, failure, success, type Result } from '../../contract/errors.js';
 import { EMPTY_RESOURCES } from '../../contract/ports/capabilities.js';
@@ -44,7 +44,7 @@ export interface BuiltinPresetOwners {
 export function prepareBuiltinPresets(
   sources: BuiltinSources,
   owners: BuiltinPresetOwners,
-): Result<BuiltinResources> {
+): Result<PreparedBuiltins> {
   const fonts = fontRoles(sources.fonts);
   if (!fonts.ok) return fonts;
   const themes = addThemes({ tokens: sources.tokens, fonts: fonts.value }, owners);

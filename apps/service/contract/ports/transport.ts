@@ -21,7 +21,7 @@ import type {
   LoopbackAddress,
 } from '../records/transport/http.js';
 import type {
-  AdmittedMutation,
+  AdmittedChange,
   ApiCall,
   ApiQuery,
   RouteOutcome,
@@ -52,8 +52,8 @@ export interface HttpSecurity {
 }
 
 /**
- * Decides who may use the service and which changes they may send. A mutation is a request that
- * changes the workspace (`POST /api/v1/authoring/preview` or `/apply`).
+ * Decides who may use the service and which change requests they may send
+ * (`POST /api/v1/authoring/preview` or `/apply`).
  */
 export interface HttpAdmission {
   /** The name of the browser's session cookie on this server. */
@@ -74,7 +74,7 @@ export interface HttpAdmission {
    * caller, and it uses a planner the caller may use. Fails with `invalid-input` at `request`, or
    * `unauthorized` at `actor` or `intent.planner`.
    */
-  admitMutation(
+  admitChange(
     input: unknown,
     caller: Caller,
   ): Result<Request>;
@@ -98,21 +98,21 @@ export interface BodyCheckContext {
   readonly metadata: HttpMetadata;
   /** This server run's label; a body made for another run is refused. */
   readonly generation: Generation;
-  readonly admission: Pick<HttpAdmission, 'admitMutation'>;
+  readonly admission: Pick<HttpAdmission, 'admitChange'>;
 }
 
 /** Reads a change request body into a request Authoring may run. */
-export interface CommandDecoder {
+export interface ChangeBodyReader {
   /**
    * Reads the body text as a change request body (`changeRequestBody`) and admits its request.
    * Fails with `invalid-input` at `content-type` or `body` for a malformed body, `conflict` at
    * `generation` when it was made for another server run, and otherwise as
-   * `HttpAdmission.admitMutation`.
+   * `HttpAdmission.admitChange`.
    */
   read(
     body: string,
     context: BodyCheckContext,
-  ): Result<AdmittedMutation>;
+  ): Result<AdmittedChange>;
 }
 
 /**
@@ -165,7 +165,7 @@ export interface EventFrames {
 
 /** The built web app's files, read from one folder chosen at start-up. */
 export interface StaticFiles {
-  /** Reads the file at one URL path. Fails with `not-found` at `file`; never rejects. */
+  /** Reads the file at one URL path. Fails with `not-found` at `file`; never throws. */
   read(path: string): Promise<Result<SentFile>>;
 }
 

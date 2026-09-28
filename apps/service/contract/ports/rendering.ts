@@ -6,9 +6,10 @@
  * `GET /api/v1/render?id=my-diagram` becomes one render job; the worker lays it out, and its reply
  * is checked before it goes to the browser.
  *
- * This file declares each step of that trip: build the job, send it to the worker, check the reply,
- * and all three together. core/rendering builds most of them. A failed render leaves the caller's
- * last good picture in place.
+ * This file declares each step of that trip: build the job (`RenderJobs`), send it
+ * (`RenderTransport`), check the reply (`RenderReader`), send and check (`DiagramProducer`), and
+ * all three for a saved collection (`CollectionRenderer`). core/rendering builds most of them. A
+ * failed render leaves the caller's last good picture in place.
  */
 import type { Result } from '../errors.js';
 import type { AuthoringResult, Collection } from '../records/capability-types.js';

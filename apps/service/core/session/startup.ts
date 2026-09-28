@@ -19,7 +19,7 @@ import { liveRecords } from '../workspace/records.js';
 /** What startup reads, validates, applies and adopts through. */
 export interface StartupOwners {
   readonly session: Pick<WorkspaceSession, 'read' | 'apply'>;
-  readonly existingWorkspaceCheck: Pick<CandidateValidator, 'validate'>;
+  readonly candidateCheck: Pick<CandidateValidator, 'validate'>;
   /** The seed request; only a new workspace applies it. */
   readonly seedRequest: AuthoringResult<Request>;
   /** The signal the seed apply runs under; compose passes one that never aborts. */
@@ -76,7 +76,7 @@ async function validateExisting(
   snapshot: Snapshot,
   owners: StartupOwners,
 ): Promise<Result<void>> {
-  return started(await owners.existingWorkspaceCheck.validate(snapshot, snapshot, []));
+  return started(await owners.candidateCheck.validate(snapshot, snapshot, []));
 }
 
 /**

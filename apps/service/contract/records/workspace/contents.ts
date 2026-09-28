@@ -6,7 +6,7 @@
  * by its owner: Model checks collections, Library the catalog, Templates the presets.
  *
  * This file declares the checked result, `WorkspaceContents`. core/workspace/reader.ts builds it.
- * Declarations only. When a record fails its check, Authoring keeps its snapshot as it was.
+ * Declarations only. A record that fails its check is reported; nothing stored is changed.
  */
 import type { Collection } from '../capability-types.js';
 import type { Catalog as PresetCatalog } from '@novakai/canvas-templates';

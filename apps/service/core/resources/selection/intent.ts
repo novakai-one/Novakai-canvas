@@ -14,7 +14,7 @@ import type { DslCommand, PresetHeader } from '../../../contract/records/plannin
 import {
   dslCommand,
   modelCommand,
-  presetChange,
+  presetCommandHeader,
 } from '../../../contract/records/planning/commands.js';
 import { andThen, success } from '../../../contract/errors.js';
 import { fromOwner, undecodable } from './refusal.js';
@@ -99,7 +99,7 @@ function modelIntent(payload: Json): AuthoringResult<Intent> {
 
 /** A preset payload's admission. Fails with `invalid-input` at `resources` outside its envelope. */
 function presetIntent(payload: Json): AuthoringResult<Intent> {
-  const change = presetChange.safeParse(payload);
+  const change = presetCommandHeader.safeParse(payload);
   if (!change.success) return undecodable();
   return success({ planner: 'preset', admission: change.data.admission });
 }

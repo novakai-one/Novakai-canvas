@@ -35,7 +35,7 @@ const NAVIGATION_SITES: readonly string[] = Object.freeze(['none', 'same-origin'
  * - `cookieName`: the browser session cookie name for this host.
  * - `checkNavigation`: success for a direct navigation; `unauthorized` at `host` or `navigation`.
  * - `authenticate`: the caller; `unauthorized` at `host`, `session` or `credential`.
- * - `admitMutation`: the admitted request; `invalid-input` at `request`, or `unauthorized` at
+ * - `admitChange`: the admitted request; `invalid-input` at `request`, or `unauthorized` at
  *   `actor` or `intent.planner`.
  */
 export function createAdmission(security: HttpSecurity): HttpAdmission {
@@ -43,7 +43,7 @@ export function createAdmission(security: HttpSecurity): HttpAdmission {
     cookieName: sessionCookieName(security.address.host),
     checkNavigation: (metadata) => bootstrap(metadata, security),
     authenticate: (metadata) => authenticate(metadata, security),
-    admitMutation,
+    admitChange,
   };
 }
 
@@ -204,7 +204,7 @@ function isAgentBearer(
  * The input as an Authoring request the caller may submit. Fails with `invalid-input` at
  * `request` when Authoring's request schema refuses it; otherwise as `admitActor`.
  */
-function admitMutation(
+function admitChange(
   input: unknown,
   caller: Caller,
 ): Result<Request> {

@@ -26,7 +26,7 @@ export const dslCommand = z
 export type DslCommand = z.infer<typeof dslCommand>;
 /**
  * Checks a Model planner payload: the collection ID as text (1–128 characters) and up to 1000
- * Model changes, which Model checks.
+ * changes. Model checks the ID and the changes.
  */
 export const modelCommand = z
   .strictObject({ collection: z.string().min(1).max(128), changes: z.array(z.unknown()).max(1000) })
@@ -44,11 +44,11 @@ export const presetHeader = z.looseObject({
 /** A preset header that passed {@link presetHeader}. */
 export type PresetHeader = z.infer<typeof presetHeader>;
 /**
- * Checks a preset planner payload far enough to find its header (`admission` is the preset to
- * save); resource selection reads only that. The full payload check is `presetCommand`
+ * Checks a preset planner payload only as far as its header (`admission` is the preset to save);
+ * resource selection reads only that. The full payload check is `presetCommand`
  * (records/presets/preparation.ts).
  */
-export const presetChange = z.looseObject({ admission: presetHeader });
+export const presetCommandHeader = z.looseObject({ admission: presetHeader });
 /**
  * Checks the private `initialize` command, which fills a brand-new workspace with its seed. HTTP
  * can never send it.

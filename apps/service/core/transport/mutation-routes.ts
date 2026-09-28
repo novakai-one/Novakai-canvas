@@ -5,12 +5,12 @@
  * receipt recovery. A throw reaches the HTTP server's `receive` (routes.ts).
  */
 import type {
-  AdmittedMutation,
+  AdmittedChange,
   ApiCall,
   RouteKey,
 } from '../../contract/records/transport/protocol.js';
 import type { HttpOutcome } from '../../contract/records/transport/http-codes.js';
-import type { CommandDecoder, HttpAdmission } from '../../contract/ports/transport.js';
+import type { ChangeBodyReader, HttpAdmission } from '../../contract/ports/transport.js';
 import type { WorkspaceSession } from '../../contract/types.js';
 import type { Generation } from '../../contract/brands.js';
 import { answerJson, type RouteHandler } from './route-answer.js';
@@ -22,8 +22,8 @@ export type MutationRouteKey = Extract<RouteKey, `POST /api/v1/authoring/${strin
 export interface MutationRouteOwners {
   readonly session: Pick<WorkspaceSession, 'prepare' | 'apply'>;
   readonly generation: Generation;
-  readonly admission: Pick<HttpAdmission, 'admitMutation'>;
-  readonly decoder: CommandDecoder;
+  readonly admission: Pick<HttpAdmission, 'admitChange'>;
+  readonly decoder: ChangeBodyReader;
 }
 
 /** The Authoring step a mutation route runs: `prepare` previews or plans, `apply` commits. */
@@ -64,7 +64,7 @@ async function runMutation(
 
 /** Runs one Authoring step on an admitted mutation. */
 type MutationStep = (
-  mutation: AdmittedMutation,
+  mutation: AdmittedChange,
   signal: AbortSignal,
   session: MutationRouteOwners['session'],
 ) => Promise<HttpOutcome>;

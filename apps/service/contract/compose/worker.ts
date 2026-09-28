@@ -22,9 +22,8 @@ import type { CapabilityFailure } from '../records/transport/failure-source.js';
  * 2. Prepare the compiled text and layout code; if that fails, tell the server why.
  * 3. Tell the server it is ready, and take jobs.
  *
- * Fails with `unavailable` at `worker` when the compiled or worker code can't load.
- * `invalid-input` at `worker` means this is not a worker thread. That is a bug guard: only
- * cli/render-worker.mjs calls this.
+ * Fails with `unavailable` at `worker` when the compiled or worker code can't load, or with
+ * `invalid-input` at `worker` if called outside a worker thread (a bug).
  */
 export async function runRenderWorker(): Promise<Result<void>> {
   try {

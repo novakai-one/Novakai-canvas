@@ -59,7 +59,8 @@ const invalidReport = z.strictObject({
 
 /**
  * Checks the quality report of one saved collection. Its fields: `valid`, `diagnostics`,
- * `warnings`, `crossings`, `relaxed` (layout rules loosened), `sections`, `engineVersions`.
+ * `warnings`, `crossings`, `relaxed` (layout rules loosened), `sections`, and `engineVersions`
+ * (the layout engine versions used).
  */
 export const inspectionReport = z
   .discriminatedUnion('valid', [validReport, invalidReport])

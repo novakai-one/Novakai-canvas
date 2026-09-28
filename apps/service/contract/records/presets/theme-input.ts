@@ -19,9 +19,9 @@ const themeVersion = z.strictObject({
   digest: z.string(),
 });
 /**
- * Checks a theme in the exact form the theme codec resolves: the chrome, the base (Design
- * System's own UI tokens, or an exact stored theme and its content), the fonts and the token
- * overrides. Design System checks the fonts and overrides.
+ * Checks a theme in the exact form the theme codec resolves: the chrome, the base, the fonts and
+ * the token overrides. The base is Design System's own UI tokens (`ui`, with the version Design
+ * System reported as `pin`) or an exact stored theme. Design System checks the fonts and overrides.
  */
 export const exactTheme = z.strictObject({
   chrome: chromeName.optional(),
@@ -46,7 +46,7 @@ export type ExactTheme = z.infer<typeof exactTheme>;
 export const sourceTheme = z.looseObject({
   kind: z.literal('theme'),
   raw: z.strictObject({
-    // chromeField rejects malformed selectors instead of bypassing source preparation.
+    // Checked later, when the theme is saved (core/presets/theme-admission.ts).
     chrome: z.unknown().optional(),
     base: z.string(),
     overrides: z.record(

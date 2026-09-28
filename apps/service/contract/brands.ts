@@ -32,24 +32,22 @@ const HEX_64 = /^[a-f0-9]{64}$/;
 export type CollectionId = z.infer<typeof collectionId>;
 
 /**
- * Checks a generation: 1–128 characters. A generation is a random label made each time the server
- * starts (adapters/credentials). Every change request carries it, so a request made before a
- * restart is refused (`conflict`) instead of landing on the restarted workspace. Also checked in
- * every HTTP answer.
+ * Checks a generation: a random label (1–128 characters) made each time the server starts. A change
+ * request made before a restart carries the old one, so it is refused (`conflict`).
  */
-export const generation = z.string().min(1).max(128).brand<'TransportGeneration'>();
+export const generation = z.string().min(1).max(128).brand<'Generation'>();
 
 /**
  * Checks the browser's session secret: 64 lowercase hex characters. Made by adapters/credentials
- * each time the server starts, and sent to the browser as a cookie. A cookie that arrives is only
- * compared with it, never checked into this type.
+ * each time the server starts, and sent to the browser as a cookie. An arriving cookie is only
+ * compared with it; it never becomes a `SessionToken`.
  */
 export const sessionToken = z.string().regex(HEX_64).brand<'BrowserSessionToken'>();
 
 /**
  * Checks the agent's secret token: 64 lowercase hex characters. The CLI sends it with every
- * request. adapters/credentials makes it once, writes it to the workspace's credential file, and is
- * the only code that reads it back.
+ * request. adapters/credentials makes it once and writes it to the workspace's credential file. It
+ * also reads it back: for the server at start-up, and for the CLI through `readAgentCredential`.
  */
 export const agentToken = z.string().regex(HEX_64).brand<'AgentToken'>();
 
@@ -111,9 +109,9 @@ export function hasDigestPrefix(text: string): text is PrefixedDigest {
 }
 
 /**
- * Removes the first 7 characters (`sha256:`) from a digest Model wrote. The one place the prefix is
- * removed. It checks nothing, so it answers plain text: the caller checks it with the owning
- * capability's digest check, which refuses text that had no prefix.
+ * Removes `sha256:` (the first 7 characters) from a digest Model wrote. The one place the prefix is
+ * removed. It checks nothing: text without the prefix comes out cut short, and the owning
+ * capability's digest check, which the caller runs next, refuses it.
  */
 export function removeDigestPrefix(prefixed: string): string {
   return prefixed.slice(DIGEST_PREFIX.length);

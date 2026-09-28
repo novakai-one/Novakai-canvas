@@ -6,8 +6,9 @@
  * and how to open and close those stores.
  *
  * This file declares those start-up values: the chosen folders and names (`WorkspaceOptions`), what
- * a new workspace starts with (`NewWorkspaceSeed`), whether it is new (`StartupKind`), and the open
- * stores (`OpenStores`). Declarations only; a failed start closes what it opened.
+ * a new workspace starts with (`NewWorkspaceSeed`), whether it is new (`StartupKind`), how to open
+ * the stores (`StoreOpeners`) and the open stores (`OpenStores`). Declarations only; a failed start
+ * closes what it opened.
  */
 import type { Assets, Result as AssetResult } from '@novakai/canvas-assets';
 import type { Persistence, Result as StorageResult } from '@novakai/canvas-persistence';
@@ -20,6 +21,7 @@ import type { HostPath, Timestamp, WorkspaceId } from '../../brands.js';
 export interface WorkspaceOptions {
   /** The workspace folder. */
   readonly directory: HostPath;
+  /** The workspace's ID. `pnpm dev` always uses `local`. */
   readonly workspace: WorkspaceId;
   /** The title written into a new workspace. */
   readonly title: string;
@@ -27,6 +29,7 @@ export interface WorkspaceOptions {
   readonly resourceRoot: HostPath;
   /** The folder of the design token sources. */
   readonly tokenRoot: HostPath;
+  /** The creation time written only into a new workspace. */
   readonly createdAt: Timestamp;
 }
 /** What a brand-new workspace starts with: its ID, title, creation time and built-in presets. */

@@ -13,7 +13,7 @@ import { createRenderJobs } from '../../core/rendering/jobs.js';
 import { createPresetCodecs } from './capabilities.js';
 
 /**
- * Loads the compiled layout code and hands over the shared service code. Rejects if that code
+ * Loads the compiled layout code and hands over the shared service code. Throws if that code
  * can't load; the CLI reports that as `render-unavailable`.
  */
 export async function createHeadlessBindings(): Promise<HeadlessBindings> {

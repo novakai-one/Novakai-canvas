@@ -34,14 +34,7 @@ export type SessionRouteKey = Extract<
 export interface SessionRouteOwners {
   readonly session: Pick<
     WorkspaceSession,
-    | 'workspace'
-    | 'builtins'
-    | 'read'
-    | 'history'
-    | 'receipt'
-    | 'render'
-    | 'inspect'
-    | 'exportArtifact'
+    'workspace' | 'builtins' | 'read' | 'history' | 'receipt' | 'render' | 'inspect' | 'exportFile'
   >;
 }
 
@@ -100,7 +93,7 @@ async function exportArtifact(
 ): Promise<RouteOutcome> {
   const input = jsonBody(call.body, call.metadata.contentType, 'resource');
   if (!input.ok) return answerOutcome(input);
-  const file = await session.exportArtifact(input.value, call.signal);
+  const file = await session.exportFile(input.value, call.signal);
   return answerFile(file);
 }
 

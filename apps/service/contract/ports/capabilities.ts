@@ -21,7 +21,8 @@ import type { plan, stage, validate } from '@novakai/canvas-model';
 import type { Templates } from '@novakai/canvas-templates';
 
 /**
- * Model's collection rules: check a collection, plan a checked change, and stage an unchecked one.
+ * Model's collection rules: check a collection, plan a checked change, and stage a change (apply it
+ * without the final check, as Language does while it turns DSL into changes).
  */
 export interface ModelRules {
   readonly validate: typeof validate;

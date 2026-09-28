@@ -3,7 +3,7 @@
  * Authoring. A changed generation never grants an automatic retry: the caller rereads and
  * reconciles its original receipt first. Authoring owns commit and receipt recovery.
  */
-import type { AdmittedMutation } from '../../contract/records/transport/protocol.js';
+import type { AdmittedChange } from '../../contract/records/transport/protocol.js';
 import type { BodyCheckContext } from '../../contract/ports/transport.js';
 import type { PrepareMode } from '../../contract/records/workspace/session.js';
 import { changeRequestBody } from '../../contract/records/transport/protocol.js';
@@ -20,7 +20,7 @@ type MutationEnvelope = ReturnType<typeof changeRequestBody.parse>;
 export function readCommand(
   body: string,
   context: BodyCheckContext,
-): Result<AdmittedMutation> {
+): Result<AdmittedChange> {
   const decoded = jsonBody(body, context.metadata.contentType, 'mutation');
   if (!decoded.ok) return decoded;
   return admitEnvelope(decoded.value, context);
@@ -33,7 +33,7 @@ export function readCommand(
 function admitEnvelope(
   input: unknown,
   context: BodyCheckContext,
-): Result<AdmittedMutation> {
+): Result<AdmittedChange> {
   const parsed = changeRequestBody.safeParse(input);
   if (!parsed.success)
     return failure('invalid-input', 'body', 'Expected a version 1 mutation envelope');
@@ -48,14 +48,14 @@ function admitEnvelope(
 function admitCurrent(
   envelope: MutationEnvelope,
   context: BodyCheckContext,
-): Result<AdmittedMutation> {
+): Result<AdmittedChange> {
   if (envelope.generation !== context.generation)
     return failure(
       'conflict',
       'generation',
       'Workspace session changed; reconcile the request receipt',
     );
-  const request = context.admission.admitMutation(envelope.request, context.caller);
+  const request = context.admission.admitChange(envelope.request, context.caller);
   if (!request.ok) return request;
   return success({
     request: request.value,

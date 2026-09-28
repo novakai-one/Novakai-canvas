@@ -11,7 +11,7 @@ import { createLanguage, type LoweredIntent } from '@novakai/canvas-language';
 import {
   hostPath,
   prepareBuiltins,
-  type BuiltinResources,
+  type PreparedBuiltins,
   type RenderingJob,
 } from '@novakai/canvas-service';
 import {
@@ -43,7 +43,7 @@ import type {
 /** The prepared capability environment of one render. */
 export interface Environment {
   readonly assets: Pick<Assets, 'stage' | 'resolve'>;
-  readonly installation: BuiltinResources;
+  readonly installation: PreparedBuiltins;
   readonly system: Pick<DesignSystem, 'resolve' | 'resolveTheme' | 'projectDiagram'>;
   readonly language: Language;
   readonly templates: Pick<Templates<LoweredIntent>, 'read' | 'planAdmission'>;

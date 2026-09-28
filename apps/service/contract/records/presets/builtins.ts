@@ -6,8 +6,9 @@
  * the shipped tokens and fonts.
  *
  * This file declares what is read from `resources/` (`BuiltinSources`), the shipped fonts by role
- * (`BuiltinFonts`), and those sources with the preset catalog made from them (`BuiltinResources`).
- * Declarations only. Reading them saves nothing; start-up saves the catalog through Authoring.
+ * (`BuiltinFonts`), and what `prepareBuiltins` answers: those sources plus the preset catalog made
+ * from them (`PreparedBuiltins`). Declarations only. Reading them saves nothing; start-up saves the
+ * catalog through Authoring.
  */
 import type { FontSet, FontSource } from '@novakai/canvas-presentation';
 import type { Catalog, RecipePayload } from '@novakai/canvas-templates';
@@ -35,7 +36,8 @@ export interface BuiltinFonts {
   readonly strong: FontSource;
 }
 
-/** The shipped sources, and the preset catalog (themes and recipes) made from them. */
-export interface BuiltinResources extends BuiltinSources {
+/** What `prepareBuiltins` answers: the shipped sources plus the preset catalog made from them. */
+export interface PreparedBuiltins extends BuiltinSources {
+  /** The built-in themes and recipes. */
   readonly presets: Catalog;
 }

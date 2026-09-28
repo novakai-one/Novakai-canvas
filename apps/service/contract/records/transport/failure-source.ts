@@ -56,8 +56,11 @@ export type CapabilityFailure = {
   readonly path: string;
   readonly message: string;
   readonly recovery: string;
+  /** The records or objects the failure is about, when the capability names them. */
   readonly targets?: readonly string[] | undefined;
+  /** What the capability expected instead, when it says (Language and Design System do). */
   readonly expected?: string | undefined;
+  /** Authoring's link from an unexpected failure to its request; `null` when there is none. */
   readonly traceId?: string | null | undefined;
   readonly source?: FailureSource | undefined;
   readonly cleanup?: CapabilityFailure | undefined;

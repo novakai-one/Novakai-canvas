@@ -22,7 +22,7 @@ import type {
   Result as AuthoringResult,
 } from '@novakai/canvas-authoring';
 import type { NewWorkspaceSeed, WorkspaceOptions } from '../records/workspace/startup.js';
-import type { BuiltinResources } from '../records/presets/builtins.js';
+import type { PreparedBuiltins } from '../records/presets/builtins.js';
 import type { ServiceCapabilities } from '../ports/capabilities.js';
 import type { AuthoringStore, ConditionalStorage } from '../ports/storage.js';
 import { createResourceAdmission } from '../../core/authoring-roles/resource-leases.js';
@@ -40,37 +40,37 @@ import { createDslPlanner } from '../../core/authoring-roles/planners/dsl.js';
 import { createModelPlanner } from '../../core/authoring-roles/planners/model.js';
 import { createLibraryPlanner } from '../../core/authoring-roles/planners/library.js';
 import { createPresetPlanner } from '../../core/authoring-roles/planners/preset.js';
-import type { WorkspaceRoles } from './workspace.js';
+import type { SharedParts } from './shared-parts.js';
 
 /** A signal that never aborts. Reads, history set-up and the start-up apply run under it. */
 export const UNCANCELLED: AbortSignal = new AbortController().signal;
 
 /**
  * What Authoring's helpers are built from: the open stores, the built-in presets and the shared
- * roles (compose/workspace.ts).
+ * parts (compose/shared-parts.ts).
  */
 export interface AuthoringInputs {
   readonly stores: {
     readonly storage: ConditionalStorage;
     readonly assets: Pick<Assets, 'resolve' | 'acquire'>;
   };
-  readonly builtins: Pick<BuiltinResources, 'presets'>;
+  readonly builtins: Pick<PreparedBuiltins, 'presets'>;
   readonly options: Pick<WorkspaceOptions, 'workspace' | 'title' | 'createdAt'>;
   readonly capabilities: Pick<ServiceCapabilities, 'model' | 'library' | 'language'>;
-  readonly roles: Pick<WorkspaceRoles, 'reader' | 'resources' | 'commands' | 'jobs' | 'producer'>;
+  readonly shared: Pick<SharedParts, 'reader' | 'resources' | 'commands' | 'jobs' | 'producer'>;
   /** Where Authoring publishes committed changes. */
   readonly changes: Notifications;
 }
 
 /** One workspace's Authoring, and what start-up needs from it. */
-export interface WiredAuthoring {
+export interface BuiltAuthoring {
   /** Makes Authoring for one request; its renders stop when `signal` aborts. */
   readonly authoring: (signal: AbortSignal) => Authoring;
   /**
-   * Authoring's check of a "candidate" (the workspace as a change would leave it). Start-up also
-   * runs it on an existing workspace as stored.
+   * Checks the workspace as a change would leave it (the "candidate"). Start-up also runs it on the
+   * stored workspace.
    */
-  readonly existingWorkspaceCheck: CandidateValidator;
+  readonly candidateCheck: CandidateValidator;
   /**
    * The request that fills a brand-new workspace with its seed (`NewWorkspaceSeed`). If the
    * built-in presets are too big for Authoring, this holds that failure; only a new workspace uses
@@ -82,10 +82,10 @@ export interface WiredAuthoring {
 }
 
 /**
- * Builds Authoring's helpers for one workspace. Never fails; rejects only if the storage code
- * can't load.
+ * Builds Authoring's helpers for one workspace. Never fails; throws only if the storage code can't
+ * load.
  */
-export async function wireAuthoring(inputs: AuthoringInputs): Promise<WiredAuthoring> {
+export async function buildAuthoring(inputs: AuthoringInputs): Promise<BuiltAuthoring> {
   const storeModule = await import('../../adapters/storage/authoring-store.js');
   const seed = newWorkspaceSeed(inputs);
   const store = storeModule.createAuthoringStore(inputs.stores.storage);
@@ -93,7 +93,7 @@ export async function wireAuthoring(inputs: AuthoringInputs): Promise<WiredAutho
   const startup = requestAuthoring(runtime, UNCANCELLED);
   return {
     authoring: (signal) => requestAuthoring(runtime, signal),
-    existingWorkspaceCheck: runtime.validation,
+    candidateCheck: runtime.validation,
     seedRequest: installationRequest(seed),
     startHistory: () => startup.initializeHistory(inputs.options.workspace),
   };
@@ -126,7 +126,7 @@ function admissionRuntime(
   seed: NewWorkspaceSeed,
   store: AuthoringStore,
 ): AdmissionRuntime {
-  const { reader, resources, jobs, producer } = inputs.roles;
+  const { reader, resources, jobs, producer } = inputs.shared;
   const assets = inputs.stores.assets;
   return {
     store,
@@ -144,7 +144,7 @@ function planners(
   seed: NewWorkspaceSeed,
 ): readonly IntentPlanner[] {
   const { model, library, language } = inputs.capabilities;
-  const { reader, resources, commands } = inputs.roles;
+  const { reader, resources, commands } = inputs.shared;
   const collections = createCollectionPlanner({ library, workspace: reader, resources });
   return [
     createInstallationPlanner(seed),

@@ -14,7 +14,7 @@ import type { ReadVersion, RecordKey } from '../capability-types.js';
 import type { Pin } from '@novakai/canvas-templates';
 
 /**
- * Reads a preset as named fields, so one field can be replaced: a recipe's DSL text (resource
+ * Checks a preset as named fields, so one field can be replaced: a recipe's DSL text (resource
  * commands) or a theme's `raw` block (theme saving).
  */
 export const presetFields = z.record(z.string(), z.json());
@@ -60,7 +60,10 @@ export interface PresetPreparation {
   readonly pin: Pin;
   /** Where the record would be stored. */
   readonly key: RecordKey;
-  /** The digests of the uploaded files the preset uses, as text. */
+  /**
+   * The digests (as text) of the uploaded files it uses. Assets checks them when the planner
+   * prepares the preset again.
+   */
   readonly resources: readonly string[];
   /**
    * The stored records read to prepare it, with their versions (the catalog's revision among them).

@@ -6,7 +6,7 @@
  */
 import type { WorkspaceSession } from '../../contract/types.js';
 import type { Authoring, AuthoringResult } from '../../contract/records/capability-types.js';
-import type { BuiltinResources } from '../../contract/records/presets/builtins.js';
+import type { PreparedBuiltins } from '../../contract/records/presets/builtins.js';
 import type { ResourceCommands, WorkspaceReader } from '../../contract/ports/workspace.js';
 import type { CollectionRenderer } from '../../contract/ports/rendering.js';
 import type { ChangeChannel } from '../../contract/ports/notifications.js';
@@ -22,7 +22,7 @@ import { commitThenRead } from './applied-commit.js';
 /** Lifecycles are already open when wiring this facade; construction starts no I/O and grants no alternative commit path. */
 export interface SessionOwners {
   readonly workspace: WorkspaceId;
-  readonly builtins: BuiltinResources;
+  readonly builtins: PreparedBuiltins;
   readonly resources: ResourceCommands;
   readonly views: WorkspaceReader;
   readonly renderer: CollectionRenderer;
@@ -39,7 +39,7 @@ export interface SessionOwners {
  * - `read`, `history`, `prepare`, `apply`, `receipt` answer `storage-unavailable` at `session`
  *   (`closedAuthoring`).
  * - `render`, `inspect` answer `unavailable` at `session` (`closedSession`).
- * - `exportArtifact` answers `unavailable` at `session`, reconnect and retry (`closedExport`).
+ * - `exportFile` answers `unavailable` at `session`, reconnect and retry (`closedExport`).
  * While open, every failure passes through unchanged from Authoring, rendering and export.
  * `close` answers the owners' close failure, or `unavailable` (path `shutdown`) when their close throws.
  */
@@ -77,8 +77,7 @@ export function createWorkspaceSession(owners: SessionOwners): WorkspaceSession 
     render: (id, signal) => lifetime.run(() => renderCollection(id, signal, owners), closedSession),
     inspect: (id, signal) =>
       lifetime.run(() => inspectCollection(id, signal, owners), closedSession),
-    exportArtifact: (input, signal) =>
-      lifetime.run(() => owners.exporter(input, signal), closedExport),
+    exportFile: (input, signal) => lifetime.run(() => owners.exporter(input, signal), closedExport),
     subscribe: (listener) => owners.changes.subscribe(listener),
     close: () => lifetime.close(),
   };

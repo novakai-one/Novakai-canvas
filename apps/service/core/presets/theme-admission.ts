@@ -23,7 +23,7 @@ import {
 import { presetFields } from '../../contract/records/presets/preparation.js';
 import { chromeName } from '../../contract/schemas.js';
 import { authoringFailure, collect, success } from '../../contract/errors.js';
-import type { FontBinding, ThemeSavingOwners } from '../../contract/ports/headless.js';
+import type { FontBinding, ThemeSavingInputs } from '../../contract/ports/headless.js';
 import { parseThemePin } from './theme-pin.js';
 
 /** One font alias bound to the family Assets verified and the digest of its bytes. */
@@ -46,7 +46,7 @@ export function prepareTheme(
   admission: Json,
   catalog: Catalog,
   bindings: readonly FontBinding[],
-  owners: ThemeSavingOwners,
+  owners: ThemeSavingInputs,
 ): AuthoringResult<Json> {
   const parsed = sourceTheme.safeParse(admission);
   if (!parsed.success) return success(admission);

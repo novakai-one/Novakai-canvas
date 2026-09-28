@@ -12,7 +12,7 @@
 import { openAssets } from '@novakai/canvas-assets';
 import { openSqlite } from '@novakai/canvas-persistence';
 import type { WorkspaceOptions, OpenStores } from '../records/workspace/startup.js';
-import type { BuiltinResources } from '../records/presets/builtins.js';
+import type { PreparedBuiltins } from '../records/presets/builtins.js';
 import type { DiagramProducer } from '../ports/rendering.js';
 import type { WorkspaceSession } from '../types.js';
 import type { Result } from '../errors.js';
@@ -20,7 +20,7 @@ import { failure, success } from '../errors.js';
 import { startWorkspace } from '../../core/session/startup.js';
 import { prepareBuiltins } from './builtins.js';
 import { startRenderWorkers } from './producer.js';
-import { wireWorkspace } from './wiring.js';
+import { buildWorkspace } from './workspace.js';
 
 /**
  * Opens the workspace folder and starts its session. Fails with the first step's mistake:
@@ -56,7 +56,7 @@ async function startOpened(
   return result;
 }
 
-/** Prepares the built-in resources and starts the render workers, then wires the workspace. */
+/** Prepares the built-in resources and starts the render workers, then builds the workspace. */
 async function configureWorkspace(
   stores: OpenStores,
   options: WorkspaceOptions,
@@ -65,19 +65,19 @@ async function configureWorkspace(
   if (!builtins.ok) return builtins;
   const renderWorkers = await startRenderWorkers();
   if (!renderWorkers.ok) return renderWorkers;
-  return wireAndStart(stores, builtins.value, options, renderWorkers.value);
+  return buildAndStart(stores, builtins.value, options, renderWorkers.value);
 }
 
-/** Wires the workspace, then runs core startup; the session is answered only once it started. */
-async function wireAndStart(
+/** Builds the workspace, then runs core startup; the session is answered only once it started. */
+async function buildAndStart(
   stores: OpenStores,
-  builtins: BuiltinResources,
+  builtins: PreparedBuiltins,
   options: WorkspaceOptions,
   renderWorkers: DiagramProducer,
 ): Promise<Result<WorkspaceSession>> {
-  const wired = await wireWorkspace(stores, builtins, options, renderWorkers);
-  if (!wired.ok) return wired;
-  const started = await startWorkspace(wired.value);
+  const built = await buildWorkspace(stores, builtins, options, renderWorkers);
+  if (!built.ok) return built;
+  const started = await startWorkspace(built.value);
   if (!started.ok) return started;
-  return success(wired.value.session);
+  return success(built.value.session);
 }

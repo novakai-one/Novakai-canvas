@@ -5,9 +5,9 @@
  * `pnpm render:png --collection my-diagram.canvas --out my-diagram.png`. The picture must still
  * match the service's, so the CLI must use the service's own theme, render-job and layout code.
  *
- * This file declares what the service shares for that (`HeadlessBindings`), and the bundles of
- * capabilities ("owners") the CLI passes in, each naming the few capability calls one step uses.
- * They live here because the CLI may not import service core. Declarations only.
+ * This file declares what the service shares for that (`HeadlessBindings`), and what the CLI
+ * passes in for each step (`RenderJobInputs`, `ThemeSavingInputs`): only the few capability calls
+ * that step uses. They live here because the CLI may not import service core. Declarations only.
  */
 import type {
   Assets,
@@ -26,7 +26,7 @@ import type { DiagramProducer, RenderJobs } from './rendering.js';
  * What building a render job reads from: stored files, Design System, the token sources, Templates
  * and libavoid's file. Never the working folder or personal settings.
  */
-export interface RenderResourceOwners {
+export interface RenderJobInputs {
   /** Finds the stored bytes of each font and image. */
   readonly assets: Pick<Assets, 'resolve'>;
   /** Resolves the theme's tokens and the diagram's style. */
@@ -40,7 +40,7 @@ export interface RenderResourceOwners {
 }
 
 /** What saving a theme reads from: Assets to check its fonts, Templates to find its base theme. */
-export interface ThemeSavingOwners {
+export interface ThemeSavingInputs {
   readonly assets: Pick<Assets, 'resolve'>;
   readonly templates: Pick<Templates<LoweredIntent>, 'read'>;
 }
@@ -61,19 +61,20 @@ export interface HeadlessBindings {
   /** Makes the recipe and theme codecs for one set of themes and files. Never fails. */
   readonly createPresetCodecs: (context: PresetContext) => PresetCodecs;
   /**
-   * Turns a theme written in source syntax into the theme as Templates saves it, with its fonts
-   * checked (core/presets/theme-admission.ts). Any other preset comes back unchanged. Fails with
-   * `invalid-input` when the base theme can't be found, a font is not a checked upload, or the
-   * theme is malformed, and `missing-asset` when Assets can't find a font.
+   * Readies a preset for saving: a theme in source syntax comes back in the form Templates saves,
+   * with its fonts checked; any other preset comes back unchanged. The answer is JSON that
+   * Templates checks when it saves it. Fails with `invalid-input` when the base theme can't be
+   * found, a font is not a checked upload, or the theme is malformed, and `missing-asset` when
+   * Assets can't find a font.
    */
   readonly prepareTheme: (
-    sourceTheme: Json,
+    preset: Json,
     catalog: Catalog,
     bindings: readonly FontBinding[],
-    owners: ThemeSavingOwners,
+    inputs: ThemeSavingInputs,
   ) => AuthoringResult<Json>;
-  /** Makes the render-job builder for the given owners (see `RenderJobs.create`). Never fails. */
-  readonly createRenderJobs: (owners: RenderResourceOwners) => RenderJobs;
+  /** Makes the render-job builder from the given inputs (see `RenderJobs.create`). Never fails. */
+  readonly createRenderJobs: (inputs: RenderJobInputs) => RenderJobs;
   /**
    * Measures, lays out and routes one job right here, without a worker. Fails with `invalid-input`
    * at `render` when a capability refuses the input, or `unavailable` at `render` when the

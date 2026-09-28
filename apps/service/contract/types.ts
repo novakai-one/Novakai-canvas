@@ -8,7 +8,7 @@
  *
  * This file declares what one open workspace answers: `WorkspaceSession`. Each call answers with a
  * `Result` (see `errors.ts`); the calls Authoring answers use Authoring's own `Result` and codes.
- * It never checks who is calling: HTTP admission did that first.
+ * It never checks who is calling: HTTP admission (ports/transport.ts) did that first.
  */
 import type { ResourceCommands } from './ports/workspace.js';
 import type {
@@ -19,7 +19,7 @@ import type {
   Request,
 } from './records/capability-types.js';
 import type { Preparation } from '@novakai/canvas-authoring';
-import type { BuiltinResources } from './records/presets/builtins.js';
+import type { PreparedBuiltins } from './records/presets/builtins.js';
 import type { CommittedChange } from './ports/notifications.js';
 import type { RenderDocument } from './records/rendering/job.js';
 import type { InspectionReport } from './records/rendering/inspection.js';
@@ -35,7 +35,7 @@ export interface WorkspaceSession {
   /** The workspace's ID. `pnpm dev` always opens `local`. */
   readonly workspace: WorkspaceId;
   /** The shipped fonts, design tokens and recipe starters, and the built-in themes and recipes. */
-  readonly builtins: BuiltinResources;
+  readonly builtins: PreparedBuiltins;
   /** Upload, restore and read stored files; prepare themes and recipes (see `ResourceCommands`). */
   readonly resources: ResourceCommands;
   /**
@@ -97,7 +97,7 @@ export interface WorkspaceSession {
    * checks it. Fails with `invalid-input` for a bad request, `unavailable` when a file can't be
    * read or encoded, and `cancelled` when `signal` aborts (see `Exporter`).
    */
-  exportArtifact(
+  exportFile(
     input: unknown,
     signal: AbortSignal,
   ): Promise<Result<SentFile>>;

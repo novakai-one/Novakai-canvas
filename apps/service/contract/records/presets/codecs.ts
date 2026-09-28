@@ -12,10 +12,11 @@ import type { DesignSystem } from '@novakai/canvas-design-system';
 import type { Language, ResolvedResources, LoweredIntent } from '@novakai/canvas-language';
 import type { RecipePort, ThemePort } from '@novakai/canvas-templates';
 /**
- * What one pair of codecs is made for. It never changes: a newly saved theme needs a new pair, so
- * no codec looks things up behind the caller's back.
+ * What one pair of codecs is made for. Fixed when made: a pair only knows the themes it was given,
+ * so a newly saved theme needs a new pair.
  */
 export interface PresetContext {
+  /** Design System, to resolve themes and tokens. */
   readonly system: Pick<DesignSystem, 'resolveTheme' | 'resolve'>;
   /** The design token sources, as read from disk. Design System checks them on every call. */
   readonly sources: unknown;
