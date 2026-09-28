@@ -261,7 +261,7 @@ function detailFields(thrown: unknown): UncheckedDetail {
 }
 
 /** Drops the fields the error didn't have (the ones read as `undefined`). */
-function withoutMissingFields(fields: UncheckedDetail): object {
+function withoutMissingFields(fields: UncheckedDetail): UncheckedDetail {
   const entries = Object.entries(fields);
   const present = entries.filter(isPresentField);
   return Object.fromEntries(present);
@@ -278,11 +278,11 @@ function isObject(thrown: unknown): thrown is object {
 }
 
 /** Whether each field it has is well formed: a path that isn't empty, a text code, a text syscall. */
-function isNativeDetail(fields: object): fields is NativeDetail {
+function isNativeDetail(fields: UncheckedDetail): fields is NativeDetail {
   return (
-    isOptionalPath(Reflect.get(fields, 'path')) &&
-    isOptionalText(Reflect.get(fields, 'systemCode')) &&
-    isOptionalText(Reflect.get(fields, 'syscall'))
+    isOptionalPath(fields.path) &&
+    isOptionalText(fields.systemCode) &&
+    isOptionalText(fields.syscall)
   );
 }
 

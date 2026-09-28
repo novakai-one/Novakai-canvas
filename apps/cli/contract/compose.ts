@@ -58,7 +58,11 @@ export async function runRender(
   return renderInRepo(choice.value, repoRoot);
 }
 
-/** Checks the typed words, then runs the command they name. */
+/**
+ * Checks the default workspace folder, then the typed words, then runs the command they name.
+ * Fails with `cli-unavailable` for an empty default workspace, with the mistake `parseCommand`
+ * finds, or as the command does.
+ */
 async function parseAndRunCommand(
   argv: readonly string[],
   defaultWorkspace: string,
@@ -84,7 +88,10 @@ function checkDefaultWorkspace(defaultWorkspace: string): Result<FilePath> {
   return success(workspace.data);
 }
 
-/** Prints the help text, or runs a profile or service command with its real parts. */
+/**
+ * Gives back the help text, or runs the profile or service command with its real parts. Fails as
+ * that command does.
+ */
 async function runParsedCommand(parsed: ParsedCommand): Promise<Result<string>> {
   switch (parsed.kind) {
     case 'help':
@@ -136,11 +143,11 @@ async function renderWithRealParts(
 
 /** Gives the typed words without pnpm's `--` separator. */
 function withoutSeparators(argv: readonly string[]): readonly string[] {
-  return argv.filter(isWordOrFlag);
+  return argv.filter(isNotPnpmSeparator);
 }
 
-/** Whether the typed word is a real word or flag, not pnpm's `--` separator. */
-function isWordOrFlag(word: string): boolean {
+/** Whether the typed word is anything but pnpm's `--` separator. */
+function isNotPnpmSeparator(word: string): boolean {
   return word !== '--';
 }
 

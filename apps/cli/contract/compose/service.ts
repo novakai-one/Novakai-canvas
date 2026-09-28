@@ -48,8 +48,8 @@ export async function runService(
   if (!token.ok) {
     return token;
   }
-  const ports = createServicePorts(serverAndWorkspace, token.value);
-  return runServiceCommand(command, ports);
+  const dependencies = createServiceDependencies(serverAndWorkspace, token.value);
+  return runServiceCommand(command, dependencies);
 }
 
 /**
@@ -79,7 +79,7 @@ function checkToken(tokenText: string): Result<AgentToken> {
 }
 
 /** Builds every part a service command uses. The three service-call parts share one connection. */
-function createServicePorts(
+function createServiceDependencies(
   serverAndWorkspace: ServerAndWorkspace,
   token: AgentToken,
 ): ServiceCommandDependencies {

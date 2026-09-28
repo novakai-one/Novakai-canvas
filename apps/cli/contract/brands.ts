@@ -162,7 +162,7 @@ function isLoopbackOrigin(text: string): boolean {
     return false;
   }
   const url = new URL(text);
-  return isLocalHttp(url) && stopsAtPort(url);
+  return isLocalHttp(url) && hasOnlyHostAndPort(url);
 }
 
 /** Whether the address is plain HTTP to 127.0.0.1. */
@@ -170,8 +170,8 @@ function isLocalHttp(url: URL): boolean {
   return url.protocol === 'http:' && url.hostname === '127.0.0.1';
 }
 
-/** Whether the address ends at its port: no path, query, hash, user name or password. */
-function stopsAtPort(url: URL): boolean {
+/** Whether the address is just host and port: no user name, password, path, query or hash. */
+function hasOnlyHostAndPort(url: URL): boolean {
   return (
     url.pathname === '/' &&
     url.search === '' &&
@@ -181,7 +181,10 @@ function stopsAtPort(url: URL): boolean {
   );
 }
 
-/** Gives the address without its trailing slash, such as `http://127.0.0.1:6200`. */
+/**
+ * Gives the address in its standard form, such as `http://127.0.0.1:6200`: no trailing slash, and
+ * no `:80`.
+ */
 function originOf(text: string): string {
   const url = new URL(text);
   return url.origin;

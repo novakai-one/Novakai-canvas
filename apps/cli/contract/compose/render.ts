@@ -184,7 +184,7 @@ function createRenderOutput(
   setup: RenderSetup,
 ): RenderOutput {
   const layoutTools = createLayoutTools(capabilities, setup);
-  const exportChoices = chooseExport(capabilities, setup.request);
+  const exportChoices = createExportChoices(capabilities, setup.request);
   return { ...createServiceLayout(layoutTools), ...createExporter(exportChoices) };
 }
 
@@ -210,7 +210,7 @@ function createLayoutTools(
 }
 
 /** Gives the typed image format and label choice, and how Export reads each section's source. */
-function chooseExport(
+function createExportChoices(
   capabilities: RenderCapabilities,
   request: RenderRequest,
 ): ExportChoices {
