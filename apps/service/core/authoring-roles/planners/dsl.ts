@@ -5,9 +5,10 @@
  * `pnpm canvas create flow.canvas` sends a `dsl` change holding the file's text and the mode
  * `create`. Language must read that text and apply it before anything can be saved.
  *
- * This file is the `dsl` planner. It checks the themes and files picked for the request haven't
- * changed, and asks Language to read the text and apply it to the stored collection. The new
- * collection goes on to the collection planner (collection-proposal.ts). Authoring saves it.
+ * This file is the `dsl` planner. Before it runs, Authoring picks the themes and files the change
+ * uses and holds them (resource-leases.ts). That pick arrives here as `pins`. The planner picks
+ * again and refuses the change (`revision-conflict` at `pins`) if the two picks differ. Then
+ * Language applies the text to the stored collection, and collection-proposal.ts plans the save.
  */
 import type {
   AuthoringResult,
@@ -37,7 +38,7 @@ export interface DslPlannerDependencies {
   readonly language: Pick<Language, 'parse' | 'lower'>;
   /** Reads the snapshot into checked collections. */
   readonly workspace: Pick<WorkspaceReader, 'read'>;
-  /** Picks the themes and files the request uses, again, on this snapshot. */
+  /** Picks the themes and files the change uses, to compare with `pins`. */
   readonly resources: Pick<ResourceSelector, 'select'>;
   /** Plans the new collection's save (collection-proposal.ts). */
   readonly collections: CollectionPlanner;
@@ -46,8 +47,8 @@ export interface DslPlannerDependencies {
 /**
  * Builds the `dsl` planner. Its `plan` turns the DSL text into a new collection and answers the
  * planned save. Mistakes: `invalid-input` for a malformed change or text Language can't read,
- * `revision-conflict` at `pins` when the picked themes or files changed, or `invariant-violation`
- * at `source` when Language can't apply the text.
+ * `revision-conflict` at `pins` when the planner's own pick differs from `pins`, or
+ * `invariant-violation` at `source` when Language can't apply the text.
  */
 export function createDslPlanner(dependencies: DslPlannerDependencies): IntentPlanner {
   return {
