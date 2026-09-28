@@ -5,13 +5,14 @@
  * tab. For example, a page from another site could try to post a change to
  * `/api/v1/authoring/apply`. Only the web app and the CLI may get in.
  *
- * This file decides who gets in: the browser with its session cookie, the CLI with its token. It
- * also checks a change request: its author must be the caller, and its planner (the kind of change,
- * such as `dsl`) must be one that caller may use. It never keeps or compares the secrets itself
+ * This file decides who gets in: the browser with its session cookie, the CLI with its token, and
+ * only at this server's own address (the `Host` header). It also checks a change request: its
+ * author must be the caller, and it must be a kind of change the caller may send (the CLI may send
+ * a DSL change, but not a raw Model change). It never keeps or compares the secrets itself
  * (`HttpSecurity` does), and never runs a change.
  *
- * Each check answers a `Result` (see `contract/errors.ts`); the refusals are made in the checks
- * here.
+ * Each check answers a `Result` (see `contract/errors.ts`). A mistake names the part of the request
+ * it is about: `unauthorized` at `host` means the `Host` header was wrong.
  */
 import type { Caller, HeaderValue, HttpMetadata } from '../../contract/records/transport/http.js';
 import type { HttpAdmission, HttpSecurity } from '../../contract/ports/transport.js';
@@ -24,7 +25,7 @@ import type { Request } from '../../contract/records/capability-types.js';
 import type { PlannerId } from '../../contract/brands.js';
 import { plannerId, requestSchema } from '../../contract/schemas.js';
 import { failure, success, type Result } from '../../contract/errors.js';
-import { headerMatches, headerText } from './request-head.js';
+import { headerMatches, headerText } from './http-metadata.js';
 
 /**
  * The public semantic planners each caller may address. Installation stays internal, and the agent
@@ -40,9 +41,9 @@ const NAVIGATION_SITES: readonly string[] = Object.freeze(['none', 'same-origin'
 
 /**
  * Builds the checks that decide who may use this server, from its address and secrets.
- * `checkNavigation` admits the browser opening the page directly, `authenticate` names the caller,
- * and `admitChange` checks a change request. Each refuses with `unauthorized`, except a change
- * request that isn't a complete Authoring request (`invalid-input` at `request`).
+ * `checkNavigation(metadata)` passes a direct page open; `authenticate(metadata)` answers the
+ * `Caller`; `admitChange(input, caller)` answers the checked change `Request`; `cookieName` names
+ * the session cookie. Refusals are `unauthorized`, or `invalid-input` for a malformed change.
  */
 export function createAdmission(security: HttpSecurity): HttpAdmission {
   return {

@@ -15,15 +15,15 @@ import type { Result } from '../errors.js';
 import { failure } from '../errors.js';
 import { createAdmission } from '../../core/transport/admission.js';
 import { readApiQuery } from '../../core/transport/api-query.js';
-import { createBrowserAccess } from '../../core/transport/browser-access.js';
+import { createWebAppFileCheck } from '../../core/transport/web-app-file-check.js';
 import { readChangeBody } from '../../core/transport/change-body.js';
 import { eventFrames } from '../../core/transport/events.js';
 import { readRequestBody } from '../../core/transport/request-body.js';
-import { readHttpMetadata } from '../../core/transport/request-head.js';
-import { requestKind } from '../../core/transport/request-kind.js';
+import { readHttpMetadata } from '../../core/transport/http-metadata.js';
+import { classifyRequest } from '../../core/transport/request-kind.js';
 import { createApiRouter } from '../../core/transport/routes.js';
-import { createSourceReadout } from '../../core/transport/source-readout.js';
-import { buildTransportResponse, httpStatus } from '../../core/transport/status.js';
+import { createSourcePrinter } from '../../core/transport/source-printer.js';
+import { buildTransportResponse, chooseHttpStatus } from '../../core/transport/status.js';
 import { createServiceLanguage } from './capabilities.js';
 
 /**
@@ -74,7 +74,7 @@ async function startServer(
       generation: security.value.generation,
       admission,
       bodyReader: { read: readChangeBody },
-      source: createSourceReadout(createServiceLanguage()),
+      printer: createSourcePrinter(createServiceLanguage()),
     }),
   });
 }
@@ -87,11 +87,11 @@ function transportPolicy(
   return {
     head: readHttpMetadata,
     body: readRequestBody,
-    kind: requestKind,
+    kind: classifyRequest,
     query: readApiQuery,
-    status: httpStatus,
+    status: chooseHttpStatus,
     envelope: buildTransportResponse,
-    browserAccess: createBrowserAccess({ admission, security }),
+    browserAccess: createWebAppFileCheck({ admission, security }),
     frames: eventFrames,
   };
 }

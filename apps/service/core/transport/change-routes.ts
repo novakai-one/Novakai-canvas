@@ -5,9 +5,9 @@
  * example, `pnpm canvas preview` posts to `/api/v1/authoring/preview`, and `pnpm canvas apply`
  * posts to `/api/v1/authoring/apply`.
  *
- * This file is those two routes. Each reads the change body (change-body.ts), then passes the
- * change to the workspace session. It never saves anything itself; Authoring decides whether a
- * change is saved.
+ * This file is those two routes. Each reads the change body with the body reader it is given
+ * (change-body.ts), then passes the change to the workspace session. It never saves anything
+ * itself; Authoring decides whether a change is saved.
  */
 import type {
   AdmittedChange,
@@ -24,8 +24,8 @@ import { jsonRoute, type RouteHandler } from './route-answer.js';
 export type ChangeRouteKey = Extract<RouteKey, `POST /api/v1/authoring/${string}`>;
 
 /**
- * What the change routes call: the workspace session, this server run's `generation`, admission's
- * change check, and the reader of the change body.
+ * What the change routes call: the workspace session and the body reader. `generation` and
+ * `admission` are handed to the body reader, which checks the body against them.
  */
 export interface ChangeRouteDependencies {
   readonly session: Pick<WorkspaceSession, 'prepare' | 'apply'>;
@@ -38,9 +38,9 @@ export interface ChangeRouteDependencies {
 type MutationRoute = 'prepare' | 'apply';
 
 /**
- * The two change routes; both answer JSON. `preview` works out what the change would do without
- * saving it; `apply` saves it. A body the reader refuses answers that mistake
- * (`ChangeBodyReader.read`); Authoring's answers pass through.
+ * Builds the two change routes; both answer JSON. `preview` calls the session's `prepare`, which
+ * works out what the change would do without saving it; `apply` calls `apply`, which saves it. A
+ * body the reader refuses is sent back as that mistake; Authoring's answers pass through.
  */
 export function changeRoutes(
   dependencies: ChangeRouteDependencies,

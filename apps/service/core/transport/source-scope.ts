@@ -5,10 +5,12 @@
  * which. For example, `?section=m-review-map` asks for one section, and `?section=a&object=b` is
  * refused because it asks for two things at once.
  *
- * This file reads that choice from the query and checks each ID against Model's ID rules. It never
- * reads the collection, so it can't tell whether the section exists.
+ * This file reads that choice from the query and checks each ID's format (the ID rules in
+ * `contract/schemas.ts`). It never reads the collection, so it can't tell whether the section
+ * exists.
  *
- * Each step answers a `Result` (see `contract/errors.ts`); the mistakes are made in the steps here.
+ * Each step answers a `Result` (see `contract/errors.ts`). Every mistake is `invalid-input` at
+ * `scope`, the part of the request that was wrong.
  */
 import type { Scope } from '../../contract/records/capability-types.js';
 import type { ApiQuery } from '../../contract/records/transport/protocol.js';
@@ -18,8 +20,8 @@ import { readAllValues } from './api-query.js';
 
 /**
  * Reads which part of the collection to print: all of it, one `section`, or one `object`. Fails
- * with `invalid-input` at `scope` when both are given, either is given twice, or an ID breaks
- * Model's ID rules.
+ * with `invalid-input` at `scope` when both are given, either is given twice, or an ID isn't in
+ * the right format.
  */
 export function readSourceScope(query: ApiQuery): Result<Scope> {
   const sections = readAllValues(query, 'section');

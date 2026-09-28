@@ -1,23 +1,23 @@
 /*
  * Why this file exists
  *
- * A request body arrives from the socket in pieces, and it may be too big, cut off, or not text.
+ * A request body arrives from the socket in chunks, and it may be too big, cut off, or not text.
  * For example, a 30 MiB upload must be stopped at 24 MiB, not read to the end.
  *
- * This file reads the pieces into the body text: at most `httpBodyLimit` bytes of valid UTF-8. It
+ * This file joins the chunks into the body text: at most `httpBodyLimit` bytes of valid UTF-8. It
  * stops reading once the body is too big, but leaves the socket open so the refusal can be sent.
  * It never parses the text; each route does that.
  *
- * Each step answers a `Result` (see `contract/errors.ts`); the one mistake is made in
- * `bodyRefused`.
+ * The one mistake it can make is `invalid-input` at `body`, meaning the body was wrong (see
+ * `contract/errors.ts`).
  */
 import { httpBodyLimit } from '../../contract/records/transport/http.js';
 import { andThen, failure, success, type Result } from '../../contract/errors.js';
 
 /**
- * Reads the body pieces into text. The text is not checked any further here; each route parses it.
- * Fails with `invalid-input` at `body` when a piece isn't bytes, the body passes 24 MiB, the upload
- * is cut off, or the bytes aren't valid UTF-8.
+ * Reads the body's chunks into text. The text is not checked any further here; each route parses
+ * it. Fails with `invalid-input` at `body` when a chunk isn't bytes, the body passes 24 MiB, the
+ * upload is cut off, or the bytes aren't valid UTF-8.
  */
 export async function readRequestBody(chunks: AsyncIterable<unknown>): Promise<Result<string>> {
   const bytes = await receivedBytes(chunks);
@@ -32,7 +32,7 @@ async function receivedBytes(chunks: AsyncIterable<unknown>): Promise<Result<Buf
   try {
     return await boundedBytes(chunks);
   } catch {
-    return bodyRefused();
+    return bodyFailure();
   }
 }
 
@@ -72,7 +72,7 @@ async function settledBytes(
 ): Promise<Result<Buffer>> {
   if (last.done) return success(Buffer.concat(accepted));
   await iterator.return?.();
-  return bodyRefused();
+  return bodyFailure();
 }
 
 /**
@@ -83,11 +83,11 @@ function decodedText(bytes: Buffer): Result<string> {
   try {
     return success(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
   } catch {
-    return bodyRefused();
+    return bodyFailure();
   }
 }
 
-/** The one body refusal: `invalid-input` at `body`. */
-function bodyRefused(): Result<never> {
+/** The one body mistake: `invalid-input` at `body`. */
+function bodyFailure(): Result<never> {
   return failure('invalid-input', 'body', 'Request body was interrupted or not valid UTF-8');
 }

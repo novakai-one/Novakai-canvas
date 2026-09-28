@@ -4,9 +4,10 @@
  * Deciding who is calling means reading a request's headers, and a header can be missing or sent
  * twice. For example, a request with two `Authorization` headers must not count as either one.
  *
- * This file reads the method and the eight headers the checks use, and marks each header as not
- * sent, sent once, or sent more than once. It also gives the checks one safe way to read a header.
- * It trusts nothing it reads; admission.ts makes the decisions.
+ * This file reads the method and eight headers (`Host`, `Origin`, the three `Sec-Fetch-*`,
+ * `Authorization`, `Cookie` and `Content-Type`) into `HttpMetadata`, and marks each header as not
+ * sent, sent once, or sent more than once. It also gives the checks two safe ways to read a
+ * header. It trusts nothing it reads; admission.ts makes the decisions.
  */
 import type {
   HeaderLists,
@@ -20,8 +21,8 @@ const ABSENT: HeaderValue = Object.freeze({ kind: 'absent' });
 const REPEATED: HeaderValue = Object.freeze({ kind: 'repeated' });
 
 /**
- * Reads the method and the headers the checks use, from Node's header lists (lowercase names, every
- * value sent). A missing method reads as empty text. Never fails.
+ * Reads the method and the eight headers the checks use, from Node's header lists (lowercase
+ * names, every value sent). A missing method reads as empty text. Never fails.
  */
 export function readHttpMetadata(
   method: string | undefined,
@@ -45,8 +46,8 @@ export function readHttpMetadata(
 export type UnambiguousHeader = Exclude<HeaderValue, { readonly kind: 'repeated' }>;
 
 /**
- * Whether the header's text is exactly `text`. A header that wasn't sent reads as empty text; one
- * sent more than once never matches.
+ * Whether the header's text is exactly `text`. A header that wasn't sent reads as empty text, so
+ * a missing header matches `''`. A header sent more than once never matches.
  */
 export function headerMatches(
   header: HeaderValue,

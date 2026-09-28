@@ -7,10 +7,13 @@
  * This file checks that `Content-Type` is `application/json`, then parses the text as JSON. It
  * never checks the JSON's shape; each route does that. The size and UTF-8 were already checked
  * when the body was read (request-body.ts).
+ *
+ * A refusal is `invalid-input` at `content-type` or at `body`: the part of the request that was
+ * wrong (see `contract/errors.ts`).
  */
 import type { HeaderValue } from '../../contract/records/transport/http.js';
 import { failure, success, type Result } from '../../contract/errors.js';
-import { headerText } from './request-head.js';
+import { headerText } from './http-metadata.js';
 
 /**
  * Which routes read the body: `change` (preview and apply) or `resource` (resources and export).
@@ -36,7 +39,7 @@ const messages: Readonly<Record<JsonBodyPurpose, BodyMessages>> = Object.freeze(
 });
 
 /**
- * Reads the body text, as sent, as JSON. The value is not checked any further; the route checks it.
+ * Reads the body text, as sent, and answers the parsed JSON, still unchecked (the route checks it).
  * Fails with `invalid-input` at `content-type` unless one `Content-Type` header names
  * `application/json` (`charset` is ignored), and at `body` when the text isn't JSON.
  */

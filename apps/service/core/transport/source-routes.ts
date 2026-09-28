@@ -5,54 +5,41 @@
  * example, `GET /api/v1/source?id=walkthrough-modules&section=m-review-map` answers that one
  * section as DSL.
  *
- * This file is the two Language routes: `language` answers the DSL's vocabulary, and `source`
- * prints one saved collection as DSL, whole or one section or object. Language does the printing
- * (source-readout.ts); this file never learns the DSL's rules.
+ * This file is the two source routes: `language` answers the DSL's vocabulary, and `source` prints
+ * one saved collection as DSL, whole or one section or object. The printer (source-printer.ts) does
+ * the printing; this file never learns the DSL's rules. A mistake names the part of the request it
+ * is about, such as `invalid-input` at `scope` (see `contract/errors.ts`).
  */
 import type { ApiCall, RouteKey } from '../../contract/records/transport/protocol.js';
 import type { HttpOutcome } from '../../contract/records/transport/http-codes.js';
 import type { Scope, Snapshot, StoredRecord } from '../../contract/records/capability-types.js';
 import type { WorkspaceSession } from '../../contract/types.js';
-import { failure, success, type Result } from '../../contract/errors.js';
+import { failure, success } from '../../contract/errors.js';
 import { liveRecord } from '../workspace/records.js';
+import type { SourcePrinter } from './source-printer.js';
 import { readSourceScope } from './source-scope.js';
 import { readLastValue } from './api-query.js';
 import { jsonRoute, type RouteHandler } from './route-answer.js';
 
-/** A Language route, as `METHOD path`. */
+/** A source route, as `METHOD path`. */
 export type SourceRouteKey = Extract<RouteKey, 'GET /api/v1/language' | 'GET /api/v1/source'>;
 
-/** What the Language routes need from Language: its vocabulary, and a collection printed as DSL. */
-export interface SourceReadout {
-  /** Language's vocabulary, as Language answers it (its own `{ ok, value }`), sent on unchanged. */
-  describe(): unknown;
-  /**
-   * Prints the stored collection (unchecked; Language checks it) as DSL for the scope. Answers
-   * Language's readout (`source`, `collection`, `revision`, `scope`), sent on unchanged. Fails
-   * with `invalid-input` at `source` when Language can't print it.
-   */
-  print(
-    collection: unknown,
-    scope: Scope,
-  ): Result<unknown>;
-}
-
-/** What the Language routes call: the workspace session's `read`, and the readout. */
+/** What the source routes call: the workspace session's `read`, and the printer. */
 export interface SourceRouteDependencies {
   readonly session: Pick<WorkspaceSession, 'read'>;
-  readonly source: SourceReadout;
+  readonly printer: SourcePrinter;
 }
 
 /**
- * The two Language routes; both answer JSON. `language` never fails. `source` answers
+ * Builds the two source routes; both answer JSON. `language` never fails. `source` answers
  * `invalid-input` at `scope` for a bad `section` or `object`, `not-found` at `collection` when
- * `?id` names no saved collection, and the readout's print failure.
+ * `?id` names no saved collection, and the printer's failure.
  */
 export function sourceRoutes(
   dependencies: SourceRouteDependencies,
 ): Readonly<Record<SourceRouteKey, RouteHandler>> {
   return Object.freeze({
-    'GET /api/v1/language': jsonRoute(async () => success(dependencies.source.describe())),
+    'GET /api/v1/language': jsonRoute(async () => success(dependencies.printer.describe())),
     'GET /api/v1/source': jsonRoute((call) => source(call, dependencies)),
   });
 }
@@ -74,7 +61,7 @@ async function source(
 /**
  * Reads the live collection named by `?id` and prints it without reinterpreting its shape;
  * Language validates it. Fails with `not-found` at `collection` when `?id` is missing or the
- * collection is absent or deleted. Authoring's read failures and the readout's `invalid-input`
+ * collection is absent or deleted. Authoring's read failures and the printer's `invalid-input`
  * at `source` pass through.
  */
 async function readSourceRecord(
@@ -86,7 +73,7 @@ async function readSourceRecord(
   if (!snapshot.ok) return snapshot;
   const record = sourceRecord(snapshot.value, readLastValue(call.query, 'id'));
   if (!record) return failure('not-found', 'collection', 'Collection was not found');
-  return dependencies.source.print(record.value, scope);
+  return dependencies.printer.print(record.value, scope);
 }
 
 /** The live collection record for `?id`; `undefined` when `?id` is missing or none is live. */

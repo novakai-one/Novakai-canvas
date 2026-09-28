@@ -6,6 +6,8 @@
  *
  * This file turns what a route produced into the answer the HTTP server writes: JSON, or a file's
  * bytes. A failure is always sent as JSON. It never writes to the socket itself.
+ *
+ * `HttpOutcome` is a JSON answer (a `Result`); `RouteOutcome` is what gets sent: JSON or bytes.
  */
 import type { Result } from '../../contract/errors.js';
 import type { ApiCall, RouteOutcome } from '../../contract/records/transport/protocol.js';
@@ -18,19 +20,22 @@ export type RouteHandler = (call: ApiCall) => Promise<RouteOutcome>;
 /** The code that answers one API call with an outcome to send as JSON. */
 export type JsonHandler = (call: ApiCall) => Promise<HttpOutcome>;
 
-/** Makes a route that runs `handler` and sends its outcome as JSON. Fails as `handler` fails. */
+/**
+ * Makes a route that runs `handler` and sends its outcome as JSON. If `handler` rejects, so does
+ * the route.
+ */
 export function jsonRoute(handler: JsonHandler): RouteHandler {
   return async (call) => answerJson(await handler(call));
 }
 
-/** The outcome, to be sent as JSON. Never fails. */
+/** Marks the outcome to be sent as JSON. Never fails. */
 export function answerJson(outcome: HttpOutcome): RouteOutcome {
   return { kind: 'json', outcome };
 }
 
 /**
- * The file, to be sent as bytes. If making or reading the file failed, that failure is sent as
- * JSON instead. Never fails.
+ * Marks the file to be sent as bytes. If making or reading the file failed, marks that failure to
+ * be sent as JSON instead. Never fails.
  */
 export function answerFile(file: Result<SentFile>): RouteOutcome {
   if (!file.ok) return answerJson(file);

@@ -5,7 +5,8 @@
  * sections at once, which the source route must refuse rather than quietly pick one.
  *
  * This file keeps every value sent for each key, in order, and gives routes two ways to read them:
- * all the values, or just the last. It never checks a value; each route does that.
+ * all the values (to refuse a repeat), or just the last (where a repeat is harmless). It never
+ * checks a value; each route does that.
  */
 import type { ApiQuery } from '../../contract/records/transport/protocol.js';
 
@@ -15,14 +16,14 @@ import type { ApiQuery } from '../../contract/records/transport/protocol.js';
  */
 export type QueryKey = 'id' | 'history' | 'section' | 'object';
 
-/** Reads every value sent for each query key, in order. Never fails. */
+/** Reads every key in the URL's query, not only `QueryKey`, with its values in order. */
 export function readApiQuery(params: URLSearchParams): ApiQuery {
   const keys = [...new Set(params.keys())];
   const entries = keys.map((key) => queryEntry(params, key));
   return Object.freeze(Object.fromEntries(entries));
 }
 
-/** Every value sent for `key`, in order, as sent; none when the key wasn't sent. */
+/** Reads every value sent for `key`, in order, as sent; none when the key wasn't sent. */
 export function readAllValues(
   query: ApiQuery,
   key: QueryKey,
@@ -31,8 +32,8 @@ export function readAllValues(
 }
 
 /**
- * The last value sent for `key`, as sent; `undefined` when the key wasn't sent. A repeat replaces
- * an earlier value.
+ * Reads the last value sent for `key`, as sent; `undefined` when the key wasn't sent. Use it for
+ * keys where a repeat is harmless (`id`, `history`): a repeat replaces the earlier value.
  */
 export function readLastValue(
   query: ApiQuery,

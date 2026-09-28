@@ -3,11 +3,12 @@
  *
  * Most of what the web app and the CLI read comes from the open workspace. For example,
  * `GET /api/v1/render?id=walkthrough-modules` answers that collection laid out, with its nodes
- * placed and wires routed, and `POST /api/v1/export` answers a PNG or SVG file.
+ * placed and wires routed.
  *
- * This file is the eight routes that pass such calls to the workspace session: `workspace`,
- * `history`, `installation`, `identity`, `render`, `inspect`, `receipt` and `export`. It never
- * writes storage. An `?id` that isn't a collection ID answers `not-found`, like a missing one.
+ * This file is the eight routes that pass such calls to the workspace session: `workspace` (every
+ * saved record), `history` (undo and redo), `installation` (built-in fonts and design tokens),
+ * `identity` (the workspace ID), `render`, `inspect` (a quality report), `receipt` (what a saved
+ * request did) and `export` (a DSL, Markdown, SVG or PNG file). It never writes storage.
  */
 import type { ApiCall, RouteKey, RouteOutcome } from '../../contract/records/transport/protocol.js';
 import type { HttpOutcome } from '../../contract/records/transport/http-codes.js';
@@ -21,8 +22,8 @@ import { readJsonBody } from './json-body.js';
 import { readLastValue } from './api-query.js';
 import { answerFile, answerJson, jsonRoute, type RouteHandler } from './route-answer.js';
 
-/** A session route, as `METHOD path`. */
-export type SessionRouteKey = Extract<
+/** A workspace route, as `METHOD path`. */
+export type WorkspaceRouteKey = Extract<
   RouteKey,
   | 'GET /api/v1/workspace'
   | 'GET /api/v1/history'
@@ -34,25 +35,26 @@ export type SessionRouteKey = Extract<
   | 'POST /api/v1/export'
 >;
 
-/** What the session routes call: the workspace session's read, render and export calls. */
-export interface SessionRouteDependencies {
+/** What the workspace routes call: the workspace session's read, render and export calls. */
+export interface WorkspaceRouteDependencies {
   readonly session: Pick<
     WorkspaceSession,
     'workspace' | 'builtins' | 'read' | 'history' | 'receipt' | 'render' | 'inspect' | 'exportFile'
   >;
 }
 
-/** The session facade, as the session routes read it. */
-type RouteSession = SessionRouteDependencies['session'];
+/** The workspace session, as the workspace routes read it. */
+type RouteSession = WorkspaceRouteDependencies['session'];
 
 /**
- * The eight session routes. `export` answers a file's bytes; the rest answer JSON. The session's
- * answers pass through. `render` and `inspect` also answer `not-found` when `?id` isn't a
+ * Builds the eight workspace routes. `export` answers a file's bytes; the rest answer JSON. The
+ * session's answers pass through: `workspace` calls `read`, `installation` reads `builtins`, and
+ * `identity` reads `workspace`. `render` and `inspect` answer `not-found` when `?id` isn't a
  * collection ID, and `export` answers `invalid-input` for a body that isn't JSON.
  */
-export function sessionRoutes(
-  dependencies: SessionRouteDependencies,
-): Readonly<Record<SessionRouteKey, RouteHandler>> {
+export function workspaceRoutes(
+  dependencies: WorkspaceRouteDependencies,
+): Readonly<Record<WorkspaceRouteKey, RouteHandler>> {
   const { session } = dependencies;
   return Object.freeze({
     'GET /api/v1/workspace': jsonRoute((call) => workspace(call, session)),

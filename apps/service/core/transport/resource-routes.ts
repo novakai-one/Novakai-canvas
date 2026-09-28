@@ -1,13 +1,15 @@
 /*
  * Why this file exists
  *
- * Diagrams use images, themes and recipes, and the web app and the CLI manage them through six
- * routes. For example, `POST /api/v1/resources/stage` stores an uploaded image, and
- * `POST /api/v1/resources/instantiate` turns a recipe into DSL.
+ * Diagrams use images, fonts, themes and recipes, and the web app and the CLI manage them through
+ * six routes under `/api/v1/resources/`: `stage` (store an uploaded file), `restore` (put a file
+ * back from a backup), `blob` (read a stored file), `freeze` (pin the themes a change names to
+ * exact versions), `prepare` (check a theme or recipe before it is saved) and `instantiate` (turn
+ * a recipe into DSL).
  *
  * This file is those six routes. Each reads a JSON body and passes it to the resource commands;
- * `freeze`, `prepare` and `instantiate` also get the current workspace snapshot. The routes save
- * nothing themselves, and a diagram only changes when a change is applied through Authoring.
+ * `freeze`, `prepare` and `instantiate` also get the workspace as saved now (the snapshot). The
+ * resource commands do any storing; no diagram changes until a change is applied through Authoring.
  */
 import type { ApiCall, RouteKey } from '../../contract/records/transport/protocol.js';
 import type { HttpOutcome } from '../../contract/records/transport/http-codes.js';
@@ -34,8 +36,9 @@ type ResourceHandler = (input: unknown) => Promise<HttpOutcome>;
 type SnapshotCommand = 'freeze' | 'preparePreset' | 'instantiate';
 
 /**
- * The six resource routes; all answer JSON. A body that isn't JSON answers `invalid-input` at
- * `content-type` or `body`. The commands' answers, and a failed snapshot read, pass through.
+ * Builds the six resource routes; all answer JSON. A body that isn't JSON answers `invalid-input`
+ * at `content-type` or `body` (the part that was wrong). The commands' answers, and a failed
+ * snapshot read, pass through.
  */
 export function resourceRoutes(
   dependencies: ResourceRouteDependencies,
