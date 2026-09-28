@@ -45,8 +45,10 @@ export function formatThemePin(pin: ThemePinParts): ThemePinText {
  * digest's `sha256:` removed; any other text, such as `ink`, selects the latest `ink`.
  */
 export function parseThemeSelection(text: string): ThemeSelection {
-  if (!EXACT_PIN.test(text)) return { kind: 'latest', id: text };
-  return exactSelection(text);
+  if (EXACT_PIN.test(text)) {
+    return exactSelection(text);
+  }
+  return latestSelection(text);
 }
 
 /**
@@ -55,17 +57,18 @@ export function parseThemeSelection(text: string): ThemeSelection {
  */
 const EXACT_PIN = /^[^@]+@[^#]+#sha256:[a-f0-9]{64}$/;
 
-/**
- * The parts of text that matched {@link EXACT_PIN}. The ID holds no `@`, so the first `@` ends it;
- * the version holds no `#`, so the first `#` after that ends the version.
- */
+/** Splits exact pin text into its ID, version and digest, removing the digest's `sha256:`. */
 function exactSelection(text: string): ThemeSelection {
-  const at = text.indexOf('@');
-  const hash = text.indexOf('#', at);
-  return {
-    kind: 'exact',
-    id: text.slice(0, at),
-    version: text.slice(at + 1, hash),
-    digest: removeDigestPrefix(text.slice(hash + 1)),
-  };
+  // The ID holds no `@`, so the first `@` ends it; the version holds no `#`, so the next `#` does.
+  const idEnd = text.indexOf('@');
+  const versionEnd = text.indexOf('#', idEnd);
+  const id = text.slice(0, idEnd);
+  const version = text.slice(idEnd + 1, versionEnd);
+  const digest = removeDigestPrefix(text.slice(versionEnd + 1));
+  return { kind: 'exact', id, version, digest };
+}
+
+/** Reads any other text as a theme ID, meaning the latest version of that theme. */
+function latestSelection(text: string): ThemeSelection {
+  return { kind: 'latest', id: text };
 }

@@ -23,11 +23,13 @@ import type {
 } from '../../contract/records/capability-types.js';
 import type { CollectionRenderer } from '../../contract/ports/rendering.js';
 import type { ResourceSelector, WorkspaceReader } from '../../contract/ports/workspace.js';
+import type { LeaseRead } from '../../contract/ports/export.js';
 import type {
   SelectedCollection,
   SnapshotIdentity,
 } from '../../contract/records/export/snapshot.js';
 import type { WorkspaceId } from '../../contract/brands.js';
+import { success } from '../../contract/errors.js';
 import { cancelledFailure, exportFailure, translateRelease, combineWithCleanup } from './faults.js';
 import {
   buildExportSnapshot,
@@ -64,96 +66,123 @@ export async function acquireSnapshot(
   dependencies: LeaseDependencies,
   signal: AbortSignal,
 ): Promise<ExportResult<SnapshotLease>> {
-  const current = await readWorkspace(dependencies, signal);
-  if (!current.ok) return current;
-  const selected = selectCollection(dependencies.reader.read(current.value), identity);
-  if (!selected.ok) return selected;
-  return retainSnapshot(selected.value, dependencies, signal);
+  const workspaceSnapshot = await readWorkspace(dependencies, signal);
+  if (!workspaceSnapshot.ok) {
+    return workspaceSnapshot;
+  }
+  const contents = dependencies.reader.read(workspaceSnapshot.value);
+  const selected = selectCollection(contents, identity);
+  if (!selected.ok) {
+    return selected;
+  }
+  return holdCollectionFiles(selected.value, dependencies, signal);
 }
 
-/**
- * The current Authoring snapshot; an aborted request is never read. Fails with `cancelled` at
- * `export` when the request aborted, and `cancelled` or `encoding-failed` at `workspace` when
- * Authoring's read fails.
- */
+/** Reads the workspace through Authoring, unless the export was already stopped. */
 async function readWorkspace(
-  owners: LeaseDependencies,
+  dependencies: LeaseDependencies,
   signal: AbortSignal,
 ): Promise<ExportResult<Snapshot>> {
-  if (signal.aborted) return cancelledFailure();
-  return checkWorkspaceRead(await owners.authoring(signal).read(owners.workspace), signal);
+  if (signal.aborted) {
+    return cancelledFailure();
+  }
+  const authoring = dependencies.authoring(signal);
+  const workspaceRead = await authoring.read(dependencies.workspace);
+  return checkWorkspaceRead(workspaceRead, signal);
 }
 
-/**
- * Lease every digest the collection needs. Fails with `resource-rejected` at `resources` when
- * selection or the lease is refused, and otherwise as `finishLease`.
- */
-async function retainSnapshot(
+/** Holds every stored file the collection uses, then renders the collection. */
+async function holdCollectionFiles(
   selected: SelectedCollection,
-  owners: LeaseDependencies,
+  dependencies: LeaseDependencies,
   signal: AbortSignal,
 ): Promise<ExportResult<SnapshotLease>> {
-  const digests = owners.resources.digestsForCollection(selected.collection, selected.contents);
-  if (!digests.ok) return exportFailure('resource-rejected', 'resources', digests.error.message);
-  const lease = owners.assets.acquire(digests.value);
-  if (!lease.ok) return exportFailure('resource-rejected', 'resources', lease.error.message);
-  return finishLease(selected, owners, signal, lease.value);
+  const digests = dependencies.resources.digestsForCollection(
+    selected.collection,
+    selected.contents,
+  );
+  if (!digests.ok) {
+    return filesNotHeldFailure(digests.error.message);
+  }
+  const lease = dependencies.assets.acquire(digests.value);
+  if (!lease.ok) {
+    return filesNotHeldFailure(lease.error.message);
+  }
+  return renderWhileHeld(selected, dependencies, signal, lease.value);
 }
 
-/**
- * The prepared snapshot holds the lease until released; any failure releases it at once. Fails
- * with `cancelled` at `export` when the request aborted, and otherwise as `prepareSnapshot`; a
- * failed release nests `cleanup-failed` at `export.release` under `cleanup`.
- */
-async function finishLease(
+/** Renders the held collection into the snapshot, letting go of its files at once on a mistake. */
+async function renderWhileHeld(
   selected: SelectedCollection,
-  owners: LeaseDependencies,
+  dependencies: LeaseDependencies,
   signal: AbortSignal,
   lease: ReadLease,
 ): Promise<ExportResult<SnapshotLease>> {
-  if (signal.aborted) return combineWithCleanup(cancelledFailure(), releaseLease(lease));
-  const prepared = await prepareSnapshot(selected, owners, lease, signal);
-  if (!prepared.ok) return combineWithCleanup(prepared, releaseLease(lease));
-  return {
-    ok: true,
-    value: { snapshot: prepared.value, release: async () => releaseLease(lease) },
-  };
+  if (signal.aborted) {
+    return releaseAfterFailure(cancelledFailure(), lease);
+  }
+  const prepared = await prepareSnapshot(selected, dependencies, lease, signal);
+  if (!prepared.ok) {
+    return releaseAfterFailure(prepared, lease);
+  }
+  const snapshotLease = heldSnapshot(prepared.value, lease);
+  return success(snapshotLease);
 }
 
-/**
- * Render, then retain; a throw anywhere in preparation is one encoding failure. Fails with
- * `cancelled` or `encoding-failed` at `render`, `cancelled` at `export` when the request aborted,
- * `resource-rejected` when a retained resource is unavailable, and `encoding-failed` at
- * `snapshot` when preparation throws.
- */
+/** Renders the collection and builds the snapshot, turning any throw into one mistake. */
 async function prepareSnapshot(
   selected: SelectedCollection,
-  owners: LeaseDependencies,
+  dependencies: LeaseDependencies,
   lease: ReadLease,
   signal: AbortSignal,
 ): Promise<ExportResult<ExportSnapshot>> {
   try {
-    const document = checkRenderedDocument(
-      await owners.renderer.render(selected.collection, selected.contents, signal),
-    );
-    if (!document.ok) return document;
-    return buildExportSnapshot(
-      selected,
-      document.value,
-      (digest, path) => readLease(lease, digest, path),
-      signal,
-    );
+    // `await` keeps a rejected render inside this try, so it becomes one mistake.
+    return await renderSnapshot(selected, dependencies, lease, signal);
   } catch {
-    return exportFailure(
-      'encoding-failed',
-      'snapshot',
-      'The retained export snapshot could not be prepared',
-    );
+    return unpreparedSnapshotFailure();
   }
 }
 
-/** One leased blob; fails with Assets' `storage-unavailable` at `path` when the lease throws. */
-function readLease(
+/** Renders the collection, then builds the snapshot from the drawing and the held files. */
+async function renderSnapshot(
+  selected: SelectedCollection,
+  dependencies: LeaseDependencies,
+  lease: ReadLease,
+  signal: AbortSignal,
+): Promise<ExportResult<ExportSnapshot>> {
+  const rendered = await dependencies.renderer.render(
+    selected.collection,
+    selected.contents,
+    signal,
+  );
+  const document = checkRenderedDocument(rendered);
+  if (!document.ok) {
+    return document;
+  }
+  const readHeldFile: LeaseRead = (digest, path) => readLeasedFile(lease, digest, path);
+  return buildExportSnapshot(selected, document.value, readHeldFile, signal);
+}
+
+/** Pairs the snapshot with the `release` that lets go of its held files. */
+function heldSnapshot(
+  snapshot: ExportSnapshot,
+  lease: ReadLease,
+): SnapshotLease {
+  return { snapshot, release: async () => releaseLease(lease) };
+}
+
+/** Lets go of the held files, and answers the mistake with any mistake from letting go attached. */
+function releaseAfterFailure(
+  failed: ExportResult<never>,
+  lease: ReadLease,
+): ExportResult<never> {
+  const released = releaseLease(lease);
+  return combineWithCleanup(failed, released);
+}
+
+/** Reads one held file, turning a throw into Assets' `storage-unavailable` at `path`. */
+function readLeasedFile(
   lease: ReadLease,
   digest: unknown,
   path: string,
@@ -161,27 +190,52 @@ function readLease(
   try {
     return lease.read(digest);
   } catch {
-    return {
-      ok: false,
-      error: {
-        code: 'storage-unavailable',
-        path,
-        message: 'The retained export resource could not be read',
-        recovery: 'Re-read blob and lease state before retry; Assets owns orphan cleanup.',
-      },
-    };
+    return heldFileThrewFailure(path);
   }
 }
 
-/** Release the lease; fails with `cleanup-failed` at `export.release` when it refuses or throws. */
+/** Lets go of the held files, turning a refusal or a throw into `cleanup-failed`. */
 function releaseLease(lease: ReadLease): ExportResult<void> {
   try {
-    return translateRelease(lease.release());
+    const released = lease.release();
+    return translateRelease(released);
   } catch {
-    return exportFailure(
-      'cleanup-failed',
-      'export.release',
-      'The export resource lease could not be released',
-    );
+    return releaseThrewFailure();
   }
+}
+
+/** Makes the mistake for files that couldn't be listed or held: `resource-rejected`. */
+function filesNotHeldFailure(message: string): ExportResult<never> {
+  return exportFailure('resource-rejected', 'resources', message);
+}
+
+/** Makes the mistake for a render or snapshot build that threw: `encoding-failed` at `snapshot`. */
+function unpreparedSnapshotFailure(): ExportResult<never> {
+  return exportFailure(
+    'encoding-failed',
+    'snapshot',
+    'The retained export snapshot could not be prepared',
+  );
+}
+
+/** Makes Assets' mistake for a held file whose read threw: `storage-unavailable` at `path`. */
+function heldFileThrewFailure(path: string): AssetResult<never> {
+  return {
+    ok: false,
+    error: {
+      code: 'storage-unavailable',
+      path,
+      message: 'The retained export resource could not be read',
+      recovery: 'Re-read blob and lease state before retry; Assets owns orphan cleanup.',
+    },
+  };
+}
+
+/** Makes the mistake for letting go of held files that threw: `cleanup-failed`. */
+function releaseThrewFailure(): ExportResult<never> {
+  return exportFailure(
+    'cleanup-failed',
+    'export.release',
+    'The export resource lease could not be released',
+  );
 }

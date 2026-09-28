@@ -48,13 +48,15 @@ export async function exportDsl(
   dependencies: TextExportDependencies,
   signal: AbortSignal,
 ): Promise<Result<SentFile>> {
-  if (request.scope.kind !== 'all')
-    return failure('invalid-input', 'scope', 'Canonical DSL export requires the whole collection');
-  return exportText(request.identity, dependencies, signal, {
+  if (request.scope.kind !== 'all') {
+    return sectionDslFailure();
+  }
+  const dsl: TextFormat = {
     name: 'dsl',
-    produce: (collection) => printedDsl(collection, dependencies.language, signal),
-    file: (source) => buildDslFile(request.identity, source),
-  });
+    write: (collection) => printDslUnlessStopped(collection, dependencies.language, signal),
+    buildFile: (text) => buildDslFile(request.identity, text),
+  };
+  return exportText(request.identity, dependencies, signal, dsl);
 }
 
 /**
@@ -68,99 +70,100 @@ export async function exportMarkdown(
   dependencies: TextExportDependencies,
   signal: AbortSignal,
 ): Promise<Result<SentFile>> {
-  return exportText(request.identity, dependencies, signal, {
+  const markdown: TextFormat = {
     name: 'markdown',
-    produce: (collection) =>
+    write: (collection) =>
       formatCollectionMarkdown(signal, collection, request.scope, dependencies.export),
-    file: (source) => buildMarkdownFile(request, source),
-  });
+    buildFile: (text) => buildMarkdownFile(request, text),
+  };
+  return exportText(request.identity, dependencies, signal, markdown);
 }
 
 /** The text formats this file exports. */
 type TextFormatName = 'dsl' | 'markdown';
 
-/**
- * One text format: its name, how the leased collection becomes text, and how that text becomes a
- * file.
- */
+/** One text format: its name, how a collection is written as text, and how text becomes a file. */
 interface TextFormat {
   readonly name: TextFormatName;
-  readonly produce: (collection: Collection) => ExportResult<string>;
-  readonly file: (text: string) => SentFile;
+  readonly write: (collection: Collection) => ExportResult<string>;
+  readonly buildFile: (text: string) => SentFile;
 }
 
-/**
- * Lease the snapshot, produce the text, release the lease, then answer with the file. Fails as
- * `exportRouteFailure` of `acquireSnapshot`'s refusal, or of `settleText`'s.
- */
+/** Holds the collection's files, writes the text, lets go, then answers the file. */
 async function exportText(
   identity: ExportRequest['identity'],
-  owners: LeaseDependencies,
+  dependencies: LeaseDependencies,
   signal: AbortSignal,
   format: TextFormat,
 ): Promise<Result<SentFile>> {
-  const acquired = await acquireSnapshot(identity, owners, signal);
-  if (!acquired.ok) return exportRouteFailure(acquired);
-  const settled = await settleText(format, acquired.value);
-  if (!settled.ok) return exportRouteFailure(settled);
-  return success(format.file(settled.value));
+  const held = await acquireSnapshot(identity, dependencies, signal);
+  if (!held.ok) {
+    return exportRouteFailure(held);
+  }
+  const text = await writeThenRelease(format, held.value);
+  if (!text.ok) {
+    return exportRouteFailure(text);
+  }
+  const file = format.buildFile(text.value);
+  return success(file);
 }
 
-/**
- * The format's text, with the lease released exactly once afterwards on every path: producing
- * never throws. Fails as `producedText`, or with `cleanup-failed` at `export.release` when the
- * release fails (nested under `cleanup` after a refusal).
- */
-async function settleText(
+/** Writes the text, then lets go of the held files exactly once, whatever the writing did. */
+async function writeThenRelease(
   format: TextFormat,
   lease: SnapshotLease,
 ): Promise<ExportResult<string>> {
-  const produced = producedText(format, lease.snapshot.collection);
+  const written = writeText(format, lease.snapshot.collection);
   const released = await lease.release();
-  return combineWithCleanup(produced, released);
+  return combineWithCleanup(written, released);
 }
 
-/**
- * The format's text from the leased collection; a throw becomes a refusal, so the caller always
- * reaches the release. Fails with the format's own refusal, or `encoding-failed` at `export.dsl`
- * or `export.markdown` when printing or formatting throws.
- */
-function producedText(
+/** Writes the collection as the format's text, turning a throw into a mistake. */
+function writeText(
   format: TextFormat,
   collection: Collection,
 ): ExportResult<string> {
   try {
-    return format.produce(collection);
+    return format.write(collection);
   } catch {
-    const fault = PRODUCTION_FAULT[format.name];
-    return exportFailure('encoding-failed', fault.path, fault.message);
+    return writingThrewFailure(format.name);
   }
 }
 
-/** Where a throw while producing a format's text is reported, and what the refusal says. */
-interface ProductionFault {
+/** Writes the collection as DSL, unless the export was already stopped. */
+function printDslUnlessStopped(
+  collection: Collection,
+  language: Pick<Language, 'print'>,
+  signal: AbortSignal,
+): ExportResult<string> {
+  if (signal.aborted) {
+    return cancelledFailure();
+  }
+  return printCollectionDsl(language, collection);
+}
+
+/** Makes the mistake for a DSL export of one section: `invalid-input` at `scope`. */
+function sectionDslFailure(): Result<never> {
+  return failure('invalid-input', 'scope', 'Canonical DSL export requires the whole collection');
+}
+
+/** Makes the mistake for a format whose writing threw: `encoding-failed` at `export.<format>`. */
+function writingThrewFailure(name: TextFormatName): ExportResult<never> {
+  const fault = WRITING_FAULT[name];
+  return exportFailure('encoding-failed', fault.path, fault.message);
+}
+
+/** Where a throw while writing a format's text is reported, and what the mistake says. */
+interface WritingFault {
   readonly path: string;
   readonly message: string;
 }
 
-/** Each format's production fault. Frozen. */
-const PRODUCTION_FAULT: Readonly<Record<TextFormatName, ProductionFault>> = Object.freeze({
+/** Each format's writing fault. Frozen. */
+const WRITING_FAULT: Readonly<Record<TextFormatName, WritingFault>> = Object.freeze({
   dsl: { path: 'export.dsl', message: 'The collection could not be printed as DSL' },
   markdown: {
     path: 'export.markdown',
     message: 'The collection could not be formatted as Markdown',
   },
 });
-
-/**
- * The canonical DSL of the collection. Fails with `cancelled` at `export` when the request
- * aborted, and `invalid-input` at `source` when Language cannot print.
- */
-function printedDsl(
-  collection: Collection,
-  language: Pick<Language, 'print'>,
-  signal: AbortSignal,
-): ExportResult<string> {
-  if (signal.aborted) return cancelledFailure();
-  return printCollectionDsl(language, collection);
-}

@@ -42,15 +42,14 @@ export function checkThemeBinding(
   preset: ThemePreset,
   model: BindingModel,
 ): Result<ThemeBinding, FailureSource> {
-  const theme = {
-    id: preset.id,
-    version: preset.version,
-    digest: addDigestPrefix(preset.digest),
-    roles: preset.payload.roles,
-  };
-  const checked = bindingCollection({ title: 'Resource binding', theme }, model);
-  if (!checked.ok) return checked;
-  return success(checked.value.theme);
+  const digest = addDigestPrefix(preset.digest);
+  const theme = { id: preset.id, version: preset.version, digest, roles: preset.payload.roles };
+  const checked = checkInSmallestCollection({ title: 'Resource binding', theme }, model);
+  if (!checked.ok) {
+    return checked;
+  }
+  const binding = checked.value.theme;
+  return success(binding);
 }
 
 /**
@@ -62,19 +61,31 @@ export function checkAssetBindings(
   theme: ThemeBinding,
   model: BindingModel,
 ): Result<readonly AssetBinding[], FailureSource> {
-  const checked = bindingCollection({ title: 'Asset binding', theme, assets: drafts }, model);
-  if (!checked.ok) return checked;
-  return success(checked.value.assets);
+  const checked = checkInSmallestCollection(
+    { title: 'Asset binding', theme, assets: drafts },
+    model,
+  );
+  if (!checked.ok) {
+    return checked;
+  }
+  const bindings = checked.value.assets;
+  return success(bindings);
 }
 
 /**
- * The smallest collection Model checks: ID `binding`, revision 0, grid arrangement, plus the
- * binding fields. Model's result unchanged; Model never throws.
+ * Has Model check the binding fields inside the smallest collection it accepts: ID `binding`,
+ * revision 0 and a grid arrangement.
  */
-function bindingCollection(
+function checkInSmallestCollection(
   fields: Readonly<Record<string, unknown>>,
   model: BindingModel,
 ): ReturnType<BindingModel['validate']> {
-  const base = { schemaVersion: 1, id: 'binding', revision: 0, arrangement: { algorithm: 'grid' } };
-  return model.validate({ ...base, ...fields });
+  const smallest = {
+    schemaVersion: 1,
+    id: 'binding',
+    revision: 0,
+    arrangement: { algorithm: 'grid' },
+  };
+  const collection = { ...smallest, ...fields };
+  return model.validate(collection);
 }

@@ -17,6 +17,7 @@ import type {
   MarkdownScope,
 } from '../../contract/records/capability-types.js';
 import type { ExportRules, ModelRules } from '../../contract/ports/capabilities.js';
+import { success } from '../../contract/errors.js';
 import { cancelledFailure, exportFailure } from './faults.js';
 
 /** What the documents helper uses: Model to check a collection, Language to write its DSL. */
@@ -34,15 +35,9 @@ export interface DocumentDependencies {
  */
 export function createDocumentsForExport(dependencies: DocumentDependencies): Documents {
   return {
-    read: (value) => {
-      const checked = dependencies.model.validate(value);
-      return checked.ok
-        ? checked
-        : exportFailure('invalid-input', 'collection', 'Collection is invalid');
-    },
+    read: (candidate) => checkCollection(dependencies.model, candidate),
     print: (collection) => printCollectionDsl(dependencies.language, collection),
-    parse: () =>
-      exportFailure('invalid-import', 'source', 'Import parsing is not part of browser export'),
+    parse: () => importNotSupportedFailure(),
   };
 }
 
@@ -55,9 +50,11 @@ export function printCollectionDsl(
   collection: Collection,
 ): ExportResult<string> {
   const printed = language.print({ collection, scope: { kind: 'all' } });
-  if (!printed.ok)
-    return exportFailure('invalid-input', 'source', 'Collection could not be printed');
-  return { ok: true, value: printed.value.source };
+  if (!printed.ok) {
+    return unprintableCollectionFailure();
+  }
+  const dsl = printed.value.source;
+  return success(dsl);
 }
 
 /**
@@ -72,17 +69,55 @@ export function formatCollectionMarkdown(
   scope: MarkdownScope,
   rules: Pick<ExportRules, 'formatMarkdown'>,
 ): ExportResult<string> {
-  if (signal.aborted) return cancelledFailure();
-  const source = rules.formatMarkdown(collection, scope);
-  if (source === undefined)
-    return exportFailure('invalid-input', 'scope', 'The requested section does not exist');
-  return markdownCompletion(source, signal);
+  if (signal.aborted) {
+    return cancelledFailure();
+  }
+  const markdown = rules.formatMarkdown(collection, scope);
+  if (markdown === undefined) {
+    return missingSectionFailure();
+  }
+  return keepUnlessStopped(markdown, signal);
 }
 
-/** The formatted text; fails with `cancelled` at `export` when the request aborted meanwhile. */
-function markdownCompletion(
-  source: string,
+/** Has Model check a collection, and refuses one Model doesn't accept. */
+function checkCollection(
+  model: Pick<ModelRules, 'validate'>,
+  candidate: unknown,
+): ExportResult<Collection> {
+  const checked = model.validate(candidate);
+  if (!checked.ok) {
+    return invalidCollectionFailure();
+  }
+  return checked;
+}
+
+/** Gives back the written Markdown, unless the export was stopped while it was being written. */
+function keepUnlessStopped(
+  markdown: string,
   signal: AbortSignal,
 ): ExportResult<string> {
-  return signal.aborted ? cancelledFailure() : { ok: true, value: source };
+  if (signal.aborted) {
+    return cancelledFailure();
+  }
+  return success(markdown);
+}
+
+/** Makes the mistake for a collection Model refuses: `invalid-input` at `collection`. */
+function invalidCollectionFailure(): ExportResult<never> {
+  return exportFailure('invalid-input', 'collection', 'Collection is invalid');
+}
+
+/** Makes the mistake for a collection Language can't print: `invalid-input` at `source`. */
+function unprintableCollectionFailure(): ExportResult<never> {
+  return exportFailure('invalid-input', 'source', 'Collection could not be printed');
+}
+
+/** Makes the mistake for a Markdown section that doesn't exist: `invalid-input` at `scope`. */
+function missingSectionFailure(): ExportResult<never> {
+  return exportFailure('invalid-input', 'scope', 'The requested section does not exist');
+}
+
+/** Makes the mistake for reading DSL back in, which an export never does: `invalid-import`. */
+function importNotSupportedFailure(): ExportResult<never> {
+  return exportFailure('invalid-import', 'source', 'Import parsing is not part of browser export');
 }

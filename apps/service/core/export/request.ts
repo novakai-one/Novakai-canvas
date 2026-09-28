@@ -8,7 +8,7 @@
  * (see `contract/errors.ts`). The shape itself is described in contract/records/export/request.ts.
  * Extra keys are ignored. It never reads the workspace.
  */
-import { failure, type Result } from '../../contract/errors.js';
+import { failure, success, type Result } from '../../contract/errors.js';
 import {
   exportRequest,
   exportSelection,
@@ -21,26 +21,50 @@ import {
  * unsupported collection, format or scope; at `export.scale` for a scale outside 1 to 4.
  */
 export function readExportRequest(body: unknown): Result<ExportRequest> {
-  if (typeof body !== 'object' || body === null)
-    return failure('invalid-input', 'export', 'Export request is invalid');
-  return selectedRequest(body);
+  if (!isObject(body)) {
+    return notAnObjectFailure();
+  }
+  if (!hasSupportedSelection(body)) {
+    return unsupportedSelectionFailure();
+  }
+  return checkScale(body);
 }
 
-/** An unsupported identity, format or scope refuses the whole request. */
-function selectedRequest(input: object): Result<ExportRequest> {
-  if (!exportSelection.safeParse(input).success)
-    return failure(
-      'invalid-input',
-      'export',
-      'Export request contains an unsupported identity, format or scope',
-    );
-  return scaledRequest(input);
+/** Whether the body is an object, and not `null`, text or a number. */
+function isObject(body: unknown): body is object {
+  return typeof body === 'object' && body !== null;
 }
 
-/** With the selection accepted, only the scale can still refuse the request. */
-function scaledRequest(input: object): Result<ExportRequest> {
-  const request = exportRequest.safeParse(input);
-  if (!request.success)
-    return failure('invalid-input', 'export.scale', 'Export scale must be between 1 and 4');
-  return { ok: true, value: request.data };
+/** Whether the body names a collection, format and scope the export supports. */
+function hasSupportedSelection(body: object): boolean {
+  const selection = exportSelection.safeParse(body);
+  return selection.success;
+}
+
+/** Checks the scale, the one part still unchecked, and answers the checked request. */
+function checkScale(body: object): Result<ExportRequest> {
+  const request = exportRequest.safeParse(body);
+  if (!request.success) {
+    return scaleOutOfRangeFailure();
+  }
+  return success(request.data);
+}
+
+/** Makes the mistake for a body that isn't an object: `invalid-input` at `export`. */
+function notAnObjectFailure(): Result<never> {
+  return failure('invalid-input', 'export', 'Export request is invalid');
+}
+
+/** Makes the mistake for an unsupported collection, format or scope: `invalid-input`. */
+function unsupportedSelectionFailure(): Result<never> {
+  return failure(
+    'invalid-input',
+    'export',
+    'Export request contains an unsupported identity, format or scope',
+  );
+}
+
+/** Makes the mistake for a scale outside 1 to 4: `invalid-input` at `export.scale`. */
+function scaleOutOfRangeFailure(): Result<never> {
+  return failure('invalid-input', 'export.scale', 'Export scale must be between 1 and 4');
 }
