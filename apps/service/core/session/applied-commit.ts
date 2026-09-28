@@ -20,18 +20,18 @@ import type { WorkspaceId } from '../../contract/brands.js';
 import { stripHistoryContents } from './history-versions.js';
 
 /**
- * Saves a change through Authoring, then reads the workspace back without its history contents.
- * `options` are the apply options as sent; Authoring checks them. A refused change answers
- * Authoring's failure. A failed read-back answers `storage-unavailable` at `snapshot`, yet the
- * change stays saved.
+ * Saves `change` through Authoring, then reads the workspace back without its history contents.
+ * `change` is the Authoring request to save (not the HTTP request); `options` are the apply
+ * options as sent. Authoring checks both. A refused change answers Authoring's failure. A failed
+ * read-back answers `storage-unavailable` at `snapshot`, yet the change stays saved.
  */
 export async function commitThenRead(
   authoring: Authoring,
   workspace: WorkspaceId,
-  request: Request,
+  change: Request,
   options: unknown,
 ): Promise<AuthoringResult<AppliedCommit>> {
-  const committed = await authoring.apply(request, options);
+  const committed = await authoring.apply(change, options);
   if (!committed.ok) return committed;
   const committedWorkspace = await authoring.read(workspace);
   if (!committedWorkspace.ok) return carriedSnapshotUnread();

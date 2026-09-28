@@ -6,8 +6,9 @@
  * example, `GET /api/v1/render?id=my-diagram` becomes `session.render('my-diagram', signal)`; once
  * the server is closing, it answers "Workspace is closing or closed" instead of starting.
  *
- * This file builds that `WorkspaceSession` from parts compose has already opened. Every call runs
- * through the session's lifetime (lifetime.ts). It never opens files or checks who is calling.
+ * This file builds that `WorkspaceSession` from parts already opened at startup
+ * (contract/compose/session.ts). Every call runs through the session's lifetime (lifetime.ts). It
+ * never opens files or checks who is calling.
  */
 import type { WorkspaceSession } from '../../contract/types.js';
 import type { Authoring, AuthoringResult } from '../../contract/records/capability-types.js';
@@ -42,7 +43,7 @@ export interface SessionDependencies {
   readonly changes: Pick<ChangeChannel, 'subscribe'>;
   /** Runs calls only while the session is open, and closes the workspace once (lifetime.ts). */
   readonly lifetime: SessionLifetime;
-  /** The signal reads run under; compose passes one that never aborts. */
+  /** The signal reads run under; startup passes one that never aborts. */
   readonly readSignal: AbortSignal;
   /** Makes Authoring for one call; that call stops when `signal` aborts. */
   authoring(signal: AbortSignal): Authoring;
