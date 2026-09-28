@@ -11,6 +11,7 @@
  */
 import type {
   AuthoringResult,
+  Collection,
   IntentPlanner,
   Proposal,
   Request,
@@ -21,7 +22,7 @@ import type { CollectionPlanner, WorkspaceReader } from '../../../contract/ports
 import type { ModelCommand } from '../../../contract/records/planning/commands.js';
 import { modelCommand } from '../../../contract/records/planning/commands.js';
 import { plannerId } from '../../../contract/schemas.js';
-import { authoringFailure } from '../../../contract/errors.js';
+import { authoringFailure, success } from '../../../contract/errors.js';
 import { readChangePayload, capabilityRefusalFailure } from './change-payload.js';
 
 /** What the `model` planner needs. */
@@ -43,47 +44,66 @@ export interface ModelPlannerDependencies {
 export function createModelPlanner(dependencies: ModelPlannerDependencies): IntentPlanner {
   return {
     id: plannerId.parse('model'),
-    plan: async (request, snapshot) => model(request, snapshot, dependencies),
+    plan: async (request, snapshot) => planModelChange(request, snapshot, dependencies),
   };
 }
 
-/**
- * The `model` planner: decodes the change batch, then plans it (see `modelCollection`). Fails
- * with `invalid-input` at `intent` when the request is not a change, and at `model` when the
- * payload lacks a collection or change batch.
- */
-function model(
+/** Reads the batch of Model changes, has Model apply it, then plans the collection's save. */
+function planModelChange(
   request: Request,
   snapshot: Snapshot,
   dependencies: ModelPlannerDependencies,
 ): AuthoringResult<Proposal> {
-  const input = readChangePayload(request, 'intent', 'Expected a diagram change');
-  if (!input.ok) return input;
-  const command = modelCommand.safeParse(input.value);
-  if (!command.success)
-    return authoringFailure(
-      'invalid-input',
-      'model',
-      'Human changes require a collection and change batch',
-    );
-  return modelCollection(command.data, snapshot, dependencies);
+  const command = readModelCommand(request);
+  if (!command.ok) {
+    return command;
+  }
+  const candidate = applyModelChanges(command.value, snapshot, dependencies);
+  if (!candidate.ok) {
+    return candidate;
+  }
+  return dependencies.collections.propose(snapshot, candidate.value);
 }
 
-/**
- * Plans the batch on the stored collection through Model and hands the result to the collection
- * planner. Fails with `invariant-violation` at the collection ID when Model refuses the batch
- * (Model's failure kept as source). Reader and collection planner failures pass through unchanged.
- */
-function modelCollection(
+/** Takes the Model command (the collection's ID and the batch) out of the request. */
+function readModelCommand(request: Request): AuthoringResult<ModelCommand> {
+  const payload = readChangePayload(request, 'intent', 'Expected a diagram change');
+  if (!payload.ok) {
+    return payload;
+  }
+  const command = modelCommand.safeParse(payload.value);
+  if (!command.success) {
+    return malformedModelCommandFailure();
+  }
+  return success(command.data);
+}
+
+/** Has Model apply the batch to the stored collection, and gives the changed collection. */
+function applyModelChanges(
   command: ModelCommand,
   snapshot: Snapshot,
   dependencies: ModelPlannerDependencies,
-): AuthoringResult<Proposal> {
-  const view = dependencies.workspace.read(snapshot);
-  if (!view.ok) return view;
-  const original = view.value.collections.find((item) => item.id === command.collection);
-  const planned = dependencies.model.plan(original, command.changes);
-  if (!planned.ok)
+): AuthoringResult<Collection> {
+  const contents = dependencies.workspace.read(snapshot);
+  if (!contents.ok) {
+    return contents;
+  }
+  // A missing collection is passed on as it is; Model answers that mistake itself.
+  const stored = contents.value.collections.find(
+    (collection) => collection.id === command.collection,
+  );
+  const planned = dependencies.model.plan(stored, command.changes);
+  if (!planned.ok) {
     return capabilityRefusalFailure('invariant-violation', command.collection, planned.error);
-  return dependencies.collections.propose(snapshot, planned.value.candidate);
+  }
+  return success(planned.value.candidate);
+}
+
+/** Makes the mistake for a Model change without a collection ID or a batch of changes. */
+function malformedModelCommandFailure(): AuthoringResult<never> {
+  return authoringFailure(
+    'invalid-input',
+    'model',
+    'Human changes require a collection and change batch',
+  );
 }

@@ -12,15 +12,18 @@
 import type {
   AuthoringResult,
   IntentPlanner,
+  Organisation,
   Proposal,
+  ReadVersion,
   Request,
   Snapshot,
+  StoredRecord,
 } from '../../../contract/records/capability-types.js';
 import type { LibraryRules } from '../../../contract/ports/capabilities.js';
 import type { WorkspaceReader } from '../../../contract/ports/workspace.js';
 import { libraryCommand } from '../../../contract/records/planning/commands.js';
 import { plannerId } from '../../../contract/schemas.js';
-import { authoringFailure } from '../../../contract/errors.js';
+import { authoringFailure, success } from '../../../contract/errors.js';
 import { listLiveRecords } from '../../workspace/records.js';
 import { readChangePayload, checkProposal, capabilityRefusalFailure } from './change-payload.js';
 
@@ -41,75 +44,113 @@ export interface LibraryPlannerDependencies {
 export function createLibraryPlanner(dependencies: LibraryPlannerDependencies): IntentPlanner {
   return {
     id: plannerId.parse('library'),
-    plan: async (request, snapshot) => propose(request, snapshot, dependencies),
+    plan: async (request, snapshot) => planLibraryChange(request, snapshot, dependencies),
   };
 }
 
-/**
- * The `library` planner: decodes the change batch, then plans it (see `planOrganisationChange`).
- * Fails with `invalid-input` at `intent` when the request is not a change, and at `library` when
- * the payload is not a bounded change batch.
- */
-function propose(
+/** Reads the batch of catalog changes, has Library apply it, then plans the catalog's write. */
+function planLibraryChange(
   request: Request,
   snapshot: Snapshot,
   dependencies: LibraryPlannerDependencies,
 ): AuthoringResult<Proposal> {
-  const input = readChangePayload(request, 'intent', 'Expected a library change');
-  if (!input.ok) return input;
-  const command = libraryCommand.safeParse(input.value);
-  if (!command.success)
-    return authoringFailure(
-      'invalid-input',
-      'library',
-      'Library changes require a bounded change batch',
-    );
-  return planOrganisationChange(command.data.changes, snapshot, dependencies);
+  const changes = readCatalogChanges(request);
+  if (!changes.ok) {
+    return changes;
+  }
+  const organisation = planCatalog(changes.value, snapshot, dependencies);
+  if (!organisation.ok) {
+    return organisation;
+  }
+  return proposeCatalogWrite(organisation.value, snapshot);
 }
 
-/**
- * Plans the batch on the stored catalog through Library, then proposes the result (see
- * `catalogProposal`). Fails with `invariant-violation` at `catalog` when Library refuses the
- * batch (Library's failure kept as source). Reader failures pass through unchanged.
- */
-function planOrganisationChange(
+/** Takes the batch of catalog changes out of the request. */
+function readCatalogChanges(request: Request): AuthoringResult<readonly unknown[]> {
+  const payload = readChangePayload(request, 'intent', 'Expected a library change');
+  if (!payload.ok) {
+    return payload;
+  }
+  const command = libraryCommand.safeParse(payload.value);
+  if (!command.success) {
+    return malformedBatchFailure();
+  }
+  return success(command.data.changes);
+}
+
+/** Has Library apply the batch to the stored catalog, and gives the new catalog. */
+function planCatalog(
   changes: readonly unknown[],
   snapshot: Snapshot,
   dependencies: LibraryPlannerDependencies,
-): AuthoringResult<Proposal> {
-  const current = dependencies.workspace.read(snapshot);
-  if (!current.ok) return current;
+): AuthoringResult<Organisation> {
+  const contents = dependencies.workspace.read(snapshot);
+  if (!contents.ok) {
+    return contents;
+  }
   const planned = dependencies.library.planOrganisation({
-    snapshot: current.value.library,
+    snapshot: contents.value.library,
     changes,
   });
-  if (!planned.ok) return capabilityRefusalFailure('invariant-violation', 'catalog', planned.error);
-  return catalogProposal(planned.value.candidate, snapshot);
+  if (!planned.ok) {
+    return capabilityRefusalFailure('invariant-violation', 'catalog', planned.error);
+  }
+  return success(planned.value.candidate);
 }
 
 /**
- * Proposes one write of the planned catalog over the stored one. Every collection and catalog
- * record version is a read, so Authoring refuses the commit if any of them changed. Fails with
- * `invariant-violation` at `catalog` when no catalog is stored, and `invalid-input` at `catalog`
- * when the proposal exceeds Authoring's limits.
+ * Plans one write of the new catalog over the stored one. Every collection and catalog version is
+ * listed as read, so Authoring refuses the save if any of them changed in the meantime.
  */
-function catalogProposal(
-  organisation: unknown,
+function proposeCatalogWrite(
+  organisation: Organisation,
   snapshot: Snapshot,
 ): AuthoringResult<Proposal> {
-  const current = listLiveRecords(snapshot, 'catalog')[0];
-  if (current === undefined)
-    return authoringFailure('invariant-violation', 'catalog', 'A library catalog is required');
-  return checkProposal(
-    {
-      writes: [{ kind: 'put', key: current.key, value: organisation, resources: [] }],
-      reads: snapshot.records
-        .filter((record) => ['collection', 'catalog'].includes(record.key.kind))
-        .map((record) => ({ key: record.key, version: record.version })),
-      diff: { kind: 'library-organisation' },
-      warnings: [],
-    },
-    'catalog',
-    'Library proposal could not be admitted',
+  const storedCatalog = findStoredCatalog(snapshot);
+  if (storedCatalog === undefined) {
+    return missingCatalogFailure();
+  }
+  const catalogWrite = { kind: 'put', key: storedCatalog.key, value: organisation, resources: [] };
+  const reads = listCollectionAndCatalogVersions(snapshot);
+  const planned = {
+    writes: [catalogWrite],
+    reads,
+    diff: { kind: 'library-organisation' },
+    warnings: [],
+  };
+  return checkProposal(planned, 'catalog', 'Library proposal could not be admitted');
+}
+
+/** Finds the stored catalog record, if there is one. */
+function findStoredCatalog(snapshot: Snapshot): StoredRecord | undefined {
+  const catalogs = listLiveRecords(snapshot, 'catalog');
+  return catalogs[0];
+}
+
+/** Lists the version of every collection and catalog record in the snapshot. */
+function listCollectionAndCatalogVersions(snapshot: Snapshot): readonly ReadVersion[] {
+  const collectionAndCatalogRecords = snapshot.records.filter(isCollectionOrCatalog);
+  return collectionAndCatalogRecords.map((record) => ({
+    key: record.key,
+    version: record.version,
+  }));
+}
+
+/** Whether the record is a collection or the catalog. */
+function isCollectionOrCatalog(record: StoredRecord): boolean {
+  return record.key.kind === 'collection' || record.key.kind === 'catalog';
+}
+
+/** Makes the mistake for a library change whose batch is missing or too long. */
+function malformedBatchFailure(): AuthoringResult<never> {
+  return authoringFailure(
+    'invalid-input',
+    'library',
+    'Library changes require a bounded change batch',
   );
+}
+
+/** Makes the mistake for a workspace with no stored catalog. */
+function missingCatalogFailure(): AuthoringResult<never> {
+  return authoringFailure('invariant-violation', 'catalog', 'A library catalog is required');
 }

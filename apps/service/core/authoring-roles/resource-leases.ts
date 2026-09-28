@@ -12,13 +12,16 @@
 import type {
   Assets,
   AuthoringResult,
+  ReadLease,
   Request,
   ResourceAdmission,
   ResourceLease,
   Snapshot,
 } from '../../contract/records/capability-types.js';
 import type { ResourceSelector } from '../../contract/ports/workspace.js';
-import { authoringFailure } from '../../contract/errors.js';
+import type { ResourceSelection } from '../../contract/records/planning/selection.js';
+import type { CapabilityFailure } from '../../contract/records/transport/failure-source.js';
+import { authoringFailure, success } from '../../contract/errors.js';
 
 /**
  * Builds Authoring's file hold (`ResourceAdmission`). Its `acquire` picks the files a request uses,
@@ -30,44 +33,70 @@ export function createResourceAdmission(
   selector: Pick<ResourceSelector, 'select'>,
   assets: Pick<Assets, 'acquire'>,
 ): ResourceAdmission {
-  return { acquire: async (request, snapshot) => acquire(request, snapshot, selector, assets) };
+  return {
+    acquire: async (request, snapshot) => holdRequestFiles(request, snapshot, selector, assets),
+  };
 }
-/** Physical byte protection lasts through authoritative commit/receipt settlement, including prior inverse-history resources. */
-function acquire(
+
+/** Picks the files the request uses, asks Assets to hold them, and describes the hold. */
+function holdRequestFiles(
   request: Request,
   snapshot: Snapshot,
   selector: Pick<ResourceSelector, 'select'>,
   assets: Pick<Assets, 'acquire'>,
 ): AuthoringResult<ResourceLease> {
-  const selected = selector.select(request, snapshot);
-  if (!selected.ok) return selected;
-  const lease = assets.acquire(selected.value.fileDigests);
-  if (!lease.ok)
-    return authoringFailure(
-      'missing-asset',
-      lease.error.path,
-      lease.error.message,
-      [],
-      lease.error,
-    );
+  const selection = selector.select(request, snapshot);
+  if (!selection.ok) {
+    return selection;
+  }
+  const hold = assets.acquire(selection.value.fileDigests);
+  if (!hold.ok) {
+    return unheldFilesFailure(hold.error);
+  }
+  const lease = describeLease(selection.value, hold.value);
+  return success(lease);
+}
+
+/** Describes the hold: the pick, the records it read, the files held, and how to let go. */
+function describeLease(
+  selection: ResourceSelection,
+  hold: ReadLease,
+): ResourceLease {
   return {
-    ok: true,
-    value: {
-      pins: selected.value.resourcesJson,
-      reads: selected.value.reads,
-      covered: selected.value.fileDigests,
-      release: async () => released(lease.value.release()),
-    },
+    pins: selection.resourcesJson,
+    reads: selection.reads,
+    covered: selection.fileDigests,
+    release: async () => letGo(hold),
   };
 }
-/** Release failure remains typed; Assets conservatively retains protection for maintenance recovery. */
-function released(result: ReturnType<Assets['close']>): AuthoringResult<void> {
-  if (result.ok) return result;
+
+/** Asks Assets to let go of the held files. */
+function letGo(hold: ReadLease): AuthoringResult<void> {
+  const released = hold.release();
+  if (!released.ok) {
+    return releaseFailure(released.error);
+  }
+  return success(undefined);
+}
+
+/** Makes the mistake for files Assets couldn't hold, keeping Assets' own. */
+function unheldFilesFailure(assetFailure: CapabilityFailure): AuthoringResult<never> {
+  return authoringFailure(
+    'missing-asset',
+    assetFailure.path,
+    assetFailure.message,
+    [],
+    assetFailure,
+  );
+}
+
+/** Makes the mistake for a hold Assets couldn't let go of; Assets keeps the hold until clean-up. */
+function releaseFailure(assetFailure: CapabilityFailure): AuthoringResult<never> {
   return authoringFailure(
     'storage-unavailable',
-    result.error.path,
-    result.error.message,
+    assetFailure.path,
+    assetFailure.message,
     [],
-    result.error,
+    assetFailure,
   );
 }
