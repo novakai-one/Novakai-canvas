@@ -42,15 +42,15 @@ function checkJobMessage(message: unknown): Result<RenderingJob> {
   if (!collection.ok) {
     return invalidCollectionFailure();
   }
-  const job = checkDrawingParts(jobMessage, collection.value);
+  const job = buildCheckedJob(jobMessage, collection.value);
   return success(job);
 }
 
 /**
- * Builds the job once Presentation has checked its fonts, style and images, and Layout its
- * options. Throws when one of them is malformed.
+ * Builds the job, with Presentation checking its fonts, style and images and Layout its options.
+ * Throws when one is malformed.
  */
-function checkDrawingParts(
+function buildCheckedJob(
   jobMessage: JobMessage,
   collection: RenderingJob['collection'],
 ): RenderingJob {

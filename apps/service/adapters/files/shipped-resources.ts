@@ -31,6 +31,9 @@ export type TokenSourceReader = Pick<TokenFileBindings, 'source'>;
 /** One shipped recipe starter: its family and DSL source. */
 type ShippedRecipe = BuiltinSources['recipes'][number];
 
+/** The shipped fonts and design token sources, once both were read. */
+type ShippedAppearance = Pick<BuiltinSources, 'fonts' | 'tokens'>;
+
 /** What Assets is asked to store for one shipped font. */
 interface FontUpload {
   readonly base64: string;
@@ -109,26 +112,30 @@ async function readShippedSources(
     readTokenSources(tokens),
     readRecipes(resourceRoot),
   ]);
+  const appearance = checkAppearance(fonts, tokenSources);
+  if (!appearance.ok) {
+    return appearance;
+  }
+  if (!recipes.ok) {
+    return recipes;
+  }
+  const sources: BuiltinSources = { ...appearance.value, recipes: recipes.value };
+  return success(sources);
+}
+
+/** Puts the fonts and token sources together, once both were read. Fonts' mistake comes first. */
+function checkAppearance(
+  fonts: Result<FontSet>,
+  tokenSources: Result<BuiltinSources['tokens']>,
+): Result<ShippedAppearance> {
   if (!fonts.ok) {
     return fonts;
   }
   if (!tokenSources.ok) {
     return tokenSources;
   }
-  return assembleSources(fonts.value, tokenSources.value, recipes);
-}
-
-/** Puts the fonts, token sources and recipe starters together, once the recipes were read too. */
-function assembleSources(
-  fonts: FontSet,
-  tokenSources: BuiltinSources['tokens'],
-  recipes: Result<readonly ShippedRecipe[]>,
-): Result<BuiltinSources> {
-  if (!recipes.ok) {
-    return recipes;
-  }
-  const sources: BuiltinSources = { fonts, tokens: tokenSources, recipes: recipes.value };
-  return success(sources);
+  const appearance: ShippedAppearance = { fonts: fonts.value, tokens: tokenSources.value };
+  return success(appearance);
 }
 
 /**

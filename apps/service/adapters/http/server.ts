@@ -187,21 +187,21 @@ async function invokeApi(
     metadata: exchange.metadata,
     body: body.value,
   };
-  const outcome = await bindings.router.invoke(apiCall);
-  writeRouteOutcome(response, outcome, bindings);
+  const routed = await bindings.router.invoke(apiCall);
+  writeRouteOutcome(response, routed, bindings);
 }
 
 /** Writes a route's answer: a file as bytes, anything else as JSON. */
 function writeRouteOutcome(
   response: ServerResponse,
-  outcome: RouteOutcome,
+  routed: RouteOutcome,
   bindings: ServerBindings,
 ): void {
-  if (outcome.kind === 'bytes') {
-    writeBytes(response, outcome.file);
+  if (routed.kind === 'bytes') {
+    writeBytes(response, routed.file);
     return;
   }
-  writeJson(response, outcome.outcome, bindings);
+  writeJson(response, routed.outcome, bindings);
 }
 
 /** Serves the web app once the policy lets the browser in; sets the cookie when it issues one. */

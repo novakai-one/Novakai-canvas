@@ -203,7 +203,7 @@ function decodeAppearance(reply: RenderReply): Result<DecodedAppearance> {
 function decodedProjectionReader(projection: RenderDocument['projection']): ProjectionReader {
   return {
     read: () => success(projection),
-    content: (input) => forLayout(readMeasuredContent(input)),
+    content: (input) => contentForLayout(readMeasuredContent(input)),
   };
 }
 
@@ -212,8 +212,11 @@ function jobDomain(job: RenderingJob): DomainReader {
   return { read: () => success(job.collection) };
 }
 
-/** Gives Presentation's answer in Layout's terms. */
-function forLayout<T>(outcome: PresentationResult<T>): LayoutResult<T> {
+/**
+ * Gives Presentation's answer in Layout's terms. Unlike derive.ts, Presentation's mistake is not
+ * kept as the source.
+ */
+function contentForLayout<T>(outcome: PresentationResult<T>): LayoutResult<T> {
   if (!outcome.ok) {
     return layoutContentFailure(outcome.error);
   }

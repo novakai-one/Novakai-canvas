@@ -72,6 +72,9 @@ const STORAGE_CODES: Readonly<Record<StorageError['code'], ErrorCode>> = Object.
   'destination-not-empty': 'revision-conflict',
 });
 
+/** Storage mistakes point at a path, never at diagram objects. */
+const NO_TARGETS: readonly string[] = Object.freeze([]);
+
 /** Reads the stored workspace for Authoring, unchecked, once it is sure it is the one asked for. */
 function readSnapshotView(
   bridge: StoreBridge,
@@ -202,7 +205,7 @@ function checkReceipt(stored: unknown): Result<Receipt> {
  */
 function storageFailure(storageError: StorageError): Result<never> {
   const code = STORAGE_CODES[storageError.code];
-  return failure(code, storageError.path, storageError.message, [], storageError);
+  return failure(code, storageError.path, storageError.message, NO_TARGETS, storageError);
 }
 
 /** Makes the mistake for a workspace this store doesn't serve. */

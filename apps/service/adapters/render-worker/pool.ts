@@ -221,6 +221,7 @@ function runOnWorker(
     worker.once('error', crashed);
     worker.once('exit', exited);
     signal.addEventListener('abort', cancelled, { once: true });
+    // A signal that aborted before the job was sent never fires 'abort', so it is checked by hand.
     if (signal.aborted) {
       cancelled();
       return;

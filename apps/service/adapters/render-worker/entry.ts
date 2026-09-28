@@ -13,7 +13,7 @@ import { parentPort, type MessagePort } from 'node:worker_threads';
 import type { Diagnostic, Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 import type { DiagramProducer } from '../../contract/ports/rendering.js';
-import type { RenderingJob } from '../../contract/records/rendering/job.js';
+import type { RenderDocument, RenderingJob } from '../../contract/records/rendering/job.js';
 import { READY_HANDSHAKE, type WorkerHandshake } from '../../contract/records/rendering/worker.js';
 
 /** What the worker thread answers jobs with. compose/worker.ts passes them. */
@@ -76,7 +76,7 @@ function answerJobs(
 async function drawJob(
   message: unknown,
   dependencies: RenderWorkerDependencies,
-): Promise<Result<unknown>> {
+): Promise<Result<RenderDocument>> {
   const job = dependencies.readJob(message);
   if (!job.ok) {
     return job;

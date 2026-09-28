@@ -67,7 +67,7 @@ export async function createLocalSecurity(
     if (!token.ok) {
       return token;
     }
-    const security = startSecurity(port, token.value);
+    const security = assembleSecurity(port, token.value);
     return success(security);
   } catch {
     return unsafeCredentialsFailure();
@@ -190,7 +190,7 @@ function readCredentialJson(text: string): Result<unknown> {
 }
 
 /** Puts this start's security together: its address, the CLI's token and new random secrets. */
-function startSecurity(
+function assembleSecurity(
   port: LoopbackPort,
   token: AgentToken,
 ): HttpSecurity {
