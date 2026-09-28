@@ -36,17 +36,17 @@ import { createLanguageWithModel } from './language.js';
 import { createThemeReader } from './theme-reader.js';
 
 /**
- * Runs one service command against the service at `target.server`, with the agent's token from
- * `target.workspace`, and gives back the text to print. Fails if the token can't be read, or as
- * the command does.
+ * Runs one service command against `--server`, with the agent's token from the `--workspace`
+ * folder, and gives back the text to print. Fails if the token can't be read, or as the command
+ * does.
  */
 export async function runService(
   command: ServiceCommand,
-  target: ServerAndWorkspace,
+  serverAndWorkspace: ServerAndWorkspace,
 ): Promise<Result<string>> {
-  const token = await readToken(target.workspace);
+  const token = await readToken(serverAndWorkspace.workspace);
   if (!token.ok) return token;
-  return runServiceCommand(command, servicePorts(target, token.value));
+  return runServiceCommand(command, servicePorts(serverAndWorkspace, token.value));
 }
 
 /**
@@ -64,10 +64,10 @@ async function readToken(workspace: FilePath): Promise<Result<AgentToken>> {
 
 /** Every service port, each bound once: three service-call adapters share one transport. */
 function servicePorts(
-  target: ServerAndWorkspace,
+  serverAndWorkspace: ServerAndWorkspace,
   token: AgentToken,
 ): ServiceCommandDependencies {
-  const transport = createTransport(target.server, token);
+  const transport = createTransport(serverAndWorkspace.server, token);
   const files = createLocalFiles();
   return {
     reads: createServiceReads(transport),
@@ -75,7 +75,7 @@ function servicePorts(
     resources: createServiceResources(transport),
     files,
     writer: files,
-    journal: createRequestJournal(target.workspace),
+    journal: createRequestJournal(serverAndWorkspace.workspace),
     reader: createResourceReader(),
     collections: { validate },
     language: createLanguageWithModel(),

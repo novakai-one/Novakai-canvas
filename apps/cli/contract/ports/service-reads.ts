@@ -15,7 +15,7 @@ import type { ReadScope } from '../records/command.js';
 import type {
   LanguageDescription,
   ServiceAnswer,
-  Readout,
+  ReadAnswer,
   ReceiptLookup,
 } from '../records/service-answers.js';
 
@@ -36,7 +36,7 @@ export interface ServiceReads {
   source(
     collection: CollectionId,
     scope: ReadScope,
-  ): Promise<Result<Readout>>;
+  ): Promise<Result<ReadAnswer>>;
   /** Asks for the service's report on one collection's layout, which `inspect` prints as JSON. */
   inspect(collection: CollectionId): Promise<Result<InspectionReport>>;
   /** Asks whether `request` was saved, with its receipt if it was, and the service's generation. */

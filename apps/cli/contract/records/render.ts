@@ -5,7 +5,7 @@
  * and where: `pnpm render:png --collection states --out out/ --format svg`.
  *
  * This file names what those flags ask for once checked, and the JSON a finished render prints:
- * the files it wrote and the theme it used. Themes are one kind of Templates "preset" (a saved
+ * the files it wrote and the theme it drew with. Themes are one kind of Templates "preset" (a saved
  * theme or recipe), so a theme's ID and digest have preset types. It declares types only.
  */
 import type { RecipeOrCollectionId, FilePath, PresetDigest, PresetId, ThemeId } from '../brands.js';
@@ -26,8 +26,8 @@ export type CollectionSelector =
   | { readonly kind: 'id'; readonly id: RecipeOrCollectionId };
 
 /**
- * The theme to draw with, not the collection's own: `--theme` as typed, or the `--theme-file`'s
- * `@id`, which Templates has already checked as a preset ID.
+ * The theme asked for in place of the collection's own: `--theme`'s ID, or the `--theme-file`'s
+ * `@id` (which Templates checks as a preset ID).
  */
 export type ThemeChoice = ThemeId | PresetId;
 
@@ -57,11 +57,12 @@ export interface ThemeDigest {
 }
 
 /**
- * What a finished render prints as JSON: the files it wrote, the collection's theme, the service's
+ * What a finished render prints as JSON: the files it wrote, the theme it drew with, the service's
  * inspection report of the drawing, and a content hash for every theme the render knew.
  */
 export interface RenderReport {
   readonly files: readonly FilePath[];
+  /** The theme it drew with: from `--theme` or `--theme-file` if given, else the collection's. */
   readonly theme: Collection['theme'];
   readonly inspection: InspectionReport;
   readonly digests: readonly ThemeDigest[];

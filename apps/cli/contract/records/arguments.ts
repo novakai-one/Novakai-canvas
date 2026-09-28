@@ -94,7 +94,7 @@ export type ArgvReading<F extends string> =
   | { readonly kind: 'malformed'; readonly flag: string };
 
 /**
- * A typed `pnpm canvas` line after Node read it: `ArgvReading` with `pnpm canvas`'s flags. A flag
- * is `malformed` when the CLI doesn't have it, or it is missing its value.
+ * A typed `pnpm canvas` line after Node read it: `ArgvReading` with `pnpm canvas`'s flags. The line
+ * is `malformed` when a flag isn't one the CLI has, or is missing its value.
  */
 export type CommandLine = ArgvReading<CanvasFlag>;

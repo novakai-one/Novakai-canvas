@@ -10,7 +10,7 @@ import type { ReadScope } from '../../contract/records/command.js';
 import type { ServiceAnswer } from '../../contract/records/service-answers.js';
 import {
   languageDescriptionSchema,
-  readoutAnswerSchema,
+  readAnswerSchema,
   receiptAnswerSchema,
 } from '../../contract/records/service-answers.js';
 import type { Parser } from '../../contract/schemas.js';
@@ -46,7 +46,7 @@ export function createServiceReads(transport: TransportGet): ServiceReads {
       value(
         observed(
           transport.get('/api/v1/source', sourceQuery(collection, scope)),
-          readoutAnswerSchema,
+          readAnswerSchema,
           'Service returned an invalid source readout',
         ),
       ),

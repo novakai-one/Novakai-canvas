@@ -10,8 +10,9 @@
  * `adapters/service-http/authoring.ts` makes the calls.
  */
 import type { Result } from '../errors.js';
+import type { Receipt } from '../records/foreign.js';
 import type { RetainedRequest } from '../records/retained-request.js';
-import type { ChangePreview, ReceiptLookup } from '../records/service-answers.js';
+import type { ChangePreview } from '../records/service-answers.js';
 
 /**
  * Sends a kept request to Authoring. Each fails with `service-rejected` (the service said no),
@@ -21,8 +22,9 @@ export interface ServiceAuthoring {
   /** Asks Authoring what the change would do, without saving it. The preview prints as JSON. */
   preview(retained: RetainedRequest): Promise<Result<ChangePreview>>;
   /**
-   * Asks Authoring to save the change. Gives back `committed` with the answer's receipt, or `none`
-   * when the answer holds no receipt. The receipt isn't matched to the request here.
+   * Asks Authoring to save the change, and gives back Authoring's receipt. An answer with no
+   * receipt fails with `invalid-response`: the save isn't confirmed, so check `canvas receipt ID`.
+   * `core/authoring/submit.ts` then checks the receipt is for this request.
    */
-  apply(retained: RetainedRequest): Promise<Result<ReceiptLookup>>;
+  apply(retained: RetainedRequest): Promise<Result<Receipt>>;
 }

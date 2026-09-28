@@ -6,11 +6,12 @@
  */
 import type { HttpTransport, WriteRoute } from '../../contract/ports/http-transport.js';
 import type { ServiceAuthoring } from '../../contract/ports/service-authoring.js';
+import type { Receipt } from '../../contract/records/foreign.js';
 import type { RetainedRequest } from '../../contract/records/retained-request.js';
 import type {
   ChangePreview,
-  ServiceAnswer,
   ReceiptLookup,
+  ServiceAnswer,
   SubmitMode,
 } from '../../contract/records/service-answers.js';
 import {
@@ -64,13 +65,13 @@ async function preview(
 }
 
 /**
- * Whether the apply answer carries a committed receipt. Fails as {@link send} or
+ * The committed receipt the apply answer carries. Fails as {@link send} or
  * {@link appliedReceipt} does.
  */
 async function apply(
   transport: TransportPost,
   retained: RetainedRequest,
-): Promise<Result<ReceiptLookup>> {
+): Promise<Result<Receipt>> {
   const answer = await send(transport, retained, 'apply');
   if (!answer.ok) return answer;
   return appliedReceipt(answer.value.value, retained.request.request);
@@ -115,17 +116,28 @@ function receiptFirst(id: RequestId): string {
 
 /**
  * The apply answer's receipt half, checked by Authoring's receipt schema. An answer without one,
- * or with a malformed one, does not confirm the commit: `invalid-response`, check the receipt.
+ * with a malformed one, or with `null` does not confirm the commit: `invalid-response`, check the
+ * receipt.
  */
 function appliedReceipt(
   value: unknown,
   request: RequestId,
-): Result<ReceiptLookup> {
+): Result<Receipt> {
   const answer = appliedAnswerSchema.safeParse(value);
   if (!answer.success)
     return unconfirmedApplyFailure(request, 'Service returned an invalid apply confirmation');
-  const receipt = receiptAnswerSchema.safeParse(answer.data.receipt);
-  if (!receipt.success)
+  const lookup = receiptAnswerSchema.safeParse(answer.data.receipt);
+  if (!lookup.success)
     return unconfirmedApplyFailure(request, 'Service returned an invalid receipt');
-  return success(receipt.data);
+  return committedReceipt(lookup.data, request);
+}
+
+/** The receipt, when the answer holds one. `null` (`none`) confirms nothing: `invalid-response`. */
+function committedReceipt(
+  lookup: ReceiptLookup,
+  request: RequestId,
+): Result<Receipt> {
+  if (lookup.kind === 'none')
+    return unconfirmedApplyFailure(request, 'Apply returned no committed receipt');
+  return success(lookup.receipt);
 }

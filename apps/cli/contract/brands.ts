@@ -15,15 +15,19 @@ import type { assetId, collectionId } from '@novakai/canvas-model';
 import { profileIds } from '@novakai/canvas-language';
 import type { RecipeFamily } from './records/foreign.js';
 
-/** Authoring's IDs and their checks: a saved record, a change request, and a workspace. */
-export { recordId, requestId, workspaceId } from '@novakai/canvas-authoring';
+/**
+ * Authoring's IDs, and the checks for the first two: a saved record, a change request, and a
+ * workspace (the ID stored in its records, not the `--workspace` folder).
+ */
+export { recordId, requestId } from '@novakai/canvas-authoring';
 export type { RecordId, RequestId, WorkspaceId } from '@novakai/canvas-authoring';
 /** Model's ID checks: a font or image, a collection, a section and an object. */
 export { assetId, collectionId, sectionId, objectId } from '@novakai/canvas-model';
 export type { SectionId, ObjectId } from '@novakai/canvas-model';
 /**
  * Checks a pin: `sha256:` then 64 lowercase hex digits. A source names stored bytes this way
- * (`source="sha256:…"`), and so does `recipe instantiate`. Model's check only says yes or no.
+ * (`source="sha256:…"`), and so does `recipe instantiate`. It gives back plain text, not a
+ * checked type.
  */
 export { digest as pinnedDigest } from '@novakai/canvas-model';
 /**

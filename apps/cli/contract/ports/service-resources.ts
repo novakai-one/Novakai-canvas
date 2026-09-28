@@ -41,8 +41,9 @@ export interface ServiceResources {
   /** Stores a kept copy of bytes again, so a retried request finds them. */
   restore(backup: ByteBackup): Promise<Result<void>>;
   /**
-   * Has Templates prepare `admission`, the theme or recipe to save, with its stored fonts and
-   * images. Gives back the key it will be saved under.
+   * Asks the service to work out exactly what saving `admission` (a theme or recipe, with its
+   * stored fonts and images) will store, without saving it. Gives back the key it will be saved
+   * under, and the whole answer for the save request.
    */
   prepare(
     admission: Admission,

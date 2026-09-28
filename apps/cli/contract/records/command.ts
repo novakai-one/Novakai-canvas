@@ -74,6 +74,11 @@ export type ServiceCommand =
       readonly scope: ReadScope;
     } & OutOption)
   | ({ readonly name: 'inspect'; readonly collection: CollectionId } & OutOption)
+  /**
+   * Each takes the ID of a request the CLI kept in its journal. `receipt` shows whether it was
+   * saved. `retry` sends it again. `apply` saves a request that `preview` kept. Neither sends one
+   * already saved.
+   */
   | ({ readonly name: 'receipt' | 'retry' | 'apply'; readonly request: RequestId } & OutOption)
   | ({ readonly name: 'create'; readonly file: FilePath } & RequestOption & OutOption)
   | ({ readonly name: 'theme-admit'; readonly file: FilePath } & RequestOption & OutOption)
@@ -93,10 +98,16 @@ export type ServiceCommand =
       readonly recipe: RecipeHeader;
     } & RequestOption &
       OutOption)
-  /** `expansion`: the saved recipe's pin, and `--namespace`, the new collection's ID. */
+  /**
+   * `recipe instantiate` copies a saved recipe out as source for a new collection. `expansion`
+   * holds which recipe, and the new collection's ID (`--namespace`).
+   */
   | ({ readonly name: 'recipe-instantiate'; readonly expansion: ExpansionRequest } & OutOption);
 
-/** A `profile` command. It runs on this machine alone and never talks to the service. */
+/**
+ * A `profile` command. A profile is a set of rules a collection follows, such as `build-spec@1`.
+ * These run on this machine alone and never talk to the service.
+ */
 export type ProfileCommand =
   | ({ readonly name: 'profile-describe'; readonly profile: ProfileId } & OutOption)
   | ({
@@ -154,5 +165,6 @@ export type ParsedCommand =
   | {
       readonly kind: 'service';
       readonly command: ServiceCommand;
+      /** `--server` and `--workspace`, checked. */
       readonly options: ServerAndWorkspace;
     };

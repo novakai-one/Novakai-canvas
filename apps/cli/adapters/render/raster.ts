@@ -10,7 +10,7 @@ import { initializeRaster } from '@novakai/canvas-export';
 import type { ProviderFault } from '../../contract/records/render-fault.js';
 import type { FilePath } from '../../contract/brands.js';
 import type { RasterEngine } from '../../contract/ports/render-files.js';
-import { nativeFault, type Result } from '../../contract/errors.js';
+import { providerFailure, type Result } from '../../contract/errors.js';
 
 /** Build the raster engine for one repo root. Touches nothing until `prepare` runs. */
 export function createRaster(root: FilePath): RasterEngine {
@@ -33,6 +33,6 @@ async function compile(root: FilePath): Promise<Result<WebAssembly.Module, Provi
     const wasm = await readFile(require.resolve('@resvg/resvg-wasm/index_bg.wasm'));
     return { ok: true, value: await WebAssembly.compile(wasm) };
   } catch (error) {
-    return { ok: false, error: nativeFault(error) };
+    return providerFailure(error);
   }
 }

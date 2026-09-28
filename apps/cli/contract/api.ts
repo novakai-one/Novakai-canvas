@@ -11,9 +11,9 @@
  */
 
 /**
- * `pnpm canvas`: check the typed line, then answer with the help text or run the command.
- * `helpText` is the help text itself. `ServiceCommandDependencies` is every tool a service command
- * may use, such as the service's calls and the file reader.
+ * `pnpm canvas`: check the typed line, then give the help text or run a profile or service command
+ * (`runProfileCommand`, `runServiceCommand`). `ServiceCommandDependencies` is every tool a service
+ * command may use, such as the service's calls and the file reader.
  */
 export { parseCommand } from '../core/commands/parse.js';
 export { helpText } from '../core/commands/help.js';

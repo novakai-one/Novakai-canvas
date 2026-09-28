@@ -23,7 +23,7 @@ import type {
 } from '../../contract/records/foreign.js';
 import type { RenderReport, RenderRequest } from '../../contract/records/render.js';
 import type { RenderFailureSource, RenderFailure } from '../../contract/records/render-failure.js';
-import { renderFaultFailure, nativeFault, success, type Result } from '../../contract/errors.js';
+import { providerFailure, success, type Result } from '../../contract/errors.js';
 import { chosenCollection } from './collection.js';
 import { pinResources } from './pins.js';
 import { renderReport } from './report.js';
@@ -104,7 +104,7 @@ function joinPorts(
 function guarded<T>(
   work: Promise<Result<T, RenderFailureSource>>,
 ): Promise<Result<T, RenderFailureSource>> {
-  return work.catch((error: unknown) => renderFaultFailure(nativeFault(error)));
+  return work.catch((error: unknown) => providerFailure(error));
 }
 
 /** After the close: the render's own failure first, then the close's; otherwise the report. */

@@ -24,9 +24,9 @@ export type RenderFault =
       readonly id: RecipeOrCollectionId;
       readonly matches: number;
     }
-  /** A theme was asked for, but the source isn't a collection. */
+  /** A theme was asked for, but the source is a patch (`patch 1`), not a whole collection. */
   | { readonly code: 'collection-required' }
-  /** A theme was asked for, but the collection has no title. */
+  /** A theme was asked for, but the collection has no title to write the theme after. */
   | { readonly code: 'collection-title-required' }
   | {
       /** A font or image's pin (its `sha256:` digest in the collection) isn't well formed. */

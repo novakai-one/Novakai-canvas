@@ -20,8 +20,8 @@ import type {
 import type { NativeDetail, ProviderFault, RenderFault } from './records/render-fault.js';
 
 /**
- * A mistake the CLI found itself, grouped by where it happens. The last line, `ThemeSourceCode`,
- * holds Templates' two `.theme` codes, passed on as written.
+ * A mistake found on this machine, grouped by where it happens. The CLI finds all of them except
+ * the last line, `ThemeSourceCode`: Templates' two `.theme` codes, passed on as written.
  */
 export type LocalCode =
   // Typed wrong. Nothing was read or sent.
@@ -30,7 +30,7 @@ export type LocalCode =
   | 'invalid-mode' // `--mode` isn't create, replace or patch.
   | 'invalid-revision' // `--revision` isn't a whole number from 0 up.
   | 'invalid-server' // `--server` isn't an `http://127.0.0.1` address.
-  | 'invalid-request' // A request ID isn't one Authoring accepts.
+  | 'invalid-request' // A typed request ID isn't one Authoring accepts.
   | 'unknown-profile' // The profile isn't `build-spec@1`.
   // Files on this machine.
   | 'source-unavailable' // A source, font or image file can't be read.
@@ -49,7 +49,7 @@ export type LocalCode =
   | 'resource-too-large' // The file is over 16 MiB.
   // The source, and what a change needs.
   | 'invalid-source' // Language refused the source. The failure's `source` says why.
-  | 'invalid-input' // A request failed Authoring's check, whether built here or sent back.
+  | 'invalid-input' // A whole change request failed Authoring's check, built here or sent back.
   | 'not-found' // The collection to change doesn't exist.
   | 'already-exists' // The collection to create already exists.
   | 'revision-required' // `replace` or `patch` without `--revision`.
@@ -171,6 +171,7 @@ export function invalidInputFailure(): Result<never, LocalFailure> {
 /**
  * Makes the failure for an apply answer that doesn't confirm the change was saved
  * (`invalid-response`). It may have been saved, so the advice is to check `request`'s receipt.
+ * `message` says what was wrong with the answer, such as "Service returned an invalid receipt".
  */
 export function unconfirmedApplyFailure(
   request: RequestId,
@@ -197,15 +198,16 @@ export function renderFaultFailure<F extends RenderFault>(fault: F): Result<neve
 }
 
 /**
- * Turns an error Node threw from a file, temp-folder or wasm step into a `provider-failed` fault.
+ * Makes the `provider-failed` failure for an error thrown by a file, temp-folder or wasm step.
  * Keeps its message, and its path, OS code (such as `ENOENT`) and syscall when well formed.
  */
-export function nativeFault(thrown: unknown): ProviderFault {
-  return {
+export function providerFailure(thrown: unknown): Result<never, ProviderFault> {
+  const fault: ProviderFault = {
     code: 'provider-failed',
     message: nativeMessage(thrown),
     detail: nativeDetail(thrown),
   };
+  return renderFaultFailure(fault);
 }
 
 /** The error's message as human context; no machine-readable field is invented. */

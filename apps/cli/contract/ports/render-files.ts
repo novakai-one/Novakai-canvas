@@ -34,7 +34,10 @@ export interface InputFiles {
 
 /** The engine that turns a drawing into PNG bytes, loaded from the repo folder. */
 export interface RasterEngine {
-  /** Starts the engine. Fails with `provider-failed`, or with Export's own finding. */
+  /**
+   * Prepares the engine: loads its WebAssembly file and starts it. Fails with `provider-failed`, or
+   * with Export's own finding.
+   */
   prepare(): Promise<Result<void, ProviderFault | ExportDiagnostic>>;
 }
 

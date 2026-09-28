@@ -15,7 +15,7 @@ import type { Result } from '../errors.js';
 export interface ThemeReader {
   /**
    * Reads `.theme` text into the theme it declares and its body, mono and strong fonts. Fails
-   * with Templates' `invalid-theme` or `duplicate-token`, whichever it finds first.
+   * with Templates' `invalid-theme`, or `duplicate-token` (one theme setting written twice).
    */
   read(themeText: string): Result<ThemeSource, ThemeSourceFailure>;
 }

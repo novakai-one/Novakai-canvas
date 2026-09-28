@@ -30,7 +30,10 @@ export type StagedResource =
   | { readonly kind: 'pinned'; readonly alias: ResourceAlias; readonly digest: AssetDigest }
   | { readonly kind: 'local'; readonly alias: ResourceAlias; readonly input: StageInput };
 
-/** A font or image after staging: its name, and a kept copy of the bytes the service holds. */
+/**
+ * A font or image after staging: its name, and a copy of the bytes the service holds, kept so a
+ * retry can put them back.
+ */
 export interface StagedBackup {
   readonly alias: ResourceAlias;
   readonly backup: ByteBackup;

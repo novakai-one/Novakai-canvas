@@ -11,7 +11,7 @@ import { openAssets, type AssetError, type Assets } from '@novakai/canvas-assets
 import type { ProviderFault } from '../../contract/records/render-fault.js';
 import { filePath, type FilePath } from '../../contract/brands.js';
 import type { TempAssetStore } from '../../contract/ports/render-assets.js';
-import { renderFaultFailure, nativeFault, success, type Result } from '../../contract/errors.js';
+import { providerFailure, success, type Result } from '../../contract/errors.js';
 
 /** What opening or closing the store fails with. */
 type StoreFailure = ProviderFault | AssetError;
@@ -31,7 +31,7 @@ async function created(): Promise<Result<FilePath, ProviderFault>> {
   try {
     return success(filePath.parse(await mkdtemp(join(tmpdir(), 'canvas-render-'))));
   } catch (error) {
-    return renderFaultFailure(nativeFault(error));
+    return providerFailure(error);
   }
 }
 
@@ -71,6 +71,6 @@ async function removed(path: FilePath): Promise<Result<void, ProviderFault>> {
     await rm(path, { recursive: true, force: true });
     return success(undefined);
   } catch (error) {
-    return renderFaultFailure(nativeFault(error));
+    return providerFailure(error);
   }
 }

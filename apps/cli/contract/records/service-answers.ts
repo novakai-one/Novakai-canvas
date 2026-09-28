@@ -40,7 +40,7 @@ export type SubmitMode = 'preview' | 'apply';
 
 /** An object placed or a wire routed by hand. `replace` leaves it where it is. */
 export interface ManualTarget {
-  /** Where it sits, as the service prints it, such as `@section/@object`. Passed on unchanged. */
+  /** Its address, such as `@section/@object`, as the service prints it. Passed on unchanged. */
   readonly target: string;
   readonly kind: 'placement' | 'route';
   /** Whether a person locked it, so automatic layout never moves it. */
@@ -48,7 +48,7 @@ export interface ManualTarget {
 }
 
 /** `read`'s answer: one collection's source at one revision, and what was placed by hand. */
-export interface Readout {
+export interface ReadAnswer {
   readonly source: string;
   readonly collection: CollectionId;
   readonly revision: CollectionRevision;
@@ -57,18 +57,20 @@ export interface Readout {
 }
 
 /**
- * Whether the service's answer holds a receipt for the request: `committed`, with Authoring's
- * receipt, or `none` when the answer holds no receipt.
+ * Whether a request was saved: `committed`, with Authoring's receipt, or `none` when the service
+ * holds no receipt for it.
  */
 export type ReceiptLookup =
   { readonly kind: 'committed'; readonly receipt: Receipt } | { readonly kind: 'none' };
 
 /**
- * The answer to preparing a theme or recipe (a "preset", in Templates' word) for saving: the key
- * it will be saved under (`preset:<digest>`), and the whole answer, which is sent on unchanged.
+ * The answer to preparing a theme or recipe (a "preset", in Templates' word). Preparing works out
+ * exactly what saving it will store, without saving anything.
  */
 export interface PresetPreparation {
+  /** The key it will be saved under (`preset:<digest>`). */
   readonly key: { readonly kind: 'preset'; readonly id: RecordId };
+  /** The whole answer, key included, sent back unchanged in the save request. */
   readonly document: PresetDocument;
 }
 
@@ -85,8 +87,8 @@ export const languageDescriptionSchema = z.json().brand<'LanguageDescription'>()
 export const changePreviewSchema = z.json().brand<'ChangePreview'>();
 
 /**
- * Checks the whole answer to preparing a theme or recipe, which is sent on unchanged. Only checked
- * to be JSON; {@link preparedAnswerSchema} checks the key the CLI reads from it.
+ * Checks the whole answer to preparing a theme or recipe, which goes back unchanged in the save
+ * request. Only checked to be JSON; {@link preparedAnswerSchema} checks the key the CLI reads.
  */
 export const presetDocumentSchema = z.json().brand<'PresetDocument'>();
 
@@ -118,15 +120,18 @@ const readScopeSchema = z
   .default({ kind: 'all' });
 
 /** Checks `read`'s answer (`/api/v1/source`). With no `manual` list, nothing was placed by hand. */
-export const readoutAnswerSchema = z.object({
+export const readAnswerSchema = z.object({
   source: z.string(),
   collection: collectionId,
   revision: collectionRevision,
   scope: readScopeSchema,
   manual: z.array(manualTargetSchema).readonly().default([]),
-}) satisfies z.ZodType<Readout>;
+}) satisfies z.ZodType<ReadAnswer>;
 
-/** Checks that an apply answer (`/authoring/apply`) has a `receipt`, which is checked apart. */
+/**
+ * Checks that an apply answer (`/authoring/apply`) has a `receipt` field. The receipt itself is
+ * checked next, by {@link receiptAnswerSchema}.
+ */
 export const appliedAnswerSchema = z.looseObject({ receipt: z.unknown() });
 
 /**

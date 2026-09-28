@@ -6,8 +6,8 @@
  * font and image store, Language, the Design System, Templates and the service's layout.
  *
  * This file builds them for one render and hands them over as one bundle of parts, `RenderPorts`.
- * If opening the render's environment (`RenderPorts.open`) fails part way, it closes the store it
- * made. A render never changes a saved collection.
+ * The parts that share the throwaway store are opened fresh for each render (`RenderPorts.open`);
+ * if that fails part way, the store is closed again. A render never changes a saved collection.
  */
 import { join } from 'node:path';
 import {
@@ -34,7 +34,7 @@ import type { RenderOutput } from '../ports/render-output.js';
 import type { RenderRequest } from '../records/render.js';
 import type { RenderFailureSource } from '../records/render-failure.js';
 import type { HeadlessTools, Language } from '../records/foreign.js';
-import { renderFaultFailure, nativeFault, success, type Result } from '../errors.js';
+import { providerFailure, success, type Result } from '../errors.js';
 import { createLanguageWithModel } from './language.js';
 import { createThemeReader } from './theme-reader.js';
 
@@ -108,7 +108,7 @@ async function environmentIn(
 
 /** A step that threw instead of returning its failure, as `provider-failed` with its evidence. */
 function thrown(error: unknown): Result<never, RenderFailureSource> {
-  return renderFaultFailure(nativeFault(error));
+  return providerFailure(error);
 }
 
 /** `error` as the outcome once `store` is closed; a failed close is not reported over it. */

@@ -17,8 +17,9 @@ export interface RenderSources {
   /** Parses one source's text with Language. Fails with Language's findings. */
   parse(source: string): Result<ParsedSource, RenderFailureSource>;
   /**
-   * Turns `source` into a new collection, with its font, image and theme names filled in from
-   * `resources`. Fails with Language's findings.
+   * Turns `source` text into a new collection, with its font, image and theme names filled in from
+   * `resources`. It parses the text itself, so `parse` need not run first. Fails with Language's
+   * findings.
    */
   lower(
     source: string,

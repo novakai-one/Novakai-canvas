@@ -29,8 +29,8 @@ export interface CollectionProfiles {
   ): string;
 
   /**
-   * Checks a parsed source against the profile: `passed`, `failed` (with findings) or
-   * `unsupported-source`.
+   * Checks a parsed source against the profile: `passed`, `failed` (with findings), or
+   * `unsupported-source` (a patch, not a whole collection, so no rule ran).
    */
   lint(
     profile: ProfileId,

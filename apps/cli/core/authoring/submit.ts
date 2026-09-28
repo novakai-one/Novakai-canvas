@@ -6,7 +6,7 @@
  */
 import { restoreResources } from '../resources/restore.js';
 import type { RestoreDependencies } from '../resources/restore.js';
-import { appliedReceipt } from '../reads/receipt.js';
+import { matchedReceipt } from '../reads/receipt.js';
 import { prepare } from './prepare.js';
 import type { PrepareDependencies } from './prepare.js';
 import type { ChangeCommand } from '../../contract/records/command.js';
@@ -94,14 +94,14 @@ async function previewed(
 }
 
 /**
- * The committed receipt of this request. Fails as the apply does, or with `invalid-response`
- * when the answer carries no receipt or one for another request.
+ * The committed receipt of this request. Fails as the apply does (`invalid-response` when the
+ * answer carries no receipt), or with `invalid-response` for a receipt of another request.
  */
 async function applied(
   retained: RetainedRequest,
   authoring: ServiceAuthoring,
 ): Promise<Result<string>> {
-  const lookup = await authoring.apply(retained);
-  if (!lookup.ok) return lookup;
-  return appliedReceipt(lookup.value, retained.request.request);
+  const receipt = await authoring.apply(retained);
+  if (!receipt.ok) return receipt;
+  return matchedReceipt(receipt.value, retained.request.request);
 }

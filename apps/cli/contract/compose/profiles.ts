@@ -17,8 +17,9 @@ import type { ProfileCommand } from '../records/command.js';
 import { createLanguageWithModel } from './language.js';
 
 /**
- * Runs one `profile` command with real files, and gives back the text to print. Fails as the
- * command does.
+ * Runs one `profile` command with real files, and gives back the text to print. Fails when the lint
+ * file can't be read or doesn't parse, when it breaks the profile's rules, or when the `--out` file
+ * can't be written.
  */
 export async function runProfile(command: ProfileCommand): Promise<Result<string>> {
   const files = createLocalFiles();

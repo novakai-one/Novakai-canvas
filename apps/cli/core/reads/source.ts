@@ -3,15 +3,15 @@
  * authorable. Pure. A partial read and kept manual geometry are named in comments above it.
  */
 import type { ReadScope } from '../../contract/records/command.js';
-import type { ManualTarget, Readout } from '../../contract/records/service-answers.js';
+import type { ManualTarget, ReadAnswer } from '../../contract/records/service-answers.js';
 
 /** The notice printed above a section or object read. */
 const partialNotice =
   '# Read-only partial context; referenced objects/views and manual geometry may be omitted. Read those IDs separately or use the full collection.\n';
 
 /** The scope notice, the `# ID revision=N` comment and any manual-geometry note, then the source. */
-export function sourceText(readout: Readout): string {
-  return `${scopeNotice(readout.scope)}# ${readout.collection} revision=${readout.revision}${manualNote(readout.manual)}\n${readout.source}`;
+export function sourceText(answer: ReadAnswer): string {
+  return `${scopeNotice(answer.scope)}# ${answer.collection} revision=${answer.revision}${manualNote(answer.manual)}\n${answer.source}`;
 }
 
 /** Nothing for a whole-collection read; the partial-context notice otherwise. */

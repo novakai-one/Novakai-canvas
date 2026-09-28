@@ -31,8 +31,8 @@ import { runService } from './compose/service.js';
  * Runs one `pnpm canvas` command, from the typed words to the text to print.
  *
  * `defaultWorkspace` is the folder used when `--workspace` isn't typed, as plain text. Fails as
- * the command does, or with `cli-unavailable` if `defaultWorkspace` is empty text or anything
- * throws. Never rejects.
+ * the command does, or with `cli-unavailable` if `defaultWorkspace` is empty text or a step
+ * throws. The throw is caught here and never passed on.
  */
 export async function runCanvas(
   argv: readonly string[],
@@ -57,7 +57,7 @@ const cliUnavailable: FailureInput = {
  *
  * `repoRoot` is the repo folder the shipped files are in, as plain text. Fails with
  * `invalid-arguments` before anything is read, `render-unavailable` if the render can't start (or
- * `repoRoot` is empty text), or `render-failed`. Never rejects or changes a saved collection.
+ * `repoRoot` is empty text), or `render-failed`. Never throws or changes a saved collection.
  */
 export async function runRender(
   argv: readonly string[],
