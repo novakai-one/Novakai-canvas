@@ -223,6 +223,7 @@ export {
   released,
   settledCaptures,
   withRequest,
+  type CaptureIdMap,
   type CaptureIds,
   type CreationCapture,
   type CreationCaptures,
@@ -241,4 +242,5 @@ export {
   diagramTarget,
   groupChanges,
   objectChanges,
+  type CreationContext,
 } from '../core/creation/records.js';

@@ -35,6 +35,12 @@ export interface AddGroupDraft {
   readonly title: string;
 }
 
+/** What the Object form's submit sends: the draft with its diagram chosen. */
+export type AddObjectRequest = AddObjectDraft & { readonly section: SectionId };
+
+/** What the Group form's submit sends: the draft with its diagram chosen. */
+export type AddGroupRequest = AddGroupDraft & { readonly section: SectionId };
+
 /** The session's Add state: one draft per form, the form problem, and the shared lock. */
 export interface CreationView {
   readonly diagram: AddDiagramDraft;
@@ -59,11 +65,11 @@ export interface SubmitView {
 }
 
 /** One Add form: its draft, the shared lock, its submit button, and the request a submit sends. */
-export interface FormView<Draft> {
+export interface FormView<Draft, Sent extends Draft = Draft> {
   readonly draft: Draft;
   readonly busy: boolean;
   readonly submit: SubmitView;
-  readonly request: Draft;
+  readonly request: Sent;
 }
 
 /** An object the Object form can reuse; one already in the target diagram is disabled. */
@@ -74,7 +80,7 @@ export interface ReuseChoice {
 }
 
 /** The Object form over its target diagram. `newModule` is false while an object is reused. */
-export interface ObjectFormView extends FormView<AddObjectDraft> {
+export interface ObjectFormView extends FormView<AddObjectDraft, AddObjectRequest> {
   readonly sections: readonly Section[];
   readonly section: SectionId;
   readonly reuse: readonly ReuseChoice[];
@@ -84,7 +90,7 @@ export interface ObjectFormView extends FormView<AddObjectDraft> {
 }
 
 /** The Group form over its target diagram. */
-export interface GroupFormView extends FormView<AddGroupDraft> {
+export interface GroupFormView extends FormView<AddGroupDraft, AddGroupRequest> {
   readonly sections: readonly Section[];
   readonly section: SectionId;
   readonly findRoom: boolean;

@@ -1,5 +1,6 @@
 import type { Section, RenderDocument, Target } from '../../contract/records/owners.js';
-import { diagnostic, type Diagnostic } from '../../contract/errors.js';
+import type { Diagnostic } from '../../contract/errors.js';
+import { staleTarget } from './stale-target.js';
 /** Internal edit rejection becomes a typed plan failure; the host preserves the recoverable Canvas draft. */
 export class EditRejected extends Error {
   /** Keep stable correction data while unwinding a multi-target plan atomically. */
@@ -9,13 +10,7 @@ export class EditRejected extends Error {
 }
 /** Missing targets never create replacement records implicitly. Host refreshes and lets the human compare their draft. */
 export function missing(target: string): never {
-  throw new EditRejected(
-    diagnostic(
-      'stale-target',
-      `This diagram target is no longer available: ${target}`,
-      'Keep the draft and compare it with the current collection.',
-    ),
-  );
+  throw new EditRejected(staleTarget(target, 'keep-draft'));
 }
 /** Resolve the section by its explicit canonical identity, never by decoding a generated scene ID. */
 export function sectionFor(

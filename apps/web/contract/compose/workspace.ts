@@ -43,7 +43,7 @@ export interface WorkspaceParts {
   readonly panels: SidePanels;
   readonly retention: DraftRetention;
   readonly navigation: WorkspaceNavigation;
-  /** The one ID source: collection, folder, diagram, object, group and definition IDs. */
+  /** The one ID source: collection, folder, diagram, object, group and relationship IDs. */
   readonly ids: IdSource;
   /** Fresh random text (a UUID) for request IDs until they come from `ids` (plan B4). */
   readonly random: () => string;
@@ -81,7 +81,7 @@ export function composeWorkspace(parts: WorkspaceParts): WorkspaceController {
     inspector: (callbacks) =>
       createInspectorSession({ retention, read: readInspectorDrafts, ...callbacks }),
     definitions: (callbacks) =>
-      createDefinitionSession({ retention, read: readDefinitionDrafts, ids, ...callbacks }),
+      createDefinitionSession({ retention, read: readDefinitionDrafts, ...callbacks }),
     source: (callbacks) =>
       createSourceController({
         inputs,

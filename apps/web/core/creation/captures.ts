@@ -3,8 +3,10 @@
  * snapshot, collection and generation it is added against; the request built from them is kept, so
  * a retry resends the same body. While any capture holds a request, every form is locked. A
  * confirmed or dismissed request releases its capture, and so does a refused or unsent one; an
- * uncertain one keeps it, so a retry cannot add the item twice. Pure; the session passes in the
- * ID source, builds the requests and publishes.
+ * uncertain one keeps it, so a retry cannot add the item twice. Pure except for one call:
+ * `captureFor` calls the injected ID source once, when it makes a capture (core still mints here;
+ * M21–M24 move minting out, so the ID arrives on an event). The session builds the requests and
+ * publishes.
  */
 import type { CreationKind } from '../../contract/records/creation.js';
 import type { Collection, Request, Snapshot } from '../../contract/records/owners.js';

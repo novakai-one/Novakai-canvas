@@ -35,7 +35,10 @@ export type WorkspaceSequence = Snapshot['sequence'];
 /** A collection's revision (Model). An alias, so a later Model brand arrives unchanged. */
 export type CollectionRevision = Collection['revision'];
 
-/** A Canvas target ID. Only `core/editing/targets.ts` and `placements.ts` turn it into a Model ID. */
+/**
+ * A Canvas target ID. Canvas target and drop text becomes a Model ID only in
+ * `core/editing/targets.ts`, `placements.ts` and `palette-drop.ts`, by matching collection records.
+ */
 export type TargetId = Target['id'];
 
 /** A Canvas scene index key. */

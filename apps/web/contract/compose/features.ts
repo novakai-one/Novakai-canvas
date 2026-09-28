@@ -2,7 +2,8 @@
  * Declarative feature registration: the side-panel sections each tab offers, and the panel
  * definitions that give each section its default placement. Feature components do not import
  * each other; adding a feature registers its renderer and default ID placement here. Pure
- * assembly: no I/O and no page globals; composition hands in the ID source for new content IDs.
+ * assembly: no I/O and no page globals; composition hands in the ID source for new definition
+ * and content IDs.
  */
 import { createElement, type ComponentType, type ReactElement } from 'react';
 import type { FeatureProps, ThemeSelectorProps } from '../react-types.js';
@@ -41,13 +42,13 @@ export interface FeatureParts {
     PanelController,
     'subscribe' | 'getSnapshot' | 'setInterfaceVisibility'
   >;
-  /** New content block IDs for the object inspector. */
-  readonly ids: Pick<IdSource, 'descendantId'>;
+  /** New definition IDs for the Definitions panel and content block IDs for the object inspector. */
+  readonly ids: Pick<IdSource, 'definitionId' | 'descendantId'>;
 }
 
 /**
  * Concrete side-panel registration is declarative; individual feature components do not import
- * each other. Cannot fail: a content ID the ID source cannot make is reported by the inspector.
+ * each other. Cannot fail: an ID the ID source cannot make is reported by the panel that asked.
  */
 export function featureSections({
   design,
@@ -75,7 +76,11 @@ export function featureSections({
       tab: 'browse',
       id: 'definitions',
       title: 'Definitions',
-      Content: createDefinitionsEditor({ ...design, Expression: createExpressionEditor(design) }),
+      Content: createDefinitionsEditor({
+        ...design,
+        Expression: createExpressionEditor(design),
+        nextDefinitionId: ids.definitionId,
+      }),
     },
     {
       tab: 'inspect',

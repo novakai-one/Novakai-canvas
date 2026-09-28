@@ -16,7 +16,7 @@ import type { Receipt } from '../../contract/records/owners.js';
 import type { WorkspaceController, WorkspaceView } from '../../contract/records/workspace.js';
 import type { ActiveDiagram } from '../../contract/records/active-diagram.js';
 import type { WorkspaceScope } from '../../contract/records/workspace-scope.js';
-import type { CollectionId, TransportGeneration } from '../../contract/brands.js';
+import type { CollectionId, SectionId, TransportGeneration } from '../../contract/brands.js';
 import type { WorkspaceBindings } from '../../contract/ports/workspace.js';
 import type {
   Request,
@@ -134,12 +134,14 @@ import {
   readGeneration,
   currentGeneration,
   type AdmittedRender,
+  type CaptureIdMap,
   type CaptureIds,
   type CollectionDraft,
   type ConnectionCapture,
   type ConnectionReview,
   type CreationCapture,
   type CreationCaptures,
+  type CreationContext,
   type HistorySlot,
   type LatestSnapshot,
   type MovementHeld,
@@ -153,6 +155,10 @@ import { connectionPolicy } from '../../contract/workspace-model.js';
 interface RenderRequest extends RenderTicket {
   readonly token: number;
   readonly job: AbortController;
+}
+/** The diagram an object or group is added to, and the form's capture made there. */
+interface CapturedTarget<K extends 'object' | 'group'> extends CreationContext {
+  readonly capture: CreationCapture<CaptureIdMap[K]>;
 }
 /** Ephemeral orchestration state contains immutable snapshots. Authoring is the sole owner of committed diagram data. */
 export function createWorkspaceController(bindings: WorkspaceBindings): WorkspaceController {
@@ -1126,46 +1132,47 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   }
   /** New objects are created once; reuse only adds a section-local appearance of the same ID. */
   async function addObject(draft: AddObjectDraft): Promise<Result<Receipt>> {
-    const target = capturedContext('object', draft.section);
-    if (!target.ok) return retainCreationFailure(target);
+    const captured = capturedTarget('object', draft.section);
+    if (!captured.ok) return retainCreationFailure(captured);
     update({
       creation: { ...state.creation, object: draft, problem: null, busy: true, adding: 'object' },
     });
-    const changes = objectChanges(target.value, draft, target.value.capture.id);
+    const changes = objectChanges(captured.value, draft, captured.value.capture.id);
     if (!changes.ok) return retainCreationFailure(changes);
-    const result = await submitCreation('object', target.value.capture, changes.value);
+    const result = await submitCreation('object', captured.value.capture, changes.value);
     return finishCreation(result, 'object');
   }
   /** A group draft is checked before the form turns busy, so a refused draft never shows as adding. */
   async function addGroup(draft: AddGroupDraft): Promise<Result<Receipt>> {
-    const target = capturedContext('group', draft.section);
-    if (!target.ok) return retainCreationFailure(target);
-    const changes = groupChanges(target.value.section, draft, target.value.capture.id);
+    const captured = capturedTarget('group', draft.section);
+    if (!captured.ok) return retainCreationFailure(captured);
+    const changes = groupChanges(captured.value.section, draft, captured.value.capture.id);
     if (!changes.ok) return retainCreationFailure(changes);
     update({
       creation: { ...state.creation, group: draft, problem: null, busy: true, adding: 'group' },
     });
-    const result = await submitCreation('group', target.value.capture, changes.value);
+    const result = await submitCreation('group', captured.value.capture, changes.value);
     return finishCreation(result, 'group');
   }
   /** The Diagram form's capture while it belongs to the open collection. Fails with
    * `id-unavailable` or `invalid-creation`. */
-  function capturedDiagram(active: ActiveDiagram) {
+  function capturedDiagram(active: ActiveDiagram): Result<CreationCapture<SectionId>> {
     const capture = captureCreation('diagram', active);
     if (!capture.ok) return capture;
     return capturedIn(capture.value, active);
   }
   /** The diagram an object or group goes to, with the form's capture there. Fails with
    * `invalid-creation` or `id-unavailable`. */
-  function capturedContext<K extends 'object' | 'group'>(
+  function capturedTarget<K extends 'object' | 'group'>(
     kind: K,
-    section: AddObjectDraft['section'],
-  ) {
+    section: SectionId | null,
+  ): Result<CapturedTarget<K>> {
     const context = creationContext(state.active, creationCaptures[kind], section);
     if (!context.ok) return context;
     const capture = captureCreation(kind, context.value.active);
     if (!capture.ok) return capture;
-    return { ok: true as const, value: { ...context.value, capture: capture.value } };
+    const captured: CapturedTarget<K> = { ...context.value, capture: capture.value };
+    return { ok: true, value: captured };
   }
   /** The first submit builds the request and keeps it on the capture; a retry resends that same body. */
   async function submitCreation(
@@ -1280,7 +1287,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   }
   async function submitConnectionRequest(review: ConnectionReview): Promise<Result<Receipt>> {
     const draft = review.capture.draft;
-    const request = connectionRequest(connectionPolicy, bindings, draft, review.label);
+    const request = reviewedConnectionRequest(review);
     if (!request.ok) {
       update({
         connection: connectionProblem(state.connection, draft, request.error),
@@ -1298,6 +1305,15 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
         problem: result.error,
       });
     return result;
+  }
+  /** The reviewed connection's create request with a new relationship ID from the ID source.
+   * Fails with `id-unavailable` or as `connectionRequest` does. */
+  function reviewedConnectionRequest(review: ConnectionReview): Result<Request> {
+    const relationship = bindings.ids.relationshipId();
+    if (!relationship.ok) return relationship;
+    const draft = review.capture.draft;
+    const builders = bindings.inputs;
+    return connectionRequest(connectionPolicy, builders, draft, review.label, relationship.value);
   }
   function cancelConnection(): void {
     if (connectionCapture?.request !== null) return;
@@ -1339,7 +1355,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   function captureCreation<K extends CreationKind>(
     kind: K,
     activeDiagram: ActiveDiagram,
-  ) {
+  ): Result<CreationCapture<CaptureIdMap[K]>> {
     const capture = captureFor(creationCaptures, kind, activeDiagram, creationIds[kind]);
     if (capture.ok) creationCaptures = holding(creationCaptures, kind, capture.value);
     return capture;

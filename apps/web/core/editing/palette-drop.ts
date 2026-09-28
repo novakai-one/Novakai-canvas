@@ -8,6 +8,7 @@ import type { AddObjectDraft } from '../../contract/records/creation.js';
 import type { DropTarget, Section } from '../../contract/records/owners.js';
 import type { GroupId, SectionId } from '../../contract/brands.js';
 import { diagnostic, type Diagnostic } from '../../contract/errors.js';
+import { staleTarget } from './stale-target.js';
 
 /** Object types the canvas palette offers. */
 export const palette = [{ kind: 'module', label: 'Module' }] as const;
@@ -43,10 +44,9 @@ function dropInto(
   target: DropTarget,
 ): PaletteDrop {
   const section = sections.find((entry) => entry.id === target.section);
-  if (section === undefined) return staleDrop(target.section);
+  if (section === undefined) return refused(staleTarget(target.section, 'drop-again'));
   // Tree sections are outlines built from parent links; the Add forms exclude them too.
-  if (section.mode === 'tree')
-    return { kind: 'refuse', problem: treeRefusal(item.label, section.title) };
+  if (section.mode === 'tree') return refused(treeRefusal(item.label, section.title));
   return addInto(item, section, target.group);
 }
 
@@ -58,7 +58,7 @@ function addInto(
 ): PaletteDrop {
   if (group === null) return added(item, section.id, null);
   const found = section.groups.find((entry) => entry.id === group);
-  if (found === undefined) return staleDrop(group);
+  if (found === undefined) return refused(staleTarget(group, 'drop-again'));
   return added(item, section.id, found.id);
 }
 
@@ -72,13 +72,8 @@ function added(
   return { kind: 'add', draft: { section, group, kind: item.kind, label, reuseObject: null } };
 }
 
-/** `stale-target`: the Canvas named a diagram or group the collection no longer has. */
-function staleDrop(target: string): PaletteDrop {
-  const problem = diagnostic(
-    'stale-target',
-    `This diagram target is no longer available: ${target}`,
-    'Nothing was changed. Drop it again on the current diagram.',
-  );
+/** A refused drop, with the reason shown to the person. */
+function refused(problem: Diagnostic): PaletteDrop {
   return { kind: 'refuse', problem };
 }
 

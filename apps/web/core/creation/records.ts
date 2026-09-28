@@ -36,7 +36,7 @@ export function diagramTarget(
   snapshot: Snapshot | null,
   draft: AddDiagramDraft,
 ): Result<ActiveDiagram> {
-  if (active === null || snapshot === null) return creationFailure('Open a collection first.');
+  if (active === null || snapshot === null) return noCollection();
   return namedDiagram(active, draft);
 }
 
@@ -45,7 +45,8 @@ export function capturedIn<Id>(
   capture: CreationCapture<Id>,
   active: ActiveDiagram,
 ): Result<CreationCapture<Id>> {
-  return capturedElsewhere(capture, active) ? foreignDraft() : { ok: true, value: capture };
+  if (capturedElsewhere(capture, active)) return foreignDraft();
+  return { ok: true, value: capture };
 }
 
 /** The new diagram: an empty grid placed after the collection's existing diagrams. */
@@ -62,7 +63,7 @@ export function creationContext(
   capture: CreationCapture<unknown> | null,
   section: SectionId | null,
 ): Result<CreationContext> {
-  if (active === null) return creationFailure('Open a collection first.');
+  if (active === null) return noCollection();
   return capturedContext(active, capture, section);
 }
 
@@ -102,9 +103,14 @@ function namedDiagram(
   active: ActiveDiagram,
   draft: AddDiagramDraft,
 ): Result<ActiveDiagram> {
-  return draft.title.trim().length === 0
-    ? creationFailure('Give the diagram a name before adding it.')
-    : { ok: true, value: active };
+  if (draft.title.trim().length === 0)
+    return creationFailure('Give the diagram a name before adding it.');
+  return { ok: true, value: active };
+}
+
+/** No collection is open. */
+function noCollection(): Extract<Result<never>, { ok: false }> {
+  return creationFailure('Open a collection first.');
 }
 
 /** The draft was captured in another collection. */
@@ -137,9 +143,8 @@ function capturedContext(
   section: SectionId | null,
 ): Result<CreationContext> {
   if (capture === null) return contextIn(active, section);
-  return capturedElsewhere(capture, active)
-    ? foreignDraft()
-    : contextIn(asCaptured(active, capture), section);
+  if (capturedElsewhere(capture, active)) return foreignDraft();
+  return contextIn(asCaptured(active, capture), section);
 }
 
 /** The open diagram with the capture's snapshot, generation and collection. */
@@ -183,9 +188,8 @@ function existingObject(
   id: ObjectId,
 ): Result<DiagramObject> {
   const object = objects.find((item) => item.id === id);
-  return object === undefined
-    ? creationFailure('Choose an existing object to reuse.')
-    : { ok: true, value: object };
+  if (object === undefined) return creationFailure('Choose an existing object to reuse.');
+  return { ok: true, value: object };
 }
 
 /** A new neutral, medium object with no content. */
@@ -228,7 +232,8 @@ function appearanceFor(
   object: ObjectId,
   group: GroupId | null,
 ): Appearance {
-  return group === null ? { object, detail: 'full' } : { object, detail: 'full', group };
+  if (group === null) return { object, detail: 'full' };
+  return { object, detail: 'full', group };
 }
 
 /** A new object is created before the diagram showing it is replaced; a reused one is not. */
@@ -238,9 +243,8 @@ function objectRecords(
   section: Section,
 ): readonly Change[] {
   const appearance: Change = { op: 'replace', target: 'sections', value: section };
-  return reuseObject === null
-    ? [{ op: 'create', target: 'objects', value: object }, appearance]
-    : [appearance];
+  if (reuseObject !== null) return [appearance];
+  return [{ op: 'create', target: 'objects', value: object }, appearance];
 }
 
 /** A neutral panel group laid out like its diagram. */

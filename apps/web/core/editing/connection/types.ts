@@ -9,7 +9,6 @@ import type {
   DiagramObject,
   EditIntent,
   Endpoint,
-  Relationship,
   Section,
 } from '../../../contract/records/owners.js';
 import type { MemberEndpointKind } from '../../../contract/records/owners.js';
@@ -46,7 +45,7 @@ export type EndpointKindTable = Readonly<
 >;
 
 /**
- * Model's connection policy and ID grammars. Web core imports no capability's runtime, so the
+ * Model's connection policy and member-ID grammar. Web core imports no capability's runtime, so the
  * caller (an adapter) reads Model's tables and injects them here.
  */
 export interface ConnectionPolicy {
@@ -68,6 +67,4 @@ export interface ConnectionPolicy {
   readonly callable: (collection: Collection, endpoint: Endpoint) => unknown;
   /** Model's member-ID grammar. */
   readonly descendantId: IdGrammar<NonNullable<Endpoint['member']>>;
-  /** Model's relationship-ID grammar. */
-  readonly relationshipId: IdGrammar<Relationship['id']>;
 }

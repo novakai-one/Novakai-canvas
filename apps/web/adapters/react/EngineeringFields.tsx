@@ -148,14 +148,10 @@ export function createEngineeringFields({
   return EngineeringFields;
 }
 
-function parameterValue(
-  parameter:
-    | string
-    | {
-        readonly name: string;
-        readonly type: string | { readonly kind: 'definition'; readonly id: string };
-      },
-): string {
+/** One signature parameter as Model types it: authored text, or a name with a type or definition. */
+type SignatureParameter = Extract<ContentBlock, { kind: 'signature' }>['parameters'][number];
+
+function parameterValue(parameter: SignatureParameter): string {
   if (typeof parameter === 'string') return parameter;
   return `${parameter.name}: ${typeof parameter.type === 'string' ? parameter.type : `@${parameter.type.id}`}`;
 }

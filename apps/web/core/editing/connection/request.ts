@@ -1,28 +1,33 @@
 /*
- * Connection request assembly: a reviewed draft becomes one relationship record (its minted ID
- * checked against the grammar, cardinalities on associations only) and the create request built
- * through the workspace bindings' model input — one relationship, one wire appearance.
+ * Connection request assembly: a reviewed draft becomes one relationship record (the ID the caller
+ * took from the ID source, cardinalities on associations only) and the create request built by
+ * the model request builder — one relationship, one wire appearance. Pure; the session takes the
+ * ID, sends the request and owns its recovery.
  */
 import type { Result } from '../../../contract/errors.js';
-import type { WorkspaceBindings } from '../../../contract/ports/workspace.js';
+import type { RequestBuilders } from '../../../contract/ports/request-builders.js';
 import type { Change, Relationship, Request, Section } from '../../../contract/records/owners.js';
 import type { Cardinality, ConnectionDraft } from '../../../contract/records/connection.js';
+import type { RelationshipId } from '../../../contract/brands.js';
 import type { ConnectionPolicy, RelationshipEndpoints } from './types.js';
-import { connectionFailure } from './failure.js';
 import { relationshipEndpoint } from './endpoints.js';
 
-/** Builds the create request for a reviewed draft: one relationship, one wire appearance. */
+/**
+ * Builds the create request for a reviewed draft: one relationship with the ID `id`, one wire
+ * appearance. Fails as the endpoint checks do (`invalid-edit`) or as the model builder does.
+ */
 export function connectionRequest(
   policy: ConnectionPolicy,
-  bindings: WorkspaceBindings,
+  builders: Pick<RequestBuilders, 'model'>,
   draft: ConnectionDraft,
   label: string,
+  id: RelationshipId,
 ): Result<Request> {
-  const relationship = relationshipFor(policy, draft, label);
+  const relationship = relationshipFor(policy, draft, label, id);
   if (!relationship.ok) {
     return relationship;
   }
-  return bindings.inputs.model(
+  return builders.model(
     draft.base,
     draft.collection.id,
     relationshipChanges(draft, relationship.value),
@@ -30,17 +35,18 @@ export function connectionRequest(
   );
 }
 
-/** The relationship a draft describes; its minted ID is checked against the grammar. */
+/** The relationship a draft describes, once both endpoints resolve. */
 function relationshipFor(
   policy: ConnectionPolicy,
   draft: ConnectionDraft,
   label: string,
+  id: RelationshipId,
 ): Result<Relationship> {
   const endpoints = relationshipEndpoints(policy, draft);
   if (!endpoints.ok) {
     return endpoints;
   }
-  return assembleRelationship(policy, draft, label, endpoints.value);
+  return { ok: true, value: relationshipRecord(draft, label, endpoints.value, id) };
 }
 
 /** Source and target as Model addresses them, each member ID checked against its grammar. */
@@ -59,30 +65,12 @@ function relationshipEndpoints(
   return { ok: true, value: { source: source.value, target: target.value } };
 }
 
-/** The assembled relationship, when its minted ID parses against the grammar. */
-function assembleRelationship(
-  policy: ConnectionPolicy,
-  draft: ConnectionDraft,
-  label: string,
-  endpoints: RelationshipEndpoints,
-): Result<Relationship> {
-  const id = policy.relationshipId.safeParse(`relationship-${draft.id}`);
-  if (!id.success) {
-    return connectionFailure(
-      'invalid-edit',
-      'The connection identity is not readable.',
-      'Cancel this connection and reconnect the endpoints.',
-    );
-  }
-  return { ok: true, value: relationshipRecord(draft, label, endpoints, id.data) };
-}
-
-/** The relationship record: labelled, solid, without provenance, cardinalities on associations only. */
+/** The relationship record: labelled, solid, no provenance, cardinalities on associations only. */
 function relationshipRecord(
   draft: ConnectionDraft,
   label: string,
   endpoints: RelationshipEndpoints,
-  id: Relationship['id'],
+  id: RelationshipId,
 ): Relationship {
   return {
     id,
@@ -109,7 +97,10 @@ function cardinalityEntry(
   side: 'from' | 'to',
   value: Cardinality,
 ): Partial<Relationship> {
-  return value === 'none' ? {} : { [side]: value };
+  if (value === 'none') {
+    return {};
+  }
+  return { [side]: value };
 }
 
 /** The relationship record and the section carrying its appearance. */
@@ -128,7 +119,7 @@ function relationshipChanges(
 }
 
 /** The wire appearance of a new relationship: orthogonal route, automatic sides, unlocked. */
-function connectionAppearance(id: Relationship['id']): Section['wires'][number] {
+function connectionAppearance(id: RelationshipId): Section['wires'][number] {
   return {
     relationship: id,
     route: 'orthogonal',
