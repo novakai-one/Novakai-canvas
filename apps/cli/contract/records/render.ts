@@ -1,14 +1,61 @@
 /*
- * Render vocabulary: the capability records the headless render speaks in. Type-only re-exports
- * keep core/render and the render factories inside every capability's public entry.
+ * render:png's request and report: which collection to render, with which theme, into which
+ * files, and the JSON a finished render prints. Pure declarations. `core/render/request.ts` mints
+ * the choice from argv and compose adds the repo root; the caller corrects the named flag and runs
+ * render:png again.
  */
-export type { Collection } from '@novakai/canvas-model';
-export type { Language, ResolvedResources } from '@novakai/canvas-language';
-export type { RenderDocument } from '@novakai/canvas-service';
-export type { Assets } from '../../../../capability/assets/contract/index.js';
-export type { Catalog, ThemePreset } from '../../../../capability/templates/contract/index.js';
-export type {
-  Documents,
-  Resource,
-  Resources,
-} from '../../../../capability/export/contract/index.js';
+import type { CollectionName, FilePath, PresetDigest, PresetId, ThemeName } from '../brands.js';
+import type { Collection, InspectionReport } from './foreign.js';
+
+/** The file format every section is written in. */
+export type RenderFormat = 'svg' | 'png';
+
+/** `all` (`--labels`): wire labels the diagram hides are drawn too. `default`: only the shown ones. */
+export type LabelMode = 'all' | 'default';
+
+/**
+ * What `--collection` names. Text ending in `.canvas` is a file. Any other text is a name: a
+ * recipe ID first, then a shipped collection ID.
+ */
+export type CollectionSelector =
+  | { readonly kind: 'file'; readonly path: FilePath }
+  | { readonly kind: 'named'; readonly name: CollectionName };
+
+/**
+ * The theme a render draws with in place of the collection's own: --theme, or else the
+ * --theme-file's `@id`.
+ */
+export type ThemeChoice = ThemeName | PresetId;
+
+/** What render:png's flags ask for. */
+export interface RenderChoice {
+  readonly collection: CollectionSelector;
+  /** --theme: wins over the --theme-file's `@id`. */
+  readonly theme?: ThemeName;
+  /** --theme-file: admitted after the shipped themes. */
+  readonly themeFile?: FilePath;
+  /** The directory the section files are written to, as given; the render's file adapter resolves it. */
+  readonly out: FilePath;
+  readonly format: RenderFormat;
+  readonly labels: LabelMode;
+}
+
+/** One read-only render: the flags' choice, below the repo root. No stored collection is changed. */
+export interface RenderRequest extends RenderChoice {
+  /** The repo root the executable found. Every shipped file the render reads is found below it. */
+  readonly root: FilePath;
+}
+
+/** An admitted theme and its content digest. */
+export interface ThemeDigest {
+  readonly id: PresetId;
+  readonly digest: PresetDigest;
+}
+
+/** What a finished render prints: written files, the collection's theme, scene counts, theme digests. */
+export interface RenderReport {
+  readonly files: readonly FilePath[];
+  readonly theme: Collection['theme'];
+  readonly inspection: InspectionReport;
+  readonly digests: readonly ThemeDigest[];
+}

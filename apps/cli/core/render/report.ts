@@ -1,41 +1,23 @@
 /*
- * The headless render report: written files, the collection's theme, scene inspection counts
- * and the admitted theme digests. Pure assembly from the document the owners produced.
+ * The render report: the written files, the collection's theme, the service's inspection of the
+ * rendered document and the admitted theme digests. Pure assembly; the service judges the
+ * document, nothing is recounted here. Nothing can fail.
  */
-import type { Catalog, Collection, RenderDocument } from '../../contract/records/render.js';
-import type { HeadlessReport } from '../../contract/records/headless.js';
+import type { Catalog, Collection, InspectionReport } from '../../contract/records/foreign.js';
+import type { RenderReport } from '../../contract/records/render.js';
 
-/** The report of one completed render. */
+/** The report of one completed render, with the service's `inspection` as it gave it. */
 export function renderReport(
-  files: HeadlessReport['files'],
+  files: RenderReport['files'],
   collection: Collection,
-  document: RenderDocument,
+  inspection: InspectionReport,
   catalog: Catalog,
-): HeadlessReport {
-  return {
-    files,
-    theme: collection.theme,
-    inspection: sceneInspection(document),
-    digests: themeDigests(catalog),
-  };
+): RenderReport {
+  return { files, theme: collection.theme, inspection, digests: themeDigests(catalog) };
 }
 
-/** Validity is asserted by the producing owners; warnings are counted by code. */
-function sceneInspection(document: RenderDocument): HeadlessReport['inspection'] {
-  return {
-    valid: true,
-    diagnostics: [],
-    warnings: document.scene.warnings,
-    crossings: document.scene.warnings.filter((warning) => warning.code === 'wire-crossing').length,
-    relaxed: document.scene.warnings.filter((warning) => warning.code === 'constraint-relaxed')
-      .length,
-    sections: document.scene.sections.length,
-    engineVersions: document.scene.engineVersions,
-  };
-}
-
-/** The admitted theme ids and digests. */
-function themeDigests(catalog: Catalog): HeadlessReport['digests'] {
+/** The admitted theme IDs and digests, in catalog order. */
+function themeDigests(catalog: Catalog): RenderReport['digests'] {
   return catalog
     .filter((preset) => preset.kind === 'theme')
     .map((preset) => ({ id: preset.id, digest: preset.digest }));

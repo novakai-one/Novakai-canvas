@@ -31,6 +31,29 @@ export const version = z
   .refine((value) => value.split('.').every((part) => Number.isSafeInteger(Number(part))))
   .brand<'PresetVersion'>();
 
+/**
+ * Checks a theme's card chrome name: 1–60 characters, a lowercase letter, then lowercase letters,
+ * digits or `-`. Presentation owns which names exist and the fallback for unknown ones.
+ */
+export const chromeName = z
+  .string()
+  .min(1)
+  .max(60)
+  .regex(/^[a-z][a-z0-9-]*$/)
+  .brand<'ChromeName'>();
+
+/**
+ * Checks a token name a `.theme` file sets (`set color TOKEN=…`): any non-empty text. Design
+ * System checks that the token exists, and its value, when the theme is admitted.
+ */
+export const tokenName = z.string().min(1).brand<'ThemeTokenName'>();
+
+/**
+ * Checks the theme a `.theme` file builds on (`base=…`): a theme ID or an exact theme pin, as
+ * written. The host resolves it against the catalog when the theme is admitted.
+ */
+export const baseTheme = z.string().min(1).brand<'BaseTheme'>();
+
 /** A preset ID that passed {@link presetId}. */
 export type PresetId = z.infer<typeof presetId>;
 
@@ -39,3 +62,12 @@ export type Digest = z.infer<typeof digest>;
 
 /** A version that passed {@link version}. */
 export type Version = z.infer<typeof version>;
+
+/** A chrome name that passed {@link chromeName}. */
+export type ChromeName = z.infer<typeof chromeName>;
+
+/** A token name that passed {@link tokenName}. */
+export type TokenName = z.infer<typeof tokenName>;
+
+/** A base theme that passed {@link baseTheme}. */
+export type BaseTheme = z.infer<typeof baseTheme>;

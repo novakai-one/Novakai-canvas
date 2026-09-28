@@ -1,16 +1,5 @@
 import { z } from 'zod';
-import { digest, presetId, version } from '../brands.js';
-
-/**
- * A card chrome name kept in a theme (1–60 characters: a lowercase letter, then lowercase letters,
- * digits or `-`). Presentation owns which names exist and the fallback for unknown ones.
- */
-const chromeName = z
-  .string()
-  .min(1)
-  .max(60)
-  .regex(/^[a-z][a-z0-9-]*$/)
-  .brand<'ChromeName'>();
+import { chromeName, digest, presetId, version } from '../brands.js';
 
 /** The two preset kinds. */
 export const kind = z.enum(['recipe', 'theme']);
@@ -189,7 +178,8 @@ export type Query = z.infer<typeof query>;
 
 /**
  * A loose check of a theme admission's `kind` and `id` only; other fields are allowed and dropped.
- * The CLI uses it to pick out theme admissions (apps/cli/adapters/headless.ts).
+ * No app imports it today: Templates' `.theme` grammar builds a typed admission itself
+ * (`readThemeSource`, core/theme-source/grammar.ts).
  */
 export const themeInput = z.object({ kind: z.literal('theme'), id: presetId }).readonly();
 

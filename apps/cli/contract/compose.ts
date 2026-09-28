@@ -1,95 +1,122 @@
-import { randomUUID } from 'node:crypto';
-import { resolve } from 'node:path';
-import { readAgentCredential } from '@novakai/canvas-service';
-import { createLanguage } from '@novakai/canvas-language';
-import { validate, plan, stage } from '@novakai/canvas-model';
-import { readArguments } from '../adapters/inputs/arguments.js';
-import { createPresetInputs } from '../adapters/inputs/preset-inputs.js';
-import { readThemeConfig } from '../adapters/inputs/theme-config.js';
-import { createResourceFiles } from '../adapters/inputs/resource-inputs.js';
-import { createRequestFiles } from '../adapters/inputs/files.js';
-import { createTransport } from '../adapters/edge/transport.js';
-import { createSemanticInputs } from '../adapters/inputs/semantic-inputs.js';
-import { executeCommand, usage } from './api.js';
-import { executeProfile, isProfileCommand } from '../core/commands/profiles.js';
-import type { Diagnostic, Result } from './errors.js';
-import type { HeadlessFailure, HeadlessOptions, HeadlessReport } from './records/headless.js';
-import { failure } from './errors.js';
-/** Bind the actual CLI to protected credentials and real HTTP; failed setup cannot submit a diagram mutation. */
+/*
+ * Composition root: reads the arguments, then runs the parsed command's family on real
+ * infrastructure wired in `compose/`: service commands in `service.ts`, profile commands in
+ * `profiles.ts`, the headless render in `render.ts` (imported only when a render runs). Not pure:
+ * reads the argv. Failures are returned as values; `cli/canvas.ts` and `cli/render.ts` print them
+ * and set the exit code. Recovery after a sent request is `receipt` then `retry`; a render changes
+ * nothing.
+ */
+import { readArguments } from '../adapters/argv/node-args.js';
+import { parseCommand, parseRenderChoice, renderCollection, usage } from './api.js';
+import { canvasFlags, renderFlags } from './records/arguments.js';
+import type { ParsedCommand } from './records/command.js';
+import type { RenderChoice, RenderReport, RenderRequest } from './records/render.js';
+import type { RenderFailure } from './records/render-failure.js';
+import { filePath } from './brands.js';
+import {
+  failure,
+  success,
+  type CliFailure,
+  type FailureInput,
+  type LocalFailure,
+  type Result,
+} from './errors.js';
+import { runProfile } from './compose/profiles.js';
+import { runService } from './compose/service.js';
+
+/**
+ * `pnpm canvas`: reads and parses the argv, then runs the command on real infrastructure. Fails as
+ * the command does, or with `cli-unavailable` when reading, parsing or running the command throws
+ * (the one boundary catch). Never rejects.
+ */
 export async function runCli(
   args: readonly string[],
   defaultWorkspace: string,
 ): Promise<Result<string>> {
   try {
-    const parsed = readArguments(args, defaultWorkspace);
-    if (!parsed.ok) return parsed;
-    return dispatch(parsed.value);
+    return await parsedRun(args, defaultWorkspace);
   } catch {
-    return failure(
-      'cli-unavailable',
-      'CLI could not complete',
-      'Retain the request ID and inspect its receipt before retrying.',
-    );
-  }
-}
-/** One owner-composed Language parser drives scope discovery; there is no second DSL implementation in the CLI. */
-async function run(options: import('./records/command.js').CliOptions): Promise<Result<string>> {
-  const credential = await readAgentCredential(
-    resolve(options.workspaceDirectory, 'agent-credential.json'),
-  );
-  if (!credential.ok) return credential;
-  const transport = createTransport(options.server, credential.value);
-  if (!transport.ok) return transport;
-  const language = createLanguage({ reader: { validate }, planner: { plan }, stage: { stage } });
-  const semantic = createSemanticInputs(language);
-  return executeCommand(options.command, {
-    transport: transport.value,
-    resourceFiles: createResourceFiles(),
-    files: createRequestFiles(resolve(options.workspaceDirectory, 'requests')),
-    semantic,
-    presets: createPresetInputs(semantic, readThemeConfig),
-    nextRequestId: randomUUID,
-  });
-}
-
-/** Local help needs no infrastructure; authoring commands bind their real runtime before executing. */
-function dispatch(options: import('./records/command.js').CliOptions): Promise<Result<string>> {
-  if (options.command.name === 'help') return Promise.resolve({ ok: true, value: usage });
-  if (isProfileCommand(options.command)) return runProfile(options);
-  return run(options);
-}
-
-/** Profile discovery/scaffold/lint bind only the Language parser and local files. */
-async function runProfile(
-  options: import('./records/command.js').CliOptions,
-): Promise<Result<string>> {
-  const language = createLanguage({ reader: { validate }, planner: { plan }, stage: { stage } });
-  const semantic = createSemanticInputs(language);
-  return executeProfile(options.command, {
-    files: createRequestFiles(resolve(options.workspaceDirectory, 'requests')),
-    semantic,
-  });
-}
-
-/** Headless export binds the same theme grammar and service owners without starting an HTTP server. */
-export async function runHeadless(
-  options: HeadlessOptions,
-): Promise<Result<HeadlessReport, HeadlessFailure | Diagnostic>> {
-  try {
-    const [adapter, service] = await Promise.all([
-      import('../adapters/edge/headless.js'),
-      import('@novakai/canvas-service'),
-    ]);
-    return adapter.renderHeadless(options, {
-      service: await service.createHeadlessBindings(),
-      resourceFiles: createResourceFiles(),
-      readTheme: readThemeConfig,
+    return failure({
+      code: 'cli-unavailable',
+      message: 'CLI could not complete',
+      recovery: 'Retain the request ID and inspect its receipt before retrying.',
     });
-  } catch {
-    return failure(
-      'render-unavailable',
-      'Headless rendering could not initialize',
-      'Restore local resources and retry.',
-    );
   }
+}
+
+/**
+ * `pnpm render:png`: Node reads the argv with every `--` dropped (pnpm forwards it), core's render
+ * grammar checks it, then one read-only render runs below the repo `root`. Fails with
+ * `invalid-arguments` before anything is read or made, `render-unavailable` when the render cannot
+ * start, or `render-failed` as core's render reports it. Never rejects.
+ */
+export async function runRender(
+  args: readonly string[],
+  root: string,
+): Promise<Result<RenderReport, RenderFailure | CliFailure>> {
+  const choice = parseRenderChoice(readArguments(args.filter(isNotSeparator), renderFlags));
+  if (!choice.ok) return choice;
+  return renderBelow(choice.value, root);
+}
+
+/** Node reads the argv; core's grammar checks every word and value; then the command runs. */
+function parsedRun(
+  args: readonly string[],
+  defaultWorkspace: string,
+): Promise<Result<string>> {
+  const parsed = parseCommand(readArguments(args, canvasFlags), { workspace: defaultWorkspace });
+  if (!parsed.ok) return Promise.resolve(parsed);
+  return dispatch(parsed.value);
+}
+
+/**
+ * Help needs no infrastructure; profile commands bind local ports; service commands bind their
+ * real runtime. Fails as the family's run does.
+ */
+function dispatch(parsed: ParsedCommand): Promise<Result<string>> {
+  switch (parsed.kind) {
+    case 'help':
+      return Promise.resolve(success(usage));
+    case 'profile':
+      return runProfile(parsed.command);
+    case 'service':
+      return runService(parsed.command, parsed.options);
+  }
+}
+
+/** Why a render could not start. */
+const renderUnavailable: FailureInput = Object.freeze({
+  code: 'render-unavailable',
+  message: 'Headless rendering could not initialize',
+  recovery: 'Restore local resources and retry.',
+});
+
+/** The render below the repo `root`. Fails with `render-unavailable` when `root` is empty. */
+function renderBelow(
+  choice: RenderChoice,
+  root: string,
+): Promise<Result<RenderReport, RenderFailure | LocalFailure>> {
+  const repo = filePath.safeParse(root);
+  if (!repo.success) return Promise.resolve(failure(renderUnavailable));
+  return boundRender({ ...choice, root: repo.data });
+}
+
+/**
+ * Binds the render's ports, then runs core's render. The one boundary catch: a render module or
+ * the service's render adapters that cannot be imported → `render-unavailable`.
+ */
+async function boundRender(
+  request: RenderRequest,
+): Promise<Result<RenderReport, RenderFailure | LocalFailure>> {
+  try {
+    const wiring = await import('./compose/render.js');
+    return await renderCollection(request, await wiring.renderPorts(request));
+  } catch {
+    return failure(renderUnavailable);
+  }
+}
+
+/** Whether the argv word is anything but pnpm's `--` separator. */
+function isNotSeparator(arg: string): boolean {
+  return arg !== '--';
 }

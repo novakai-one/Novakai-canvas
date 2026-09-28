@@ -1,51 +1,33 @@
-import { parseArgs } from 'node:util';
-import { resolve } from 'node:path';
-import { runHeadless, headlessOptions, type HeadlessOptions } from '../contract/index.js';
-/** CLI owns malformed arguments and terminal display; render failures retain owner diagnostics. */
-function options(args: readonly string[]): HeadlessOptions {
-  const { values } = parseArgs({
-    args: args.filter((arg) => arg !== '--'),
-    options: {
-      collection: { type: 'string' },
-      theme: { type: 'string' },
-      'theme-file': { type: 'string' },
-      out: { type: 'string' },
-      format: { type: 'string', default: 'png' },
-      labels: { type: 'boolean', default: false },
-    },
-  });
-  return headlessOptions.parse({
-    collection: required(values.collection, '--collection'),
-    theme: values.theme,
-    themeFile: values['theme-file'],
-    out: resolve(required(values.out, '--out')),
-    format: format(values.format),
-    labels: values.labels,
-    root: new URL('../../../', import.meta.url).pathname,
-  });
-}
-/** Raw argv text is guarded for presence here and branded by headlessOptions; required arguments fail before any temporary asset store is created; main prints usage and permits retry. */
-function required(
-  value: string | undefined,
-  name: string,
-): string {
-  if (!value) throw new TypeError(name + ' is required');
-  return value;
-}
-/** Raw argv format is guarded into a closed literal union; only the requested artifact encoders are exposed; main handles invalid input without partial output. */
-function format(value: string | undefined): 'svg' | 'png' {
-  if (value === 'svg' || value === 'png') return value;
-  throw new TypeError('--format must be svg or png');
-}
-/** Standalone read-only command; diagnostics set a failing process status and never modify stored state. */
+/*
+ * `pnpm render:png`: argv → runRender. A render's result prints as JSON on stdout; an argument
+ * failure prints as lines on stderr, like `pnpm canvas`. Any failure exits 1. Read-only: no stored
+ * collection is changed, so the caller corrects the input and runs it again.
+ */
+import { fileURLToPath } from 'node:url';
+import type { CliFailure, RenderFailure, RenderReport, Result } from '../contract/index.js';
+import { formatFailure, runRender } from '../contract/index.js';
+
+/** The checkout this file ships in; every shipped theme, collection and wasm file is below it. */
+const root = fileURLToPath(new URL('../../../', import.meta.url));
+
+/** Run one render, print its outcome and set the exit code. */
 async function main(): Promise<void> {
-  try {
-    const result = await runHeadless(options(process.argv.slice(2)));
-    console.log(JSON.stringify(result));
-    process.exitCode = result.ok ? 0 : 1;
-  } catch (error) {
-    console.error(String(error));
-    process.exitCode = 1;
-  }
+  const result = await runRender(process.argv.slice(2), root);
+  if (!result.ok) process.exitCode = 1;
+  print(result);
 }
-await main();
+
+/** An argument failure as lines on stderr; any other outcome as JSON on stdout. */
+function print(result: Result<RenderReport, RenderFailure | CliFailure>): void {
+  if (!result.ok && result.error.code === 'invalid-arguments') {
+    process.stderr.write(`${formatFailure(result.error).join('\n')}\n`);
+    return;
+  }
+  process.stdout.write(`${JSON.stringify(result)}\n`);
+}
+
+/** runRender returns every failure as a value; a rejection is a bug: print it and exit 1. */
+await main().catch((error: unknown) => {
+  process.stderr.write(`${String(error)}\n`);
+  process.exitCode = 1;
+});

@@ -11,6 +11,12 @@
     "@novakai/canvas-service": "workspace:*",
     "@novakai/canvas-language": "workspace:*",
     "@novakai/canvas-model": "workspace:*",
+    "@novakai/canvas-assets": "workspace:*",
+    "@novakai/canvas-export": "workspace:*",
+    "@novakai/canvas-presentation": "workspace:*",
+    "@novakai/canvas-templates": "workspace:*",
+    "@novakai/canvas-design-system": "workspace:*",
+    "@novakai/canvas-library": "workspace:*",
     "zod": "4.6.2"
   }
 }

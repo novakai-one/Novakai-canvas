@@ -1,16 +1,12 @@
-/** Agent CLI public surface; source is readable DSL and every mutation crosses the service Authoring gate. */
-export { executeCommand } from './api.js';
-export { runCli } from './compose.js';
-export type { Command, CliOptions } from './records/command.js';
-export type {
-  CliDependencies,
-  Transport,
-  RequestFiles,
-  SemanticInputs,
-  RequestDraft,
-} from './ports/runtime.js';
-export type { Result, Diagnostic } from './errors.js';
-export { runHeadless } from './compose.js';
-export type { HeadlessOptions } from './records/headless.js';
-export { headlessOptions } from './records/headless.js';
-export type { ProfileDescriptor, ProfileFinding, ProfileLintResult } from './records/profiles.js';
+/*
+ * The CLI's public surface: only what the two executables in cli/ use. `runCli` answers
+ * `pnpm canvas`, `runRender` answers `pnpm render:png`, `formatFailure` turns a failure into
+ * terminal lines. Both entry points return every failure as a value and never reject. Every
+ * mutation crosses the service's Authoring gate; recovery after a sent request is `canvas receipt`
+ * then `canvas retry`.
+ */
+export { runCli, runRender } from './compose.js';
+export { formatFailure } from './api.js';
+export type { Result, CliFailure } from './errors.js';
+export type { RenderReport } from './records/render.js';
+export type { RenderFailure } from './records/render-failure.js';

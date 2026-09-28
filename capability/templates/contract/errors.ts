@@ -34,6 +34,29 @@ export type ErrorCode =
   | 'dependency-cycle'
   | 'provider-failed';
 
+/**
+ * Why a `.theme` file could not be read (`readThemeSource`); the facade never returns these codes.
+ * Callers branch on the code, never on the message. The first failure wins.
+ * - `invalid-theme`: a line does not match the grammar, the file does not declare exactly one
+ *   body, mono and strong font, the chrome is not a chrome name, or the header's @id or version
+ *   is not a preset ID or version (core/theme-source/).
+ * - `duplicate-token`: one token is set twice (core/theme-source/grammar.ts).
+ */
+export type ThemeSourceCode = 'invalid-theme' | 'duplicate-token';
+
+/**
+ * One `.theme` failure: its code, what went wrong and how to correct the file. Nothing was read or
+ * staged, so the caller corrects the theme file and reads it again.
+ */
+export interface ThemeSourceFailure {
+  /** What kind of failure this is; see {@link ThemeSourceCode}. */
+  readonly code: ThemeSourceCode;
+  /** A human-readable explanation. Its wording is not part of the contract. */
+  readonly message: string;
+  /** How to correct the theme file. */
+  readonly recovery: string;
+}
+
 /** One failure: its code, where it happened, what went wrong and how to recover. */
 export interface Diagnostic {
   /** What kind of failure this is; see {@link ErrorCode}. */
