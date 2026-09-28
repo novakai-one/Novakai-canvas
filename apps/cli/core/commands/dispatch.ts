@@ -54,7 +54,8 @@ export type ServiceCommandDependencies = ReadDependencies &
 
 /**
  * Every tool a profile command may need: `files` (reads the file `lint` checks), `language`
- * (Language, which reads DSL text), and `writer` (writes the `--out` file).
+ * (Language, which reads DSL text), `profiles` (Language's profiles and their rules), and `writer`
+ * (writes the `--out` file).
  */
 export type ProfileCommandDependencies = ProfileDependencies & OutFileDependencies;
 
