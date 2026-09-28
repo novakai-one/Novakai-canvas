@@ -39,75 +39,78 @@ export function findCollectionSource(
   catalog: Catalog,
   dependencies: SourceDependencies,
 ): Promise<Result<SourceFile, RenderFailureSource>> {
-  if (selector.kind === 'file') return dependencies.inputFiles.read(selector.path);
-  return namedSource(selector.id, catalog, dependencies);
+  if (selector.kind === 'file') {
+    return dependencies.inputFiles.read(selector.path);
+  }
+  return findNamedSource(selector.id, catalog, dependencies);
 }
 
-/**
- * A recipe's shipped source when `name` is a recipe ID; otherwise the shipped collection it names.
- * Fails as {@link recipeSource} or {@link shippedSource} does.
- */
-function namedSource(
+/** Finds the source an ID names: the recipe with that ID, or else the one shipped collection. */
+async function findNamedSource(
   name: RecipeOrCollectionId,
   catalog: Catalog,
   dependencies: SourceDependencies,
 ): Promise<Result<SourceFile, RenderFailureSource>> {
-  const recipe = recipeNamed(catalog, name);
-  if (recipe === undefined) return shippedSource(name, dependencies);
-  return Promise.resolve(recipeSource(recipe, dependencies.inputFiles));
+  const recipe = findRecipe(catalog, name);
+  if (recipe === undefined) {
+    return findShippedSource(name, dependencies);
+  }
+  return recipeSource(recipe, dependencies.inputFiles);
 }
 
 /**
- * The recipe's source, with its family's shipped file for its resources to resolve against. Fails
- * with `provider-failed` when that file's path fails its check.
+ * Gives back a recipe's source text, with the path of its family's shipped file, so its fonts and
+ * images are found next to that file.
  */
 function recipeSource(
   recipe: RecipePreset,
   inputFiles: SourceDependencies['inputFiles'],
 ): Result<SourceFile, RenderFailureSource> {
-  const file = inputFiles.recipeFile(recipe.payload.family);
-  if (!file.ok) return file;
-  return success({ source: recipe.payload.source, path: file.value });
+  const familyFile = inputFiles.recipeFile(recipe.payload.family);
+  if (!familyFile.ok) {
+    return familyFile;
+  }
+  return success({ source: recipe.payload.source, path: familyFile.value });
 }
 
-/**
- * The one shipped collection whose parsed ID is `name`. Fails with `provider-failed` when the
- * shipped files cannot be read, or `collection-selection` unless exactly one matches.
- */
-async function shippedSource(
+/** Finds the one shipped `.canvas` file whose text declares the collection ID `name`. */
+async function findShippedSource(
   name: RecipeOrCollectionId,
   dependencies: SourceDependencies,
 ): Promise<Result<SourceFile, RenderFailureSource>> {
-  const sources = await dependencies.inputFiles.shippedCollections();
-  if (!sources.ok) return sources;
+  const shipped = await dependencies.inputFiles.shippedCollections();
+  if (!shipped.ok) {
+    return shipped;
+  }
   const parse = dependencies.sources.parse;
-  return onlyMatch(
-    name,
-    sources.value.filter((source) => declares(source, name, parse)),
-  );
+  const matches = shipped.value.filter((source) => declaresId(source, name, parse));
+  return requireOneMatch(name, matches);
 }
 
-/** The single match. Fails with `collection-selection`, counting the matches, unless there is one. */
-function onlyMatch(
+/** Gives back the only match; no match, or more than one, is a mistake. */
+function requireOneMatch(
   name: RecipeOrCollectionId,
   matches: readonly SourceFile[],
 ): Result<SourceFile, RenderFault> {
   const [match] = matches;
-  if (matches.length !== 1 || match === undefined)
-    return renderFaultFailure({ code: 'collection-selection', id: name, matches: matches.length });
+  if (match === undefined || matches.length > 1) {
+    return collectionSelectionFailure(name, matches.length);
+  }
   return success(match);
 }
 
 /**
- * The recipe whose preset ID is `name`. None when `name` is not a Templates preset ID, since no
- * preset can have it, or when no recipe has it.
+ * Finds the recipe in `catalog` whose preset ID is `name`. There is none when `name` can't be a
+ * preset ID at all.
  */
-function recipeNamed(
+function findRecipe(
   catalog: Catalog,
   name: RecipeOrCollectionId,
 ): RecipePreset | undefined {
   const id = presetId.safeParse(name);
-  if (!id.success) return undefined;
+  if (!id.success) {
+    return undefined;
+  }
   return catalog.find((preset) => isRecipeWithId(preset, id.data));
 }
 
@@ -119,12 +122,23 @@ function isRecipeWithId(
   return preset.kind === 'recipe' && preset.id === id;
 }
 
-/** Whether Language parses `source` and its collection ID is `name`. */
-function declares(
+/** Whether Language can parse `source`, and the collection ID it declares is `name`. */
+function declaresId(
   source: SourceFile,
   name: RecipeOrCollectionId,
   parse: RenderSources['parse'],
 ): boolean {
   const parsed = parse(source.source);
   return parsed.ok && parsed.value.collection === name;
+}
+
+/**
+ * Makes the mistake for an ID that matches no shipped collection, or more than one
+ * (`collection-selection`). It says how many matched.
+ */
+function collectionSelectionFailure(
+  name: RecipeOrCollectionId,
+  matchCount: number,
+): Result<never, RenderFault> {
+  return renderFaultFailure({ code: 'collection-selection', id: name, matches: matchCount });
 }
