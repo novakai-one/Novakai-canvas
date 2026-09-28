@@ -7,8 +7,7 @@ import { renderCollection } from './collection.js';
 /**
  * The valid report of a freshly rendered document: the scene passed the independent inspector
  * during derivation, so the report is its own warning record, the crossing and relaxed-constraint
- * counts, the section count and the engine versions. Pure; cannot fail. The headless render
- * (apps/cli) reports it too.
+ * counts, the section count and the engine versions. Pure; cannot fail.
  */
 export function validReport(document: RenderDocument): InspectionReport {
   const warnings = document.scene.warnings;

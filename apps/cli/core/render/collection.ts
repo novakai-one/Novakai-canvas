@@ -1,9 +1,9 @@
 /*
- * The collection one render draws: the chosen source with the chosen theme written in, its images
- * staged, lowered against the admitted catalog's pins and checked by Model, with the chosen theme's
- * pin in place of the collection's own. A fresh copy: no stored collection or source file changes.
- * Pure apart from the injected ports. The caller names another collection or theme and runs
- * render:png again.
+ * The collection one render draws: the chosen source with the chosen theme written in, its fonts
+ * and images admitted as asset records, lowered against the admitted catalog's pins and checked by
+ * Model, with the chosen theme's pin in place of the collection's own. A fresh copy: no stored
+ * collection or source file changes. Pure apart from the injected ports. The caller names another
+ * collection or theme and runs render:png again.
  */
 import type { RenderSources } from '../../contract/ports/render-sources.js';
 import type { Collection, ResolvedResources } from '../../contract/records/foreign.js';
@@ -25,8 +25,9 @@ export interface CollectionDependencies extends SourceDependencies, AssetDepende
 
 /**
  * The checked collection `selector` names, drawn with `themes`' choice when there is one. Fails as
- * choosing the source, overriding its theme, admitting its images, Language's lowering or Model's
- * check does, or with `missing-theme` when the choice has no admitted pin.
+ * choosing the source, overriding its theme, admitting its fonts and images, Language's lowering
+ * or Model's check does, with `duplicate-asset` when the source declares one asset ID twice, or
+ * with `missing-theme` when the choice has no admitted pin.
  */
 export async function chosenCollection(
   selector: CollectionSelector,

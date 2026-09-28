@@ -2,13 +2,14 @@
  * The immutable export snapshot of one render: identity, collection, scene, paint, and every byte
  * it retains (collection assets, document fonts, catalog presets). Pure; asset bytes resolve
  * through the render's asset store and base64 is decoded by the injected decoder. Export's check
- * that it reads only these bytes is bound in the exporter adapter. The caller fixes the named asset
+ * that it reads only these bytes lives in retained-resources.ts. The caller fixes the named asset
  * and runs render:png again.
  */
 import type { RenderAssets } from '../../contract/ports/render-assets.js';
 import type {
   Catalog,
   Collection,
+  CollectionAsset,
   ExportSnapshot,
   RenderDocument,
   Resource,
@@ -20,9 +21,6 @@ import { combined, mapped } from '../shared/results.js';
 
 /** What the snapshot reads: the stored asset bytes and the base64 decoder. */
 export type SnapshotAssets = Pick<RenderAssets, 'resolve' | 'decodeBase64'>;
-
-/** One asset record the collection declares. */
-type CollectionAsset = Collection['assets'][number];
 
 /** One font the rendered document embeds. */
 type DocumentFont = RenderDocument['fonts'][number];

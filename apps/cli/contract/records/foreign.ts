@@ -4,6 +4,7 @@
  */
 import type { TransportResponse, createHeadlessBindings } from '@novakai/canvas-service';
 import type { Admission } from '@novakai/canvas-templates';
+import type { Collection } from '@novakai/canvas-model';
 export type { Collection, Mode, Result as ModelResult } from '@novakai/canvas-model';
 export type {
   Declaration,
@@ -46,6 +47,9 @@ export type OperationSource = Extract<
 
 /** Evidence under a failure: Language or Model validation diagnostics, or a nested operation failure. */
 export type FailureSource = NonNullable<OperationSource['source']>;
+
+/** One asset record a collection declares, as Model types it. Model exports no name for it. */
+export type CollectionAsset = Collection['assets'][number];
 
 /** A recipe's diagram family, as Templates' admission declares it. */
 export type RecipeFamily = Extract<Admission, { readonly kind: 'recipe' }>['family'];

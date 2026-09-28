@@ -9,7 +9,11 @@
  */
 import type { RenderAssets } from '../../contract/ports/render-assets.js';
 import type { RenderSources } from '../../contract/ports/render-sources.js';
-import type { Collection, ResourceRequest, StoredBlob } from '../../contract/records/foreign.js';
+import type {
+  CollectionAsset,
+  ResourceRequest,
+  StoredBlob,
+} from '../../contract/records/foreign.js';
 import type { RenderEvidence } from '../../contract/records/render-failure.js';
 import type { RenderFault } from '../../contract/records/render-fault.js';
 import type { SourceFile } from '../../contract/records/source-file.js';
@@ -20,9 +24,6 @@ import { altText, credit } from '../resources/provenance.js';
 import { checked } from '../shared/checks.js';
 import { combined } from '../shared/results.js';
 import { admitResource, type AdmissionDependencies } from './resource-admission.js';
-
-/** One asset record a collection declares, as Model types it. */
-export type AssetRecord = Collection['assets'][number];
 
 /** What a source's asset records use: Language's parse, admission and the stored bytes. */
 export interface AssetDependencies extends AdmissionDependencies {
@@ -45,7 +46,7 @@ export interface AssetDependencies extends AdmissionDependencies {
 export async function sourceAssets(
   source: SourceFile,
   dependencies: AssetDependencies,
-): Promise<Result<readonly AssetRecord[], RenderEvidence>> {
+): Promise<Result<readonly CollectionAsset[], RenderEvidence>> {
   const parsed = dependencies.sources.parse(source.source);
   if (!parsed.ok) return parsed;
   const declarations = parsed.value.resources.filter(isAsset);
@@ -71,7 +72,7 @@ async function assetRecord(
   file: FilePath,
   request: ResourceRequest,
   dependencies: AssetDependencies,
-): Promise<Result<AssetRecord, RenderEvidence>> {
+): Promise<Result<CollectionAsset, RenderEvidence>> {
   const digest = await admitResource(file, request, dependencies);
   if (!digest.ok) return digest;
   const stored = dependencies.assets.resolve(digest.value);
@@ -87,7 +88,7 @@ function describedAsset(
   request: ResourceRequest,
   digest: AssetDigest,
   stored: StoredBlob,
-): Result<AssetRecord> {
+): Result<CollectionAsset> {
   const id = declaredId(request);
   if (!id.ok) return id;
   return success({
@@ -116,8 +117,8 @@ function declaredId(request: ResourceRequest): Result<AssetId> {
  * cannot be told apart from the first.
  */
 function uniqueRecords(
-  records: readonly AssetRecord[],
-): Result<readonly AssetRecord[], RenderFault> {
+  records: readonly CollectionAsset[],
+): Result<readonly CollectionAsset[], RenderFault> {
   const repeated = records.find((record, index) => !isFirstWithId(records, record, index));
   if (repeated === undefined) return success(records);
   return faulted({ code: 'duplicate-asset', asset: repeated.id });
@@ -125,8 +126,8 @@ function uniqueRecords(
 
 /** Whether `record`, at `index`, is the first of `records` with its ID. */
 function isFirstWithId(
-  records: readonly AssetRecord[],
-  record: AssetRecord,
+  records: readonly CollectionAsset[],
+  record: CollectionAsset,
   index: number,
 ): boolean {
   return records.findIndex((other) => other.id === record.id) === index;

@@ -61,8 +61,10 @@ import type { NativeDetail, ProviderFault, RenderFault } from './records/render-
  *
  * Transport:
  * - `connection-uncertain`: no confirmed answer. Check the receipt before retrying.
- * - `invalid-response`: a service answer did not match its schema or lacks what the command
- *   needs, such as a committed receipt; or the service's credential reader returned no token.
+ * - `invalid-response`: an owner's answer broke its own contract. A service answer did not match
+ *   its schema or lacks what the command needs, such as a committed receipt; the service's
+ *   credential reader returned no token; or Language's parse gave an asset alias that is not
+ *   Model's asset ID.
  *
  * Setup: `cli-unavailable` and `render-unavailable` (an unexpected throw at the entry point).
  *   `cli-unavailable` also reports a fresh request ID that fails Authoring's grammar; nothing was

@@ -26,6 +26,7 @@ import { faulted, nativeFault, success, type Result } from '../../contract/error
 import { chosenCollection } from './collection.js';
 import { pinResources } from './pins.js';
 import { renderReport } from './report.js';
+import { resourceInspector } from './retained-resources.js';
 import { exportSections } from './sections.js';
 import { renderSnapshot } from './snapshot.js';
 import { admitThemes } from './themes.js';
@@ -170,6 +171,7 @@ async function exported(
     document: produced.document,
     snapshot: produced.snapshot,
     pins: pinResources(produced.catalog, produced.snapshot.collection.assets),
+    resources: resourceInspector(produced.snapshot.resources),
   });
   if (!exporter.ok) return exporter;
   const files = await exportSections(request.format, ports, exporter.value, produced.document);

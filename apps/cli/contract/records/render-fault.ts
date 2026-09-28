@@ -5,9 +5,8 @@
  * errors.ts build the failed Results. The caller corrects the named input or resource and runs
  * render:png again.
  */
-import type { Collection } from './foreign.js';
 import type { ThemeChoice } from './render.js';
-import type { CollectionName, FilePath } from '../brands.js';
+import type { AssetId, CollectionName, FilePath } from '../brands.js';
 
 /**
  * A render failure the CLI found itself. Consumers branch on the code, never the message.
@@ -37,13 +36,13 @@ export type RenderFault =
   | { readonly code: 'collection-title-required' }
   | {
       readonly code: 'invalid-asset-pin';
-      readonly asset: Collection['assets'][number]['id'];
+      readonly asset: AssetId;
       /** The digest text as the collection gives it. */
       readonly digest: string;
     }
   | {
       readonly code: 'duplicate-asset';
-      readonly asset: Collection['assets'][number]['id'];
+      readonly asset: AssetId;
     }
   | ProviderFault;
 

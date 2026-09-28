@@ -1,8 +1,9 @@
 /*
  * The render environment's output: the service draws one collection into a document and inspects
  * it, and Export turns each section of its snapshot into file bytes. Declarations only;
- * adapters/render/production.ts and exporter.ts implement it. Writes nothing; core/render/sections.ts writes the
- * bytes through the section files port. Every failure is the owner's evidence, returned as a value.
+ * adapters/render/production.ts and exporter.ts implement it. Writes nothing;
+ * core/render/sections.ts writes the bytes through the section files port. Every failure is the
+ * owner's evidence, returned as a value.
  */
 import type { RenderEvidence } from '../records/render-failure.js';
 import type {
@@ -12,6 +13,7 @@ import type {
   InspectionReport,
   RenderDocument,
   ResolvedResources,
+  Resources,
 } from '../records/foreign.js';
 import type { SectionId } from '../brands.js';
 import type { Result } from '../errors.js';
@@ -22,6 +24,8 @@ export interface ExportInput {
   readonly snapshot: ExportSnapshot;
   /** The pins Export's documents port lowers DSL against. */
   readonly pins: ResolvedResources;
+  /** The inspector that admits only resources the snapshot retained. */
+  readonly resources: Resources;
 }
 
 /** Export bound to one snapshot, format and label mode. */
@@ -42,9 +46,6 @@ export interface RenderOutput {
   ): Promise<Result<RenderDocument, RenderEvidence>>;
   /** The service's inspection report of a document it produced. Cannot fail. */
   inspect(document: RenderDocument): InspectionReport;
-  /**
-   * Export over one snapshot; it reads only the resources the snapshot retained. Fails with
-   * Presentation's font failure.
-   */
+  /** Export over one snapshot. Fails with Presentation's font failure. */
   exporter(input: ExportInput): Promise<Result<SectionExporter, RenderEvidence>>;
 }

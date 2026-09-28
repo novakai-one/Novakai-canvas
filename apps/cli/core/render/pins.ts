@@ -6,13 +6,11 @@
 import type {
   Catalog,
   Collection,
+  CollectionAsset,
   ResolvedResources,
   ThemePreset,
 } from '../../contract/records/foreign.js';
 import { pinOf } from '../resources/digests.js';
-
-/** One asset record a collection declares. */
-type CollectionAsset = Collection['assets'][number];
 
 /** Theme pins from the admitted catalog, plus `assets`, the collection's own asset records. */
 export function pinResources(
