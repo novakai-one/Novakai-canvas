@@ -61,7 +61,8 @@ export function readCollectionImages(
 
 /**
  * Reads one font's stored bytes and the family Assets recorded for it, which measuring, the
- * browser and export all use.
+ * browser and export all use. `digest` is the font's content hash as the theme lists it; Assets
+ * checks it.
  */
 function readFont(
   digest: string,
@@ -90,7 +91,7 @@ function isImage(file: CollectionFile): boolean {
 
 /**
  * Reads one image's stored bytes; its width and height come from Assets, never from sizes typed
- * in the diagram.
+ * in the diagram. `digest` is the image's content hash with `sha256:` removed; Assets checks it.
  */
 function readImage(
   digest: string,

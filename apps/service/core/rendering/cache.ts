@@ -20,7 +20,7 @@ const MOST_KEPT = 8;
  * The drawings that worked, each under its job's key (see `jobKey`), oldest first. Only successes
  * are ever kept.
  */
-type KeptDrawings = Map<string, Result<RenderDocument>>;
+type KeptDrawings = Map<string, Result<RenderDocument, never>>;
 
 /**
  * Wraps `producer` so it answers a repeated render job from memory.
@@ -47,7 +47,7 @@ async function recallOrProduce(
     return known;
   }
   const produced = await producer.produce(job, signal);
-  return remember(kept, key, produced);
+  return keepIfDrawn(kept, key, produced);
 }
 
 /** Writes everything that shapes the drawing, except the job's ID, as one text key. */
@@ -62,8 +62,8 @@ function jobKey(job: RenderingJob): string {
   ]);
 }
 
-/** Keeps a drawing that worked, then hands back the producer's answer unchanged. */
-function remember(
+/** Keeps the drawing if it worked; either way, answers with what the producer gave back. */
+function keepIfDrawn(
   kept: KeptDrawings,
   key: string,
   produced: Result<RenderDocument>,

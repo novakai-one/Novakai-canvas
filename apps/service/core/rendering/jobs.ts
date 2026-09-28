@@ -31,6 +31,13 @@ import {
   requireResource,
 } from './job-refusal.js';
 
+/** How many of the theme's base gaps each spacing choice uses. */
+const GAP_STEPS: Readonly<Record<keyof RenderingJob['options']['gap'], number>> = Object.freeze({
+  compact: 3,
+  normal: 8,
+  roomy: 12,
+});
+
 /**
  * Makes the render-job builder. `inputs` are the parts it asks: Templates for the theme, Assets
  * for fonts and images, Design System for the style. Its `create` builds one collection's job.
@@ -109,7 +116,10 @@ function readPinnedTheme(
   return requireTheme(preset.value);
 }
 
-/** Writes the exact theme version the collection pins. */
+/**
+ * The exact theme version the collection pins, in the form Templates reads it. The collection
+ * stores its digest with `sha256:`; Templates wants it without.
+ */
 function versionPinnedBy(collection: Collection): ThemeVersion {
   return {
     kind: 'theme',
@@ -170,12 +180,15 @@ function resolveDiagramStyle(
   return checkStyle(unchecked);
 }
 
-/** Writes one theme font in the form Design System reads it. */
+/** One theme font in the form Design System reads it, marked approved. */
 function approvedFont(font: FontSource): ApprovedFont {
   return { family: font.family, digest: font.digest, approved: true };
 }
 
-/** Writes the theme's own exact version. */
+/**
+ * The theme's own exact version, in the form Design System reads it (its digest already has no
+ * prefix).
+ */
 function versionOf(theme: ThemePreset): ThemeVersion {
   return { kind: 'theme', id: theme.id, version: theme.version, digest: theme.digest };
 }
@@ -229,10 +242,14 @@ function addLayoutOptions(withoutOptions: JobWithoutOptions): AuthoringResult<Re
 function scaleLayoutOptions(
   style: RenderingJob['style'],
 ): AuthoringResult<RenderingJob['options']> {
-  // `gridColumns` is the column count when a section doesn't set one; `maxBranches` is the most
-  // Layout allows.
+  // Outer padding is two theme paddings; sequence rows sit two body lines apart. `gridColumns` is
+  // the column count when a section doesn't set one; `maxBranches` is the most Layout allows.
   const options = layoutOptions.safeParse({
-    gap: { compact: style.gap * 3, normal: style.gap * 8, roomy: style.gap * 12 },
+    gap: {
+      compact: style.gap * GAP_STEPS.compact,
+      normal: style.gap * GAP_STEPS.normal,
+      roomy: style.gap * GAP_STEPS.roomy,
+    },
     padding: style.padding * 2,
     routeClearance: style.padding,
     labelGap: style.gap,

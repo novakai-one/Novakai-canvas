@@ -41,7 +41,7 @@ export async function inspectCollection(
  */
 function reportRefusedRender(refusal: Diagnostic): Result<InspectionReport> {
   if (saysNothingAboutQuality(refusal)) {
-    return passedOnFailure(refusal);
+    return unchangedFailure(refusal);
   }
   const report = invalidReport(refusal);
   return success(report);
@@ -55,8 +55,8 @@ function saysNothingAboutQuality(refusal: Diagnostic): boolean {
   return refusal.code !== 'invalid-input';
 }
 
-/** Passes the refusal on as the same mistake: its code, path, message and source. */
-function passedOnFailure(refusal: Diagnostic): Result<never> {
+/** The same mistake again: its code, path, message and source. */
+function unchangedFailure(refusal: Diagnostic): Result<never> {
   return failure(refusal.code, refusal.path, refusal.message, refusal.source);
 }
 
