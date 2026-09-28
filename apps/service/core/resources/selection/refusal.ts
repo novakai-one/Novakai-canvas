@@ -20,8 +20,9 @@ import { authoringFailure } from '../../../contract/errors.js';
 export function fromCapability<Value>(
   answer: AuthoringResult<Value, FailureSource>,
 ): AuthoringResult<Value> {
-  if (!answer.ok)
-    return missingAssetFailure('The owning capability rejected this input', answer.error);
+  if (!answer.ok) {
+    return capabilityRefusedFailure(answer.error);
+  }
   return answer;
 }
 
@@ -42,4 +43,9 @@ export function missingAssetFailure(
  */
 export function unreadableRequestFailure(): AuthoringResult<never> {
   return authoringFailure('invalid-input', 'resources', 'Resource request could not be decoded');
+}
+
+/** Makes the mistake for a capability that refused: `missing-asset`, its failure as `source`. */
+function capabilityRefusedFailure(source: FailureSource): AuthoringResult<never> {
+  return missingAssetFailure('The owning capability rejected this input', source);
 }

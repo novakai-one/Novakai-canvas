@@ -13,23 +13,20 @@
 import type {
   Assets,
   AuthoringResult,
+  Json,
   Request,
   ResolvedResources,
   ResourceRequest,
   Snapshot,
 } from '../../../contract/records/capability-types.js';
 import { removeDigestPrefix, hasDigestPrefix, addDigestPrefix } from '../../../contract/brands.js';
-import { andThen, collect, success } from '../../../contract/errors.js';
-import {
-  checkAssetBindings,
-  type AssetBinding,
-  type BindingModel,
-  type ThemeBinding,
-} from '../../presets/theme-binding.js';
+import { collect, success } from '../../../contract/errors.js';
+import type { AssetBinding, BindingModel, ThemeBinding } from '../../presets/theme-binding.js';
 import { findLiveRecord } from '../../workspace/records.js';
 import type { DeclaredResources } from './intent.js';
 import type { Themes } from './themes.js';
 import { checkDigest } from './digests.js';
+import { bindNewAsset, type Upload } from './new-asset.js';
 import { fromCapability, missingAssetFailure } from './refusal.js';
 
 /** What binding files needs. */
@@ -43,9 +40,6 @@ export interface AssetBindingDependencies {
 /** The files a change can use, keyed by the name its DSL gives them, such as `logo`. */
 export type AssetBindings = ResolvedResources['assets'];
 
-/** One supplied upload: an alias and the Assets digest of its bytes. */
-type Upload = Request['assets'][number];
-
 /** What a request's own source declares when it may bind assets. */
 type DeclaredSources = Exclude<DeclaredResources, { readonly kind: 'theme-admission' }>;
 
@@ -53,8 +47,10 @@ type DeclaredSources = Exclude<DeclaredResources, { readonly kind: 'theme-admiss
 interface BindingInputs {
   /** Pinned declarations first, then the request's own uploads. */
   readonly supplied: readonly Upload[];
-  readonly requests: readonly ResourceRequest[];
-  readonly previous: readonly AssetBinding[];
+  /** The theme and asset lines the change's source declares. */
+  readonly declaredLines: readonly ResourceRequest[];
+  /** The saved collection's bindings; none for a new collection. */
+  readonly earlier: readonly AssetBinding[];
 }
 
 /**
@@ -72,158 +68,184 @@ export function bindAssets(
   availableThemes: Themes,
   dependencies: AssetBindingDependencies,
 ): AuthoringResult<AssetBindings> {
-  if (declared.kind === 'theme-admission') return success({});
+  if (declared.kind === 'theme-admission') {
+    return success(NO_BINDINGS);
+  }
   const inputs = bindingInputs(request, declared, snapshot, dependencies);
-  if (!inputs.ok) return inputs;
+  if (!inputs.ok) {
+    return inputs;
+  }
   return bindSupplied(inputs.value, availableThemes, dependencies);
 }
 
-/**
- * The collection's earlier bindings, then the pinned declarations and the request's uploads.
- * Fails as `priorAssets` or `pinnedUploads` fails.
- */
+/** What a theme being saved binds: no files. */
+const NO_BINDINGS: AssetBindings = Object.freeze({});
+
+/** What a new collection, or one not saved yet, had bound before: no files. */
+const NO_EARLIER_BINDINGS: readonly AssetBinding[] = Object.freeze([]);
+
+/** Gathers the collection's earlier bindings, then the uploads to bind: pinned lines first. */
 function bindingInputs(
   request: Request,
   declared: DeclaredSources,
   snapshot: Snapshot,
   dependencies: AssetBindingDependencies,
 ): AuthoringResult<BindingInputs> {
-  const previous = priorAssets(declared.collection, snapshot, dependencies.model);
-  if (!previous.ok) return previous;
+  const earlier = listEarlierBindings(declared.collection, snapshot, dependencies.model);
+  if (!earlier.ok) {
+    return earlier;
+  }
   const pinned = pinnedUploads(declared.requests);
-  if (!pinned.ok) return pinned;
+  if (!pinned.ok) {
+    return pinned;
+  }
   const supplied = [...pinned.value, ...request.assets];
-  return success({ supplied, requests: declared.requests, previous: previous.value });
+  return success({ supplied, declaredLines: declared.requests, earlier: earlier.value });
 }
 
-/**
- * Every supplied upload bound over the earlier bindings, in order; with none supplied, the
- * earlier bindings as they are. Fails as `firstTheme` or `suppliedAsset` fails; uploads after
- * the first failure are not read.
- */
+/** Binds every supplied upload over the earlier bindings, borrowing a theme for Model's check. */
 function bindSupplied(
   inputs: BindingInputs,
   availableThemes: Themes,
   dependencies: AssetBindingDependencies,
 ): AuthoringResult<AssetBindings> {
-  if (inputs.supplied.length === 0) return success(byId(inputs.previous));
-  const theme = firstTheme(availableThemes);
-  if (!theme.ok) return theme;
-  const bound = collect(inputs.supplied, (upload) =>
-    suppliedAsset(upload, inputs, theme.value, dependencies),
-  );
-  return andThen(bound, (bindings) => success(byId([...inputs.previous, ...bindings])));
+  if (inputs.supplied.length === 0) {
+    const bindings = keyById(inputs.earlier);
+    return success(bindings);
+  }
+  const theme = borrowTheme(availableThemes);
+  if (!theme.ok) {
+    return theme;
+  }
+  return bindEachUpload(inputs, theme.value, dependencies);
 }
 
-/**
- * Earlier bindings belong to one collection; the same alias in another collection never leaks in.
- * None for a new collection (`null`) or one with no live record. Fails with `missing-asset` at
- * `resources` when Model refuses the stored collection.
- */
-function priorAssets(
-  id: string | null,
+/** Binds each supplied upload in order, and lets it replace an earlier binding of the same name. */
+function bindEachUpload(
+  inputs: BindingInputs,
+  theme: ThemeBinding,
+  dependencies: AssetBindingDependencies,
+): AuthoringResult<AssetBindings> {
+  const bound = collect(inputs.supplied, (upload) =>
+    bindUpload(upload, inputs, theme, dependencies),
+  );
+  if (!bound.ok) {
+    return bound;
+  }
+  const bindings = keyById([...inputs.earlier, ...bound.value]);
+  return success(bindings);
+}
+
+/** Lists the file bindings of the saved collection the change names, none for a new one. */
+function listEarlierBindings(
+  collectionId: string | null,
   snapshot: Snapshot,
   model: BindingModel,
 ): AuthoringResult<readonly AssetBinding[]> {
-  if (id === null) return success([]);
-  const record = findLiveRecord(snapshot, 'collection', id);
-  if (!record) return success([]);
-  return andThen(fromCapability(model.validate(record.value)), (collection) =>
-    success(collection.assets),
-  );
+  if (collectionId === null) {
+    return success(NO_EARLIER_BINDINGS);
+  }
+  const record = findLiveRecord(snapshot, 'collection', collectionId);
+  if (record === undefined) {
+    return success(NO_EARLIER_BINDINGS);
+  }
+  return listStoredBindings(record.value, model);
 }
 
-/**
- * Asset declarations whose source is a `sha256:` pin supply their bytes by digest. Fails with
- * `invalid-input` at `resources` when a pinned digest is not an Authoring digest.
- */
-function pinnedUploads(requests: readonly ResourceRequest[]): AuthoringResult<readonly Upload[]> {
-  const pinned = requests.filter((item) => item.kind !== 'theme' && hasDigestPrefix(item.source));
-  return collect(pinned, pinnedUpload);
+/** Has Model check the saved collection, then lists its file bindings. */
+function listStoredBindings(
+  storedCollection: Json,
+  model: BindingModel,
+): AuthoringResult<readonly AssetBinding[]> {
+  const collection = fromCapability(model.validate(storedCollection));
+  if (!collection.ok) {
+    return collection;
+  }
+  return success(collection.value.assets);
 }
 
-/** One pinned declaration as an upload. Fails with `invalid-input` at `resources` on a malformed digest. */
-function pinnedUpload(request: ResourceRequest): AuthoringResult<Upload> {
-  const digest = checkDigest(removeDigestPrefix(request.source));
-  return andThen(digest, (checked) => success({ alias: request.alias, digest: checked }));
+/** Turns each `asset` line whose source is a `sha256:` pin into an upload of those bytes. */
+function pinnedUploads(
+  declaredLines: readonly ResourceRequest[],
+): AuthoringResult<readonly Upload[]> {
+  const pinnedLines = declaredLines.filter(isPinnedFileLine);
+  return collect(pinnedLines, pinnedUpload);
 }
 
-/**
- * Model checks an asset binding against one actual admitted theme. Fails with `missing-asset` at
- * `resources` ("Asset binding requires an admitted theme") when there is none.
- */
-function firstTheme(themes: Themes): AuthoringResult<ThemeBinding> {
-  const theme = Object.values(themes)[0];
-  if (!theme) return missingAssetFailure('Asset binding requires an admitted theme');
+/** Whether a line declares a file (not a theme) whose source is a `sha256:` pin. */
+function isPinnedFileLine(line: ResourceRequest): boolean {
+  return line.kind !== 'theme' && hasDigestPrefix(line.source);
+}
+
+/** Turns one pinned line into an upload, checking its digest as Authoring's. */
+function pinnedUpload(line: ResourceRequest): AuthoringResult<Upload> {
+  const bareDigest = removeDigestPrefix(line.source);
+  const digest = checkDigest(bareDigest);
+  if (!digest.ok) {
+    return digest;
+  }
+  const upload: Upload = { alias: line.alias, digest: digest.value };
+  return success(upload);
+}
+
+/** Picks the first available theme, for Model's check to borrow. */
+function borrowTheme(themes: Themes): AuthoringResult<ThemeBinding> {
+  const [theme] = Object.values(themes);
+  if (theme === undefined) {
+    return noThemeToBorrowFailure();
+  }
   return success(theme);
 }
 
-/**
- * A new upload needs metadata in the source; otherwise an earlier binding must name the same
- * bytes. Fails with `missing-asset` at `resources` ("Missing authored asset metadata: <alias>")
- * when neither exists, or as `newAsset` fails.
- */
-function suppliedAsset(
+/** Binds one upload from its `asset` line, or else reuses an earlier binding of the same bytes. */
+function bindUpload(
   upload: Upload,
   inputs: BindingInputs,
   theme: ThemeBinding,
   dependencies: AssetBindingDependencies,
 ): AuthoringResult<AssetBinding> {
-  const metadata = inputs.requests.find(
-    (item) => item.alias === upload.alias && item.kind !== 'theme',
-  );
-  if (metadata) return newAsset(upload, metadata, theme, dependencies);
-  const existing = inputs.previous.find(
-    (item) => item.id === upload.alias && item.digest === addDigestPrefix(upload.digest),
-  );
-  if (!existing) return missingAssetFailure(`Missing authored asset metadata: ${upload.alias}`);
-  return success(existing);
+  const assetLine = findAssetLine(upload, inputs.declaredLines);
+  if (assetLine !== undefined) {
+    return bindNewAsset(upload, assetLine, theme, dependencies);
+  }
+  return reuseEarlierBinding(upload, inputs.earlier);
 }
 
-/**
- * Assets resolves the bytes and their media type; Model checks the authored metadata. Fails with
- * `missing-asset` at `resources` when Assets or Model refuses (its failure kept in `source`), or
- * when Model returns no binding.
- */
-function newAsset(
+/** Finds the `asset` line that names this upload. */
+function findAssetLine(
   upload: Upload,
-  metadata: ResourceRequest,
-  theme: ThemeBinding,
-  dependencies: AssetBindingDependencies,
+  declaredLines: readonly ResourceRequest[],
+): ResourceRequest | undefined {
+  return declaredLines.find((line) => line.alias === upload.alias && line.kind !== 'theme');
+}
+
+/** Finds the earlier binding with this upload's name and bytes, refusing an upload with none. */
+function reuseEarlierBinding(
+  upload: Upload,
+  earlier: readonly AssetBinding[],
 ): AuthoringResult<AssetBinding> {
-  const blob = fromCapability(dependencies.assets.resolve(upload.digest));
-  if (!blob.ok) return blob;
-  const draft = {
-    id: upload.alias,
-    digest: addDigestPrefix(upload.digest),
-    mediaType: blob.value.descriptor.mediaType,
-    alt: metadata.alt ?? upload.alias,
-    ...optionalMetadata(metadata),
-  };
-  const checked = fromCapability(checkAssetBindings([draft], theme, dependencies.model));
-  return andThen(checked, firstBinding);
-}
-
-/**
- * The one binding Model checked. Fails with `missing-asset` at `resources` ("Asset binding is
- * missing after owner validation") when Model returned none.
- */
-function firstBinding(bindings: readonly AssetBinding[]): AuthoringResult<AssetBinding> {
-  const [validated] = bindings;
-  if (!validated) return missingAssetFailure('Asset binding is missing after owner validation');
-  return success(validated);
-}
-
-/** Licence and attribution stay absent unless the source writes them; none is invented. */
-function optionalMetadata(metadata: ResourceRequest): Readonly<Record<string, string>> {
-  return Object.fromEntries(
-    Object.entries({ license: metadata.license, attribution: metadata.attribution }).filter(
-      (item): item is [string, string] => typeof item[1] === 'string',
-    ),
+  const prefixedDigest = addDigestPrefix(upload.digest);
+  const reused = earlier.find(
+    (binding) => binding.id === upload.alias && binding.digest === prefixedDigest,
   );
+  if (reused === undefined) {
+    return missingMetadataFailure(upload.alias);
+  }
+  return success(reused);
 }
 
-/** Asset bindings keyed by id; a later binding replaces an earlier one with the same id. */
-function byId(bindings: readonly AssetBinding[]): AssetBindings {
-  return Object.fromEntries(bindings.map((item) => [item.id, item]));
+/** Keys the bindings by name; a later binding replaces an earlier one with the same name. */
+function keyById(bindings: readonly AssetBinding[]): AssetBindings {
+  const entries = bindings.map((binding) => [binding.id, binding] as const);
+  return Object.fromEntries(entries);
+}
+
+/** Makes the mistake for files with no theme to borrow: `missing-asset` at `resources`. */
+function noThemeToBorrowFailure(): AuthoringResult<never> {
+  return missingAssetFailure('Asset binding requires an admitted theme');
+}
+
+/** Makes the mistake for an upload with no `asset` line and no earlier binding: `missing-asset`. */
+function missingMetadataFailure(alias: string): AuthoringResult<never> {
+  return missingAssetFailure(`Missing authored asset metadata: ${alias}`);
 }

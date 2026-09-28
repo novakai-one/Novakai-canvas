@@ -19,13 +19,14 @@ import type {
   ThemePreset,
 } from '../../../contract/records/capability-types.js';
 import { addDigestPrefix } from '../../../contract/brands.js';
-import { andThen, collect, success } from '../../../contract/errors.js';
+import { collect, success } from '../../../contract/errors.js';
 import {
   checkThemeBinding,
   type BindingModel,
   type ThemeBinding,
 } from '../../presets/theme-binding.js';
 import { formatThemePin, type ThemePinText } from '../../presets/theme-pin.js';
+import type { DslCommand } from '../../../contract/records/planning/commands.js';
 import type { Intent } from './intent.js';
 import { fromCapability, missingAssetFailure } from './refusal.js';
 
@@ -52,12 +53,17 @@ export function listAvailableThemes(
   catalog: Catalog,
   dependencies: ThemeDependencies,
 ): AuthoringResult<Themes> {
-  const records = listThemePresets(catalog);
-  const exact = collect(records, (preset) => exactEntry(preset, dependencies));
-  if (!exact.ok) return exact;
-  const ids = [...new Set(records.map((item) => item.id))];
-  const aliases = collect(ids, (id) => aliasEntry(catalog, id, dependencies));
-  return andThen(aliases, (latest) => success(Object.fromEntries([...exact.value, ...latest])));
+  const themePresets = listThemePresets(catalog);
+  const exact = collect(themePresets, (preset) => exactEntry(preset, dependencies));
+  if (!exact.ok) {
+    return exact;
+  }
+  const latest = latestEntries(catalog, themePresets, dependencies);
+  if (!latest.ok) {
+    return latest;
+  }
+  const themes: Themes = Object.fromEntries([...exact.value, ...latest.value]);
+  return success(themes);
 }
 
 /**
@@ -69,46 +75,116 @@ export function applyFrozenThemes(
   intent: Intent,
   available: Themes,
 ): AuthoringResult<Themes> {
-  if (intent.planner !== 'dsl') return success(available);
-  const pins = collect(Object.entries(intent.command.themePins ?? {}), ([alias, exact]) =>
-    retainedEntry(available, alias, exact),
-  );
-  return andThen(pins, (retained) => success({ ...available, ...Object.fromEntries(retained) }));
+  if (intent.planner !== 'dsl') {
+    return success(available);
+  }
+  return pointAtFrozenVersions(intent.command, available);
 }
 
 /** Lists the stored theme presets, in catalog order. Never fails. */
 export function listThemePresets(catalog: Catalog): readonly ThemePreset[] {
-  return catalog.filter((item) => item.kind === 'theme');
+  return catalog.filter(isThemePreset);
 }
 
-/** One theme binding under its alias or exact pin text. */
+/** One theme binding under its name or exact pin text. */
 type ThemeEntry = readonly [string, ThemeBinding];
 
-/**
- * A stored theme version under its exact pin. Fails with `missing-asset` at `resources` when Model
- * refuses the binding.
- */
+/** Has Model check one stored theme version, and keys it by its exact pin text. */
 function exactEntry(
   preset: ThemePreset,
   dependencies: ThemeDependencies,
 ): AuthoringResult<ThemeEntry> {
   const binding = fromCapability(checkThemeBinding(preset, dependencies.model));
-  return andThen(binding, (bound) => success([presetPin(preset), bound] as const));
+  if (!binding.ok) {
+    return binding;
+  }
+  const entry: ThemeEntry = [presetPin(preset), binding.value];
+  return success(entry);
 }
 
-/**
- * A theme id under its latest version's binding. Fails as `latestBinding` fails.
- */
-function aliasEntry(
+/** Keys each theme ID by its latest version, once per ID, in catalog order. */
+function latestEntries(
+  catalog: Catalog,
+  themePresets: readonly ThemePreset[],
+  dependencies: ThemeDependencies,
+): AuthoringResult<readonly ThemeEntry[]> {
+  const themeIds = listEachIdOnce(themePresets);
+  return collect(themeIds, (id) => latestEntry(catalog, id, dependencies));
+}
+
+/** Keys one theme ID by its latest version's binding. */
+function latestEntry(
   catalog: Catalog,
   id: string,
   dependencies: ThemeDependencies,
 ): AuthoringResult<ThemeEntry> {
   const binding = latestBinding(catalog, id, dependencies);
-  return andThen(binding, (bound) => success([id, bound] as const));
+  if (!binding.ok) {
+    return binding;
+  }
+  const entry: ThemeEntry = [id, binding.value];
+  return success(entry);
 }
 
-/** A stored theme version's exact pin text, its digest in Model's pinned form. Never fails. */
+/** Has Model check the latest version of one theme ID, as Templates decides which is latest. */
+function latestBinding(
+  catalog: Catalog,
+  id: string,
+  dependencies: ThemeDependencies,
+): AuthoringResult<ThemeBinding> {
+  const latest = readLatestTheme(catalog, id, dependencies);
+  if (!latest.ok) {
+    return latest;
+  }
+  return fromCapability(checkThemeBinding(latest.value, dependencies.model));
+}
+
+/** Asks Templates for the latest version of one theme ID; it must be a theme. */
+function readLatestTheme(
+  catalog: Catalog,
+  id: string,
+  dependencies: ThemeDependencies,
+): AuthoringResult<ThemePreset> {
+  const latestPin = { kind: 'theme', id };
+  const preset = fromCapability(dependencies.templates.read(catalog, latestPin));
+  if (!preset.ok) {
+    return preset;
+  }
+  if (preset.value.kind !== 'theme') {
+    return notAThemeFailure();
+  }
+  return success(preset.value);
+}
+
+/** Points each name in the DSL change's `themePins` at the exact version it was frozen to. */
+function pointAtFrozenVersions(
+  command: DslCommand,
+  available: Themes,
+): AuthoringResult<Themes> {
+  const frozenPins = Object.entries(command.themePins ?? {});
+  const frozen = collect(frozenPins, ([name, exactPin]) => frozenEntry(available, name, exactPin));
+  if (!frozen.ok) {
+    return frozen;
+  }
+  const frozenThemes = Object.fromEntries(frozen.value);
+  return success({ ...available, ...frozenThemes });
+}
+
+/** Keys a frozen theme name by the exact version it names, refusing a version no longer stored. */
+function frozenEntry(
+  available: Themes,
+  name: string,
+  exactPin: string,
+): AuthoringResult<ThemeEntry> {
+  const binding = available[exactPin];
+  if (binding === undefined) {
+    return frozenVersionMissingFailure(exactPin);
+  }
+  const entry: ThemeEntry = [name, binding];
+  return success(entry);
+}
+
+/** Writes a stored theme version's exact pin text, with its digest in Model's `sha256:` form. */
 function presetPin(preset: ThemePreset): ThemePinText {
   return formatThemePin({
     id: preset.id,
@@ -117,40 +193,24 @@ function presetPin(preset: ThemePreset): ThemePinText {
   });
 }
 
-/**
- * The binding for a theme id's latest version; Templates decides which version is latest. Fails
- * with `missing-asset` at `resources` when Templates or Model refuses (its failure kept in
- * `source`), or when Templates returns a preset that is not a theme.
- */
-function latestBinding(
-  catalog: Catalog,
-  id: string,
-  dependencies: ThemeDependencies,
-): AuthoringResult<ThemeBinding> {
-  const read = fromCapability(dependencies.templates.read(catalog, { kind: 'theme', id }));
-  const latest = andThen(read, selectedTheme);
-  return andThen(latest, (preset) => fromCapability(checkThemeBinding(preset, dependencies.model)));
+/** Lists the theme IDs, each once, in the order first seen. */
+function listEachIdOnce(themePresets: readonly ThemePreset[]): readonly string[] {
+  const ids = themePresets.map((preset) => preset.id);
+  const distinctIds = new Set(ids);
+  return [...distinctIds];
 }
 
-/**
- * The preset Templates selected, which must be a theme. Fails with `missing-asset` at
- * `resources` ("Selected preset is not a theme") when it is not.
- */
-function selectedTheme(preset: Preset): AuthoringResult<ThemePreset> {
-  if (preset.kind !== 'theme') return missingAssetFailure('Selected preset is not a theme');
-  return success(preset);
+/** Whether a preset is a theme. */
+function isThemePreset(preset: Preset): preset is ThemePreset {
+  return preset.kind === 'theme';
 }
 
-/**
- * A retained pin under its alias; the pin must still be in the current catalog. Fails with
- * `missing-asset` at `resources` ("Retained theme pin unavailable: <pin>") when it is not.
- */
-function retainedEntry(
-  available: Themes,
-  alias: string,
-  exact: string,
-): AuthoringResult<ThemeEntry> {
-  const pin = available[exact];
-  if (!pin) return missingAssetFailure(`Retained theme pin unavailable: ${exact}`);
-  return success([alias, pin] as const);
+/** Makes the mistake for a latest version that is not a theme: `missing-asset` at `resources`. */
+function notAThemeFailure(): AuthoringResult<never> {
+  return missingAssetFailure('Selected preset is not a theme');
+}
+
+/** Makes the mistake for a frozen version no longer stored: `missing-asset` at `resources`. */
+function frozenVersionMissingFailure(exactPin: string): AuthoringResult<never> {
+  return missingAssetFailure(`Retained theme pin unavailable: ${exactPin}`);
 }

@@ -24,7 +24,9 @@ import { unreadableRequestFailure } from './refusal.js';
  */
 export function toResourcesJson(resources: ResolvedResources): AuthoringResult<Json> {
   const pins = json.safeParse({ resources });
-  if (!pins.success) return unreadableRequestFailure();
+  if (!pins.success) {
+    return unreadableRequestFailure();
+  }
   return success(pins.data);
 }
 
@@ -42,23 +44,32 @@ export function sameResourcesJson(
 /** A JSON object. */
 type JsonRecord = { readonly [key: string]: Json };
 
-/** Whether two JSON values are equal (see `sameResourcesJson`). */
+/** Whether two JSON values are equal, comparing arrays and objects part by part. */
 function sameJson(
   left: Json,
   right: Json,
 ): boolean {
-  if (isJsonArray(left)) return sameArray(left, right);
-  if (isJsonRecord(left)) return sameRecord(left, right);
+  if (isJsonArray(left)) {
+    return sameArray(left, right);
+  }
+  if (isJsonRecord(left)) {
+    return sameRecord(left, right);
+  }
   return left === right;
 }
 
-/** Whether `right` is an array of the same length whose items equal `left`'s, in order. */
+/** Whether `right` is an array of the same length whose elements equal `left`'s, in order. */
 function sameArray(
   left: readonly Json[],
   right: Json,
 ): boolean {
-  if (!isJsonArray(right)) return false;
-  return left.length === right.length && left.every((item, index) => sameItem(item, right[index]));
+  if (!isJsonArray(right)) {
+    return false;
+  }
+  if (left.length !== right.length) {
+    return false;
+  }
+  return left.every((element, index) => bothPresentAndSame(element, right[index]));
 }
 
 /** Whether `right` is an object with exactly `left`'s keys, each holding an equal value. */
@@ -66,32 +77,36 @@ function sameRecord(
   left: JsonRecord,
   right: Json,
 ): boolean {
-  if (!isJsonRecord(right)) return false;
-  const keys = Object.keys(left);
-  return (
-    keys.length === Object.keys(right).length &&
-    keys.every((key) => sameItem(left[key], right[key]))
-  );
+  if (!isJsonRecord(right)) {
+    return false;
+  }
+  const leftKeys = Object.keys(left);
+  if (leftKeys.length !== Object.keys(right).length) {
+    return false;
+  }
+  return leftKeys.every((key) => bothPresentAndSame(left[key], right[key]));
 }
 
 /**
- * Whether two looked-up values are present and equal. JSON holds no `undefined`, so a missing key
- * or index never equals a present one.
+ * Whether two looked-up values are both present and equal. JSON holds no `undefined`, so a missing
+ * key or index never equals a present one.
  */
-function sameItem(
+function bothPresentAndSame(
   left: Json | undefined,
   right: Json | undefined,
 ): boolean {
-  if (left === undefined || right === undefined) return false;
+  if (left === undefined || right === undefined) {
+    return false;
+  }
   return sameJson(left, right);
 }
 
 /** Whether a JSON value is an array. */
-function isJsonArray(value: Json): value is readonly Json[] {
-  return Array.isArray(value);
+function isJsonArray(candidate: Json): candidate is readonly Json[] {
+  return Array.isArray(candidate);
 }
 
 /** Whether a JSON value is an object (not an array and not `null`). */
-function isJsonRecord(value: Json): value is JsonRecord {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+function isJsonRecord(candidate: Json): candidate is JsonRecord {
+  return typeof candidate === 'object' && candidate !== null && !Array.isArray(candidate);
 }

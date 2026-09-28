@@ -15,7 +15,6 @@ import type {
   WriteLease,
 } from '../../../contract/records/capability-types.js';
 import type { RestoreInput } from '../../../contract/records/presets/resource-commands.js';
-import type { ResourceCommands } from '../../../contract/ports/workspace.js';
 import { restoreInput } from '../../../contract/records/presets/resource-commands.js';
 
 /** What restoring a file needs. */
@@ -33,37 +32,47 @@ export async function restoreFile(
   input: unknown,
   dependencies: RestoreDependencies,
 ): Promise<AssetResult<void>> {
-  const checked = restoreInput.safeParse(input);
-  if (!checked.success)
-    return {
-      ok: false,
-      error: {
-        code: 'invalid-input',
-        path: 'restore',
-        message: 'Expected digest and normalized base64',
-        recovery: 'Retain the original backup.',
-      },
-    };
-  return restoreChecked(checked.data, dependencies);
+  const request = restoreInput.safeParse(input);
+  if (!request.success) {
+    return malformedRestoreFailure();
+  }
+  return holdAndWrite(request.data, dependencies);
 }
 
-/** Reservation failure leaves no lease; a successful reservation always reaches release. */
-async function restoreChecked(
-  checked: RestoreInput,
+/** Holds the file, then writes its bytes; if the hold is refused, nothing is written or let go. */
+async function holdAndWrite(
+  request: RestoreInput,
   dependencies: RestoreDependencies,
-): ReturnType<ResourceCommands['restore']> {
-  const lease = dependencies.assets.reserve([checked.digest]);
-  if (!lease.ok) return lease;
-  return restoreReserved(lease.value, checked);
+): Promise<AssetResult<void>> {
+  const lease = dependencies.assets.reserve([request.digest]);
+  if (!lease.ok) {
+    return lease;
+  }
+  return writeAndRelease(lease.value, request);
 }
 
-/** Stage failure remains primary; release failure is observable only after successful staging. */
-async function restoreReserved(
+/** Writes the bytes, then always lets the hold go; a failed write wins over a failed release. */
+async function writeAndRelease(
   lease: WriteLease,
-  checked: RestoreInput,
-): ReturnType<ResourceCommands['restore']> {
-  const staged = await lease.stage(checked.digest, checked.base64);
+  request: RestoreInput,
+): Promise<AssetResult<void>> {
+  const written = await lease.stage(request.digest, request.base64);
   const released = lease.release();
-  if (!staged.ok) return staged;
+  if (!written.ok) {
+    return written;
+  }
   return released;
+}
+
+/** Makes the mistake for a body that is not a digest and base64 text: `invalid-input`. */
+function malformedRestoreFailure(): AssetResult<never> {
+  return {
+    ok: false,
+    error: {
+      code: 'invalid-input',
+      path: 'restore',
+      message: 'Expected digest and normalized base64',
+      recovery: 'Retain the original backup.',
+    },
+  };
 }
