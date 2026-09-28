@@ -5,8 +5,9 @@
  * it changes: for example, `walkthrough` is `ink` with a different accent colour. Design System
  * works out every value from the base theme plus those changes, and checks the result.
  *
- * This file is that theme codec. Every mistake is `invalid-input` at `preset` (codec-refusal.ts),
- * with Design System's own failure kept as the source when it refused. It never saves.
+ * This file is the theme codec: Templates asks it to work out a theme, and it asks Design System.
+ * Every mistake is `invalid-input` at `preset` (codec-refusal.ts), with Design System's own
+ * failure kept as the source when it refused. It never saves.
  */
 import type {
   DesignSystem,
@@ -32,7 +33,8 @@ export interface ThemeCodecContext {
 
 /**
  * Builds the theme codec Templates uses. Its `resolve` works out a theme's full values from its
- * changes and its base, which must be a UI base or exactly one of the `available` themes.
+ * changes and its base: one of the app's own interface themes (`kind: 'ui'`, in
+ * capability/design-system/tokens/themes) or exactly one of the `available` saved themes.
  * Mistakes: `invalid-input` at `preset` when the input isn't a theme, the base isn't available,
  * Design System refuses the theme, or an ID, version or digest fails Templates' check.
  */

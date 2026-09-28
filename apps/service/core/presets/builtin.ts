@@ -38,7 +38,8 @@ export interface BuiltinPresetDependencies {
 }
 
 /**
- * Makes the built-in preset catalog, and answers the shipped sources with it (`presets`).
+ * Makes the built-in preset catalog.
+ * Returns the shipped sources plus the new catalog under `presets`.
  * 1. Names the shipped fonts by role: body, mono, strong.
  * 2. Adds Paper (light) and Ink (dark) with those fonts.
  * 3. Adds each shipped recipe, which may use those two themes.

@@ -6,8 +6,8 @@
  * the font its text uses, exactly as stored.
  *
  * This file gathers those from the held files: the theme first, then the images, then the fonts.
- * A missing theme or a file that can't be read refuses the export (`resource-rejected`); an image
- * mistake is reported before a font mistake. It only reads.
+ * A missing theme or a file that can't be read refuses the export (`resource-rejected`). When
+ * Export later asks to check them again, this file passes them through unchanged. It only reads.
  */
 import type {
   AssetResult,
@@ -27,7 +27,8 @@ import { exportFailure } from './faults.js';
 
 /**
  * Gathers the collection's theme, images and fonts, in that order, for Export. The theme comes
- * from `presets`; images and fonts are read with `readHeldFile`.
+ * from `presets`, the fonts are the ones the drawn `document` uses, and files are read with
+ * `readHeldFile`.
  * Mistakes: `resource-rejected` at `resources.theme` when the pinned theme isn't in `presets`, or
  * at the file's path when an image or font can't be read.
  */
@@ -46,10 +47,10 @@ export function gatherExportResources(
 }
 
 /**
- * Builds the resources helper Export asks for. It accepts the gathered resources as they are:
- * this file already checked them. Never fails.
+ * Builds the resource check Export asks for (its `Resources`), which lets every resource through
+ * unchanged: `gatherExportResources` already checked them. Never fails.
  */
-export function createResourceInspector(): Resources {
+export function createPassThroughResources(): Resources {
   return {
     inspect: async (items) => ({ ok: true, value: items }),
   };

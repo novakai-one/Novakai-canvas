@@ -5,8 +5,8 @@
  * them. When a codec can't, Templates needs the mistake in its own form. For example, a recipe
  * whose DSL has a typo is refused as `invalid-input` at `preset`.
  *
- * This file makes that one kind of mistake for both codecs, as a Templates `Result`. The caller
- * keeps its source, fixes it and prepares again. It never throws.
+ * This file makes that one kind of mistake for both codecs, as a Templates `Result`. The agent
+ * fixes the theme or recipe and saves it again. It never throws.
  */
 import type { FailureSource } from '../../contract/records/transport/failure-source.js';
 import type { TemplatesResult } from '../../contract/records/capability-types.js';

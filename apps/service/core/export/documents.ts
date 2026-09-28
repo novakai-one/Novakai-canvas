@@ -3,11 +3,11 @@
  *
  * Export (the capability) makes SVG and PNG files, but it can't check a collection or write DSL by
  * itself. It asks a "documents" helper that the service supplies. The DSL and Markdown exports
- * need the same text, for example the `.canvas` file of `my-diagram` at revision 3.
+ * (text.ts) need text too: the `.canvas` DSL, or Markdown, of `my-diagram` at revision 3.
  *
  * This file builds that helper from Model and Language, and writes a collection as DSL or Markdown.
- * Each answers an Export `Result` (mistakes made in faults.ts). It never reads an import: that is
- * always refused. A throw from Language or the Markdown formatter is not caught here.
+ * Each answers an Export `Result` (mistakes made in faults.ts). Export can ask the helper to read
+ * DSL back in (`parse`); that is always refused. A throw while writing the text isn't caught.
  */
 import type {
   Collection,

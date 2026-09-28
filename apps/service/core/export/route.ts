@@ -16,7 +16,7 @@ import type { ExportRules } from '../../contract/ports/capabilities.js';
 import type { Exporter, PngEncoder } from '../../contract/ports/export.js';
 import type { ExportRequest } from '../../contract/records/export/request.js';
 import { readExportRequest } from './request.js';
-import { createResourceInspector } from './resources.js';
+import { createPassThroughResources } from './resources.js';
 import { buildArtifactFile } from './files.js';
 import { createDocumentsForExport, type DocumentDependencies } from './documents.js';
 import { acquireSnapshot } from './lease.js';
@@ -117,7 +117,7 @@ async function encodeNative(
     readerCss: '',
     snapshots: { acquire: (identity) => acquireSnapshot(identity, owners, signal) },
     documents: createDocumentsForExport(owners),
-    resources: createResourceInspector(),
+    resources: createPassThroughResources(),
   });
   return buildArtifactFile(await exporter.service.exportArtifact(request, signal));
 }

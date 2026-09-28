@@ -1,7 +1,7 @@
 /*
  * Why this file exists
  *
- * A theme file is written for people: `base=ink`, colours such as `"#72dbe8"`, and fonts by name,
+ * A theme file is written for people: `base=ink`, colours such as `"#72dbe8"`, and fonts by file,
  * such as `font body source="./fonts/inter.woff2"`. Templates and Design System need the exact
  * form: the base as an exact pin, each font as a checked font file, each colour as numbers.
  *
@@ -37,9 +37,10 @@ type FontEntry = readonly [
 
 /**
  * Readies one preset for saving: a theme written for people comes back in the exact form Templates
- * saves; any other preset comes back unchanged. The base is looked up in `catalog`, the saved
- * presets. Mistakes: `invalid-input` when the base can't be found, a font file isn't a checked
- * font, or the theme is malformed; `missing-asset` when Assets can't find a font file.
+ * saves; any other preset comes back unchanged. The base is found in `catalog` (the saved presets)
+ * with `inputs.templates`; each of `fontBindings` is checked with `inputs.assets`.
+ * Mistakes: `invalid-input` when the base can't be found, a font file isn't a checked font, or the
+ * theme is malformed; `missing-asset` when Assets can't find a font file.
  */
 export function prepareTheme(
   preset: Json,
