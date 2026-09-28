@@ -23,7 +23,7 @@ import type {
   WorkspaceSnapshot,
 } from '../../contract/records/foreign.js';
 import type { RetainedRequest } from '../../contract/records/retained-request.js';
-import type { StagedBackup } from '../../contract/records/staged-resource.js';
+import type { NamedAssetDigest, StagedBackup } from '../../contract/records/staged-resource.js';
 import type { ServiceAnswer, PresetPreparation } from '../../contract/records/service-answers.js';
 import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
@@ -59,6 +59,7 @@ interface PresetSource {
 /** A preset ready to send: its stored fonts and images, and the preset the service prepared. */
 interface PreparedPreset {
   readonly staged: readonly StagedBackup[];
+  readonly assets: readonly NamedAssetDigest[];
   readonly preparation: PresetPreparation;
 }
 
@@ -83,7 +84,10 @@ export async function admitPreset(
   return sendPreset(command, prepared.value, dependencies);
 }
 
-/** Reads the preset file, then parses its text as a theme or a recipe. */
+/**
+ * Reads the preset file, then parses its text as a theme or a recipe.
+ * Stops at a file it can't read.
+ */
 async function readPresetSource(
   command: AdmitCommand,
   dependencies: AdmitDependencies,
@@ -95,7 +99,11 @@ async function readPresetSource(
   return parsePresetText(command, presetText.value, dependencies);
 }
 
-/** Parses the file's text: a theme with Templates' theme reader, a recipe with Language. */
+/**
+ * Parses the file's text: a theme with Templates' theme reader, a recipe with Language.
+ * Stops at text that isn't a theme (`invalid-theme`, `duplicate-token`) or a recipe
+ * (`invalid-source`).
+ */
 function parsePresetText(
   command: AdmitCommand,
   presetText: string,
@@ -141,7 +149,7 @@ async function preparePreset(
   if (!preparation.ok) {
     return preparation;
   }
-  return success({ staged: staged.value, preparation: preparation.value });
+  return success({ staged: staged.value, assets, preparation: preparation.value });
 }
 
 /**
@@ -153,14 +161,14 @@ async function sendPreset(
   prepared: PreparedPreset,
   dependencies: AdmitDependencies,
 ): Promise<Result<string>> {
-  const workspaceAnswer = await dependencies.reads.workspace();
-  if (!workspaceAnswer.ok) {
-    return workspaceAnswer;
+  const workspaceRead = await dependencies.reads.workspace();
+  if (!workspaceRead.ok) {
+    return workspaceRead;
   }
   const retained = buildRetainedRequest(
     command,
     prepared,
-    workspaceAnswer.value,
+    workspaceRead.value,
     dependencies.requestIds,
   );
   if (!retained.ok) {
@@ -197,6 +205,5 @@ function presetDraft(
   prepared: PreparedPreset,
   requestId: RequestId,
 ): PresetDraft {
-  const assets = listNamedAssetDigests(prepared.staged);
-  return { preparation: prepared.preparation, assets, request: requestId };
+  return { preparation: prepared.preparation, assets: prepared.assets, request: requestId };
 }

@@ -62,7 +62,10 @@ export function answerProfileCommand(
   }
 }
 
-/** Writes the profile's rules as `profile describe` prints them. */
+/**
+ * Writes the profile's rules as `profile describe` prints them. It can't fail; it answers with a
+ * `Result` so all three profile commands answer the same way.
+ */
 function describeProfile(
   profile: ProfileId,
   profiles: CollectionProfiles,
@@ -72,7 +75,10 @@ function describeProfile(
   return success(description);
 }
 
-/** Writes the profile's starter source, named with the typed collection ID and title. */
+/**
+ * Writes the profile's starter source, named with the typed collection ID and title. It can't
+ * fail; it answers with a `Result` like the other profile commands.
+ */
 function scaffoldStarter(
   command: ScaffoldCommand,
   profiles: CollectionProfiles,

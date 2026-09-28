@@ -29,7 +29,7 @@ export function formatDescriptor(descriptor: ProfileDescriptor): string {
   const titleLine = `${descriptor.id} — ${descriptor.description}`;
   const commandLines = profileCommands(descriptor.id).map(indentedLine);
   const slotLines = descriptor.slots.map(slotLine);
-  const appendix = appendixLine(descriptor.appendix);
+  const appendixRule = appendixLine(descriptor.appendix);
   const conventionLines = descriptor.conventions.map(indentedLine);
   const noteLines = descriptor.notes.map(noteLine);
   // Each '' is a blank line between two parts.
@@ -41,7 +41,7 @@ export function formatDescriptor(descriptor: ProfileDescriptor): string {
     '',
     'Required logical documents:',
     ...slotLines,
-    appendix,
+    appendixRule,
     '',
     'Structural conventions:',
     ...conventionLines,
@@ -116,8 +116,8 @@ function noteLine(note: string): string {
 }
 
 /**
- * Writes the summary for a lint status Language never sends; its `never` parameter makes the
- * compiler prove every status above is handled.
+ * Writes the summary for a lint status Language never sends. Its `never` parameter makes the
+ * compiler prove `formatLintSummary` handles every status.
  */
 function unsupportedStatusSummary(
   profile: ProfileId,
