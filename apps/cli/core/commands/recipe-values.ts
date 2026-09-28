@@ -39,7 +39,7 @@ interface HeaderText {
 }
 
 /** The three texts of a pin `ID@VERSION#PIN`. */
-interface PinText {
+interface PinParts {
   readonly id: string;
   readonly version: string;
   readonly digest: string;
@@ -149,8 +149,9 @@ function checkRecipePin(pinText: string): Result<RecipePin> {
 }
 
 /** `ID@VERSION#PIN` split at its `@` and `#`. Fails with `invalid-arguments` for any other shape. */
-function splitPinText(pinText: string): Result<PinText> {
-  // Text of any other shape does not match, so it has no parts.
+function splitPinText(pinText: string): Result<PinParts> {
+  // `exec` gives null for any other shape; `?? []` makes all three parts missing, so one check
+  // covers both.
   const [, id, version, digest] = pinShape.exec(pinText) ?? [];
   const hasEveryPart = id !== undefined && version !== undefined && digest !== undefined;
   if (!hasEveryPart) {
@@ -160,7 +161,7 @@ function splitPinText(pinText: string): Result<PinText> {
 }
 
 /** The pin's ID and version, then its digest. Fails with `invalid-arguments` (the usage line). */
-function checkPinParts(pinParts: PinText): Result<RecipePin> {
+function checkPinParts(pinParts: PinParts): Result<RecipePin> {
   const identity = checkPinIdentity(pinParts);
   if (!identity.ok) {
     return identity;
@@ -173,7 +174,7 @@ function checkPinParts(pinParts: PinText): Result<RecipePin> {
 }
 
 /** The pin's ID, then its version. Fails with `invalid-arguments` (the usage line). */
-function checkPinIdentity(pinParts: PinText): Result<PresetIdentity> {
+function checkPinIdentity(pinParts: PinParts): Result<PresetIdentity> {
   const id = checked(presetIdSchema, pinParts.id, instantiateUsage);
   if (!id.ok) {
     return id;

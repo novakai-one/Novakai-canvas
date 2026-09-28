@@ -5,7 +5,7 @@
  */
 import type { FilePath } from '../../contract/brands.js';
 import type { LocalFiles } from '../../contract/ports/local-files.js';
-import type { Writes } from '../../contract/records/command.js';
+import type { OutOption } from '../../contract/records/command.js';
 import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
 
@@ -31,7 +31,7 @@ export interface OutputPorts {
  */
 export async function deliverAnswer(
   answer: CommandAnswer,
-  outOption: Writes,
+  outOption: OutOption,
   ports: OutputPorts,
 ): Promise<Result<PrintedText>> {
   const destination = chooseDestination(outOption);
@@ -42,7 +42,7 @@ export async function deliverAnswer(
 }
 
 /** Where the command asked for its answer: the --out file when given, otherwise the terminal. */
-function chooseDestination(outOption: Writes): AnswerDestination {
+function chooseDestination(outOption: OutOption): AnswerDestination {
   if (outOption.out === undefined) {
     return { kind: 'terminal' };
   }

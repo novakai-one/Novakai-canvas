@@ -27,17 +27,17 @@ export type ReadScope =
   | { readonly kind: 'object'; readonly id: ObjectId };
 
 /** `--out`: write the text answer to this file instead of stdout. */
-export interface Writes {
+export interface OutOption {
   readonly out?: FilePath;
 }
 
 /** `--request`: a fixed request ID for scripted receipt lookup. Absent: a fresh one is minted. */
-export interface Retains {
+export interface RequestOption {
   readonly request?: RequestId;
 }
 
 /** `--revision`: the collection revision the agent read. Absent on replace or patch: `revision-required`. */
-export interface Revises {
+export interface RevisionOption {
   readonly revision?: CollectionRevision;
 }
 
@@ -51,42 +51,48 @@ export interface RecipeHeader {
 
 /** A command the local service answers. */
 export type ServiceCommand =
-  | ({ readonly name: 'describe' | 'list' } & Writes)
+  | ({ readonly name: 'describe' | 'list' } & OutOption)
   | ({
       readonly name: 'read';
       readonly collection: CollectionId;
       readonly scope: ReadScope;
-    } & Writes)
-  | ({ readonly name: 'inspect'; readonly collection: CollectionId } & Writes)
-  | ({ readonly name: 'receipt' | 'retry' | 'apply'; readonly request: RequestId } & Writes)
-  | ({ readonly name: 'create'; readonly file: FilePath } & Retains & Writes)
-  | ({ readonly name: 'theme-admit'; readonly file: FilePath } & Retains & Writes)
-  | ({ readonly name: 'replace' | 'patch'; readonly file: FilePath } & Revises & Retains & Writes)
-  | ({ readonly name: 'preview'; readonly file: FilePath; readonly mode: ChangeMode } & Revises &
-      Retains &
-      Writes)
+    } & OutOption)
+  | ({ readonly name: 'inspect'; readonly collection: CollectionId } & OutOption)
+  | ({ readonly name: 'receipt' | 'retry' | 'apply'; readonly request: RequestId } & OutOption)
+  | ({ readonly name: 'create'; readonly file: FilePath } & RequestOption & OutOption)
+  | ({ readonly name: 'theme-admit'; readonly file: FilePath } & RequestOption & OutOption)
+  | ({ readonly name: 'replace' | 'patch'; readonly file: FilePath } & RevisionOption &
+      RequestOption &
+      OutOption)
+  | ({
+      readonly name: 'preview';
+      readonly file: FilePath;
+      readonly mode: ChangeMode;
+    } & RevisionOption &
+      RequestOption &
+      OutOption)
   | ({
       readonly name: 'recipe-admit';
       readonly file: FilePath;
       readonly recipe: RecipeHeader;
-    } & Retains &
-      Writes)
-  | ({ readonly name: 'recipe-instantiate'; readonly expansion: ExpansionRequest } & Writes);
+    } & RequestOption &
+      OutOption)
+  | ({ readonly name: 'recipe-instantiate'; readonly expansion: ExpansionRequest } & OutOption);
 
 /** A local build-spec profile command. Each writes its text answer to `--out` when given. */
 export type ProfileCommand =
-  | ({ readonly name: 'profile-describe'; readonly profile: ProfileId } & Writes)
+  | ({ readonly name: 'profile-describe'; readonly profile: ProfileId } & OutOption)
   | ({
       readonly name: 'profile-scaffold';
       readonly profile: ProfileId;
       readonly collection: CollectionId;
       readonly title: string;
-    } & Writes)
+    } & OutOption)
   | ({
       readonly name: 'profile-lint';
       readonly profile: ProfileId;
       readonly file: FilePath;
-    } & Writes);
+    } & OutOption);
 
 /** Any `pnpm canvas` command. */
 export type Command = { readonly name: 'help' } | ServiceCommand | ProfileCommand;
@@ -111,7 +117,7 @@ export type AdmitCommand = Extract<
  * `patch` need the revision the agent read.
  */
 export type ChangeIntent =
-  { readonly mode: 'create' } | ({ readonly mode: 'replace' | 'patch' } & Revises);
+  { readonly mode: 'create' } | ({ readonly mode: 'replace' | 'patch' } & RevisionOption);
 
 /** Where service commands are sent. */
 export interface ServiceOptions {

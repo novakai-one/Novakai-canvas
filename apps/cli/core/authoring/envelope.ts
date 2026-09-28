@@ -5,7 +5,7 @@
  * names, and nothing is sent.
  */
 import type { RequestIds } from '../../contract/ports/request-ids.js';
-import type { Retains } from '../../contract/records/command.js';
+import type { RequestOption } from '../../contract/records/command.js';
 import type { ReadVersion, Request } from '../../contract/records/foreign.js';
 import type { AssetBinding } from '../../contract/records/staged-resource.js';
 import type { RequestId, WorkspaceId } from '../../contract/brands.js';
@@ -54,7 +54,7 @@ export function envelope(
 
 /** The command's `--request` when given, so a script can look up its receipt; else a fresh ID. */
 export function requestIdFor(
-  command: Retains,
+  command: RequestOption,
   ids: RequestIds,
 ): RequestId {
   return command.request ?? ids.next();

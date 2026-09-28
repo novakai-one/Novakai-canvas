@@ -7,12 +7,12 @@
  */
 import type {
   ChangeMode,
+  OutOption,
   ReadScope,
   RecipeHeader,
-  Retains,
-  Revises,
+  RequestOption,
+  RevisionOption,
   ServiceCommand,
-  Writes,
 } from '../../contract/records/command.js';
 import type { FilePath } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
@@ -46,7 +46,7 @@ interface RecipeSource {
 }
 
 /** --request and --out, which every command that sends a DSL source or preset file takes. */
-type RequestAndOutOptions = Retains & Writes;
+type RequestAndOutOptions = RequestOption & OutOption;
 
 /** `describe` or `list`: --out only. Fails with `output-unavailable` (an empty --out). */
 export function buildAnswerOnlyCommand(
@@ -147,7 +147,7 @@ export function buildRevisionCheckedCommand(
   name: RevisionCheckedCommandName,
   fileText: string,
   flags: CommandFlags,
-  revisionOption: Revises,
+  revisionOption: RevisionOption,
 ): Result<ServiceCommand> {
   const file = checkSourceFile(fileText);
   if (!file.ok) {
@@ -168,7 +168,7 @@ export function buildPreviewCommand(
   fileText: string,
   flags: CommandFlags,
   mode: ChangeMode,
-  revisionOption: Revises,
+  revisionOption: RevisionOption,
 ): Result<ServiceCommand> {
   const file = checkSourceFile(fileText);
   if (!file.ok) {

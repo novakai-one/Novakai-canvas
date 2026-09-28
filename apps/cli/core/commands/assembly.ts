@@ -8,10 +8,10 @@
 import type {
   ChangeMode,
   CommandName,
-  Command,
   ParsedCommand,
+  ProfileCommand,
   ReadScope,
-  Revises,
+  RevisionOption,
   ServiceCommand,
 } from '../../contract/records/command.js';
 import type { Result } from '../../contract/errors.js';
@@ -39,6 +39,7 @@ import {
   buildRequestCommand,
   buildRevisionCheckedCommand,
 } from './service-commands.js';
+import type { OneOperandCommand } from './table.js';
 import {
   checkChangeMode,
   checkReadScope,
@@ -46,10 +47,16 @@ import {
   checkServiceOptions,
 } from './values.js';
 
+/** The commands that run locally with a build-spec profile. */
+type ProfileCommandName = ProfileCommand['name'];
+
+/** A service command that takes one operand: every one-operand command but the profile commands. */
+type OperandServiceCommandName = Exclude<OneOperandCommand, ProfileCommandName>;
+
 /** --mode (how a DSL source changes a collection) and --revision (the revision the agent read). */
 interface ModeAndRevision {
   readonly mode: ChangeMode;
-  readonly revisionOption: Revises;
+  readonly revisionOption: RevisionOption;
 }
 
 /**
@@ -61,14 +68,22 @@ interface ScopeModeAndRevision extends ModeAndRevision {
   readonly scope: ReadScope;
 }
 
+/** Every profile command, keyed by itself. */
+const profileCommands: Readonly<Record<ProfileCommandName, ProfileCommandName>> = Object.freeze({
+  'profile-describe': 'profile-describe',
+  'profile-scaffold': 'profile-scaffold',
+  'profile-lint': 'profile-lint',
+} satisfies Record<ProfileCommandName, ProfileCommandName>);
+
 /**
  * Assembles the accepted command with every value checked.
  *
  * Steps; the first failure stops assembly and is returned unchanged:
  * 1. Check the read scope, --mode, then --revision.
- * 2. Build the command: its operand first, then its own flags, --request and --out.
- * 3. Classify the command: `help` and profile commands run locally; a service command also gets
- *    its checked --server and --workspace (`defaultWorkspace` when the flag is absent).
+ * 2. Build the command for who runs it. `help` carries no values. A profile command runs locally:
+ *    its operand, then its own flags and --out. A service command is sent: its operand, then its
+ *    own flags, --request and --out, then its --server and --workspace (`defaultWorkspace` when
+ *    the flag is absent).
  *
  * Fails with `invalid-arguments`, `invalid-mode`, `invalid-revision`, `invalid-request`,
  * `unknown-profile`, `source-unavailable` (an empty FILE), `output-unavailable` (an empty --out)
@@ -82,11 +97,7 @@ export function assembleCommand(
   if (!scopeModeAndRevision.ok) {
     return scopeModeAndRevision;
   }
-  const command = buildCommand(accepted, scopeModeAndRevision.value);
-  if (!command.ok) {
-    return command;
-  }
-  return classifyCommand(command.value, accepted.flags, defaultWorkspace);
+  return buildCommand(accepted, scopeModeAndRevision.value, defaultWorkspace);
 }
 
 /**
@@ -127,41 +138,92 @@ function checkModeAndRevision(
   return success({ mode: mode.value, revisionOption: revisionOption.value });
 }
 
-/** A command that takes no operand, or one with its operand. Fails as its builder does. */
+/**
+ * The command built by whether it takes an operand. Fails as its builder does, then with
+ * `invalid-server`.
+ */
 function buildCommand(
   accepted: AcceptedCommand,
   scopeModeAndRevision: ScopeModeAndRevision,
-): Result<Command> {
+  defaultWorkspace: WorkspaceText,
+): Result<ParsedCommand> {
   switch (accepted.kind) {
     case 'no-operand':
-      return buildNoOperandCommand(accepted);
+      return buildNoOperandCommand(accepted, defaultWorkspace);
     case 'one-operand':
-      return buildOperandCommand(accepted, scopeModeAndRevision);
+      return buildOperandCommand(accepted, scopeModeAndRevision, defaultWorkspace);
     default:
       return unsupported(accepted);
   }
 }
 
-/** `help`, which carries no values; or `describe` or `list` with --out. Fails as its builder does. */
-function buildNoOperandCommand(accepted: AcceptedWithoutOperand): Result<Command> {
+/**
+ * `help`, which carries no values; or `describe` or `list`, sent with --out. Fails with
+ * `output-unavailable`, then `invalid-server`.
+ */
+function buildNoOperandCommand(
+  accepted: AcceptedWithoutOperand,
+  defaultWorkspace: WorkspaceText,
+): Result<ParsedCommand> {
   const { name, flags } = accepted;
+  if (name === 'help') {
+    return success({ kind: 'help' });
+  }
+  const serviceCommand = buildAnswerOnlyCommand(name, flags);
+  return addServiceOptions(serviceCommand, flags, defaultWorkspace);
+}
+
+/**
+ * A command with its operand: a profile command runs locally; any other is a service command,
+ * sent with its --server and --workspace. Fails as its builder does, then with `invalid-server`.
+ */
+function buildOperandCommand(
+  accepted: AcceptedWithOperand,
+  scopeModeAndRevision: ScopeModeAndRevision,
+  defaultWorkspace: WorkspaceText,
+): Result<ParsedCommand> {
+  const { name, operand, flags } = accepted;
+  if (isProfileCommandName(name)) {
+    const profileCommand = buildProfileCommand(name, operand, flags);
+    return routeLocally(profileCommand);
+  }
+  const serviceCommand = buildServiceCommand(name, operand, flags, scopeModeAndRevision);
+  return addServiceOptions(serviceCommand, flags, defaultWorkspace);
+}
+
+/** The profile command its name picks, from its operand and flags. Fails as that builder does. */
+function buildProfileCommand(
+  name: ProfileCommandName,
+  operand: string,
+  flags: CommandFlags,
+): Result<ProfileCommand> {
   switch (name) {
-    case 'help':
-      return success({ name });
-    case 'describe':
-    case 'list':
-      return buildAnswerOnlyCommand(name, flags);
+    case 'profile-describe':
+      return buildProfileDescribeCommand(operand, flags);
+    case 'profile-scaffold':
+      return buildProfileScaffoldCommand(operand, flags);
+    case 'profile-lint':
+      return buildProfileLintCommand(operand, flags);
     default:
       return unsupported(name);
   }
 }
 
-/** The command its name picks, built from its operand and flags. Fails as that builder does. */
-function buildOperandCommand(
-  accepted: AcceptedWithOperand,
+/** The built profile command, routed to run locally. Passes its builder's failure on unchanged. */
+function routeLocally(profileCommand: Result<ProfileCommand>): Result<ParsedCommand> {
+  if (!profileCommand.ok) {
+    return profileCommand;
+  }
+  return success({ kind: 'profile', command: profileCommand.value });
+}
+
+/** The service command its name picks, from its operand and flags. Fails as that builder does. */
+function buildServiceCommand(
+  name: OperandServiceCommandName,
+  operand: string,
+  flags: CommandFlags,
   scopeModeAndRevision: ScopeModeAndRevision,
-): Result<Command> {
-  const { name, operand, flags } = accepted;
+): Result<ServiceCommand> {
   const { scope, mode, revisionOption } = scopeModeAndRevision;
   switch (name) {
     case 'read':
@@ -184,62 +246,31 @@ function buildOperandCommand(
       return buildRecipeAdmitCommand(operand, flags);
     case 'recipe-instantiate':
       return buildRecipeInstantiateCommand(operand, flags);
-    case 'profile-describe':
-      return buildProfileDescribeCommand(operand, flags);
-    case 'profile-scaffold':
-      return buildProfileScaffoldCommand(operand, flags);
-    case 'profile-lint':
-      return buildProfileLintCommand(operand, flags);
     default:
       return unsupported(name);
   }
 }
 
 /**
- * The command sorted by who runs it: `help` and profile commands run locally; a service command
- * is sent, so its --server and --workspace are checked here. Fails with `invalid-server`.
+ * The built service command with its --server, then --workspace. Passes its builder's failure on
+ * unchanged, then fails with `invalid-server`.
  */
-function classifyCommand(
-  command: Command,
-  flags: CommandFlags,
-  defaultWorkspace: WorkspaceText,
-): Result<ParsedCommand> {
-  switch (command.name) {
-    case 'help':
-      return success({ kind: 'help' });
-    case 'profile-describe':
-    case 'profile-scaffold':
-    case 'profile-lint':
-      return success({ kind: 'profile', command });
-    case 'describe':
-    case 'list':
-    case 'read':
-    case 'inspect':
-    case 'receipt':
-    case 'retry':
-    case 'apply':
-    case 'create':
-    case 'replace':
-    case 'patch':
-    case 'preview':
-    case 'theme-admit':
-    case 'recipe-admit':
-    case 'recipe-instantiate':
-      return addServiceOptions(command, flags, defaultWorkspace);
-    default:
-      return unsupported(command);
-  }
-}
-
-/** The service command with its --server, then --workspace. Fails with `invalid-server`. */
 function addServiceOptions(
-  command: ServiceCommand,
+  serviceCommand: Result<ServiceCommand>,
   flags: CommandFlags,
   defaultWorkspace: WorkspaceText,
 ): Result<ParsedCommand> {
+  if (!serviceCommand.ok) {
+    return serviceCommand;
+  }
   const options = checkServiceOptions(flags, defaultWorkspace);
   if (!options.ok) {
     return options;
   }
-  return success({ kind: 'service', command, options: options.value });
+  return success({ kind: 'service', command: serviceCommand.value, options: options.value });
+}
+
+/** Whether the command runs locally with a build-spec profile. */
+function isProfileCommandName(name: OneOperandCommand): name is ProfileCommandName {
+  return Object.hasOwn(profileCommands, name);
 }

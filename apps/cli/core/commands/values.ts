@@ -25,11 +25,11 @@ import type { ProfileId } from '../../contract/records/profiles.js';
 import type {
   ChangeMode,
   CommandName,
+  OutOption,
   ReadScope,
-  Retains,
-  Revises,
+  RequestOption,
+  RevisionOption,
   ServiceOptions,
-  Writes,
 } from '../../contract/records/command.js';
 import type { FailureInput, Result } from '../../contract/errors.js';
 import { failure, success, unreadableSource, unwritableOutput } from '../../contract/errors.js';
@@ -82,14 +82,14 @@ export function checkReadScope(flags: Pick<CommandFlags, 'section' | 'object'>):
 }
 
 /**
- * The change mode. `create`, `replace` and `patch` are their own mode; any other command checks
- * --mode (`create` when absent). Fails with `invalid-mode`.
+ * The change mode. A change command (`create`, `replace`, `patch`) is its own mode; any other
+ * command checks --mode (`create` when absent). Fails with `invalid-mode`.
  */
 export function checkChangeMode(
   name: CommandName,
   flags: Pick<CommandFlags, 'mode'>,
 ): Result<ChangeMode> {
-  if (isChangeMode(name)) {
+  if (isChangeCommand(name)) {
     return success(name);
   }
   const modeText = flags.mode ?? defaultMode;
@@ -103,7 +103,7 @@ export function checkChangeMode(
  * --revision: a whole number from 0 to `Number.MAX_SAFE_INTEGER`; absent stays absent. Fails with
  * `invalid-revision`.
  */
-export function checkRevisionOption(flags: Pick<CommandFlags, 'revision'>): Result<Revises> {
+export function checkRevisionOption(flags: Pick<CommandFlags, 'revision'>): Result<RevisionOption> {
   if (flags.revision === undefined) {
     return success({});
   }
@@ -131,7 +131,7 @@ export function checkRequestId(requestText: string): Result<RequestId> {
 }
 
 /** --request; absent stays absent and a fresh ID is minted later. Fails with `invalid-request`. */
-export function checkRequestOption(flags: Pick<CommandFlags, 'request'>): Result<Retains> {
+export function checkRequestOption(flags: Pick<CommandFlags, 'request'>): Result<RequestOption> {
   if (flags.request === undefined) {
     return success({});
   }
@@ -154,7 +154,7 @@ export function checkSourceFile(fileText: string): Result<FilePath> {
  * --out; absent stays absent. An empty path fails with the text its write would give:
  * `output-unavailable`. It fails before the command runs, so nothing is sent or committed.
  */
-export function checkOutOption(flags: Pick<CommandFlags, 'out'>): Result<Writes> {
+export function checkOutOption(flags: Pick<CommandFlags, 'out'>): Result<OutOption> {
   if (flags.out === undefined) {
     return success({});
   }
@@ -255,6 +255,11 @@ function fillEmptyWorkspace(workspaceText: string): string {
     return currentDirectory;
   }
   return workspaceText;
+}
+
+/** Whether the command is `create`, `replace` or `patch`: its name is also its change mode. */
+function isChangeCommand(name: CommandName): name is 'create' | 'replace' | 'patch' {
+  return isChangeMode(name);
 }
 
 /** Whether `text` is one of the three change modes. */
