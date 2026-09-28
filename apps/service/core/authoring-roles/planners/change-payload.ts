@@ -18,7 +18,7 @@ import type {
   Request,
 } from '../../../contract/records/capability-types.js';
 import { proposalSchema } from '../../../contract/schemas.js';
-import { authoringFailure } from '../../../contract/errors.js';
+import { authoringFailure, success } from '../../../contract/errors.js';
 
 /** The codes a planner answers when Model, Library or Language refuses a change. */
 export type CapabilityRefusalCode = Extract<
@@ -39,8 +39,10 @@ export function readChangePayload(
   path: string,
   message: string,
 ): AuthoringResult<Json> {
-  if (request.intent.kind !== 'change') return authoringFailure('invalid-input', path, message);
-  return { ok: true, value: request.intent.payload };
+  if (request.intent.kind !== 'change') {
+    return notAChangeFailure(path, message);
+  }
+  return success(request.intent.payload);
 }
 
 /**
@@ -53,9 +55,11 @@ export function checkProposal(
   path: string,
   message: string,
 ): AuthoringResult<Proposal> {
-  const parsed = proposalSchema.safeParse(planned);
-  if (!parsed.success) return authoringFailure('invalid-input', path, message);
-  return { ok: true, value: parsed.data };
+  const proposal = proposalSchema.safeParse(planned);
+  if (!proposal.success) {
+    return unfitProposalFailure(path, message);
+  }
+  return success(proposal.data);
 }
 
 /**
@@ -69,4 +73,20 @@ export function capabilityRefusalFailure<T>(
   source: CapabilityFailure,
 ): AuthoringResult<T> {
   return authoringFailure(code, path, 'The owning capability rejected this input', [], source);
+}
+
+/** Makes the mistake for an undo or redo sent to a planner, which only plans changes. */
+function notAChangeFailure(
+  path: string,
+  message: string,
+): AuthoringResult<never> {
+  return authoringFailure('invalid-input', path, message);
+}
+
+/** Makes the mistake for planned writes that don't fit Authoring's proposal shape or limits. */
+function unfitProposalFailure(
+  path: string,
+  message: string,
+): AuthoringResult<never> {
+  return authoringFailure('invalid-input', path, message);
 }

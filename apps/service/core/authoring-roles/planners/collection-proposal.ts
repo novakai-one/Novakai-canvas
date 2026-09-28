@@ -11,6 +11,7 @@
 import type {
   AuthoringResult,
   Collection,
+  Organisation,
   Proposal,
   Snapshot,
 } from '../../../contract/records/capability-types.js';
@@ -22,6 +23,8 @@ import type {
   ResourceSelector,
   WorkspaceReader,
 } from '../../../contract/ports/workspace.js';
+import { success } from '../../../contract/errors.js';
+import type { RecordKind } from '../../workspace/records.js';
 import { checkProposal, capabilityRefusalFailure } from './change-payload.js';
 
 /** What planning a collection's save needs. */
@@ -43,83 +46,121 @@ export interface CollectionPlannerDependencies {
 export function createCollectionPlanner(
   dependencies: CollectionPlannerDependencies,
 ): CollectionPlanner {
-  return { propose: (snapshot, collection) => propose(snapshot, collection, dependencies) };
+  return {
+    propose: (snapshot, collection) => proposeCollectionSave(snapshot, collection, dependencies),
+  };
 }
 
-/**
- * Reads the snapshot and the collection's expected resources, then builds the proposal (see
- * `proposal`). Reader and selector failures pass through unchanged.
- */
-function propose(
+/** One record the save puts: its key, its value, and the stored files it keeps (as digests). */
+interface PlannedWrite {
+  readonly kind: 'put';
+  readonly key: { readonly kind: RecordKind; readonly id: string };
+  readonly value: unknown;
+  readonly resources: readonly string[];
+}
+
+/** Plans the collection's write, keeping the stored files it needs, plus its catalog entry if new. */
+function proposeCollectionSave(
   snapshot: Snapshot,
   collection: Collection,
   dependencies: CollectionPlannerDependencies,
 ): AuthoringResult<Proposal> {
-  const view = dependencies.workspace.read(snapshot);
-  if (!view.ok) return view;
-  const blobs = dependencies.resources.digestsForCollection(collection, view.value);
-  if (!blobs.ok) return blobs;
-  return proposal(collection, view.value, blobs.value, dependencies);
+  const contents = dependencies.workspace.read(snapshot);
+  if (!contents.ok) {
+    return contents;
+  }
+  const fileDigests = dependencies.resources.digestsForCollection(collection, contents.value);
+  if (!fileDigests.ok) {
+    return fileDigests;
+  }
+  const collectionWrite = plannedCollectionWrite(collection, fileDigests.value);
+  return proposeStoredOrNewCollection(collection, collectionWrite, contents.value, dependencies);
 }
 
-/**
- * Proposes the collection write alone when the collection is already stored. A new collection
- * also gets Library's catalog membership as a second write. Fails with `invariant-violation` at
- * `catalog` when Library refuses the membership (Library's failure kept as source), and
- * `invalid-input` at `proposal` when the proposal exceeds Authoring's limits.
- */
-function proposal(
+/** A stored collection gets its write alone; a new one also gets its catalog entry. */
+function proposeStoredOrNewCollection(
   collection: Collection,
-  view: WorkspaceContents,
-  resources: readonly AuthoringDigest[],
+  collectionWrite: PlannedWrite,
+  contents: WorkspaceContents,
   dependencies: CollectionPlannerDependencies,
 ): AuthoringResult<Proposal> {
-  const write = {
+  if (isStoredCollection(contents, collection)) {
+    return checkCollectionProposal([collectionWrite], collection.id);
+  }
+  return proposeNewCollection(collection, collectionWrite, contents, dependencies);
+}
+
+/** Asks Library to add the new collection to the catalog, and plans both writes. */
+function proposeNewCollection(
+  collection: Collection,
+  collectionWrite: PlannedWrite,
+  contents: WorkspaceContents,
+  dependencies: CollectionPlannerDependencies,
+): AuthoringResult<Proposal> {
+  const catalog = planCatalogEntry(collection, contents, dependencies);
+  if (!catalog.ok) {
+    return catalog;
+  }
+  const catalogWrite = plannedCatalogWrite(catalog.value);
+  return checkCollectionProposal([collectionWrite, catalogWrite], collection.id);
+}
+
+/** Asks Library to register the collection at the end of the catalog, and gives the new catalog. */
+function planCatalogEntry(
+  collection: Collection,
+  contents: WorkspaceContents,
+  dependencies: CollectionPlannerDependencies,
+): AuthoringResult<Organisation> {
+  const inventory = [...contents.library.collections, dependencies.workspace.project(collection)];
+  const lastPlace = contents.library.organisation.entries.length;
+  const registration = { op: 'register', value: { collection: collection.id, order: lastPlace } };
+  const planned = dependencies.library.planMembership({
+    snapshot: contents.library,
+    changes: [registration],
+    inventory,
+  });
+  if (!planned.ok) {
+    return capabilityRefusalFailure('invariant-violation', 'catalog', planned.error);
+  }
+  return success(planned.value.candidate);
+}
+
+/** Whether the collection is already stored. */
+function isStoredCollection(
+  contents: WorkspaceContents,
+  collection: Collection,
+): boolean {
+  return contents.collections.some((stored) => stored.id === collection.id);
+}
+
+/** Plans the collection's write, keeping the stored files it needs. */
+function plannedCollectionWrite(
+  collection: Collection,
+  fileDigests: readonly AuthoringDigest[],
+): PlannedWrite {
+  return {
     kind: 'put',
     key: { kind: 'collection', id: collection.id },
     value: collection,
-    resources,
+    resources: fileDigests,
   };
-  if (view.collections.some((item) => item.id === collection.id))
-    return checked([write], collection.id);
-  const inventory = [...view.library.collections, dependencies.workspace.project(collection)];
-  const organisation = dependencies.library.planMembership({
-    snapshot: view.library,
-    changes: [
-      {
-        op: 'register',
-        value: { collection: collection.id, order: view.library.organisation.entries.length },
-      },
-    ],
-    inventory,
-  });
-  if (!organisation.ok)
-    return capabilityRefusalFailure('invariant-violation', 'catalog', organisation.error);
-  return checked(
-    [
-      write,
-      {
-        kind: 'put',
-        key: { kind: 'catalog', id: organisation.value.candidate.id },
-        value: organisation.value.candidate,
-        resources: [],
-      },
-    ],
-    collection.id,
-  );
 }
 
-/**
- * Checks the writes against Authoring's proposal schema, with no reads and the collection ID as
- * the diff. Fails with `invalid-input` at `proposal` when they exceed Authoring's limits.
- */
-function checked(
-  writes: readonly unknown[],
-  collection: string,
+/** Plans the write of the catalog Library planned. */
+function plannedCatalogWrite(organisation: Organisation): PlannedWrite {
+  return {
+    kind: 'put',
+    key: { kind: 'catalog', id: organisation.id },
+    value: organisation,
+    resources: [],
+  };
+}
+
+/** Checks the writes fit Authoring's limits, with no reads and the collection's ID as the diff. */
+function checkCollectionProposal(
+  writes: readonly PlannedWrite[],
+  collectionId: string,
 ): AuthoringResult<Proposal> {
-  return checkProposal(
-    { writes, reads: [], diff: { collection }, warnings: [] },
-    'proposal',
-    'Collection proposal exceeds the authoring contract',
-  );
+  const planned = { writes, reads: [], diff: { collection: collectionId }, warnings: [] };
+  return checkProposal(planned, 'proposal', 'Collection proposal exceeds the authoring contract');
 }

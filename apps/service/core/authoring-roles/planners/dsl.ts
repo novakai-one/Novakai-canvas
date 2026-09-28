@@ -12,6 +12,7 @@
  */
 import type {
   AuthoringResult,
+  Collection,
   IntentPlanner,
   Json,
   Language,
@@ -28,7 +29,7 @@ import type { ResourceSelection } from '../../../contract/records/planning/selec
 import type { DslCommand } from '../../../contract/records/planning/commands.js';
 import { dslCommand } from '../../../contract/records/planning/commands.js';
 import { plannerId } from '../../../contract/schemas.js';
-import { authoringFailure } from '../../../contract/errors.js';
+import { authoringFailure, success } from '../../../contract/errors.js';
 import { sameResourcesJson } from '../../resources/selection/pins.js';
 import { readChangePayload, capabilityRefusalFailure } from './change-payload.js';
 
@@ -53,94 +54,128 @@ export interface DslPlannerDependencies {
 export function createDslPlanner(dependencies: DslPlannerDependencies): IntentPlanner {
   return {
     id: plannerId.parse('dsl'),
-    plan: async (request, snapshot, pins) => lower(request, snapshot, pins, dependencies),
+    plan: async (request, snapshot, pins) => planDslChange(request, snapshot, pins, dependencies),
   };
 }
 
-/**
- * The `dsl` planner: takes the change payload, then lowers it (see `lowerSource`). Fails with
- * `invalid-input` at `intent` when the request is not a change.
- */
-function lower(
+/** Reads the DSL command, checks the pick of themes and files still stands, then applies the text. */
+function planDslChange(
   request: Request,
   snapshot: Snapshot,
   pins: Json,
   dependencies: DslPlannerDependencies,
 ): AuthoringResult<Proposal> {
-  const input = readChangePayload(request, 'intent', 'Expected a diagram change');
-  if (!input.ok) return input;
-  return lowerSource(input.value, request, snapshot, pins, dependencies);
+  const command = readDslCommand(request);
+  if (!command.ok) {
+    return command;
+  }
+  const selection = pickResourcesAgain(request, snapshot, pins, dependencies);
+  if (!selection.ok) {
+    return selection;
+  }
+  return applyDslText(command.value, snapshot, selection.value, dependencies);
 }
 
-/**
- * Decodes the DSL command and repeats resource selection on this snapshot, then compiles it (see
- * `compile`). Fails with `invalid-input` at `dsl` when the payload lacks source or mode. Selector
- * failures pass through unchanged.
- */
-function lowerSource(
-  input: Json,
+/** Takes the DSL command (the text and its mode) out of the request. */
+function readDslCommand(request: Request): AuthoringResult<DslCommand> {
+  const payload = readChangePayload(request, 'intent', 'Expected a diagram change');
+  if (!payload.ok) {
+    return payload;
+  }
+  const command = dslCommand.safeParse(payload.value);
+  if (!command.success) {
+    return malformedDslCommandFailure();
+  }
+  return success(command.data);
+}
+
+/** Picks the change's themes and files again, and checks the pick matches the held one (`pins`). */
+function pickResourcesAgain(
   request: Request,
   snapshot: Snapshot,
   pins: Json,
   dependencies: DslPlannerDependencies,
-): AuthoringResult<Proposal> {
-  const command = dslCommand.safeParse(input);
-  if (!command.success)
-    return authoringFailure(
-      'invalid-input',
-      'dsl',
-      'DSL change requires source and an explicit mode',
-    );
-  const selected = dependencies.resources.select(request, snapshot);
-  if (!selected.ok) return selected;
-  return compile(command.data, snapshot, pins, selected.value, dependencies);
+): AuthoringResult<ResourceSelection> {
+  const selection = dependencies.resources.select(request, snapshot);
+  if (!selection.ok) {
+    return selection;
+  }
+  if (!sameResourcesJson(pins, selection.value.resourcesJson)) {
+    return changedPickFailure();
+  }
+  return success(selection.value);
 }
 
-/**
- * Parses the source, then lowers it (see `compileCollection`). Fails with `revision-conflict` at
- * `pins` when the selected pins differ from the admitted pins in any value (see
- * `sameResourcesJson`), and `invalid-input` at `source` when Language cannot parse the source
- * (Language's failure kept as source).
- */
-function compile(
+/** Has Language read the text and apply it to the stored collection, then plans the save. */
+function applyDslText(
   command: DslCommand,
   snapshot: Snapshot,
-  pins: Json,
-  selected: ResourceSelection,
+  selection: ResourceSelection,
   dependencies: DslPlannerDependencies,
 ): AuthoringResult<Proposal> {
-  if (!sameResourcesJson(pins, selected.resourcesJson))
-    return authoringFailure(
-      'revision-conflict',
-      'pins',
-      'Resource selection differs from the admitted lease',
-    );
   const parsed = dependencies.language.parse(command.source);
-  if (!parsed.ok) return capabilityRefusalFailure('invalid-input', 'source', parsed.error);
-  return compileCollection(command, parsed.value.collection, snapshot, selected, dependencies);
+  if (!parsed.ok) {
+    return capabilityRefusalFailure('invalid-input', 'source', parsed.error);
+  }
+  const collectionId = parsed.value.collection;
+  const lowered = lowerOntoStored(command, collectionId, snapshot, selection, dependencies);
+  if (!lowered.ok) {
+    return lowered;
+  }
+  return dependencies.collections.propose(snapshot, lowered.value);
 }
 
-/**
- * Lowers the command against the stored collection (null when not stored yet) and hands the
- * result to the collection planner. Fails with `invariant-violation` at `source` when Language
- * refuses the change (Language's failure kept as source). Reader and collection planner failures
- * pass through unchanged.
- */
-function compileCollection(
+/** Has Language apply the command to the stored collection (none yet for a new one). */
+function lowerOntoStored(
   command: DslCommand,
-  id: string,
+  collectionId: string,
   snapshot: Snapshot,
-  selected: ResourceSelection,
+  selection: ResourceSelection,
   dependencies: DslPlannerDependencies,
-): AuthoringResult<Proposal> {
-  const view = dependencies.workspace.read(snapshot);
-  if (!view.ok) return view;
-  const original = view.value.collections.find((item) => item.id === id) ?? null;
-  const intent = dependencies.language.lower({
+): AuthoringResult<Collection> {
+  const stored = findStoredCollection(snapshot, collectionId, dependencies);
+  if (!stored.ok) {
+    return stored;
+  }
+  const lowered = dependencies.language.lower({
     ...command,
-    snapshot: original,
-    resources: selected.resources,
+    snapshot: stored.value,
+    resources: selection.resources,
   });
-  if (!intent.ok) return capabilityRefusalFailure('invariant-violation', 'source', intent.error);
-  return dependencies.collections.propose(snapshot, intent.value.collection);
+  if (!lowered.ok) {
+    return capabilityRefusalFailure('invariant-violation', 'source', lowered.error);
+  }
+  return success(lowered.value.collection);
+}
+
+/** Finds the stored collection with this ID, or `null` when it isn't stored yet. */
+function findStoredCollection(
+  snapshot: Snapshot,
+  collectionId: string,
+  dependencies: DslPlannerDependencies,
+): AuthoringResult<Collection | null> {
+  const contents = dependencies.workspace.read(snapshot);
+  if (!contents.ok) {
+    return contents;
+  }
+  const stored = contents.value.collections.find((collection) => collection.id === collectionId);
+  return success(stored ?? null);
+}
+
+/** Makes the mistake for a DSL change without its text or an explicit mode. */
+function malformedDslCommandFailure(): AuthoringResult<never> {
+  return authoringFailure(
+    'invalid-input',
+    'dsl',
+    'DSL change requires source and an explicit mode',
+  );
+}
+
+/** Makes the mistake for a pick of themes and files that differs from the one Authoring holds. */
+function changedPickFailure(): AuthoringResult<never> {
+  return authoringFailure(
+    'revision-conflict',
+    'pins',
+    'Resource selection differs from the admitted lease',
+  );
 }

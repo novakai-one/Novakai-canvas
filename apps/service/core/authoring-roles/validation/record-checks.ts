@@ -14,7 +14,7 @@ import type {
   StoredRecord,
 } from '../../../contract/records/capability-types.js';
 import type { FailureSource } from '../../../contract/records/transport/failure-source.js';
-import { andThen, authoringFailure, collect, success } from '../../../contract/errors.js';
+import { authoringFailure, collect, success } from '../../../contract/errors.js';
 import { findLiveRecord, type RecordKind } from '../../workspace/records.js';
 
 /**
@@ -33,7 +33,9 @@ export function requireFact(
   condition: boolean,
   message: string,
 ): AuthoringResult<void> {
-  if (!condition) return invariantViolationFailure(message);
+  if (!condition) {
+    return invariantViolationFailure(message);
+  }
   return success(undefined);
 }
 
@@ -46,9 +48,11 @@ export function requireRecord(
   kind: RecordKind,
   id: string,
 ): AuthoringResult<StoredRecord> {
-  const value = findLiveRecord(snapshot, kind, id);
-  if (!value) return invariantViolationFailure(`Missing canonical record ${kind}:${id}`);
-  return success(value);
+  const record = findLiveRecord(snapshot, kind, id);
+  if (record === undefined) {
+    return missingRecordFailure(kind, id);
+  }
+  return success(record);
 }
 
 /**
@@ -60,10 +64,10 @@ export function requireExactFiles(
   record: StoredRecord,
   expectedDigests: readonly string[],
 ): AuthoringResult<void> {
-  return requireFact(
-    retainsExactly(record, expectedDigests),
-    `Resource retention differs for ${record.key.kind}:${record.key.id}`,
-  );
+  if (!retainsExactly(record, expectedDigests)) {
+    return retentionDiffersFailure(record);
+  }
+  return success(undefined);
 }
 
 /**
@@ -74,20 +78,43 @@ export function checkEach<Item>(
   items: readonly Item[],
   check: (item: Item) => AuthoringResult<void>,
 ): AuthoringResult<void> {
-  return andThen(collect(items, check), () => success(undefined));
+  const checked = collect(items, check);
+  if (!checked.ok) {
+    return checked;
+  }
+  return success(undefined);
 }
 
-/**
- * Whether the record's retained digests, sorted, equal the distinct expected digests, sorted. A
- * digest the record retains twice makes them differ.
- */
+/** Whether the record keeps each expected file once, and no other; a file kept twice fails. */
 function retainsExactly(
   record: StoredRecord,
-  expected: readonly string[],
+  expectedDigests: readonly string[],
 ): boolean {
-  const retained = [...record.resources].toSorted();
-  const wanted = [...new Set(expected)].toSorted();
-  return (
-    retained.length === wanted.length && retained.every((digest, index) => digest === wanted[index])
+  const retained = record.resources.toSorted();
+  const distinctExpected = [...new Set(expectedDigests)];
+  const wanted = distinctExpected.toSorted();
+  return sameSortedDigests(retained, wanted);
+}
+
+/** Whether two sorted digest lists hold the same digests. */
+function sameSortedDigests(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  return left.length === right.length && left.every((digest, index) => digest === right[index]);
+}
+
+/** Makes the mistake for a record that isn't in the candidate. */
+function missingRecordFailure(
+  kind: RecordKind,
+  id: string,
+): AuthoringResult<never> {
+  return invariantViolationFailure(`Missing canonical record ${kind}:${id}`);
+}
+
+/** Makes the mistake for a record that doesn't keep exactly the stored files it should. */
+function retentionDiffersFailure(record: StoredRecord): AuthoringResult<never> {
+  return invariantViolationFailure(
+    `Resource retention differs for ${record.key.kind}:${record.key.id}`,
   );
 }
