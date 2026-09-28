@@ -8,7 +8,7 @@ Composes all capabilities: owns sessions, rendering and inspection jobs, resourc
 | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `cli/`                                         | Process entries: `serve.ts` (`pnpm dev`) and `render-worker.mjs` (the render worker realm)                                                |
 | `contract/index.ts`                            | The only import surface for web and cli                                                                                                   |
-| `contract/api.ts`                              | The one core function consumers call (`projectCollection`)                                                                                |
+| `contract/api.ts`                              | The core functions consumers call (`projectCollection`, `validReport`)                                                                    |
 | `contract/errors.ts`, `types.ts`, `schemas.ts` | Service failure codes and `Result`; the `WorkspaceSession` type; capability schemas core parses with                                      |
 | `contract/brands.ts`                           | Typed IDs: capability brands; service brands (generation, session/agent secrets, port, host path, render job ID); `sha256:` ⇄ bare digest |
 | `contract/records/`                            | Data (see note below): capability types, then a folder per topic (`transport`, `rendering`, `planning`, `presets`, `workspace`, `export`) |

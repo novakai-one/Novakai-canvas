@@ -53,9 +53,10 @@ function invalidReport(refusal: Diagnostic): InspectionReport {
 /**
  * The valid report: the scene passed the independent inspector during derivation, so the report
  * is its own warning record, the crossing and relaxed-constraint counts, the section count and the
- * engine versions.
+ * engine versions. Also the report of the CLI's headless render (`pnpm render:png`). Pure; cannot
+ * fail.
  */
-function validReport(document: RenderDocument): InspectionReport {
+export function validReport(document: RenderDocument): InspectionReport {
   const scene = document.scene;
   return {
     valid: true,
