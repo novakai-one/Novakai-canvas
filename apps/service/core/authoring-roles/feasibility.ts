@@ -6,9 +6,8 @@
  * `pnpm canvas preview` on a DSL change lays out the changed collection and warns if wires cross.
  *
  * This file answers that question for Authoring. It renders each changed collection and passes on
- * its routing warnings, which nodes and wires the layout moved, and the drawn result when a preview
- * is asked for. Each step answers a `Result` (contract/errors.ts); the first mistake stops the
- * check. It never saves anything.
+ * its routing warnings, each node or wire Layout had to nudge from where it was asked to go, and
+ * the drawn result when a preview is asked for. It never saves anything.
  */
 import type {
   AuthoringDiagnostic,
@@ -41,8 +40,8 @@ export interface FeasibilityDependencies {
 
 /**
  * Builds Authoring's layout check (`Feasibility`). Its `check` renders each changed collection and
- * answers its routing warnings, which nodes and wires the layout moved (before and after), and the
- * drawn result when a preview is asked for.
+ * answers its routing warnings, each node or wire Layout had to nudge (its box or route before and
+ * after, and why), and the drawn result when a preview is asked for.
  * Mistakes: `constraint-conflict` when a collection can't be rendered or the request is cancelled,
  * `corrupt-record` when the result isn't JSON. The reader's and job builder's pass through.
  */

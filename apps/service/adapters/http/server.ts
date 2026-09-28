@@ -64,9 +64,9 @@ const HANDLERS: Readonly<Record<RequestKind, Handler>> = Object.freeze({
 
 /**
  * Starts the HTTP server on 127.0.0.1 at `options.port`, answering each request with `bindings`.
- * Fails with `unavailable` at `server` when the port can't be opened; the caller still has the
- * workspace, and closes it. The running server's `close` fails the same way if it can't close
- * cleanly.
+ * Fails with `unavailable` at `server` when the port can't be opened. The running server's `close`
+ * fails the same way if it can't close cleanly. It never opens or closes the workspace; whoever
+ * opened it closes it.
  */
 export function startHttpServer(
   options: ServerOptions,

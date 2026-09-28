@@ -3,8 +3,8 @@
  *
  * Only DSL, Model and preset changes can use themes and files. For example, a DSL change's text
  * may say `asset @logo image source="./logo.png"`, and only Language can read that line. So the
- * selector first reads which kind of change it has, then asks Language what its text declares. It
- * never treats a JSON field as a file path.
+ * selector first reads which kind of change it has, then asks Language what its text declares. A
+ * file is only ever found through Language, never by reading a path out of the JSON.
  *
  * This file does both reads. A payload that fails its planner's check is `invalid-input`; text
  * Language refuses is `missing-asset`. Both are at `resources`, and nothing is saved.

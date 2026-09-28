@@ -37,10 +37,10 @@ import {
 } from './job-refusal.js';
 
 /**
- * Makes the render-job builder, which reads through `inputs`. Its `create` builds the job for one
- * collection (see `RenderJobs` in contract/ports/rendering.ts).
- * Mistakes: `missing-asset` when Templates, Assets or Design System refuse, or the pinned preset
- * isn't a theme; `invalid-input` when what they gave back isn't in the form Presentation or Layout
+ * Makes the render-job builder. `inputs` are the parts it asks: Templates for the theme, Assets
+ * for fonts and images, Design System for the style. Its `create` builds one collection's job.
+ * Mistakes: `missing-asset` when a part refuses, or the exact theme version the collection names
+ * is a recipe; `invalid-input` when a part's answer isn't in the form Presentation or Layout
  * expects.
  */
 export function createRenderJobs(inputs: RenderJobInputs): RenderJobs {

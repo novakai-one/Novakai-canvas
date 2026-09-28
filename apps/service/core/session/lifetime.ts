@@ -22,7 +22,7 @@ export interface SessionLifetime {
   ): Promise<T>;
   /**
    * Stops new calls, waits for running ones, then closes the workspace once; calling it again gets
-   * the same answer. Fails with the close's own failure, or `unavailable` at `shutdown` if it throws.
+   * the same answer. Fails as `closeWorkspace` fails, or with `unavailable` if `closeWorkspace` throws.
    */
   close(): Promise<Result<void>>;
 }

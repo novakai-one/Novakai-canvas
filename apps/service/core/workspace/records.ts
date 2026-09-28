@@ -52,8 +52,8 @@ export function presetRecordId(digest: PresetDigest): `preset:${string}` {
 }
 
 /**
- * Makes the ID an uploaded file's stored description is saved under (kind `asset-admission`):
- * `asset:<digest>`. Never fails.
+ * Makes the record ID for one uploaded file, `asset:<digest>`. That record (kind `asset-admission`)
+ * describes the file: its type, size, alt text and where it came from. Never fails.
  */
 export function assetRecordId(digest: AssetDigest): `asset:${string}` {
   return `asset:${digest}`;

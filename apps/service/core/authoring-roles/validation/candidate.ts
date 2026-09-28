@@ -42,9 +42,10 @@ export interface CandidateValidatorDependencies extends CatalogCheckDependencies
 }
 
 /**
- * Builds the final check (`CandidateValidator`). Its `validate` checks the candidate, then answers
- * each record's version from before the change, so Authoring saves only if none changed since.
- * Undo/redo history records are left out; Authoring tracks those itself.
+ * Builds the final check (`CandidateValidator`). Its `validate` checks the workspace as the change
+ * would leave it, and answers the version each record it read had before the change. Authoring
+ * saves only if those versions are still current. Undo and redo records aren't in that list;
+ * Authoring guards those itself.
  * Mistakes: `invariant-violation` at `candidate` when a record is missing or out of date, keeps the
  * wrong files, names another workspace, or a file is gone. Reader mistakes pass through.
  */

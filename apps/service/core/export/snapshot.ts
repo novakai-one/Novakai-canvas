@@ -6,8 +6,8 @@
  * must be refused, not quietly answered with revision 3.
  *
  * This file checks each answer on the way (the workspace read, the collection found, the render)
- * and builds the final export snapshot. Each step answers an Export `Result` (mistakes made in
- * faults.ts). It calls nothing itself; lease.ts does the reading and rendering.
+ * and builds the final export snapshot. It never reads the workspace or renders: lease.ts does
+ * both, and hands in the one file reader this file uses (`readHeldFile`).
  */
 import type { Result } from '../../contract/errors.js';
 import type {
@@ -69,8 +69,8 @@ export function checkRenderedDocument(
 
 /**
  * Builds the snapshot Export makes its file from: the collection, its drawn scene, its colours,
- * and its theme, images and fonts read with `readHeldFile`. Fails with `cancelled` at `export`
- * when the export was stopped, or as `gatherExportResources` fails.
+ * and its theme, images and fonts, each read with `readHeldFile`. Fails with `cancelled` at
+ * `export` when the export was stopped, or when a file can't be read (`gatherExportResources`).
  */
 export function buildExportSnapshot(
   selected: SelectedCollection,

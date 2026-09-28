@@ -74,9 +74,10 @@ export function translateRelease(release: AssetResult<void>): ExportResult<void>
 }
 
 /**
- * Combines the export's own answer with the answer to letting go of its held files.
- * If letting go failed, a success becomes that `cleanup-failed` mistake, and an earlier mistake
- * keeps its code and carries the clean-up mistake under `cleanup`. Otherwise `primary` is kept.
+ * Combines the export's own answer (`primary`) with the answer to letting go of its held files
+ * (`cleanup`). When `cleanup` worked, answers `primary`. When it failed, a working `primary`
+ * becomes the `cleanup` mistake, and a failed `primary` keeps its own mistake, with the `cleanup`
+ * mistake attached under `cleanup`.
  */
 export function combineWithCleanup<T>(
   primary: ExportResult<T>,
