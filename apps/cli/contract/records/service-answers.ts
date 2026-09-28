@@ -163,8 +163,10 @@ export const preparedAnswerSchema = z.looseObject({
   reads: z.array(z.unknown()),
 });
 
-/** Authoring's receipt, or `null`, as a lookup: `committed` with the receipt, or `none`. */
+/** Turns Authoring's receipt, or `null` when there is none, into a `ReceiptLookup`. */
 function receiptLookup(receipt: Receipt | null): ReceiptLookup {
-  if (receipt === null) return { kind: 'none' };
+  if (receipt === null) {
+    return { kind: 'none' };
+  }
   return { kind: 'committed', receipt };
 }

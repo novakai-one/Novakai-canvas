@@ -9,30 +9,41 @@
  * request's contents.
  */
 import { fileURLToPath } from 'node:url';
-import type { Result } from '../contract/index.js';
+import type { CliFailure, Result } from '../contract/index.js';
 import { formatFailure, runCanvas } from '../contract/index.js';
 
 /** The workspace a command uses when given no `--workspace`: `.local/workspace` in this checkout. */
 const defaultWorkspace = fileURLToPath(new URL('../../../.local/workspace', import.meta.url));
 
-/** Run one command, print its outcome and set the exit code. */
+/** Runs the typed command, prints what came back, and sets the exit code to 1 on a failure. */
 async function main(): Promise<void> {
-  const outcome = await runCanvas(process.argv.slice(2), defaultWorkspace);
-  if (!outcome.ok) process.exitCode = 1;
-  print(outcome);
+  const argv = process.argv.slice(2);
+  const outcome = await runCanvas(argv, defaultWorkspace);
+  if (!outcome.ok) {
+    process.exitCode = 1;
+  }
+  printOutcome(outcome);
 }
 
-/** A failure as lines on stderr; the command's text on stdout. */
-function print(outcome: Result<string>): void {
+/** Prints the command's text on stdout, or its failure on stderr. */
+function printOutcome(outcome: Result<string>): void {
   if (!outcome.ok) {
-    process.stderr.write(`${formatFailure(outcome.error).join('\n')}\n`);
+    printFailure(outcome.error);
     return;
   }
   process.stdout.write(`${outcome.value}\n`);
 }
 
-/** runCanvas returns every failure as a value; only a throw while printing reaches this catch. */
-await main().catch(() => {
+/** Prints the failure as lines on stderr. */
+function printFailure(failure: CliFailure): void {
+  const lines = formatFailure(failure);
+  process.stderr.write(`${lines.join('\n')}\n`);
+}
+
+/** Says printing failed and sets the exit code to 1. Only a throw while printing gets here. */
+function reportPrintingCrash(): void {
   process.stderr.write('CLI failed. Preserve the request ID and check its receipt.\n');
   process.exitCode = 1;
-});
+}
+
+await main().catch(reportPrintingCrash);

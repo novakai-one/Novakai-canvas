@@ -156,17 +156,23 @@ export type ThemeId = z.infer<typeof themeId>;
 /** The name a source gives one font or image, checked by {@link resourceAlias}. */
 export type ResourceAlias = z.infer<typeof resourceAlias>;
 
-/** Whether `text` parses as a URL that is exactly an `http://127.0.0.1` origin. */
+/** Whether the text is exactly an `http://127.0.0.1` address, with or without a port. */
 function isLoopbackOrigin(text: string): boolean {
-  if (!URL.canParse(text)) return false;
-  return isOriginOnly(new URL(text));
+  if (!URL.canParse(text)) {
+    return false;
+  }
+  const url = new URL(text);
+  return isLocalHttp(url) && stopsAtPort(url);
 }
 
-/** Plain HTTP to 127.0.0.1, any port; a path, query, hash or user info is refused. */
-function isOriginOnly(url: URL): boolean {
+/** Whether the address is plain HTTP to 127.0.0.1. */
+function isLocalHttp(url: URL): boolean {
+  return url.protocol === 'http:' && url.hostname === '127.0.0.1';
+}
+
+/** Whether the address ends at its port: no path, query, hash, user name or password. */
+function stopsAtPort(url: URL): boolean {
   return (
-    url.protocol === 'http:' &&
-    url.hostname === '127.0.0.1' &&
     url.pathname === '/' &&
     url.search === '' &&
     url.hash === '' &&
@@ -175,7 +181,8 @@ function isOriginOnly(url: URL): boolean {
   );
 }
 
-/** The origin of a URL {@link isLoopbackOrigin} accepted. */
+/** Gives the address without its trailing slash, such as `http://127.0.0.1:6200`. */
 function originOf(text: string): string {
-  return new URL(text).origin;
+  const url = new URL(text);
+  return url.origin;
 }
