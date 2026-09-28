@@ -66,14 +66,17 @@ export function readArguments<F extends string>(
   return splitArguments(nodeReading, knownFlags);
 }
 
-/** Has Node's parser read argv without refusing anything, so this file can judge each flag. */
+/**
+ * Reads argv with Node's parser in lenient mode (`strict: false`), so nothing is refused yet.
+ * `firstRefusedFlag` then does strict mode's checks itself, so it can name the bad flag as typed.
+ */
 function readWithNode<F extends string>(
   argv: readonly string[],
-  spec: FlagSpec<F>,
+  knownFlags: FlagSpec<F>,
 ): NodeReading {
   return parseArgs({
     args: [...argv],
-    options: { ...spec },
+    options: { ...knownFlags },
     allowPositionals: true,
     strict: false,
     tokens: true,
@@ -83,10 +86,10 @@ function readWithNode<F extends string>(
 /** Finds the first flag Node's strict mode would refuse, or `undefined` when every flag is fine. */
 function firstRefusedFlag<F extends string>(
   tokens: readonly Token[],
-  spec: FlagSpec<F>,
+  knownFlags: FlagSpec<F>,
 ): FlagToken | undefined {
   const flagTokens = tokens.filter(isFlagToken);
-  return flagTokens.find((token) => isRefusedFlag(token, spec));
+  return flagTokens.find((token) => isRefusedFlag(token, knownFlags));
 }
 
 /** Whether the token is a flag, not a word or the `--` terminator. */
@@ -97,21 +100,21 @@ function isFlagToken(token: Token): token is FlagToken {
 /** Whether strict mode would refuse the flag: the program doesn't have it, or its value misfits. */
 function isRefusedFlag<F extends string>(
   token: FlagToken,
-  spec: FlagSpec<F>,
+  knownFlags: FlagSpec<F>,
 ): boolean {
-  if (!isFlag(token.name, spec)) {
+  if (!isFlag(token.name, knownFlags)) {
     return true;
   }
-  const shape = spec[token.name];
+  const shape = knownFlags[token.name];
   return !hasFittingValue(token, shape);
 }
 
-/** Whether `name` is declared in `spec`; inherited object keys such as `constructor` are not. */
+/** Whether `name` is one of `knownFlags`; inherited keys such as `constructor` are not. */
 function isFlag<F extends string>(
   name: string,
-  spec: FlagSpec<F>,
+  knownFlags: FlagSpec<F>,
 ): name is F {
-  return Object.hasOwn(spec, name);
+  return Object.hasOwn(knownFlags, name);
 }
 
 /** Whether the flag carries the value its shape takes: text for a text flag, none for a switch. */
@@ -152,10 +155,10 @@ function malformedFlagFailure<F extends string>(refused: FlagToken): ArgvReading
 /** Makes the `split` reading: the words, each known flag's value, and the flags typed twice. */
 function splitArguments<F extends string>(
   nodeReading: NodeReading,
-  spec: FlagSpec<F>,
+  knownFlags: FlagSpec<F>,
 ): ArgvReading<F> {
-  const flagValues = declaredFlagValues(nodeReading.values, spec);
-  const repeated = repeatedFlags(nodeReading.tokens, spec);
+  const flagValues = declaredFlagValues(nodeReading.values, knownFlags);
+  const repeated = repeatedFlags(nodeReading.tokens, knownFlags);
   const rawArguments: RawArguments<F> = {
     positionals: nodeReading.positionals,
     values: flagValues,
@@ -167,20 +170,20 @@ function splitArguments<F extends string>(
 /** Keeps each flag the program has, with its text or switch value, and drops anything else. */
 function declaredFlagValues<F extends string>(
   nodeValues: Readonly<Record<string, unknown>>,
-  spec: FlagSpec<F>,
+  knownFlags: FlagSpec<F>,
 ): ReadonlyMap<F, string | boolean> {
   const allEntries = Object.entries(nodeValues);
-  const declaredEntries = allEntries.filter((entry) => isDeclaredEntry(entry, spec));
+  const declaredEntries = allEntries.filter((entry) => isDeclaredEntry(entry, knownFlags));
   return new Map(declaredEntries);
 }
 
 /** Whether the entry is a flag the program has, with a text or switch value. */
 function isDeclaredEntry<F extends string>(
   entry: readonly [string, unknown],
-  spec: FlagSpec<F>,
+  knownFlags: FlagSpec<F>,
 ): entry is DeclaredEntry<F> {
   const [name, nodeValue] = entry;
-  return isFlag(name, spec) && isFlagValue(nodeValue);
+  return isFlag(name, knownFlags) && isFlagValue(nodeValue);
 }
 
 /** Whether Node gave a text or switch value; `parseArgs` gives nothing else without `multiple`. */
@@ -191,9 +194,9 @@ function isFlagValue(nodeValue: unknown): nodeValue is string | boolean {
 /** Lists each flag typed more than once, named once, in the order it was first repeated. */
 function repeatedFlags<F extends string>(
   tokens: readonly Token[],
-  spec: FlagSpec<F>,
+  knownFlags: FlagSpec<F>,
 ): readonly F[] {
-  const typedFlags = declaredFlagNames(tokens, spec);
+  const typedFlags = declaredFlagNames(tokens, knownFlags);
   const repeats = typedFlags.filter((flag, position) =>
     wasTypedEarlier(typedFlags, flag, position),
   );
@@ -204,11 +207,11 @@ function repeatedFlags<F extends string>(
 /** Lists the typed flags the program has, in typed order, once for each time typed. */
 function declaredFlagNames<F extends string>(
   tokens: readonly Token[],
-  spec: FlagSpec<F>,
+  knownFlags: FlagSpec<F>,
 ): readonly F[] {
   const flagTokens = tokens.filter(isFlagToken);
   const typedNames = flagTokens.map(flagName);
-  return typedNames.filter((name) => isFlag(name, spec));
+  return typedNames.filter((name) => isFlag(name, knownFlags));
 }
 
 /** Gives the flag's name as Node read it, without dashes. */

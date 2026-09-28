@@ -83,7 +83,9 @@ function prepareAndPlanTheme(
   input: ThemeInput,
   jsonTheme: JsonTheme,
 ): Result<Catalog, RenderFailureSource> {
-  const prepared = dependencies.prepareTheme(jsonTheme, input.catalog, input.fonts, dependencies);
+  // The service reads the theme's base through templates, and its fonts back from assets.
+  const themeOwners = { assets: dependencies.assets, templates: dependencies.templates };
+  const prepared = dependencies.prepareTheme(jsonTheme, input.catalog, input.fonts, themeOwners);
   if (!prepared.ok) {
     return prepared;
   }

@@ -81,7 +81,10 @@ async function sendApply(
   return checkAppliedReceipt(answer.value, retained.request.request);
 }
 
-/** Posts the kept request to Authoring, leaving out its byte copies. */
+/**
+ * Posts the kept request to Authoring, leaving out its byte copies. A lost or unreadable answer
+ * gets advice to check the receipt first; a service rejection is passed on as it came.
+ */
 async function sendToAuthoring(
   transport: TransportPost,
   retained: RetainedRequest,
@@ -89,7 +92,7 @@ async function sendToAuthoring(
 ): Promise<Result<ServiceAnswer<unknown>>> {
   const envelope = authoringEnvelope(retained, mode);
   const answer = await transport.post(routes[mode], envelope);
-  if (!answer.ok) {
+  if (!answer.ok && isUnconfirmedAnswer(answer.error)) {
     return unconfirmedAnswerFailure(answer.error, retained.request.request);
   }
   return answer;
@@ -161,18 +164,14 @@ function receiptFirstAdvice(request: RequestId): string {
 }
 
 /**
- * Passes on the transport's mistake. A lost or unreadable answer gets advice to check the
- * request's receipt, never to send a new request; a service rejection is passed on whole.
+ * Makes the mistake for a lost or unreadable answer: the transport's mistake, with advice to check
+ * the request's receipt, never to send a new request.
  */
 function unconfirmedAnswerFailure(
-  transportFailure: CliFailure,
+  transportFailure: LocalFailure,
   request: RequestId,
-): Result<never> {
-  if (isUnconfirmedAnswer(transportFailure)) {
-    const advised: LocalFailure = { ...transportFailure, recovery: receiptFirstAdvice(request) };
-    return { ok: false, error: advised };
-  }
-  return { ok: false, error: transportFailure };
+): Result<never, LocalFailure> {
+  return failure({ ...transportFailure, recovery: receiptFirstAdvice(request) });
 }
 
 /** Makes the mistake for a preview answer that isn't JSON (`invalid-response`). */

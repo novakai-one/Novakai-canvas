@@ -97,7 +97,11 @@ async function checkAlreadyKept(
   return success(undefined);
 }
 
-/** Reads back the journal record already kept for `id`, while saving it again. */
+/**
+ * Reads the record already kept under this ID, when the same ID is saved a second time. A file
+ * that can't be read fails as `retention-unavailable` (the new save isn't safe), not
+ * `request-unavailable` as a retry's read does.
+ */
 async function readKeptRecord(
   requestFile: string,
   id: RequestId,
@@ -119,7 +123,10 @@ function isDifferentRequest(
   return keptJson !== retainedJson;
 }
 
-/** Reads a kept request and its byte copies back from the journal, for a retry. */
+/**
+ * Reads a kept request and its byte copies back from the journal, for a retry. A missing or
+ * unreadable file fails as `request-unavailable`.
+ */
 async function readRequest(
   journalFolder: string,
   id: RequestId,

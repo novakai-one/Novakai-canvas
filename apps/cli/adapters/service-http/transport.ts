@@ -49,13 +49,13 @@ export function createHttpTransport(
   token: AgentToken,
 ): HttpTransport {
   return {
-    get: (route, query) => send(server, token, getRequest(route, query)),
-    post: (route, body) => send(server, token, postRequest(route, body)),
+    get: (route, query) => send(server, token, outgoingGet(route, query)),
+    post: (route, body) => send(server, token, outgoingPost(route, body)),
   };
 }
 
 /** Makes a GET request to the route, with the query string when there is one. */
-function getRequest(
+function outgoingGet(
   route: ReadRoute,
   query: RouteQuery | undefined,
 ): OutgoingRequest {
@@ -64,7 +64,7 @@ function getRequest(
 }
 
 /** Makes a POST request to the route, with the body as JSON text. */
-function postRequest(
+function outgoingPost(
   route: WriteRoute,
   body: unknown,
 ): OutgoingRequest {

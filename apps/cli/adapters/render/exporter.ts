@@ -69,14 +69,14 @@ async function prepareExporter(
   if (!presentation.ok) {
     return presentation;
   }
-  const exportSetup = setUpExport(presentation.value, input, choices);
-  const exportBindings = composeExport(exportSetup);
+  const exportOwners = gatherExportOwners(presentation.value, input, choices);
+  const exportBindings = composeExport(exportOwners);
   const sectionExporter = exporterOfSections(exportBindings, input.snapshot, choices.format);
   return success(sectionExporter);
 }
 
-/** Gathers what Export is set up with: the fonts, the `--labels` choice and the collection. */
-function setUpExport(
+/** Gathers what Export is built from: the fonts, the `--labels` choice and the collection. */
+function gatherExportOwners(
   presentation: ReactBindings,
   input: ExportInput,
   choices: ExportChoices,
