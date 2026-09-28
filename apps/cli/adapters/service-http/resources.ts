@@ -2,8 +2,9 @@
  * Why this file exists
  *
  * A source that names `./assets/logo.png` needs the logo's bytes stored in the service before the
- * change is sent. That, and preparing a theme or recipe to save, are calls to
- * `POST /api/v1/resources/<step>`, such as `/api/v1/resources/stage`.
+ * change is sent. Then `freeze` has the service write each stored file's digest (a fingerprint of
+ * its bytes) into the request, so the change points at exactly those bytes. Each step, and
+ * preparing a theme or recipe to save, is a call to `POST /api/v1/resources/<step>`.
  *
  * This file makes those calls and checks each answer. None saves a change: bytes stored by a
  * command that then fails are simply left unused, and the command can be run again.
@@ -32,9 +33,9 @@ type TransportPost = Pick<HttpTransport, 'post'>;
 type Check<T> = (value: unknown) => Result<T>;
 
 /**
- * Gives core its font, image, theme and recipe steps, made over `transport`. Each fails as the
- * transport does, or with `invalid-response` when the answer isn't the expected shape. `freeze`,
- * which writes the stored bytes' digests into a request, fails with `invalid-input` instead.
+ * Gives core its font, image, theme and recipe calls, made over `transport`. Each fails as the
+ * transport does, or with `invalid-response` when the answer isn't the expected shape. The one
+ * exception: when the request `freeze` gives back fails Authoring's check, it is `invalid-input`.
  */
 export function createServiceResources(transport: TransportPost): ServiceResources {
   return {

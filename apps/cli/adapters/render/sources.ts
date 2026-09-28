@@ -1,9 +1,10 @@
 /*
  * Why this file exists
  *
- * A render starts from `.canvas` text but can only draw a checked collection. Language turns the
- * text into a collection, and Model checks it. Export asks for the same jobs, plus printing a
- * collection back to text, through its own `Documents` shape and its own kind of mistake.
+ * A render starts from `.canvas` text but can only draw a checked collection. Language parses the
+ * text and turns it into a collection (its `lower` step), and Model checks it. Export asks for the
+ * same jobs, plus printing a collection back to text, through its own `Documents` shape and its
+ * own kind of mistake.
  *
  * This file answers core and Export from Language and Model. A source is always read as a new
  * collection, never as a change to a saved one. Mistakes come back as values. Nothing touches disk.
@@ -21,8 +22,9 @@ import type {
 import { success, type Result } from '../../contract/errors.js';
 
 /**
- * Gives core its Language and Model steps: parse text, turn it into a collection, check a
- * collection. Each step fails with Language's or Model's own findings.
+ * Gives core its three steps: parse text (`parse`) and turn it into a new collection (`lower`)
+ * with Language, then check a collection with Model (`validate`). Each fails with its owner's
+ * findings.
  */
 export function createRenderSources(language: Pick<Language, 'parse' | 'lower'>): RenderSources {
   return {
@@ -33,10 +35,10 @@ export function createRenderSources(language: Pick<Language, 'parse' | 'lower'>)
 }
 
 /**
- * Gives Export its way to check a collection (read), print it as text, and parse text into a new
- * collection, using `resolvedResources` for font, image and theme names. Export needs it to start,
- * though render:png never uses it. A mistake becomes Export's `invalid-input` (read, print) or
- * `invalid-import` (parse).
+ * Gives Export its `Documents`: `read` checks a collection (Model), `print` turns one into text,
+ * and `parse` turns text into a new collection (Language's `lower`, with font, image and theme
+ * names from `resolvedResources`). Export needs them to start; render:png never calls them.
+ * Mistakes become Export's `invalid-input` (read, print) or `invalid-import` (parse).
  */
 export function createExportDocuments(
   language: Pick<Language, 'lower' | 'print'>,

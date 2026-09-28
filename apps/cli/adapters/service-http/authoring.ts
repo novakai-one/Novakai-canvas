@@ -6,8 +6,8 @@
  * request: it checks `canvas receipt ID`, then runs `canvas retry ID` only if nothing was saved.
  *
  * This file sends a kept request to preview or apply, and checks the answer. When an answer is
- * lost or unreadable, its advice names that receipt. It never retries, and never saves anything
- * itself; Authoring does. Mistakes come back as values.
+ * lost or can't be read, the mistake tells the agent to run `canvas receipt ID` before any retry.
+ * It never retries, and never saves anything itself; Authoring does. Mistakes come back as values.
  */
 import type { HttpTransport, WriteRoute } from '../../contract/ports/http-transport.js';
 import type { ServiceAuthoring } from '../../contract/ports/service-authoring.js';
@@ -38,9 +38,9 @@ const routes: Readonly<Record<SubmitMode, WriteRoute>> = Object.freeze({
 });
 
 /**
- * Gives core its preview and apply sends, made over `transport`. Both fail with
- * `service-rejected`, or with `connection-uncertain` or `invalid-response`, whose advice names the
- * request's receipt.
+ * Gives core its preview and apply calls, made over `transport`. Both can fail with
+ * `service-rejected`. A lost or unreadable answer (`connection-uncertain`, `invalid-response`)
+ * tells the agent to check the request's receipt first.
  */
 export function createServiceAuthoring(transport: TransportPost): ServiceAuthoring {
   return {

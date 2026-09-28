@@ -6,8 +6,8 @@
  * needs a render job: the collection, the themes and recipes the render knows, and an empty
  * library, since a render has no saved workspace.
  *
- * This file makes that job and has the service lay it out. It reads only the layout engine's
- * WebAssembly file, and never changes anything saved. Mistakes come back as values.
+ * This file makes that job and has the service lay it out. It reads and writes no files itself;
+ * the service's tools load the layout engine's WebAssembly file. Mistakes come back as values.
  */
 import {
   validateLibrarySnapshot,
@@ -25,7 +25,7 @@ import type {
 } from '../../contract/records/foreign.js';
 import type { Result } from '../../contract/errors.js';
 
-/** The service's layout code, set up with this render's assets, themes and layout engine. */
+/** The service's layout code, already loaded with the render's assets, themes and layout engine. */
 export interface ServiceLayoutTools {
   /** The service's render jobs; `renderJobs.create` makes the job for one collection. */
   readonly renderJobs: ReturnType<HeadlessTools['createRenderJobs']>;
