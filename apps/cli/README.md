@@ -67,36 +67,45 @@ Four folders, four jobs:
 ## Level 4 — Each purpose, one at a time
 
 ### 1. Learn the diagram language
+
 - `describe` asks the server for the DSL vocabulary and prints it.
 - Starts in `core/reads/queries.ts`.
 
 ### 2. Look at what exists
+
 - `list` prints the collections; `read` prints one collection's source; `inspect` prints its layout warnings.
 - Starts in `core/reads/queries.ts` (collection text in `core/reads/collections.ts`, source in `core/reads/source.ts`).
 
 ### 3. Change a diagram
+
 1. Read the `.canvas` file and parse it with the Language capability.
 2. Turn it into one Authoring request with a fresh request ID (`core/authoring/prepare.ts`, `change-request.ts`).
 3. Keep a copy of the request in the local journal, so it can be retried.
 4. Send it: saved at once (`create`, `replace`, `patch`) or checked first (`preview`, then `apply`).
+
 - Starts in `core/authoring/submit.ts`. `apply` starts in `core/authoring/reconcile.ts`.
 
 ### 4. Recover a save whose answer was lost
+
 1. `receipt` asks the server whether the request was saved (`core/reads/receipt.ts`).
 2. `retry` checks the receipt first; only if there is none, it resends the SAME request from the journal — never a new one.
+
 - Starts in `core/authoring/reconcile.ts`.
 
 ### 5. Add reusable pieces
+
 - `theme admit` reads a `.theme` file (its grammar is in `core/themes/`) and sends it with its font files.
 - `recipe admit` sends a reusable diagram starter; `recipe instantiate` turns a starter into editable DSL (written with `--out`).
 - Admitting starts in `core/presets/admit.ts`; instantiate is one server call in `core/commands/dispatch.ts`. Font and image files are staged by `core/resources/`.
 
 ### 6. Work with build specs
+
 - `profile describe` explains the build-spec format; `profile scaffold` writes a starter spec; `profile lint` checks a spec against the rules.
 - Runs locally, with no server.
 - Starts in `core/profiles/commands.ts`. The rules are in `core/profiles/lint/`.
 
 ### 7. Draw a diagram to image files
+
 - `pnpm render:png --collection ID --out DIR` writes one PNG or SVG per section. It changes nothing that is saved.
 - Starts in `core/render/render.ts` (the typed arguments are read in `core/render/request.ts`).
 
@@ -105,12 +114,14 @@ Four folders, four jobs:
 ## Reference for maintainers
 
 **Add a command** — four places, in this order:
+
 1. Its member in `contract/records/command.ts`.
 2. Its row in `core/commands/table.ts` (words, flags, help line).
 3. Its fields in `core/commands/operands.ts`.
 4. Its case in `core/commands/dispatch.ts`.
 
 **Import rules** (checked by `pnpm architecture` unless marked):
+
 - `core/` imports only `core/` and `contract/{records,ports,brands,schemas,errors}`. No packages, no Node.
 - `adapters/` imports only `contract/{records,ports,brands,schemas,errors}`, Node and packages. Never `core/` or another adapter.
 - Only `contract/compose/` imports adapters.
