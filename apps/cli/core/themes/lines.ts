@@ -4,11 +4,18 @@
  * `invalid-theme`; the caller fixes the theme file and runs the command again.
  */
 import { fontRoles } from '../../contract/records/theme-source.js';
-import type { FontRole, FontRequest, TokenOverride } from '../../contract/records/theme-source.js';
+import type {
+  FontRole,
+  FontRequest,
+  OverrideValue,
+  PixelDimension,
+  TokenOverride,
+} from '../../contract/records/theme-source.js';
 import type { Span } from '../../contract/records/foreign.js';
+import { tokenName } from '../../contract/brands.js';
 import type { FailureInput, Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
-import { mapped } from '../shared/results.js';
+import { checked } from '../shared/checks.js';
 
 /** One declaration line: its text without surrounding whitespace, and where that text sits. */
 export interface ThemeLine {
@@ -146,14 +153,7 @@ function colorEntry(
   captures: Captures,
   line: ThemeLine,
 ): Result<BodyEntry> {
-  return success(
-    overrideEntry({
-      type: 'color',
-      token: captures.name,
-      value: captures.value,
-      line: lineOf(line),
-    }),
-  );
+  return overrideEntry(captures, line, { type: 'color', value: captures.value });
 }
 
 /** A number override. Fails with `invalid-theme` when the number is not finite. */
@@ -161,9 +161,9 @@ function numberEntry(
   captures: Captures,
   line: ThemeLine,
 ): Result<BodyEntry> {
-  return mapped(finite(captures.value), (value) =>
-    overrideEntry({ type: 'number', token: captures.name, value, line: lineOf(line) }),
-  );
+  const value = finite(captures.value);
+  if (!value.ok) return value;
+  return overrideEntry(captures, line, { type: 'number', value: value.value });
 }
 
 /**
@@ -174,14 +174,8 @@ function dimensionEntry(
   captures: Captures,
   line: ThemeLine,
 ): Result<BodyEntry> {
-  return success(
-    overrideEntry({
-      type: 'dimension',
-      token: captures.name,
-      value: { value: Number(captures.value), unit: 'px' },
-      line: lineOf(line),
-    }),
-  );
+  const value: PixelDimension = { value: Number(captures.value), unit: 'px' };
+  return overrideEntry(captures, line, { type: 'dimension', value });
 }
 
 /** The decimal text as a number. Fails with `invalid-theme` when it is too large to be finite. */
@@ -191,12 +185,17 @@ function finite(text: string): Result<number> {
   return success(value);
 }
 
-/** The 1-based line number the declaration is written on. */
-function lineOf(line: ThemeLine): number {
-  return line.span.start.line;
-}
-
-/** A body entry for one token override. */
-function overrideEntry(override: TokenOverride): BodyEntry {
-  return { kind: 'override', override };
+/**
+ * A body entry for one token override: the typed value, the token it sets and the line's span.
+ * Fails with `invalid-theme` when the token is not a token name; the pattern already matched one.
+ */
+function overrideEntry(
+  captures: Captures,
+  line: ThemeLine,
+  typed: OverrideValue,
+): Result<BodyEntry> {
+  const token = checked(tokenName, captures.name, themeMismatch);
+  if (!token.ok) return token;
+  const override: TokenOverride = { ...typed, token: token.value, span: line.span };
+  return success({ kind: 'override', override });
 }

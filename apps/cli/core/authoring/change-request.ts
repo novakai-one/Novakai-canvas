@@ -8,9 +8,11 @@
 import type { CollectionReader } from '../../contract/ports/collection-reader.js';
 import type { ChangeIntent } from '../../contract/records/command.js';
 import type {
+  ModelRevision,
   ReadVersion,
   Request,
   Snapshot,
+  StorageVersion,
   StoredRecord,
 } from '../../contract/records/foreign.js';
 import type { CollectionRevision, RecordId, RequestId } from '../../contract/brands.js';
@@ -95,7 +97,7 @@ function storedVersion(
   record: StoredRecord | undefined,
   requested: CollectionRevision | undefined,
   reader: CollectionReader,
-): Result<number> {
+): Result<StorageVersion> {
   if (record === undefined) return failure(missingCollection);
   const collection = reader.validate(record.value);
   if (!collection.ok)
@@ -113,10 +115,10 @@ function storedVersion(
  * overwrite newer work. Fails with `revision-required` or `revision-conflict`.
  */
 function matchedRevision(
-  version: number,
-  current: number,
+  version: StorageVersion,
+  current: ModelRevision,
   requested: CollectionRevision | undefined,
-): Result<number> {
+): Result<StorageVersion> {
   if (requested === undefined)
     return failure({
       code: 'revision-required',
@@ -152,8 +154,7 @@ function withCatalog(
       request: draft.request,
       expected,
       assets: [],
-      planner: 'dsl',
-      payload: { source: draft.source, mode: draft.intent.mode },
+      change: { planner: 'dsl', payload: { source: draft.source, mode: draft.intent.mode } },
     },
     malformedRequest,
   );

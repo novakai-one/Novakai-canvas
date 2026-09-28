@@ -67,7 +67,7 @@ function servicePorts(
     authoring: createServiceAuthoring(transport),
     resources: createServiceResources(transport),
     files: createLocalFiles(),
-    journal: createRequestJournal(resolve(options.workspace, 'requests')),
+    journal: createRequestJournal(options.workspace),
     reader: createResourceReader(),
     collections: { validate },
     language: composeLanguage(),

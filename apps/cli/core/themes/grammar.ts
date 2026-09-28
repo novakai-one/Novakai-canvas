@@ -13,8 +13,8 @@ import type {
   ThemeSource,
   TokenOverride,
 } from '../../contract/records/theme-source.js';
-import { chromeName, presetId, version } from '../../contract/brands.js';
-import type { PresetId, Version } from '../../contract/brands.js';
+import { baseTheme, chromeName, presetId, version } from '../../contract/brands.js';
+import type { PresetId, TokenName, Version } from '../../contract/brands.js';
 import type { FailureInput, Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 import { checked } from '../shared/checks.js';
@@ -121,20 +121,25 @@ function overridesOf(entries: readonly BodyEntry[]): readonly TokenOverride[] {
  */
 function uniqueOverrides(overrides: readonly TokenOverride[]): Result<readonly TokenOverride[]> {
   const firstLines = firstLineByToken(overrides);
-  const repeat = overrides.find((item) => firstLines.get(item.token) !== item.line);
+  const repeat = overrides.find((item) => firstLines.get(item.token) !== lineOf(item));
   if (repeat === undefined) return success(overrides);
   return failure({
     code: 'duplicate-token',
-    message: `Line ${repeat.line} repeats theme token ${repeat.token}`,
+    message: `Line ${lineOf(repeat)} repeats theme token ${repeat.token}`,
     recovery: `Remove the duplicate ${repeat.token} declaration and admit the theme again.`,
   });
 }
 
 /** The line each token is first set on. A Map keeps the last entry per key, so read in reverse. */
-function firstLineByToken(overrides: readonly TokenOverride[]): ReadonlyMap<string, number> {
+function firstLineByToken(overrides: readonly TokenOverride[]): ReadonlyMap<TokenName, number> {
   return new Map(
-    overrides.toReversed().map((item): readonly [string, number] => [item.token, item.line]),
+    overrides.toReversed().map((item): readonly [TokenName, number] => [item.token, lineOf(item)]),
   );
+}
+
+/** The 1-based line the override is written on. */
+function lineOf(override: TokenOverride): number {
+  return override.span.start.line;
 }
 
 /** The fonts when there is exactly one per role. Fails with `invalid-theme` otherwise. */
@@ -172,14 +177,17 @@ function themeSource(
 
 /**
  * The theme's `raw` input: base, chrome and each override's value by token, in that key order.
- * Fails with `invalid-theme` when the chrome is not a Design System chrome name.
+ * Fails with `invalid-theme` when the base is empty (the header pattern already refuses one) or
+ * the chrome is not a Design System chrome name.
  */
 function themeRaw(
   header: HeaderText,
   overrides: readonly TokenOverride[],
 ): Result<ThemeRaw> {
+  const base = checked(baseTheme, header.base, themeMismatch);
+  if (!base.ok) return base;
   return mapped(chromeChoice(header.chrome), (chrome) => ({
-    base: header.base,
+    base: base.value,
     ...chrome,
     overrides: Object.fromEntries(overrides.map((item) => [item.token, item.value])),
   }));

@@ -73,6 +73,31 @@ export const collectionName = z.string().min(1).brand<'CollectionName'>();
  */
 export const themeName = z.string().min(1).brand<'ThemeName'>();
 
+/**
+ * The name a source declares one font or image under: a DSL asset's `@alias` or a theme font role.
+ * Minted by core's resource staging from Language's or the theme grammar's declaration
+ * (`invalid-response`; neither gives an empty alias).
+ */
+export const resourceAlias = z.string().min(1).brand<'ResourceAlias'>();
+
+/**
+ * A `.theme` token name as the file writes it (`set color TOKEN=…`). Design System checks it when
+ * the theme is admitted. Minted by the theme grammar (`invalid-theme`).
+ */
+export const tokenName = z.string().min(1).brand<'ThemeTokenName'>();
+
+/**
+ * The theme a `.theme` file builds on (`base=…`): a theme ID or an exact theme pin. The service
+ * resolves it when the theme is admitted. Minted by the theme grammar (`invalid-theme`).
+ */
+export const baseTheme = z.string().min(1).brand<'BaseTheme'>();
+
+/**
+ * Where a hand-set placement or route sits, as Language prints it (`@section/@object`). Minted by
+ * the `read` answer's schema (`invalid-response`).
+ */
+export const manualAddress = z.string().brand<'ManualAddress'>();
+
 /** A collection ID that passed Model's `collectionId`. Model exports the schema, not the type. */
 export type CollectionId = z.infer<typeof collectionId>;
 
@@ -102,6 +127,18 @@ export type CollectionName = z.infer<typeof collectionName>;
 
 /** A theme selector that passed {@link themeName}. */
 export type ThemeName = z.infer<typeof themeName>;
+
+/** An alias that passed {@link resourceAlias}. */
+export type ResourceAlias = z.infer<typeof resourceAlias>;
+
+/** A token name that passed {@link tokenName}. */
+export type TokenName = z.infer<typeof tokenName>;
+
+/** A base theme that passed {@link baseTheme}. */
+export type BaseTheme = z.infer<typeof baseTheme>;
+
+/** An address that passed {@link manualAddress}. */
+export type ManualAddress = z.infer<typeof manualAddress>;
 
 /** Whether `text` parses as a URL that is exactly an `http://127.0.0.1` origin. */
 function isLoopbackOrigin(text: string): boolean {

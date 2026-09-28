@@ -1,9 +1,9 @@
 /*
  * Confined, bounded reads of the fonts and images a source declares: the path stays inside the
  * source file's directory, the extension matches the declared kind, and at most 16 MiB is read.
- * Filesystem I/O; core decides pinned digests before calling it. Each failure is a value that
- * carries the declaration's `location`; the caller fixes that declaration or file and runs the
- * command again.
+ * Filesystem I/O; core decides pinned digests before calling it and adds the declaration's
+ * `location` to a failure. Each failure is a value; the caller fixes that declaration or file and
+ * runs the command again.
  */
 import { open, realpath } from 'node:fs/promises';
 import type { FileHandle } from 'node:fs/promises';
@@ -42,39 +42,27 @@ export function createResourceReader(): ResourceReader {
 
 /**
  * The declared file's bytes. Fails with `absolute-path`, `path-escape`, `source-unavailable`,
- * `unsupported-media`, `resource-mismatch` or `resource-too-large`, each with the declaration's
- * location.
+ * `unsupported-media`, `resource-mismatch` or `resource-too-large`.
  */
 async function read(
   file: FilePath,
   request: ResourceRequest,
 ): Promise<Result<LocalBytes, LocalFailure>> {
   const path = await confined(file, request.source);
-  if (!path.ok) return located(file, request, path.error);
-  return readLocated(file, request, path.value);
+  if (!path.ok) return path;
+  return readConfined(request, path.value);
 }
 
 /** A resolved location proceeds through typed media and bounded-byte admission. */
-async function readLocated(
-  file: FilePath,
+async function readConfined(
   request: ResourceRequest,
   path: string,
 ): Promise<Result<LocalBytes, LocalFailure>> {
   const type = mediaType(path, request);
-  if (!type.ok) return located(file, request, type.error);
+  if (!type.ok) return type;
   const content = await bytes(path);
-  if (!content.ok) return located(file, request, content.error);
+  if (!content.ok) return content;
   return success({ base64: content.value.toString('base64'), mediaType: type.value });
-}
-
-/** Add the declaration's place in `file` without replacing the failure's code, message or recovery. */
-function located(
-  file: FilePath,
-  request: ResourceRequest,
-  error: LocalFailure,
-): Result<never, LocalFailure> {
-  const { line, column } = request.span.start;
-  return failure({ ...error, location: { file, line, column, alias: request.alias } });
 }
 
 /** A path is admitted only beneath the real source directory; absolute and symlink escapes are explicit outcomes. */

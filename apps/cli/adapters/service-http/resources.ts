@@ -13,6 +13,7 @@ import type { PresetPreparation } from '../../contract/records/service-answers.j
 import {
   blobAnswer,
   preparedAnswer,
+  presetDocument,
   stagedAnswer,
 } from '../../contract/records/service-answers.js';
 import { requestSchema } from '../../contract/schemas.js';
@@ -91,13 +92,15 @@ function restored(): Result<void> {
 }
 
 /**
- * The preset key; the whole answer is kept unchanged as the change payload. Fails with
- * `invalid-response`.
+ * The preset key; the whole answer, checked as JSON, is kept unchanged as the change payload.
+ * Fails with `invalid-response`.
  */
 function preparation(value: unknown): Result<PresetPreparation> {
   const parsed = preparedAnswer.safeParse(value);
-  if (!parsed.success) return invalidResponse('Service returned invalid preset preparation');
-  return success({ key: parsed.data.key, document: value });
+  const document = presetDocument.safeParse(value);
+  if (!parsed.success || !document.success)
+    return invalidResponse('Service returned invalid preset preparation');
+  return success({ key: parsed.data.key, document: document.data });
 }
 
 /**

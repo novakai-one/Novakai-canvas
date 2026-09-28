@@ -4,8 +4,8 @@
  * (one body line at a time in core/themes/lines.ts); `theme admit` and render:png read it. Design
  * System checks the token names and values later; the grammar only types them.
  */
-import type { ChromeName } from '../brands.js';
-import type { Admission, ResourceRequest } from './foreign.js';
+import type { BaseTheme, ChromeName, TokenName } from '../brands.js';
+import type { Admission, ResourceRequest, Span } from './foreign.js';
 
 /** The three fonts every theme declares, in the order the grammar's error text names them. */
 export const fontRoles = Object.freeze(['body', 'mono', 'strong'] as const);
@@ -28,23 +28,26 @@ export interface PixelDimension {
   readonly unit: 'px';
 }
 
-/** What every token override carries: the token it sets and the 1-based line it is written on. */
+/** A `set` line's value, tagged by its `type`: color text, a number or a pixel dimension. */
+export type OverrideValue =
+  | { readonly type: 'color'; readonly value: string }
+  | { readonly type: 'number'; readonly value: number }
+  | { readonly type: 'dimension'; readonly value: PixelDimension };
+
+/** What every token override carries: the token it sets and where its line's text sits. */
 interface OverrideLine {
-  readonly token: string;
-  readonly line: number;
+  readonly token: TokenName;
+  readonly span: Span;
 }
 
-/** One `set color|number|dimension TOKEN=VALUE` line, tagged by its `type`. */
-export type TokenOverride =
-  | (OverrideLine & { readonly type: 'color'; readonly value: string })
-  | (OverrideLine & { readonly type: 'number'; readonly value: number })
-  | (OverrideLine & { readonly type: 'dimension'; readonly value: PixelDimension });
+/** One `set color|number|dimension TOKEN=VALUE` line: its typed value, token and span. */
+export type TokenOverride = OverrideValue & OverrideLine;
 
 /** The theme's `raw` input: the base theme, the optional chrome and each override's value by token. */
 export interface ThemeRaw {
-  readonly base: string;
+  readonly base: BaseTheme;
   readonly chrome?: ChromeName;
-  readonly overrides: Readonly<Record<string, TokenOverride['value']>>;
+  readonly overrides: Readonly<Record<TokenName, OverrideValue['value']>>;
 }
 
 /** A Templates theme admission whose `raw` input is the grammar's typed record. */

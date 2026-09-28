@@ -6,8 +6,8 @@
  * here, not in records/ (data only) or a file of their own, because render core and the render
  * adapters both call them and core may import only records/, ports/, brands, schemas and errors.
  */
-import { filePath, type FilePath, type RequestId } from './brands.js';
-import type { FailureSource, OperationSource } from './records/foreign.js';
+import { filePath, type FilePath, type RequestId, type ResourceAlias } from './brands.js';
+import type { FailureSource, OperationSource, SourcePosition } from './records/foreign.js';
 import type { NativeDetail, ProviderFault, RenderFault } from './records/render-fault.js';
 
 /**
@@ -63,8 +63,8 @@ import type { NativeDetail, ProviderFault, RenderFault } from './records/render-
  * - `connection-uncertain`: no confirmed answer. Check the receipt before retrying.
  * - `invalid-response`: an owner's answer broke its own contract. A service answer did not match
  *   its schema or lacks what the command needs, such as a committed receipt; the service's
- *   credential reader returned no token; or Language's parse gave an asset alias that is not
- *   Model's asset ID.
+ *   credential reader returned no token; or Language's parse gave an empty resource alias or an
+ *   asset alias that is not Model's asset ID.
  *
  * Setup: `cli-unavailable` and `render-unavailable` (an unexpected throw at the entry point).
  *   `cli-unavailable` also reports a fresh request ID that fails Authoring's grammar; nothing was
@@ -115,16 +115,14 @@ export type ForeignCode = 'service-rejected' | 'credential-unavailable';
 export type CliErrorCode = LocalCode | ForeignCode;
 
 /**
- * Where a source declares the font or image a failure is about. Printed as
- * `file:line:column asset @alias` before the message.
+ * Where a source declares the font or image a failure is about: the file, Language's 1-based line
+ * and column, and the alias. Printed as `file:line:column asset @alias` before the message.
  */
-export interface SourceLocation {
+export interface SourceLocation extends Pick<SourcePosition, 'line' | 'column'> {
   /** The DSL or theme file that declares the resource. */
   readonly file: FilePath;
-  readonly line: number;
-  readonly column: number;
   /** The name the declaration gives the resource. */
-  readonly alias: string;
+  readonly alias: ResourceAlias;
 }
 
 /** A failure the CLI found. */

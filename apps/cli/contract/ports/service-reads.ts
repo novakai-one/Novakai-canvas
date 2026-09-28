@@ -5,9 +5,14 @@
  */
 import type { CollectionId, RequestId } from '../brands.js';
 import type { Result } from '../errors.js';
-import type { Receipt, Snapshot } from '../records/foreign.js';
+import type { InspectionReport, Snapshot } from '../records/foreign.js';
 import type { ReadScope } from '../records/command.js';
-import type { Observed, Readout } from '../records/service-answers.js';
+import type {
+  LanguageDescription,
+  Observed,
+  Readout,
+  ReceiptLookup,
+} from '../records/service-answers.js';
 
 /**
  * One read of the local service. Every method fails with `connection-uncertain`,
@@ -16,7 +21,7 @@ import type { Observed, Readout } from '../records/service-answers.js';
  */
 export interface ServiceReads {
   /** The DSL vocabulary, as the service describes it; printed as JSON. */
-  language(): Promise<Result<unknown>>;
+  language(): Promise<Result<LanguageDescription>>;
   /** Every workspace record, checked by Authoring's snapshot schema, and the generation it came from. */
   workspace(): Promise<Result<Observed<Snapshot>>>;
   /** One collection's DSL source, narrowed to a section or object when `scope` names one. */
@@ -24,8 +29,8 @@ export interface ServiceReads {
     collection: CollectionId,
     scope: ReadScope,
   ): Promise<Result<Readout>>;
-  /** The service's inspection report of one collection; printed as JSON. */
-  inspect(collection: CollectionId): Promise<Result<unknown>>;
-  /** The committed receipt of `request`, or `null` when none exists, and the generation it came from. */
-  receipt(request: RequestId): Promise<Result<Observed<Receipt | null>>>;
+  /** The service's inspection report of one collection, checked by its schema; printed as JSON. */
+  inspect(collection: CollectionId): Promise<Result<InspectionReport>>;
+  /** Whether `request` committed, with its receipt when it did, and the generation it came from. */
+  receipt(request: RequestId): Promise<Result<Observed<ReceiptLookup>>>;
 }

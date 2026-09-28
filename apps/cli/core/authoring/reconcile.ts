@@ -9,8 +9,7 @@ import { matchedReceipt } from '../reads/receipt.js';
 import type { ServiceReads } from '../../contract/ports/service-reads.js';
 import type { RequestJournal } from '../../contract/ports/request-journal.js';
 import type { JournalRecord } from '../../contract/records/retained-request.js';
-import type { Receipt } from '../../contract/records/foreign.js';
-import type { Observed } from '../../contract/records/service-answers.js';
+import type { Observed, ReceiptLookup } from '../../contract/records/service-answers.js';
 import type { RequestId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 
@@ -32,17 +31,18 @@ export async function retry(
 ): Promise<Result<string>> {
   const retained = await dependencies.journal.read(request);
   if (!retained.ok) return retained;
-  const receipt = await dependencies.reads.receipt(request);
-  if (!receipt.ok) return receipt;
-  return reconciled(retained.value, receipt.value, dependencies);
+  const lookup = await dependencies.reads.receipt(request);
+  if (!lookup.ok) return lookup;
+  return reconciled(retained.value, lookup.value, dependencies);
 }
 
 /** Receipt absence permits explicit caller-requested replay; changed Authoring preconditions remain rejected by the owner. */
 async function reconciled(
   record: JournalRecord,
-  receipt: Observed<Receipt | null>,
+  lookup: Observed<ReceiptLookup>,
   dependencies: RetryDependencies,
 ): Promise<Result<string>> {
-  if (receipt.value !== null) return matchedReceipt(receipt.value, record.request.request);
-  return submit({ ...record, generation: receipt.generation }, 'apply', dependencies);
+  if (lookup.value.kind === 'committed')
+    return matchedReceipt(lookup.value.receipt, record.request.request);
+  return submit({ ...record, generation: lookup.generation }, 'apply', dependencies);
 }

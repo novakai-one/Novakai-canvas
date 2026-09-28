@@ -11,7 +11,7 @@ import type { CollectionSelector } from '../../contract/records/render.js';
 import type { RenderEvidence } from '../../contract/records/render-failure.js';
 import type { RenderFault } from '../../contract/records/render-fault.js';
 import type { SourceFile } from '../../contract/records/source-file.js';
-import type { CollectionName } from '../../contract/brands.js';
+import { presetId, type CollectionName, type PresetId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { faulted, success } from '../../contract/errors.js';
 
@@ -47,7 +47,7 @@ function namedSource(
   catalog: Catalog,
   dependencies: SourceDependencies,
 ): Promise<Result<SourceFile, RenderEvidence>> {
-  const recipe = catalog.find((preset) => isRecipeNamed(preset, name));
+  const recipe = recipeNamed(catalog, name);
   if (recipe === undefined) return shippedSource(name, dependencies);
   return Promise.resolve(recipeSource(recipe, dependencies.inputFiles));
 }
@@ -93,12 +93,25 @@ function onlyMatch(
   return success(match);
 }
 
-/** Whether a preset is the recipe named `name`. */
-function isRecipeNamed(
-  preset: Catalog[number],
+/**
+ * The recipe whose preset ID is `name`. None when `name` is not a Templates preset ID, since no
+ * preset can have it, or when no recipe has it.
+ */
+function recipeNamed(
+  catalog: Catalog,
   name: CollectionName,
+): RecipePreset | undefined {
+  const id = presetId.safeParse(name);
+  if (!id.success) return undefined;
+  return catalog.find((preset) => isRecipeWithId(preset, id.data));
+}
+
+/** Whether a preset is the recipe with preset ID `id`. */
+function isRecipeWithId(
+  preset: Catalog[number],
+  id: PresetId,
 ): preset is RecipePreset {
-  return preset.kind === 'recipe' && preset.id === String(name);
+  return preset.kind === 'recipe' && preset.id === id;
 }
 
 /** Whether Language parses `source` and its collection ID is `name`. */

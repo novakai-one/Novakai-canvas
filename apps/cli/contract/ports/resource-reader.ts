@@ -15,8 +15,8 @@ import type { LocalBytes } from '../records/staged-resource.js';
 export interface ResourceReader {
   /**
    * The declared file's bytes and media type. Fails with `absolute-path`, `path-escape`,
-   * `source-unavailable`, `unsupported-media`, `resource-mismatch` or `resource-too-large`; every
-   * failure carries the declaration's `location`.
+   * `source-unavailable`, `unsupported-media`, `resource-mismatch` or `resource-too-large`; core
+   * adds the declaration's `location` to every failure.
    */
   read(
     file: FilePath,
