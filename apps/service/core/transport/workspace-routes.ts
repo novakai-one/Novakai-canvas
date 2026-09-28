@@ -141,8 +141,8 @@ async function readReceipt(
   call: ApiCall,
   session: RouteSession,
 ): Promise<HttpOutcome> {
-  const requestId = readLastValue(call.query, 'id');
-  return session.receipt(requestId);
+  const requestIdText = readLastValue(call.query, 'id');
+  return session.receipt(requestIdText);
 }
 
 /**

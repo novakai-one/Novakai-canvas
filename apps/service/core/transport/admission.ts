@@ -101,7 +101,7 @@ function isDirectPageOpen(
   metadata: HttpMetadata,
   security: HttpSecurity,
 ): boolean {
-  return isPageOpen(metadata) && isStartedHere(metadata, security);
+  return isPageOpen(metadata) && isOpenedFromHere(metadata, security);
 }
 
 /** Whether the request is a `GET` that opens a whole page (`navigate` mode, `document` target). */
@@ -113,15 +113,14 @@ function isPageOpen(metadata: HttpMetadata): boolean {
 }
 
 /**
- * Whether the page open was typed or started on this origin (`Sec-Fetch-Site` `none` or
- * `same-origin`), with no foreign Origin.
+ * Whether the page was opened by typing its address or from this server's own page
+ * (`Sec-Fetch-Site` `none` or `same-origin`), with no foreign Origin.
  */
-function isStartedHere(
+function isOpenedFromHere(
   metadata: HttpMetadata,
   security: HttpSecurity,
 ): boolean {
-  const navigationSite = isNavigationSite(metadata.site);
-  return navigationSite && isTrustedOrigin(metadata, security);
+  return isNavigationSite(metadata.site) && isTrustedOrigin(metadata, security);
 }
 
 /** Whether the `Sec-Fetch-Site` header, sent once, is one a direct page open may carry. */
@@ -156,8 +155,9 @@ function isSameOriginFetch(
   metadata: HttpMetadata,
   security: HttpSecurity,
 ): boolean {
-  const sameOrigin = headerMatches(metadata.site, 'same-origin');
-  return sameOrigin && isTrustedOrigin(metadata, security);
+  const fromThisSite = headerMatches(metadata.site, 'same-origin');
+  const originAllowed = isTrustedOrigin(metadata, security);
+  return fromThisSite && originAllowed;
 }
 
 /** Whether the Origin header is missing, empty, or exactly this server's origin; never repeated. */
@@ -165,8 +165,9 @@ function isTrustedOrigin(
   metadata: HttpMetadata,
   security: HttpSecurity,
 ): boolean {
-  const ownOrigin = headerMatches(metadata.origin, security.address.origin);
-  return isBlankHeader(metadata.origin) || ownOrigin;
+  const originBlank = isBlankHeader(metadata.origin);
+  const originIsOurs = headerMatches(metadata.origin, security.address.origin);
+  return originBlank || originIsOurs;
 }
 
 /** Whether the request's session cookie equals the session secret (compared in constant time). */
@@ -234,7 +235,10 @@ function checkAgentCaller(
   return success(CLI_CALLER);
 }
 
-/** Whether the request sent an Origin or `Sec-Fetch-Site` header with text, as a browser does. */
+/**
+ * Whether the request sent an Origin or `Sec-Fetch-Site` header that isn't blank, as a browser
+ * does. A header sent twice counts, even with empty text.
+ */
 function carriesBrowserHeaders(metadata: HttpMetadata): boolean {
   const originSent = !isBlankHeader(metadata.origin);
   const siteSent = !isBlankHeader(metadata.site);

@@ -22,8 +22,8 @@ const NO_VALUES: readonly string[] = Object.freeze([]);
 /** Reads every key in the URL's query, not only `QueryKey`, with its values in order. */
 export function readApiQuery(params: URLSearchParams): ApiQuery {
   const keys = new Set(params.keys());
-  const valuesByKey = [...keys].map((key) => keyWithValues(params, key));
-  const query: ApiQuery = Object.freeze(Object.fromEntries(valuesByKey));
+  const keysWithValues = [...keys].map((key) => keyWithValues(params, key));
+  const query: ApiQuery = Object.freeze(Object.fromEntries(keysWithValues));
   return query;
 }
 

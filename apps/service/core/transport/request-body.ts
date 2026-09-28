@@ -42,22 +42,24 @@ async function receiveBytes(chunks: AsyncIterable<unknown>): Promise<Result<Buff
 async function readWithinLimit(chunks: AsyncIterable<unknown>): Promise<Result<Buffer>> {
   const iterator = chunks[Symbol.asyncIterator]();
   const accepted: Buffer[] = [];
-  let size = 0;
+  let receivedBytes = 0;
   let next = await iterator.next();
-  while (!next.done && fitsLimit(next.value, size)) {
+  // Stepped by hand, not with `for await`, so `next` is kept: `finishReading` uses it to tell a
+  // stream that ended from a chunk that didn't fit.
+  while (!next.done && fitsLimit(next.value, receivedBytes)) {
     accepted.push(next.value);
-    size += next.value.byteLength;
+    receivedBytes += next.value.byteLength;
     next = await iterator.next();
   }
   return finishReading(iterator, next, accepted);
 }
 
-/** Whether the chunk is bytes and `size` plus it stays within `httpBodyLimit`. */
+/** Whether the chunk is bytes and `receivedBytes` plus it stays within `httpBodyLimit`. */
 function fitsLimit(
   chunk: unknown,
-  size: number,
+  receivedBytes: number,
 ): chunk is Buffer {
-  return Buffer.isBuffer(chunk) && size + chunk.byteLength <= httpBodyLimit;
+  return Buffer.isBuffer(chunk) && receivedBytes + chunk.byteLength <= httpBodyLimit;
 }
 
 /** Joins the accepted chunks when the stream ended; otherwise stops reading and refuses the body. */

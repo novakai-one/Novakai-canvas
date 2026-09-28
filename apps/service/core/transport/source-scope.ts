@@ -39,7 +39,8 @@ function hasBothScopes(
   objects: readonly string[],
 ): boolean {
   const sectionGiven = sections.length > 0;
-  return sectionGiven && objects.length > 0;
+  const objectGiven = objects.length > 0;
+  return sectionGiven && objectGiven;
 }
 
 /** Whether `section` or `object` was given more than once. */
@@ -48,7 +49,8 @@ function hasRepeatedScope(
   objects: readonly string[],
 ): boolean {
   const sectionRepeated = sections.length > 1;
-  return sectionRepeated || objects.length > 1;
+  const objectRepeated = objects.length > 1;
+  return sectionRepeated || objectRepeated;
 }
 
 /** Reads the one section or object asked for, or the whole collection when neither was. */

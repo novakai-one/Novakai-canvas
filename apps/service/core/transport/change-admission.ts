@@ -2,7 +2,9 @@
  * Why this file exists
  *
  * Knowing who is calling is not enough to let a change through. For example, the CLI could send a
- * change that says the browser wrote it, or one made with a planner only the browser may use.
+ * change that says the browser wrote it, or one that uses the `model` planner, which only the
+ * browser may use. A planner turns a change into the edits Authoring saves: `dsl` reads DSL text,
+ * and `model` takes edits made by hand in the browser.
  *
  * This file checks a change request: it must be a complete Authoring request, its author must be
  * the caller, and it must use a planner the caller may use. It never runs the change.
@@ -39,7 +41,10 @@ export function admitChange(
   return checkCallerMaySend(request.value, caller);
 }
 
-/** Reads the input with Authoring's request schema. */
+/**
+ * Reads the input with Authoring's request schema. Refuses input that isn't a complete Authoring
+ * request (`invalid-input` at `request`).
+ */
 function readRequest(input: unknown): Result<Request> {
   const request = requestSchema.safeParse(input);
   if (!request.success) {
@@ -68,7 +73,8 @@ function isSentByCaller(
   caller: Caller,
 ): boolean {
   const sameId = request.actor.id === caller.id;
-  return sameId && request.actor.kind === caller.kind;
+  const sameKind = request.actor.kind === caller.kind;
+  return sameId && sameKind;
 }
 
 /**
