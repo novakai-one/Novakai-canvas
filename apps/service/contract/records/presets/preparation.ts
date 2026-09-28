@@ -1,33 +1,28 @@
 /*
- * Preset preparation records: the request schemas resource commands decode, the prepared preset
- * the preset planner carries, and the diagnostic resource commands answer with. Declarations
- * only; the ResourceCommands port is in ports/workspace.ts. Templates and Assets own their
- * failures, Authoring owns commit and replay.
+ * Why this file exists
+ *
+ * Saving a theme or recipe (a "preset") takes two steps. `POST /api/v1/resources/prepare` checks it
+ * and answers exactly what would be saved, saving nothing. Then the caller sends that as a change,
+ * and the preset planner prepares it again to make sure nothing moved in between.
+ *
+ * This file holds the prepared preset (`PresetPreparation`), the preset planner's check of it
+ * (`presetCommand`), and a way to read a preset as named fields (`presetFields`). The field names
+ * are sent over HTTP and stored with each change, so they stay as they are. Declarations only.
  */
-import type { FailureSource } from '../transport/failure-source.js';
-import type { Result } from '../../errors.js';
 import { z } from 'zod';
-import type { ReadVersion, RecordKey } from '@novakai/canvas-authoring';
+import type { ReadVersion, RecordKey } from '../capability-types.js';
 import type { Pin } from '@novakai/canvas-templates';
-import type { AuthoringErrorCode, TemplatesErrorCode } from '../capabilities.js';
-/** A preset preparation request: the admission and the uploaded assets it may bind (none by default). */
-export const preparationInput = z.strictObject({
-  admission: z.json(),
-  assets: z.array(z.strictObject({ alias: z.string(), digest: z.string() })).default([]),
-});
-export type PreparationInput = z.infer<typeof preparationInput>;
-/** A byte restore request: the digest and its normalized base64 bytes. */
-export const restoreInput = z.strictObject({ digest: z.string(), base64: z.string() });
-export type RestoreInput = z.infer<typeof restoreInput>;
-/** A recipe instantiation request: the recipe pin (Templates checks it) and the target namespace. */
-export const instantiateInput = z.strictObject({ pin: z.unknown(), namespace: z.string() });
-export type InstantiateInput = z.infer<typeof instantiateInput>;
+
 /**
- * A preset admission read as named fields, so one field can be replaced: a recipe's source
- * (resource commands) or a theme's raw block (theme admission).
+ * Checks a preset as named fields, so one field can be replaced: a recipe's DSL text (resource
+ * commands) or a theme's `raw` block (theme saving).
  */
-export const admissionFields = z.record(z.string(), z.json());
-/** Prepared content is immutable host data; Authoring repeats preparation and owns commit/replay. */
+export const presetFields = z.record(z.string(), z.json());
+
+/**
+ * Checks the preset planner's payload: a prepared preset exactly as `preparePreset` answered it.
+ * The planner prepares it again and refuses it if anything changed.
+ */
 export const presetCommand = z.strictObject({
   admission: z.json(),
   record: z.json(),
@@ -46,27 +41,32 @@ export const presetCommand = z.strictObject({
     }),
   ),
 });
+/** A preset planner payload that passed {@link presetCommand}. */
 export type PresetCommand = z.infer<typeof presetCommand>;
-/** Preparation returns the exact content and observed catalog revision, without a canonical write. */
+
+/** Any JSON value, as a `z.json()` check reads it. */
+type CheckedJson = z.infer<ReturnType<typeof z.json>>;
+
+/**
+ * A prepared preset: exactly what would be saved, and what was read to make it. Nothing is saved
+ * yet.
+ */
 export interface PresetPreparation {
-  readonly admission: z.infer<ReturnType<typeof z.json>>;
-  readonly record: z.infer<ReturnType<typeof z.json>>;
+  /** The preset to save; a theme's source syntax is already translated. */
+  readonly admission: CheckedJson;
+  /** The record Templates would store. */
+  readonly record: CheckedJson;
+  /** The exact version (kind, ID, version, digest) the preset would get. */
   readonly pin: Pin;
+  /** Where the record would be stored. */
   readonly key: RecordKey;
+  /**
+   * The digests (as text) of the uploaded files it uses. Assets checks them when the planner
+   * prepares the preset again.
+   */
   readonly resources: readonly string[];
+  /**
+   * The stored records read to prepare it, with their versions (the catalog's revision among them).
+   */
   readonly reads: readonly ReadVersion[];
 }
-/**
- * The codes a resource preparation refuses with: Authoring's (selection, theme admission and the
- * service's own input refusals) and Templates' (catalog, admission and recipe reads).
- */
-export type ResourceErrorCode = AuthoringErrorCode | TemplatesErrorCode;
-/** Resource preparation preserves the originating owner's stable diagnostic and recovery advice. */
-export interface ResourceDiagnostic {
-  readonly code: ResourceErrorCode;
-  readonly path: string;
-  readonly message: string;
-  readonly recovery: string;
-  readonly source?: FailureSource | undefined;
-}
-export type ResourceResult<T> = Result<T, ResourceDiagnostic>;

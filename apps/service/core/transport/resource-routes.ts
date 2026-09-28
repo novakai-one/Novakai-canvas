@@ -1,78 +1,96 @@
 /*
- * The six `POST /api/v1/resources/*` routes: each reads a JSON body and forwards it to the
- * resource commands; freeze, prepare and instantiate first read the current snapshot. Pure over
- * the injected owners; no route writes storage. A refused body is the caller's to correct;
- * Authoring owns commit and receipt recovery. A throw reaches the HTTP server's `receive`
- * (routes.ts).
+ * Why this file exists
+ *
+ * Diagrams use images, fonts, themes and recipes, and the web app and the CLI manage them through
+ * six routes under `/api/v1/resources/`: `stage` (store an uploaded file), `restore` (put a file
+ * back from a backup), `blob` (read a stored file), `freeze` (pin the themes a change names to
+ * exact versions), `prepare` (check a theme or recipe before it is saved) and `instantiate` (turn
+ * a recipe into DSL).
+ *
+ * This file is those six routes. Each reads a JSON body and passes it to the resource commands; no
+ * diagram changes until a change is applied through Authoring.
  */
 import type { ApiCall, RouteKey } from '../../contract/records/transport/protocol.js';
-import type { WireOutcome } from '../../contract/records/transport/wire-codes.js';
+import type { HttpOutcome } from '../../contract/records/transport/http-codes.js';
 import type { ResourceCommands } from '../../contract/ports/workspace.js';
 import type { WorkspaceSession } from '../../contract/types.js';
-import { jsonBody } from './json-body.js';
-import { answerJson, type RouteHandler } from './route-answer.js';
+import { readJsonBody } from './json-body.js';
+import { jsonRoute, type RouteHandler } from './route-answer.js';
 
 /** A resource route, as `METHOD path`: every route under `/api/v1/resources/`. */
 export type ResourceRouteKey = Extract<RouteKey, `POST /api/v1/resources/${string}`>;
 
-/** The owners the resource routes forward to. */
-export interface ResourceRouteOwners {
+/**
+ * What the resource routes call: the workspace session's `read` (for the snapshot), and the
+ * resource commands.
+ */
+export interface ResourceRouteDependencies {
   readonly session: Pick<WorkspaceSession, 'read'>;
   readonly resources: ResourceCommands;
 }
 
-/** One resource command run on the admitted body. */
-type ResourceHandler = (input: unknown) => Promise<WireOutcome>;
+/** One resource command, run on the body read as JSON. */
+type BodyCommand = (json: unknown) => Promise<HttpOutcome>;
 /** The resource commands that bind the current snapshot. */
 type SnapshotCommand = 'freeze' | 'preparePreset' | 'instantiate';
 
 /**
- * The frozen resource route table; every route answers JSON. Every route fails as `runOnJsonBody`;
- * freeze, prepare and instantiate also as `onSnapshot`. Resource command outcomes pass through.
+ * Builds the six resource routes; all answer JSON. A body that isn't JSON answers `invalid-input`
+ * at `content-type` or `body` (the part that was wrong). The commands' answers, and a failed
+ * snapshot read, pass through.
  */
 export function resourceRoutes(
-  owners: ResourceRouteOwners,
+  dependencies: ResourceRouteDependencies,
 ): Readonly<Record<ResourceRouteKey, RouteHandler>> {
-  const { resources } = owners;
+  const { resources } = dependencies;
   return Object.freeze({
-    'POST /api/v1/resources/stage': resourceRoute((input) => resources.stage(input)),
-    'POST /api/v1/resources/restore': resourceRoute((input) => resources.restore(input)),
-    'POST /api/v1/resources/blob': resourceRoute(async (input) => resources.blob(input)),
-    'POST /api/v1/resources/freeze': resourceRoute(onSnapshot(owners, 'freeze')),
-    'POST /api/v1/resources/prepare': resourceRoute(onSnapshot(owners, 'preparePreset')),
-    'POST /api/v1/resources/instantiate': resourceRoute(onSnapshot(owners, 'instantiate')),
+    'POST /api/v1/resources/stage': resourceRoute((json) => resources.storeUpload(json)),
+    'POST /api/v1/resources/restore': resourceRoute((json) => resources.restore(json)),
+    'POST /api/v1/resources/blob': resourceRoute(async (json) => resources.readFile(json)),
+    'POST /api/v1/resources/freeze': resourceRoute((json) =>
+      runOnSnapshot(json, dependencies, 'freeze'),
+    ),
+    'POST /api/v1/resources/prepare': resourceRoute((json) =>
+      runOnSnapshot(json, dependencies, 'preparePreset'),
+    ),
+    'POST /api/v1/resources/instantiate': resourceRoute((json) =>
+      runOnSnapshot(json, dependencies, 'instantiate'),
+    ),
   });
 }
 
-/** The route that runs `handler` on the body read as JSON (`runOnJsonBody`). */
-function resourceRoute(handler: ResourceHandler): RouteHandler {
-  return answerJson((call) => runOnJsonBody(call, handler));
+/** Makes the route that reads the body as JSON, then runs `command` on it. */
+function resourceRoute(command: BodyCommand): RouteHandler {
+  return jsonRoute((call) => runOnJsonBody(call, command));
 }
 
 /**
- * Runs `handler` on the body read as JSON. Fails with `invalid-input` at `content-type` or `body`
- * as `jsonBody` (json-body.ts). The server authenticates before reading the body.
+ * Reads the body as JSON, then runs `command` on it. Fails with `invalid-input` at `content-type`
+ * or `body` as `readJsonBody` (json-body.ts). The server authenticates before reading the body.
  */
 async function runOnJsonBody(
   call: ApiCall,
-  handler: ResourceHandler,
-): Promise<WireOutcome> {
-  const input = jsonBody(call.body, call.metadata.contentType, 'resource');
-  if (!input.ok) return input;
-  return handler(input.value);
+  command: BodyCommand,
+): Promise<HttpOutcome> {
+  const json = readJsonBody(call.body, call.metadata.contentType, 'resource');
+  if (!json.ok) {
+    return json;
+  }
+  return command(json.value);
 }
 
 /**
- * A handler that reads the current snapshot, then runs `command` on it. The command stays
- * mutation-free until an Authoring apply. Authoring's read failures pass through.
+ * Reads the current snapshot, then runs `command` on the body and that snapshot. The command
+ * changes no diagram until an Authoring apply. Authoring's read failures pass through.
  */
-function onSnapshot(
-  owners: ResourceRouteOwners,
+async function runOnSnapshot(
+  json: unknown,
+  dependencies: ResourceRouteDependencies,
   command: SnapshotCommand,
-): ResourceHandler {
-  return async (input) => {
-    const snapshot = await owners.session.read();
-    if (!snapshot.ok) return snapshot;
-    return owners.resources[command](input, snapshot.value);
-  };
+): Promise<HttpOutcome> {
+  const snapshot = await dependencies.session.read();
+  if (!snapshot.ok) {
+    return snapshot;
+  }
+  return dependencies.resources[command](json, snapshot.value);
 }

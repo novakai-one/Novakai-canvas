@@ -1,20 +1,28 @@
 /*
- * The session's lifetime: admit work while open, then drain it and close the owners once. Pure
- * promise bookkeeping; the owners' close is injected by compose. A failed close is returned, and
- * the caller keeps the workspace.
+ * Why this file exists
+ *
+ * When the server stops, a save may still be running, and closing the database under it would
+ * break that save. For example, if `pnpm dev` gets Ctrl-C while `pnpm canvas apply` is saving, the
+ * save must finish before the workspace files close.
+ *
+ * This file keeps track of running calls. Once closing starts, new calls get the "closed" answer,
+ * running ones finish, and then the workspace closes, once. It never cancels a running call.
  */
 import { failure, type Result } from '../../contract/errors.js';
 
-/** Shutdown rejects new work, drains every admitted operation and closes owners only after physical settlement. */
+/** Runs calls only while the session is open, then closes the workspace once they finish. */
 export interface SessionLifetime {
-  /** Runs `operation` while open (rethrowing what it throws), or answers `unavailable()` once closing. */
+  /**
+   * Runs `operation` while the session is open and answers what it answers (a throw is passed on).
+   * Once closing has started, answers `closedAnswer()` instead.
+   */
   run<T>(
     operation: () => Promise<T>,
-    unavailable: () => T,
+    closedAnswer: () => T,
   ): Promise<T>;
   /**
-   * Drains admitted work, then closes the owners once; every call shares that answer. Passes the
-   * owners' close failure through; fails with `unavailable` at `shutdown` when closing throws.
+   * Stops new calls, waits for running ones, then closes the workspace once; calling it again gets
+   * the same answer. Fails as `closeWorkspace` fails, or with `unavailable` if `closeWorkspace` throws.
    */
   close(): Promise<Result<void>>;
 }
@@ -26,62 +34,83 @@ type LifetimePhase =
 /** The phase once `close` has been called. */
 type ClosingPhase = Extract<LifetimePhase, { readonly kind: 'closing' }>;
 
+/** The phase a new session starts in. */
 const OPEN: LifetimePhase = Object.freeze({ kind: 'open' });
 
 /**
- * Tracks the session's admitted work. `run` answers the caller's `unavailable()` once closing has
- * begun. `close` drains admitted work, then closes the owners once; every later call gets the same
- * answer. The owners' own close failure is returned as-is; a thrown close is `unavailable` (path
- * `shutdown`).
+ * Makes the lifetime of one session. `closeWorkspace` runs once, after every running call has
+ * finished. Never fails.
  */
-export function createSessionLifetime(close: () => Promise<Result<void>>): SessionLifetime {
-  const active = new Set<Promise<unknown>>();
-  let phase = OPEN;
+export function createSessionLifetime(
+  closeWorkspace: () => Promise<Result<void>>,
+): SessionLifetime {
+  const runningCalls = new Set<Promise<unknown>>();
+  let phase: LifetimePhase = OPEN;
   return {
-    async run<T>(operation: () => Promise<T>, unavailable: () => T): Promise<T> {
-      if (phase.kind === 'closing') return unavailable();
-      return track(active, operation);
+    async run<T>(operation: () => Promise<T>, closedAnswer: () => T): Promise<T> {
+      if (phase.kind === 'closing') {
+        return closedAnswer();
+      }
+      return trackRunningCall(runningCalls, operation);
     },
     close(): Promise<Result<void>> {
-      const closing = closingPhase(phase, () => shutdown([...active], close));
+      const startShutdown = () => shutdown([...runningCalls], closeWorkspace);
+      const closing = enterClosingPhase(phase, startShutdown);
       phase = closing;
       return closing.closed;
     },
   };
 }
 
-/** Runs one admitted operation, holding it in `active` until it settles. Rethrows what it throws. */
-async function track<T>(
-  active: Set<Promise<unknown>>,
+/** Runs one call and holds it in `runningCalls` until it settles; a throw is passed on. */
+async function trackRunningCall<T>(
+  runningCalls: Set<Promise<unknown>>,
   operation: () => Promise<T>,
 ): Promise<T> {
-  const pending = Promise.resolve().then(operation);
-  active.add(pending);
+  // Started through a promise so a call that throws at once still becomes a rejected promise,
+  // tracked and cleaned up like any other.
+  const call = Promise.resolve().then(operation);
+  runningCalls.add(call);
   try {
-    return await pending;
+    return await call;
   } finally {
-    active.delete(pending);
+    runningCalls.delete(call);
   }
 }
 
-/** The current closing phase, or a new one whose shutdown `start` begins now. Never fails. */
-function closingPhase(
+/** Starts shutdown on the first `close`, and hands later calls the same closing phase. */
+function enterClosingPhase(
   phase: LifetimePhase,
-  start: () => Promise<Result<void>>,
+  startShutdown: () => Promise<Result<void>>,
 ): ClosingPhase {
-  if (phase.kind === 'closing') return phase;
-  return { kind: 'closing', closed: start() };
+  if (phase.kind === 'closing') {
+    return phase;
+  }
+  const closed = startShutdown();
+  return { kind: 'closing', closed };
 }
 
-/** Waits for every admitted operation to settle, then closes the owners; a thrown close is `unavailable` (path `shutdown`). */
+/** Waits for every running call to settle, then closes the workspace. */
 async function shutdown(
-  active: readonly Promise<unknown>[],
-  close: () => Promise<Result<void>>,
+  runningCalls: readonly Promise<unknown>[],
+  closeWorkspace: () => Promise<Result<void>>,
 ): Promise<Result<void>> {
-  await Promise.allSettled(active);
+  await Promise.allSettled(runningCalls);
+  return tryCloseWorkspace(closeWorkspace);
+}
+
+/** Closes the workspace, and turns a thrown close into the `unavailable` mistake. */
+async function tryCloseWorkspace(
+  closeWorkspace: () => Promise<Result<void>>,
+): Promise<Result<void>> {
   try {
-    return await close();
+    return await closeWorkspace();
   } catch {
-    return failure('unavailable', 'shutdown', 'Workspace owners could not close cleanly');
+    return closeThrewFailure();
   }
+}
+
+/** Makes the mistake for a workspace close that threw (`unavailable` at `shutdown`). */
+function closeThrewFailure(): Result<never> {
+  return failure('unavailable', 'shutdown', 'Workspace owners could not close cleanly');
 }

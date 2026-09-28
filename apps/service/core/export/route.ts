@@ -1,117 +1,129 @@
 /*
- * The workspace export route: a read-only projection over one current Authoring snapshot. A
- * checked request is dispatched by format: DSL and Markdown are printed from a leased snapshot
- * (text.ts); SVG and PNG are encoded by Export, which acquires its snapshot through the route's
- * lease (lease.ts). Every path releases its lease once, also when a DSL print or Markdown
- * format throws (text.ts). Pure over the owners compose injects; the caller owns retry.
+ * Why this file exists
+ *
+ * `POST /api/v1/export` asks for one saved collection as a file, for example `my-diagram` at
+ * revision 3 as a PNG. There are four formats, and they are made in two different ways.
+ *
+ * This file builds the exporter behind that route. It checks the request (request.ts), then sends
+ * DSL and Markdown to text.ts, and SVG and PNG to Export (the capability), which gets its snapshot
+ * from lease.ts. Every answer is a `Result` (contract/errors.ts); Export's own mistakes are kept as
+ * the source. An export only reads; it never changes the workspace.
  */
-import type { Result } from '../../contract/errors.js';
-import type { StaticFile } from '../../contract/records/transport/server.js';
-import type { PresentationBindings } from '../../contract/records/capabilities.js';
+import { failure, success, type Result } from '../../contract/errors.js';
+import type { SentFile } from '../../contract/records/transport/server.js';
+import type { PresentationBindings } from '../../contract/records/capability-types.js';
 import type { ExportRules } from '../../contract/ports/capabilities.js';
-import type { ExportHandler, Rasterizer } from '../../contract/ports/export.js';
+import type { Exporter, PngEncoder } from '../../contract/ports/export.js';
 import type { ExportRequest } from '../../contract/records/export/request.js';
 import { readExportRequest } from './request.js';
-import { resourceInspector } from './resources.js';
-import { artifactOutcome } from './files.js';
-import { exportDocuments, type DocumentOwners } from './documents.js';
+import { createPassThroughResources } from './resources.js';
+import { buildArtifactFile } from './files.js';
+import { createDocumentsForExport, type DocumentDependencies } from './documents.js';
 import { acquireSnapshot } from './lease.js';
-import { exportDsl, exportMarkdown, type TextOwners } from './text.js';
+import { exportDsl, exportMarkdown, type TextExportDependencies } from './text.js';
 
-/** Everything one export reads through: the text and lease owners, plus Export's documents port. */
-export interface ExportRouteOwners extends TextOwners, DocumentOwners {
+/** What one exporter uses: all that the text exports and the documents helper need, plus these. */
+export interface ExporterDependencies extends TextExportDependencies, DocumentDependencies {
+  /** Export's rules: `compose` builds Export, `formatMarkdown` writes Markdown. */
   readonly export: Pick<ExportRules, 'compose' | 'formatMarkdown'>;
+  /** Presentation, which Export draws the SVG and PNG with. */
   readonly presentation: PresentationBindings;
-  readonly rasterizer: Rasterizer;
+  /** Starts on the first PNG request and turns the SVG into PNG bytes. */
+  readonly pngEncoder: PngEncoder;
 }
 
 /**
- * The export route of one workspace; starts no I/O. `invoke` answers one file, or fails with
- * `invalid-input` for a refused request (see `readExportRequest`) or a DSL scope other than the
- * whole collection (at `scope`), `unavailable` at `export.png` when the rasterizer cannot start,
- * and otherwise as `exportRouteFailure`: an Export refusal is `cancelled`, `invalid-input` or
- * `unavailable`, with Export's diagnostic kept as source. Every export only reads; the caller
- * owns the retry.
+ * Builds the exporter of one workspace. Its `exportFile` turns one request, as sent, into one file.
+ * Nothing is read until a request arrives.
+ * Mistakes: `invalid-input` for a bad request, a missing collection, an old revision or a DSL
+ * export of one section; `unavailable` when the PNG encoder can't start or a file can't be made;
+ * and `cancelled` when the export was stopped. Export's own mistake is kept as the source.
  */
-export function createExportRoute(owners: ExportRouteOwners): ExportHandler {
-  return { invoke: (input, signal) => invokeExport(input, signal, owners) };
+export function createExporter(dependencies: ExporterDependencies): Exporter {
+  return { exportFile: (body, signal) => exportOneFile(body, signal, dependencies) };
 }
 
-/**
- * A checked request is dispatched by format; a refused one never reaches an owner. Fails as
- * `readExportRequest` (`invalid-input` at `export` or `export.scale`), or as `dispatchExport`.
- */
-async function invokeExport(
-  input: unknown,
+/** Checks the request as sent, then makes the file in the format it asks for. */
+async function exportOneFile(
+  body: unknown,
   signal: AbortSignal,
-  owners: ExportRouteOwners,
-): Promise<Result<StaticFile>> {
-  const request = readExportRequest(input);
-  if (!request.ok) return request;
-  return dispatchExport(request.value, owners, signal);
+  dependencies: ExporterDependencies,
+): Promise<Result<SentFile>> {
+  const request = readExportRequest(body);
+  if (!request.ok) {
+    return request;
+  }
+  return exportByFormat(request.value, dependencies, signal);
 }
 
-/**
- * DSL and Markdown are printed from a leased snapshot; SVG and PNG are encoded by Export. Fails as
- * `exportDsl`, `exportMarkdown` or `nativeExport`.
- */
-async function dispatchExport(
+/** Sends DSL and Markdown to the text exports, and SVG and PNG to Export. */
+async function exportByFormat(
   request: ExportRequest,
-  owners: ExportRouteOwners,
+  dependencies: ExporterDependencies,
   signal: AbortSignal,
-): Promise<Result<StaticFile>> {
+): Promise<Result<SentFile>> {
   switch (request.format) {
     case 'dsl':
-      return exportDsl(request, owners, signal);
+      return exportDsl(request, dependencies, signal);
     case 'markdown':
-      return exportMarkdown(request, owners, signal);
+      return exportMarkdown(request, dependencies, signal);
+    case 'svg':
+    case 'png':
+      return exportPicture(request, dependencies, signal);
     default:
-      return nativeExport(request, owners, signal);
+      return unsupported(request.format);
   }
 }
 
-/**
- * PNG first needs the rasterizer; an unavailable rasterizer refuses before any owner is read.
- * Fails with `unavailable` at `export.png` (see `prepareFormat`), or as `encodeNative`.
- */
-async function nativeExport(
+/** Starts the PNG encoder for a PNG, then has Export draw the SVG or PNG file. */
+async function exportPicture(
   request: ExportRequest,
-  owners: ExportRouteOwners,
+  dependencies: ExporterDependencies,
   signal: AbortSignal,
-): Promise<Result<StaticFile>> {
-  const prepared = await prepareFormat(request.format, owners);
-  if (!prepared.ok) return prepared;
-  return encodeNative(request, owners, signal);
+): Promise<Result<SentFile>> {
+  const encoder = await startEncoderFor(request.format, dependencies);
+  if (!encoder.ok) {
+    return encoder;
+  }
+  return drawWithExport(request, dependencies, signal);
 }
 
-/**
- * The rasterizer for PNG; every other format needs nothing. Fails with `unavailable` at
- * `export.png` when the rasterizer cannot start.
- */
-async function prepareFormat(
+/** Starts the PNG encoder when the format is PNG; any other format needs nothing started. */
+async function startEncoderFor(
   format: ExportRequest['format'],
-  owners: ExportRouteOwners,
+  dependencies: ExporterDependencies,
 ): Promise<Result<void>> {
-  return format === 'png' ? owners.rasterizer.prepare() : { ok: true, value: undefined };
+  if (format === 'png') {
+    return dependencies.pngEncoder.prepare();
+  }
+  return success(undefined);
+}
+
+/** The service never exports HTML, so Export's HTML reader needs no stylesheet. */
+const NO_READER_CSS = '';
+
+/** Builds Export for this request, has it draw the file, and wraps the file as the download. */
+async function drawWithExport(
+  request: ExportRequest,
+  dependencies: ExporterDependencies,
+  signal: AbortSignal,
+): Promise<Result<SentFile>> {
+  const exporter = dependencies.export.compose({
+    presentation: dependencies.presentation,
+    readerCss: NO_READER_CSS,
+    snapshots: { acquire: (identity) => acquireSnapshot(identity, dependencies, signal) },
+    documents: createDocumentsForExport(dependencies),
+    resources: createPassThroughResources(),
+  });
+  const artifact = await exporter.service.exportArtifact(request, signal);
+  return buildArtifactFile(artifact);
 }
 
 /**
- * Export encodes the artifact from a snapshot it acquires through this route. Fails as
- * `exportRouteFailure` of Export's diagnostic (including `acquireSnapshot`'s refusals):
- * `cancelled` stays `cancelled`, an input refusal is `invalid-input`, and `encoding-failed`
- * (also a provider throw), `cleanup-failed` or `resource-rejected` is `unavailable`.
+ * Answers a format the switch doesn't know with `invalid-input` at `export`. It never runs:
+ * request.ts lets only the four formats through.
  */
-async function encodeNative(
-  request: ExportRequest,
-  owners: ExportRouteOwners,
-  signal: AbortSignal,
-): Promise<Result<StaticFile>> {
-  const exporter = owners.export.compose({
-    presentation: owners.presentation,
-    readerCss: '',
-    snapshots: { acquire: (identity) => acquireSnapshot(identity, owners, signal) },
-    documents: exportDocuments(owners),
-    resources: resourceInspector(),
-  });
-  return artifactOutcome(await exporter.service.exportArtifact(request, signal));
+function unsupported(format: never): Result<SentFile> {
+  void format;
+  return failure('invalid-input', 'export', 'Unsupported export format');
 }

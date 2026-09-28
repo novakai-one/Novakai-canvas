@@ -1,33 +1,48 @@
 /*
- * A route's answer as the HTTP server writes it: a JSON outcome, or a file sent as bytes. Pure.
- * JSON routes answer through `answerJson`; the export route answers its file through
- * `answerFile`. A failure is always JSON: the caller corrects and resends it, and Authoring owns
- * commit and receipt recovery.
+ * Why this file exists
+ *
+ * Most routes answer JSON, but the export route answers a file. For example, exporting a diagram as
+ * PNG sends the image's bytes, while a refused export still sends a JSON failure.
+ *
+ * This file turns what a route produced into the answer the HTTP server writes: JSON, or a file's
+ * bytes. A failure is always sent as JSON. It never writes to the socket itself.
+ *
+ * `HttpOutcome` is a JSON answer (a `Result`); `RouteOutcome` is what gets sent: JSON or bytes.
  */
 import type { Result } from '../../contract/errors.js';
 import type { ApiCall, RouteOutcome } from '../../contract/records/transport/protocol.js';
-import type { StaticFile } from '../../contract/records/transport/server.js';
-import type { WireOutcome } from '../../contract/records/transport/wire-codes.js';
-import type { ApiRouter } from '../../contract/ports/transport.js';
+import type { SentFile } from '../../contract/records/transport/server.js';
+import type { HttpOutcome } from '../../contract/records/transport/http-codes.js';
 
-/** Answers one API call. */
-export type RouteHandler = ApiRouter['invoke'];
+/** The code that answers one API call, with JSON or a file's bytes. */
+export type RouteHandler = (call: ApiCall) => Promise<RouteOutcome>;
 
-/** Answers one API call with an outcome sent as JSON. */
-type JsonHandler = (call: ApiCall) => Promise<WireOutcome>;
+/** The code that answers one API call with an outcome to send as JSON. */
+export type JsonHandler = (call: ApiCall) => Promise<HttpOutcome>;
 
-/** The route that answers `handler`'s outcome as JSON. Fails as `handler`. */
-export function answerJson(handler: JsonHandler): RouteHandler {
-  return async (call) => answerOutcome(await handler(call));
+/**
+ * Makes a route that runs `handler` and sends its outcome as JSON. If `handler` rejects, so does
+ * the route.
+ */
+export function jsonRoute(handler: JsonHandler): RouteHandler {
+  return async (call) => {
+    const outcome = await handler(call);
+    return answerJson(outcome);
+  };
 }
 
-/** The outcome, answered as JSON. Cannot fail. */
-export function answerOutcome(outcome: WireOutcome): RouteOutcome {
+/** Marks the outcome to be sent as JSON. Never fails. */
+export function answerJson(outcome: HttpOutcome): RouteOutcome {
   return { kind: 'json', outcome };
 }
 
-/** The file, answered as bytes; its failure is answered as JSON. Cannot fail. */
-export function answerFile(file: Result<StaticFile>): RouteOutcome {
-  if (!file.ok) return answerOutcome(file);
+/**
+ * Marks the file to be sent as bytes. If making or reading the file failed, marks that failure to
+ * be sent as JSON instead. Never fails.
+ */
+export function answerFile(file: Result<SentFile>): RouteOutcome {
+  if (!file.ok) {
+    return answerJson(file);
+  }
   return { kind: 'bytes', file: file.value };
 }

@@ -1,33 +1,43 @@
 /*
- * HTTP serving: expose one already-open workspace through authenticated loopback transport. The
- * socket, static-file and credential adapters load lazily; admission, the router and the transport
- * policy bind to the server's security. Every failure is a value; the caller keeps the workspace,
- * closes transport before draining it, and retries startup.
+ * Why this file exists
+ *
+ * An open workspace is no use until the browser and the CLI can reach it. That needs a web server
+ * on `127.0.0.1:<port>`, fresh secrets for this run, the CLI's token file, and the rules for who
+ * may call what.
+ *
+ * This file starts that server for one open workspace. It never opens or closes the workspace:
+ * if the server fails, the caller still has it. Every answer is a `Result` (see `errors.ts`).
  */
 import type { WorkspaceSession } from '../types.js';
 import type { LocalServer, ServerOptions } from '../records/transport/server.js';
-import type { HttpAdmission, HttpSecurity, TransportPolicy } from '../ports/transport.js';
+import type {
+  ApiRouter,
+  HttpAdmission,
+  HttpSecurity,
+  ServerBindings,
+  StaticFiles,
+  TransportPolicy,
+} from '../ports/transport.js';
+import type { Generation } from '../brands.js';
 import type { Result } from '../errors.js';
 import { failure } from '../errors.js';
 import { createAdmission } from '../../core/transport/admission.js';
-import { apiQuery } from '../../core/transport/api-query.js';
-import { createBrowserAccess } from '../../core/transport/browser-access.js';
-import { readCommand } from '../../core/transport/command.js';
+import { readApiQuery } from '../../core/transport/api-query.js';
+import { createWebAppFileCheck } from '../../core/transport/web-app-file-check.js';
+import { readChangeBody } from '../../core/transport/change-body.js';
 import { eventFrames } from '../../core/transport/events.js';
-import { requestBody } from '../../core/transport/request-body.js';
-import { requestHead } from '../../core/transport/request-head.js';
-import { requestKind } from '../../core/transport/request-kind.js';
-import { createHttpRouter } from '../../core/transport/routes.js';
-import { createSourceReadout } from '../../core/transport/source-readout.js';
-import { httpStatus, transportResponse } from '../../core/transport/status.js';
+import { readRequestBody } from '../../core/transport/request-body.js';
+import { readHttpMetadata } from '../../core/transport/http-metadata.js';
+import { classifyRequest } from '../../core/transport/request-kind.js';
+import { createApiRouter } from '../../core/transport/routes.js';
+import { createSourcePrinter } from '../../core/transport/source-printer.js';
+import { buildTransportResponse, chooseHttpStatus } from '../../core/transport/status.js';
 import { createServiceLanguage } from './capabilities.js';
 
 /**
- * Serves one already-open workspace on the configured loopback port. Fails with `unavailable` at
- * `credential` when the credential file cannot be created, is unsafe or is malformed,
- * `unavailable` at `server` when the port cannot be opened, and `unavailable` at `server` ("HTTP
- * bindings could not initialize") when an adapter cannot load or anything else throws. The
- * workspace stays open for the caller.
+ * Serves one open workspace at `127.0.0.1:<port>`. Fails with `unavailable` at `credential` when
+ * the CLI's token file can't be made or read safely, and `unavailable` at `server` when the port
+ * can't be opened or the server code can't load. The workspace stays open either way.
  */
 export async function serveWorkspace(
   session: WorkspaceSession,
@@ -36,60 +46,80 @@ export async function serveWorkspace(
   try {
     return await startServer(session, options);
   } catch {
-    return failure(
-      'unavailable',
-      'server',
-      'HTTP bindings could not initialize; retain the existing workspace',
-    );
+    return serverUnavailableFailure();
   }
 }
 
-/**
- * Loads the adapters, creates this server's security and starts the socket. Fails as
- * `serveWorkspace` names; throws when an adapter cannot load.
- */
+/** Loads the server code, makes this run's secrets and the CLI's token file, then listens. */
 async function startServer(
   session: WorkspaceSession,
   options: ServerOptions,
 ): Promise<Result<LocalServer>> {
-  const [credentials, files, server] = await Promise.all([
+  const [localCredentials, staticFiles, httpServer] = await Promise.all([
     import('../../adapters/credentials/local-credentials.js'),
     import('../../adapters/http/static-files.js'),
     import('../../adapters/http/server.js'),
   ]);
-  const security = await credentials.createLocalSecurity(options.port, options.credentialFile);
-  if (!security.ok) return security;
-  const admission = createAdmission(security.value);
-  return server.startHttpServer(options, {
-    security: security.value,
+  const security = await localCredentials.createLocalSecurity(options.port, options.credentialFile);
+  if (!security.ok) {
+    return security;
+  }
+  const webAppFiles = staticFiles.createStaticFiles(options.webRoot);
+  const bindings = serverBindings(session, security.value, webAppFiles);
+  return httpServer.startHttpServer(options, bindings);
+}
+
+/** Builds everything the server answers with: who may come in, the routes and the web app files. */
+function serverBindings(
+  session: WorkspaceSession,
+  security: HttpSecurity,
+  files: StaticFiles,
+): ServerBindings {
+  const admission = createAdmission(security);
+  const policy = transportPolicy(admission, security);
+  const router = apiRouter(session, security.generation, admission);
+  return { security, admission, changes: session, policy, files, router };
+}
+
+/** Builds the router that answers every API call on the open workspace. */
+function apiRouter(
+  session: WorkspaceSession,
+  generation: Generation,
+  admission: HttpAdmission,
+): ApiRouter {
+  const printer = createSourcePrinter(createServiceLanguage());
+  return createApiRouter({
+    session,
+    resources: session.resources,
+    generation,
     admission,
-    changes: session,
-    policy: transportPolicy(admission, security.value),
-    files: files.createStaticFiles(options.webRoot),
-    router: createHttpRouter({
-      session,
-      resources: session.resources,
-      generation: security.value.generation,
-      admission,
-      decoder: { read: readCommand },
-      source: createSourceReadout(createServiceLanguage()),
-    }),
+    bodyReader: { read: readChangeBody },
+    printer,
   });
 }
 
-/** The core transport policy, with browser access bound to this server's admission and secret. */
+/** Builds the core transport policy, with browser access bound to this server's secrets. */
 function transportPolicy(
   admission: HttpAdmission,
   security: HttpSecurity,
 ): TransportPolicy {
   return {
-    head: requestHead,
-    body: requestBody,
-    kind: requestKind,
-    query: apiQuery,
-    status: httpStatus,
-    envelope: transportResponse,
-    browserAccess: createBrowserAccess({ admission, security }),
+    head: readHttpMetadata,
+    body: readRequestBody,
+    kind: classifyRequest,
+    query: readApiQuery,
+    status: chooseHttpStatus,
+    envelope: buildTransportResponse,
+    browserAccess: createWebAppFileCheck({ admission, security }),
     frames: eventFrames,
   };
+}
+
+/** The `unavailable` failure at `server` for server code that threw while loading or starting. */
+function serverUnavailableFailure(): Result<never> {
+  return failure(
+    'unavailable',
+    'server',
+    'HTTP bindings could not initialize; retain the existing workspace',
+  );
 }

@@ -1,20 +1,30 @@
 /*
- * The evidence a failure carries under its code: a record or source-language validation, or an
- * owner's operational failure, nested to any depth. Schemas and their types. The codes inside stay
- * each owner's open text; the top-level wire code is closed (wire-codes.ts). Consumers keep the
- * evidence and branch on the top-level code, never on a message.
+ * Why this file exists
+ *
+ * When a capability finds a mistake, the service answers with its own code but keeps the
+ * capability's failure underneath as evidence (`source`). For example, a DSL change with a typo
+ * answers `invalid-input`, and its `source` holds Language's diagnostic with the typo's line and
+ * column. Evidence can nest: a failure may carry the failure that caused it.
+ *
+ * This file holds the check for that evidence (`failureSource`) and its type. The codes inside are
+ * each capability's own; only the top-level code comes from a closed list (http-codes.ts). Callers
+ * keep the evidence and branch on the top-level code, never on a message.
  */
 import { z } from 'zod';
-/** Source coordinates retain the compiler's exact character and line addresses. */
+/** A place in DSL text: its character offset, line and column, exactly as Language gave them. */
 const position = z.strictObject({ offset: z.number(), line: z.number(), column: z.number() });
+/** A stretch of DSL text, from `start` to `end`. */
 const span = z.strictObject({ start: position, end: position });
-/** Foreign codes remain owner-defined. Consumers retain them; they do not reinterpret message text. */
+/** One mistake in a stored record, at its `path`. The code is the capability's own. */
 const recordDiagnostic = z.strictObject({
   code: z.string(),
   path: z.string(),
   message: z.string(),
 });
-/** A source-language diagnostic retains correction guidance and the original domain issue when present. */
+/**
+ * One mistake in DSL text: where it is, what was found, what was expected and how to fix it, and
+ * the record mistake behind it when there is one.
+ */
 const languageDiagnostic = z.strictObject({
   code: z.string(),
   span,
@@ -24,33 +34,47 @@ const languageDiagnostic = z.strictObject({
   recovery: z.string(),
   source: recordDiagnostic.optional(),
 });
-/** Consumer-owned validation evidence supports both record addresses and source spans without flattening either. */
-const validation = z.strictObject({
+/** Checks a failed check: one or more record or DSL mistakes, each kept as it was reported. */
+const failedCheck = z.strictObject({
   code: z.literal('validation-failed'),
   diagnostics: z
     .tuple([z.union([recordDiagnostic, languageDiagnostic])])
     .rest(z.union([recordDiagnostic, languageDiagnostic]))
     .readonly(),
 });
-/** A wrapped operational failure retains all supported owner metadata, including nested validation evidence. */
-export type OperationSource = {
+/**
+ * A failed check, as {@link failedCheck} reads it: code `validation-failed`, and one or more record
+ * or DSL mistakes in `diagnostics`.
+ */
+export type FailedCheck = z.infer<typeof failedCheck>;
+/**
+ * One capability's failure, with everything it reported. `source` is the failure that caused it,
+ * and `cleanup` a second failure that happened while cleaning up after it.
+ */
+export type CapabilityFailure = {
   readonly code: string;
   readonly path: string;
   readonly message: string;
   readonly recovery: string;
+  /** The records or objects the failure is about, when the capability names them. */
   readonly targets?: readonly string[] | undefined;
+  /** What the capability expected instead, when it says (Language and Design System do). */
   readonly expected?: string | undefined;
+  /** Authoring's link from an unexpected failure to its request; `null` when there is none. */
   readonly traceId?: string | null | undefined;
   readonly source?: FailureSource | undefined;
-  readonly cleanup?: OperationSource | undefined;
+  readonly cleanup?: CapabilityFailure | undefined;
 };
-/** Source data is evidence under the primary error, never a second top-level Result channel. */
-export type FailureSource = z.infer<typeof validation> | OperationSource;
 /**
- * Every field of an operational failure except its code. `operationSource` pairs them with an
- * owner's open code; the top-level wire failure (wire-codes.ts) pairs them with its closed code.
+ * The evidence kept under a service failure: a failed check, or a capability's failure. It never
+ * replaces the service's own code.
  */
-export const operationFields = {
+export type FailureSource = FailedCheck | CapabilityFailure;
+/**
+ * Every field of a capability's failure except its code. `capabilityFailure` adds the capability's
+ * own code; the top-level failure (http-codes.ts) adds a code from the closed list.
+ */
+export const capabilityFailureFields = {
   path: z.string(),
   message: z.string(),
   recovery: z.string(),
@@ -58,12 +82,12 @@ export const operationFields = {
   expected: z.string().optional(),
   traceId: z.string().nullable().optional(),
   source: z.lazy(() => failureSource).optional(),
-  cleanup: z.lazy(() => operationSource).optional(),
+  cleanup: z.lazy(() => capabilityFailure).optional(),
 };
-/** Complete operational envelope used at the HTTP boundary; metadata is never silently stripped. */
-export const operationSource: z.ZodType<OperationSource> = z.strictObject({
+/** Checks one capability's failure as it arrives over HTTP. No field is dropped. */
+export const capabilityFailure: z.ZodType<CapabilityFailure> = z.strictObject({
   code: z.string(),
-  ...operationFields,
+  ...capabilityFailureFields,
 });
-/** Runtime decoding rejects malformed evidence rather than silently stripping codes, paths or spans. */
-export const failureSource: z.ZodType<FailureSource> = z.union([validation, operationSource]);
+/** Checks the evidence under a failure. Malformed evidence is refused, never quietly trimmed. */
+export const failureSource: z.ZodType<FailureSource> = z.union([failedCheck, capabilityFailure]);

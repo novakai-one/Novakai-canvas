@@ -1,8 +1,13 @@
 /*
- * The candidate checks after the collections: every preset record, the workspace metadata, the
- * catalog record and every asset-admission record, each against its retained bytes. Pure over
- * Assets; every check answers `invariant-violation` at `candidate` as a value (record-checks.ts),
- * and the first failure stops validation. Authoring keeps the committed snapshot on rejection.
+ * Why this file exists
+ *
+ * After the collections, the final check looks at every other kind of record. Each must exist, be
+ * valid, and keep exactly the stored files it should, and those files must really be there. For
+ * example, a theme's record must keep exactly its font files, and each font must be readable.
+ *
+ * This file checks the presets, then the workspace's details, the catalog and each uploaded file's
+ * description. Each check answers a `Result` (contract/errors.ts), and the first mistake stops it.
+ * Every mistake is `invariant-violation` at `candidate`, made in record-checks.ts. It only reads.
  */
 import type {
   Assets,
@@ -10,156 +15,220 @@ import type {
   Preset,
   Snapshot,
   StoredRecord,
-} from '../../../contract/records/capabilities.js';
+} from '../../../contract/records/capability-types.js';
 import type { WorkspaceContents } from '../../../contract/records/workspace/contents.js';
 import { workspaceMetadata, assetMetadata } from '../../../contract/records/workspace/metadata.js';
-import { andThen } from '../../../contract/errors.js';
-import { presetResources } from '../../presets/resources.js';
+import { success } from '../../../contract/errors.js';
+import { listPresetFileDigests } from '../../presets/resources.js';
 import {
   assetRecordId,
-  liveRecords,
+  listLiveRecords,
   METADATA_RECORD_ID,
   presetRecordId,
 } from '../../workspace/records.js';
 import {
-  allPassed,
-  invariantBroken,
-  requireFact,
+  checkEach,
+  invariantViolationFailure,
   requireRecord,
-  requireRetention,
+  requireExactFiles,
 } from './record-checks.js';
 
-/** What the catalog checks read: Assets resolves retained digests. */
-export interface CatalogCheckOwners {
+/** What these checks need: Assets, to confirm each stored file can be read. */
+export interface CatalogCheckDependencies {
+  /** The file store. `resolve` reads a stored file by its digest. */
   readonly assets: Pick<Assets, 'resolve'>;
 }
 
 /**
- * Checks each preset in order: its record at `preset:<digest>` retains exactly its fonts or
- * assets, and Assets resolves each of those digests. Fails with `invariant-violation` at
- * `candidate` when the record is missing, the resources differ or bytes are missing.
+ * Checks each preset, in order. Its record must exist and keep exactly the files it uses (a
+ * theme's fonts, a recipe's stored files), and each of those files must be readable. The first
+ * mistake stops the checks.
  */
 export function checkPresets(
   snapshot: Snapshot,
-  view: WorkspaceContents,
-  owners: CatalogCheckOwners,
+  contents: WorkspaceContents,
+  dependencies: CatalogCheckDependencies,
 ): AuthoringResult<void> {
-  return allPassed(view.presets, (preset) => checkPreset(snapshot, preset, owners));
+  return checkEach(contents.presets, (preset) => checkPreset(snapshot, preset, dependencies));
 }
 
 /**
- * Checks the workspace metadata, then the catalog, then every asset-admission record. Fails with
- * `invariant-violation` at `candidate` as `checkWorkspaceRecord`, `checkCatalogRecord` or
- * `checkAsset` fails.
+ * Checks the workspace's details record, then the catalog record, then each uploaded file's
+ * description. The details must name this workspace, the catalog must be at its current revision,
+ * and each uploaded file must be readable. The first mistake stops the checks.
  */
-export function checkMetadata(
+export function checkMetadataRecords(
   snapshot: Snapshot,
-  view: WorkspaceContents,
-  owners: CatalogCheckOwners,
+  contents: WorkspaceContents,
+  dependencies: CatalogCheckDependencies,
 ): AuthoringResult<void> {
   const workspace = checkWorkspaceRecord(snapshot);
-  const catalog = andThen(workspace, () => checkCatalogRecord(snapshot, view));
-  return andThen(catalog, () => checkAssets(snapshot, owners));
+  if (!workspace.ok) {
+    return workspace;
+  }
+  const catalog = checkCatalogRecord(snapshot, contents);
+  if (!catalog.ok) {
+    return catalog;
+  }
+  return checkAssets(snapshot, dependencies);
 }
 
-/**
- * One preset's record retains exactly its digests, and each digest resolves. Fails with
- * `invariant-violation` at `candidate` ("Missing preset bytes <digest>" for bytes Assets cannot
- * resolve).
- */
+/** Checks one preset's record keeps exactly the preset's files, and each file can be read. */
 function checkPreset(
   snapshot: Snapshot,
   preset: Preset,
-  owners: CatalogCheckOwners,
+  dependencies: CatalogCheckDependencies,
 ): AuthoringResult<void> {
-  const slot = requireRecord(snapshot, 'preset', presetRecordId(preset.digest));
-  if (!slot.ok) return slot;
-  const expected = presetResources(preset);
-  const retained = requireRetention(slot.value, expected);
-  return andThen(retained, () => checkPresetBytes(expected, owners));
+  const recordId = presetRecordId(preset.digest);
+  const record = requireRecord(snapshot, 'preset', recordId);
+  if (!record.ok) {
+    return record;
+  }
+  const fileDigests = listPresetFileDigests(preset);
+  const retained = requireExactFiles(record.value, fileDigests);
+  if (!retained.ok) {
+    return retained;
+  }
+  return checkEach(fileDigests, (digest) => requirePresetFile(digest, dependencies));
 }
 
-/**
- * Assets resolves each preset digest, in order. Fails with `invariant-violation` at `candidate`
- * ("Missing preset bytes <digest>") at the first digest it cannot resolve; later digests are not
- * read.
- */
-function checkPresetBytes(
-  digests: readonly string[],
-  owners: CatalogCheckOwners,
+/** Checks Assets can read one of a preset's files. */
+function requirePresetFile(
+  digest: string,
+  dependencies: CatalogCheckDependencies,
 ): AuthoringResult<void> {
-  return allPassed(digests, (digest) =>
-    requireFact(owners.assets.resolve(digest).ok, `Missing preset bytes ${digest}`),
-  );
+  const stored = dependencies.assets.resolve(digest);
+  if (!stored.ok) {
+    return missingPresetFileFailure(digest);
+  }
+  return success(undefined);
 }
 
-/**
- * The workspace metadata record: present, valid, naming this workspace and retaining no bytes.
- * Fails with `invariant-violation` at `candidate` ("Invalid workspace metadata", "Workspace
- * metadata identity differs", or as `requireRecord` / `requireRetention` fail).
- */
+/** Checks the workspace's details record is valid, names this workspace, and keeps no files. */
 function checkWorkspaceRecord(snapshot: Snapshot): AuthoringResult<void> {
-  const slot = requireRecord(snapshot, 'workspace', METADATA_RECORD_ID);
-  if (!slot.ok) return slot;
-  const metadata = workspaceMetadata.safeParse(slot.value.value);
-  if (!metadata.success) return invariantBroken('Invalid workspace metadata');
-  const identity = requireFact(
-    metadata.data.id === snapshot.workspace,
-    'Workspace metadata identity differs',
-  );
-  return andThen(identity, () => requireRetention(slot.value, []));
+  const record = requireRecord(snapshot, 'workspace', METADATA_RECORD_ID);
+  if (!record.ok) {
+    return record;
+  }
+  const named = requireThisWorkspace(record.value, snapshot);
+  if (!named.ok) {
+    return named;
+  }
+  return requireExactFiles(record.value, []);
 }
 
-/**
- * The catalog record: present at the catalog's revision and retaining no bytes. Fails with
- * `invariant-violation` at `candidate` ("Catalog revision differs", or as `requireRecord` /
- * `requireRetention` fail).
- */
+/** Checks the details record is valid and names the workspace being saved. */
+function requireThisWorkspace(
+  record: StoredRecord,
+  snapshot: Snapshot,
+): AuthoringResult<void> {
+  const metadata = workspaceMetadata.safeParse(record.value);
+  if (!metadata.success) {
+    return invalidWorkspaceMetadataFailure();
+  }
+  if (metadata.data.id !== snapshot.workspace) {
+    return otherWorkspaceFailure();
+  }
+  return success(undefined);
+}
+
+/** Checks the catalog record is at the catalog's revision and keeps no files. */
 function checkCatalogRecord(
   snapshot: Snapshot,
-  view: WorkspaceContents,
+  contents: WorkspaceContents,
 ): AuthoringResult<void> {
-  const organisation = view.library.organisation;
-  const catalog = requireRecord(snapshot, 'catalog', organisation.id);
-  if (!catalog.ok) return catalog;
-  const revision = requireFact(
-    catalog.value.version === organisation.revision,
-    'Catalog revision differs',
-  );
-  return andThen(revision, () => requireRetention(catalog.value, []));
+  const organisation = contents.library.organisation;
+  const record = requireRecord(snapshot, 'catalog', organisation.id);
+  if (!record.ok) {
+    return record;
+  }
+  if (record.value.version !== organisation.revision) {
+    return catalogRevisionFailure();
+  }
+  return requireExactFiles(record.value, []);
 }
 
-/**
- * Checks each asset-admission record in order (see `checkAsset`); the first failure stops the
- * checks.
- */
+/** Checks each uploaded file's description in order; the first mistake stops the checks. */
 function checkAssets(
   snapshot: Snapshot,
-  owners: CatalogCheckOwners,
+  dependencies: CatalogCheckDependencies,
 ): AuthoringResult<void> {
-  return allPassed(liveRecords(snapshot, 'asset-admission'), (record) =>
-    checkAsset(record, owners),
-  );
+  const assetRecords = listLiveRecords(snapshot, 'asset-admission');
+  return checkEach(assetRecords, (record) => checkAsset(record, dependencies));
 }
 
-/**
- * One asset-admission record: valid metadata, stored at `asset:<digest>`, retaining only that
- * digest, and its bytes resolvable in Assets. Fails with `invariant-violation` at `candidate`
- * when any of these fails.
- */
+/** Checks one uploaded file's description, that it keeps only its own file, and the file can be read. */
 function checkAsset(
   record: StoredRecord,
-  owners: CatalogCheckOwners,
+  dependencies: CatalogCheckDependencies,
 ): AuthoringResult<void> {
-  const parsed = assetMetadata.safeParse(record.value);
-  if (!parsed.success) return invariantBroken('Invalid asset discovery metadata');
-  const digest = parsed.data.digest;
-  const identity = requireFact(
-    record.key.id === assetRecordId(digest),
-    'Asset discovery identity differs from its digest',
-  );
-  const retained = andThen(identity, () => requireRetention(record, [digest]));
-  return andThen(retained, () =>
-    requireFact(owners.assets.resolve(digest).ok, `Missing admitted asset ${digest}`),
-  );
+  const digest = readAssetDigest(record);
+  if (!digest.ok) {
+    return digest;
+  }
+  const retained = requireExactFiles(record, [digest.value]);
+  if (!retained.ok) {
+    return retained;
+  }
+  return requireUploadedFile(digest.value, dependencies);
+}
+
+/** Reads the file's digest from its description, and checks the record is stored under it. */
+function readAssetDigest(record: StoredRecord): AuthoringResult<string> {
+  const metadata = assetMetadata.safeParse(record.value);
+  if (!metadata.success) {
+    return invalidAssetMetadataFailure();
+  }
+  const digest = metadata.data.digest;
+  if (record.key.id !== assetRecordId(digest)) {
+    return assetIdentityFailure();
+  }
+  return success(digest);
+}
+
+/** Checks Assets can read an uploaded file. */
+function requireUploadedFile(
+  digest: string,
+  dependencies: CatalogCheckDependencies,
+): AuthoringResult<void> {
+  const stored = dependencies.assets.resolve(digest);
+  if (!stored.ok) {
+    return missingUploadedFileFailure(digest);
+  }
+  return success(undefined);
+}
+
+/** Makes the mistake for a preset file Assets can't read. */
+function missingPresetFileFailure(digest: string): AuthoringResult<never> {
+  return invariantViolationFailure(`Missing preset bytes ${digest}`);
+}
+
+/** Makes the mistake for a details record that isn't valid. */
+function invalidWorkspaceMetadataFailure(): AuthoringResult<never> {
+  return invariantViolationFailure('Invalid workspace metadata');
+}
+
+/** Makes the mistake for a details record that names another workspace. */
+function otherWorkspaceFailure(): AuthoringResult<never> {
+  return invariantViolationFailure('Workspace metadata identity differs');
+}
+
+/** Makes the mistake for a catalog record that isn't at the catalog's revision. */
+function catalogRevisionFailure(): AuthoringResult<never> {
+  return invariantViolationFailure('Catalog revision differs');
+}
+
+/** Makes the mistake for an uploaded file's description that isn't valid. */
+function invalidAssetMetadataFailure(): AuthoringResult<never> {
+  return invariantViolationFailure('Invalid asset discovery metadata');
+}
+
+/** Makes the mistake for an uploaded file's description stored under another digest. */
+function assetIdentityFailure(): AuthoringResult<never> {
+  return invariantViolationFailure('Asset discovery identity differs from its digest');
+}
+
+/** Makes the mistake for an uploaded file Assets can't read. */
+function missingUploadedFileFailure(digest: string): AuthoringResult<never> {
+  return invariantViolationFailure(`Missing admitted asset ${digest}`);
 }

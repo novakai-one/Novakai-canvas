@@ -1,17 +1,23 @@
 /*
- * Export snapshot decisions: a workspace read settles into a snapshot or a refusal; the requested
- * collection must exist at its exact revision; a rendered document is kept or its failure
- * translated; and the export snapshot pins identity, scene, paint and every retained resource.
- * Cancellation is checked after each owner await. Pure; the adapter calls the owners.
+ * Why this file exists
+ *
+ * Before an export holds any files, it must know the collection is really there at the asked-for
+ * revision. For example, asking for `my-diagram` at revision 2 after it was saved as revision 3
+ * must be refused, not quietly answered with revision 3.
+ *
+ * This file checks each answer on the way (the workspace read, the collection found, the render)
+ * and builds the final export snapshot. It never reads the workspace or renders: lease.ts does
+ * both, and hands in the one file reader this file uses (`readHeldFile`).
  */
-import type { Result } from '../../contract/errors.js';
+import { success, type Result } from '../../contract/errors.js';
 import type {
   AuthoringResult,
   Collection,
   ExportResult,
   ExportSnapshot,
+  Resource,
   Snapshot,
-} from '../../contract/records/capabilities.js';
+} from '../../contract/records/capability-types.js';
 import type { WorkspaceContents } from '../../contract/records/workspace/contents.js';
 import type { RenderDocument } from '../../contract/records/rendering/job.js';
 import type { LeaseRead } from '../../contract/ports/export.js';
@@ -19,77 +25,143 @@ import type {
   SelectedCollection,
   SnapshotIdentity,
 } from '../../contract/records/export/snapshot.js';
-import { cancelledExport, exportRejection, ownerRejection } from './faults.js';
-import { retainedResources } from './resources.js';
+import { cancelledFailure, exportFailure, readOrRenderFailure } from './faults.js';
+import { gatherExportResources } from './resources.js';
 
-/** The workspace read: an owner failure is translated at `workspace`; a late abort cancels. */
-export function workspaceSnapshot(
+/**
+ * Checks Authoring's answer to reading the workspace. Fails with `cancelled` or `encoding-failed`
+ * at `workspace` when the read failed, and `cancelled` at `export` when the export was stopped
+ * meanwhile.
+ */
+export function checkWorkspaceRead(
   current: AuthoringResult<Snapshot>,
   signal: AbortSignal,
 ): ExportResult<Snapshot> {
-  if (!current.ok) return ownerRejection(current.error, 'workspace');
-  return signal.aborted ? cancelledExport() : current;
+  if (!current.ok) {
+    return readOrRenderFailure(current.error, 'workspace');
+  }
+  if (signal.aborted) {
+    return cancelledFailure();
+  }
+  return current;
 }
 
-/** The requested collection from the workspace view; refused when missing or at another revision. */
-export function selectedCollection(
-  view: AuthoringResult<WorkspaceContents>,
+/**
+ * Finds the collection `identity` names in the workspace's checked contents, at exactly that
+ * revision. Fails with `encoding-failed` at `workspace` when the contents couldn't be read,
+ * `invalid-input` at `identity.collectionId` when there is no such collection, and
+ * `snapshot-mismatch` at `identity.revision` when the collection is at another revision.
+ */
+export function selectCollection(
+  contents: AuthoringResult<WorkspaceContents>,
   identity: SnapshotIdentity,
 ): ExportResult<SelectedCollection> {
-  if (!view.ok) return exportRejection('encoding-failed', 'workspace', view.error.message);
-  const collection = view.value.collections.find((item) => item.id === identity.collectionId);
-  if (collection === undefined)
-    return exportRejection('invalid-input', 'identity.collectionId', 'Collection does not exist');
-  return matchingRevision(collection, identity.revision, view.value);
+  if (!contents.ok) {
+    return unreadableContentsFailure(contents.error.message);
+  }
+  const collection = findCollection(contents.value, identity);
+  if (collection === undefined) {
+    return missingCollectionFailure();
+  }
+  return checkRevision(collection, identity.revision, contents.value);
 }
 
-/** The rendered document, or its owner failure translated at `render`. */
-export function renderedDocument(document: Result<RenderDocument>): ExportResult<RenderDocument> {
-  return document.ok ? document : ownerRejection(document.error, 'render');
+/**
+ * Checks the renderer's answer. Fails with `cancelled` or `encoding-failed` at `render` when
+ * rendering failed.
+ */
+export function checkRenderedDocument(
+  rendered: Result<RenderDocument>,
+): ExportResult<RenderDocument> {
+  if (!rendered.ok) {
+    return readOrRenderFailure(rendered.error, 'render');
+  }
+  return rendered;
 }
 
-/** The immutable export snapshot, unless the request aborted or a resource was not retained. */
-export function exportSnapshot(
+/**
+ * Builds the snapshot Export makes its file from: the collection, its drawn scene, its colours,
+ * and its theme, images and fonts, each read with `readHeldFile`. Fails with `cancelled` at
+ * `export` when the export was stopped, or when a file can't be read (`gatherExportResources`).
+ */
+export function buildExportSnapshot(
   selected: SelectedCollection,
   document: RenderDocument,
-  read: LeaseRead,
+  readHeldFile: LeaseRead,
   signal: AbortSignal,
 ): ExportResult<ExportSnapshot> {
-  if (signal.aborted) return cancelledExport();
-  const resources = retainedResources(read, selected.collection, document, selected.view.presets);
-  if (!resources.ok) return resources;
-  return {
-    ok: true,
-    value: {
-      identity: {
-        collectionId: selected.collection.id,
-        revision: selected.collection.revision,
-        inputKey: document.scene.inputKey,
-        title: selected.collection.title,
-      },
-      collection: selected.collection,
-      scene: document.scene,
-      resources: resources.value,
-      paint: {
-        fill: document.style.surface,
-        stroke: document.style.border,
-        text: document.style.text,
-      },
-    },
-  };
+  if (signal.aborted) {
+    return cancelledFailure();
+  }
+  const resources = gatherExportResources(
+    readHeldFile,
+    selected.collection,
+    document,
+    selected.contents.presets,
+  );
+  if (!resources.ok) {
+    return resources;
+  }
+  const snapshot = exportSnapshot(selected.collection, document, resources.value);
+  return success(snapshot);
 }
 
-/** The selection, when the collection is still at the requested revision. */
-function matchingRevision(
+/** Finds the collection with the asked-for ID, or nothing when there is none. */
+function findCollection(
+  contents: WorkspaceContents,
+  identity: SnapshotIdentity,
+): Collection | undefined {
+  return contents.collections.find((collection) => collection.id === identity.collectionId);
+}
+
+/** Checks the collection is at the asked-for revision, and pairs it with the workspace contents. */
+function checkRevision(
   collection: Collection,
   revision: number,
-  view: WorkspaceContents,
+  contents: WorkspaceContents,
 ): ExportResult<SelectedCollection> {
-  if (collection.revision !== revision)
-    return exportRejection(
-      'snapshot-mismatch',
-      'identity.revision',
-      'Requested revision is no longer available',
-    );
-  return { ok: true, value: { collection, view } };
+  if (collection.revision !== revision) {
+    return revisionMismatchFailure();
+  }
+  const selected: SelectedCollection = { collection, contents };
+  return success(selected);
+}
+
+/** Puts the collection, its drawing, its held files and its colours together for Export. */
+function exportSnapshot(
+  collection: Collection,
+  document: RenderDocument,
+  resources: readonly Resource[],
+): ExportSnapshot {
+  const identity = {
+    collectionId: collection.id,
+    revision: collection.revision,
+    inputKey: document.scene.inputKey,
+    title: collection.title,
+  };
+  const paint = {
+    fill: document.style.surface,
+    stroke: document.style.border,
+    text: document.style.text,
+  };
+  return { identity, collection, scene: document.scene, resources, paint };
+}
+
+/** Makes the mistake for workspace contents that couldn't be read: `encoding-failed`. */
+function unreadableContentsFailure(message: string): ExportResult<never> {
+  return exportFailure('encoding-failed', 'workspace', message);
+}
+
+/** Makes the mistake for a collection that doesn't exist: `invalid-input` at its ID. */
+function missingCollectionFailure(): ExportResult<never> {
+  return exportFailure('invalid-input', 'identity.collectionId', 'Collection does not exist');
+}
+
+/** Makes the mistake for an old revision: `snapshot-mismatch` at `identity.revision`. */
+function revisionMismatchFailure(): ExportResult<never> {
+  return exportFailure(
+    'snapshot-mismatch',
+    'identity.revision',
+    'Requested revision is no longer available',
+  );
 }

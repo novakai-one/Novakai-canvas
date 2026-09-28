@@ -1,40 +1,45 @@
 /*
- * The export seams: the rasterizer PNG export waits for, the guarded read of one leased blob, and
- * the export route the session calls. Declarations only; adapters/raster supplies the rasterizer,
- * core/export implements the rest and compose binds them. Export owns its failures; the caller
- * corrects its request or retries once the named dependency is restored.
+ * Why this file exists
+ *
+ * `POST /api/v1/export` asks for one saved collection as a file, for example `my-diagram` at
+ * revision 3 as a PNG. The session passes the request on and gets back a file, or the mistake
+ * found.
+ *
+ * This file declares the exporter (`Exporter`), the PNG encoder it starts on first use
+ * (`PngEncoder`), and how it reads a stored font or image it has put on hold (`LeaseRead`).
+ * core/export builds the exporter. An export only reads; it never changes the workspace.
  */
 import type { Result } from '../errors.js';
-import type { AssetResult, StoredBlob } from '../records/capabilities.js';
-import type { StaticFile } from '../records/transport/server.js';
+import type { AssetResult, StoredBlob } from '../records/capability-types.js';
+import type { SentFile } from '../records/transport/server.js';
 
 /**
- * The PNG rasterizer: Export encodes PNG only after it is initialized. The first `prepare` starts
- * the one initialization; later calls share that outcome, failure too. The export route asks for
- * it lazily, on the first PNG request.
+ * Starts Export's PNG encoder (it turns an SVG drawing into PNG bytes). It starts once, on the
+ * first PNG request; later requests share that outcome, even a failed one.
  */
-export interface Rasterizer {
+export interface PngEncoder {
   /**
-   * Initializes the rasterizer once; later calls share that outcome. Fails with `unavailable` at
-   * `export.png`.
+   * Starts the encoder the first time; later calls share that outcome. Fails with `unavailable`
+   * at `export.png`.
    */
   prepare(): Promise<Result<void>>;
 }
 
-/** A guarded read of one leased blob; a throwing lease is reported as a failed read. */
-export type LeaseRead = (digest: unknown, path: string) => AssetResult<StoredBlob>;
+/**
+ * Reads one held font or image (a lease stops its removal). `digest` is text; Assets checks it.
+ * A failed or throwing read is reported at `failurePath`, such as `resources.logo`.
+ */
+export type LeaseRead = (digest: string, failurePath: string) => AssetResult<StoredBlob>;
 
-/** The export route: unknown input in, a file or a typed failure out; the HTTP route sends it. */
-export interface ExportHandler {
+/** Turns one export request into one file. The HTTP route then sends that file. */
+export interface Exporter {
   /**
-   * Answers one export file. Fails with `invalid-input` for a refused request, `unavailable` at
-   * `export.png` when the rasterizer cannot start, and otherwise as `exportRouteFailure` of
-   * Export's refusal (Export's diagnostic kept as source): `cancelled` stays `cancelled`, an input
-   * refusal is `invalid-input`, and `encoding-failed`, `cleanup-failed` or `resource-rejected` is
-   * `unavailable`.
+   * Makes one export file from the request as sent. Fails with `invalid-input` for a bad request,
+   * `unavailable` when the PNG encoder can't start or Export can't read a file, encode or clean up,
+   * and `cancelled` when the export was stopped. Export's own failure is kept as the source.
    */
-  invoke(
+  exportFile(
     input: unknown,
     signal: AbortSignal,
-  ): Promise<Result<StaticFile>>;
+  ): Promise<Result<SentFile>>;
 }

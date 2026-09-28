@@ -1,40 +1,56 @@
 /*
- * The HTTP answer for an outcome: its status, chosen by the failure's wire code, and its
- * versioned JSON envelope. Pure. Clients branch on the code and status, never on the message; they
- * keep their draft and request ID and reconcile the receipt before retrying.
+ * Why this file exists
+ *
+ * Every API answer needs an HTTP status and the same JSON envelope, so callers can branch without
+ * reading messages. For example, a `revision-conflict` failure is sent with status 409, inside the
+ * envelope `{ version: 1, generation, outcome }` (a `TransportResponse`). `generation` names this
+ * server run; it changes on every restart.
+ *
+ * This file chooses the status for each failure code and puts the outcome in that envelope. It
+ * never changes a failure; clients branch on its code and status, never on its message.
  */
 import type { TransportResponse } from '../../contract/records/transport/protocol.js';
 import type {
   HttpStatus,
-  WireErrorCode,
-  WireOutcome,
-} from '../../contract/records/transport/wire-codes.js';
+  HttpErrorCode,
+  HttpOutcome,
+} from '../../contract/records/transport/http-codes.js';
 import type { Generation } from '../../contract/brands.js';
+import { success } from '../../contract/errors.js';
 
 /** A status for a refused outcome. */
 type FailureStatus = Exclude<HttpStatus, 200>;
 
-/** 200 for a success; otherwise the status of the failure's wire code (`FAILURE_STATUS`). */
-export function httpStatus(outcome: WireOutcome): HttpStatus {
-  if (outcome.ok) return 200;
+/**
+ * Chooses the HTTP status for the outcome: 200 when it worked, otherwise the status of its failure
+ * code, such as 422 for `invalid-input` or 409 for `conflict`. Never fails.
+ */
+export function chooseHttpStatus(outcome: HttpOutcome): HttpStatus {
+  if (outcome.ok) {
+    return 200;
+  }
   return FAILURE_STATUS[outcome.error.code];
 }
 
 /**
- * The version 1 envelope carrying the server's generation and the outcome. A success with no value
- * (a void owner success) carries an explicit JSON `null`, so the envelope stays valid.
+ * Puts the outcome in the envelope every answer has: `{ version: 1, generation, outcome }`. A
+ * success with no value is sent with the value `null`, so the envelope stays valid JSON.
  */
-export function transportResponse(
-  outcome: WireOutcome,
+export function buildTransportResponse(
+  outcome: HttpOutcome,
   generation: Generation,
 ): TransportResponse {
-  return { version: 1, generation, outcome: wireValue(outcome) };
+  const sentOutcome = outcomeAsSent(outcome);
+  return { version: 1, generation, outcome: sentOutcome };
 }
 
-/** The outcome as sent: a failure unchanged, a success with `undefined` replaced by `null`. */
-function wireValue(outcome: WireOutcome): WireOutcome {
-  if (!outcome.ok) return outcome;
-  return { ok: true, value: outcome.value ?? null };
+/** Readies the outcome to send: a failure unchanged, a success with `undefined` replaced by `null`. */
+function outcomeAsSent(outcome: HttpOutcome): HttpOutcome {
+  if (!outcome.ok) {
+    return outcome;
+  }
+  const sentValue = outcome.value ?? null;
+  return success(sentValue);
 }
 
 /**
@@ -43,7 +59,7 @@ function wireValue(outcome: WireOutcome): WireOutcome {
  * `request-reused`) or a cancellation (`cancelled`), 503 an unavailable dependency, and 422 for
  * every other code, including `constraint-conflict` (the caller corrects its input).
  */
-const FAILURE_STATUS: Readonly<Record<WireErrorCode, FailureStatus>> = Object.freeze({
+const FAILURE_STATUS: Readonly<Record<HttpErrorCode, FailureStatus>> = Object.freeze({
   'invalid-input': 422,
   unauthorized: 401,
   'not-found': 404,

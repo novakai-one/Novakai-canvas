@@ -1,27 +1,33 @@
 /*
- * The `/api/v1` router: one handler per route key, composed from the route families. Session
- * routes forward to the session facade, source routes to the source readout, mutation routes to
- * the mutation decoder and resource routes to the resource commands. Pure over the injected
- * owners; no route writes storage, and Authoring owns commit and receipt recovery. The HTTP server
- * authenticates before `invoke`; a handler throw reaches its `receive`, which answers
- * `unavailable` at `request`.
+ * Why this file exists
+ *
+ * The service answers 18 API routes, and each call must reach the right one. For example,
+ * `GET /api/v1/render?id=walkthrough-modules` must reach the code that renders that collection.
+ *
+ * This file builds the router: one table from `METHOD path` to the code that answers it, made from
+ * the four route groups (workspace, source, change and resource routes). A route that doesn't
+ * exist answers `not-found`. It never checks who is calling (the server did that first) and never
+ * writes storage.
  */
-import type { RouteKey } from '../../contract/records/transport/protocol.js';
-import type { WireOutcome } from '../../contract/records/transport/wire-codes.js';
+import type { ApiCall, RouteKey, RouteOutcome } from '../../contract/records/transport/protocol.js';
+import type { HttpOutcome } from '../../contract/records/transport/http-codes.js';
 import type { ApiRouter } from '../../contract/ports/transport.js';
 import { routeKeys } from '../../contract/records/transport/protocol.js';
 import { failure } from '../../contract/errors.js';
-import { mutationRoutes, type MutationRouteOwners } from './mutation-routes.js';
-import { resourceRoutes, type ResourceRouteOwners } from './resource-routes.js';
-import { answerOutcome, type RouteHandler } from './route-answer.js';
-import { sessionRoutes, type SessionRouteOwners } from './session-routes.js';
-import { sourceRoutes, type SourceRouteOwners } from './source-routes.js';
+import { changeRoutes, type ChangeRouteDependencies } from './change-routes.js';
+import { resourceRoutes, type ResourceRouteDependencies } from './resource-routes.js';
+import { answerJson, type RouteHandler } from './route-answer.js';
+import { sourceRoutes, type SourceRouteDependencies } from './source-routes.js';
+import { workspaceRoutes, type WorkspaceRouteDependencies } from './workspace-routes.js';
 
-/** The owners every route family forwards to. */
-export type RouteOwners = SessionRouteOwners &
-  SourceRouteOwners &
-  MutationRouteOwners &
-  ResourceRouteOwners;
+/**
+ * What the four route groups call: the workspace session, the DSL printer, the change checks and
+ * the resource commands.
+ */
+export type RouterDependencies = WorkspaceRouteDependencies &
+  SourceRouteDependencies &
+  ChangeRouteDependencies &
+  ResourceRouteDependencies;
 
 /** The frozen table of every API route; the build fails when a family leaves a key out. */
 type RouteTable = Readonly<Record<RouteKey, RouteHandler>>;
@@ -30,28 +36,35 @@ type RouteTable = Readonly<Record<RouteKey, RouteHandler>>;
 const ROUTE_KEYS: ReadonlySet<string> = new Set(routeKeys);
 
 /**
- * Binds the route table to the owners. `invoke` looks up `METHOD path` and runs its handler.
- * Fails with `not-found` at `route` (as JSON) when no route key matches; otherwise answers as the
- * handler.
+ * Builds the router for one server. Its `invoke(call)` runs the route for the call's `METHOD path`
+ * and answers its `RouteOutcome`. A route that doesn't exist answers `not-found` at `route`, as
+ * JSON. If a route throws, `invoke` rejects, and the HTTP server answers `unavailable`.
  */
-export function createHttpRouter(owners: RouteOwners): ApiRouter {
-  const routes = routeTable(owners);
-  return {
-    invoke: async (call) => {
-      const key = `${call.metadata.method} ${call.path}`;
-      if (!isRouteKey(key)) return answerOutcome(noRoute());
-      return routes[key](call);
-    },
-  };
+export function createApiRouter(dependencies: RouterDependencies): ApiRouter {
+  const routes = routeTable(dependencies);
+  return { invoke: (call) => invokeRoute(routes, call) };
 }
 
-/** Every route family's table in one frozen table. Handler failures are named in each family. */
-function routeTable(owners: RouteOwners): RouteTable {
+/** Runs the route the call's `METHOD path` names, or answers `not-found` when there is none. */
+async function invokeRoute(
+  routes: RouteTable,
+  call: ApiCall,
+): Promise<RouteOutcome> {
+  const key = `${call.metadata.method} ${call.path}`;
+  if (!isRouteKey(key)) {
+    return answerJson(noRouteFailure());
+  }
+  const route = routes[key];
+  return route(call);
+}
+
+/** Joins every route family's table into one frozen table. Each family names its own failures. */
+function routeTable(dependencies: RouterDependencies): RouteTable {
   return Object.freeze({
-    ...sessionRoutes(owners),
-    ...sourceRoutes(owners),
-    ...mutationRoutes(owners),
-    ...resourceRoutes(owners),
+    ...workspaceRoutes(dependencies),
+    ...sourceRoutes(dependencies),
+    ...changeRoutes(dependencies),
+    ...resourceRoutes(dependencies),
   });
 }
 
@@ -60,7 +73,7 @@ function isRouteKey(key: string): key is RouteKey {
   return ROUTE_KEYS.has(key);
 }
 
-/** `not-found` at `route`: no handler serves this method and path. */
-function noRoute(): WireOutcome {
+/** Makes the mistake for a method and path no route answers. */
+function noRouteFailure(): HttpOutcome {
   return failure('not-found', 'route', 'This method and API route are not available');
 }

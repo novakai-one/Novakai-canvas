@@ -1,38 +1,70 @@
 /*
- * Export request reading: unknown route input becomes one checked request or one refusal.
- * Refusals keep the boundary's three messages in their order: a body that is not an object;
- * then any unsupported identity, format or scope (an array body lands here); then a scale
- * outside 1–4. Extra keys are ignored.
+ * Why this file exists
+ *
+ * `POST /api/v1/export` sends its body as JSON, and anything can arrive. For example, a body with
+ * `"format": "pdf"` or `"scale": 9` must be refused before any collection is read.
+ *
+ * This file checks the body and answers one checked `ExportRequest`, or the first mistake it finds
+ * (see `contract/errors.ts`). The shape itself is described in contract/records/export/request.ts.
+ * Extra keys are ignored. It never reads the workspace.
  */
-import { failure, type Result } from '../../contract/errors.js';
+import { failure, success, type Result } from '../../contract/errors.js';
 import {
   exportRequest,
   exportSelection,
   type ExportRequest,
 } from '../../contract/records/export/request.js';
 
-/** The checked request, or the first refusal in boundary order. */
-export function readExportRequest(input: unknown): Result<ExportRequest> {
-  if (typeof input !== 'object' || input === null)
-    return failure('invalid-input', 'export', 'Export request is invalid');
-  return selectedRequest(input);
+/**
+ * Checks an export request body as sent, and answers the checked request.
+ * Mistakes, all `invalid-input`: at `export` for a body that isn't an object or names an
+ * unsupported collection, format or scope; at `export.scale` for a scale outside 1 to 4.
+ */
+export function readExportRequest(body: unknown): Result<ExportRequest> {
+  if (!isObject(body)) {
+    return notAnObjectFailure();
+  }
+  if (!hasSupportedSelection(body)) {
+    return unsupportedSelectionFailure();
+  }
+  return checkScale(body);
 }
 
-/** An unsupported identity, format or scope refuses the whole request. */
-function selectedRequest(input: object): Result<ExportRequest> {
-  if (!exportSelection.safeParse(input).success)
-    return failure(
-      'invalid-input',
-      'export',
-      'Export request contains an unsupported identity, format or scope',
-    );
-  return scaledRequest(input);
+/** Whether the body is an object, and not `null`, text or a number. */
+function isObject(body: unknown): body is object {
+  return typeof body === 'object' && body !== null;
 }
 
-/** With the selection accepted, only the scale can still refuse the request. */
-function scaledRequest(input: object): Result<ExportRequest> {
-  const request = exportRequest.safeParse(input);
-  if (!request.success)
-    return failure('invalid-input', 'export.scale', 'Export scale must be between 1 and 4');
-  return { ok: true, value: request.data };
+/** Whether the body names a collection, format and scope the export supports. */
+function hasSupportedSelection(body: object): boolean {
+  const selection = exportSelection.safeParse(body);
+  return selection.success;
+}
+
+/** Checks the scale, the one part still unchecked, and answers the checked request. */
+function checkScale(body: object): Result<ExportRequest> {
+  const request = exportRequest.safeParse(body);
+  if (!request.success) {
+    return scaleOutOfRangeFailure();
+  }
+  return success(request.data);
+}
+
+/** Makes the mistake for a body that isn't an object: `invalid-input` at `export`. */
+function notAnObjectFailure(): Result<never> {
+  return failure('invalid-input', 'export', 'Export request is invalid');
+}
+
+/** Makes the mistake for an unsupported collection, format or scope: `invalid-input`. */
+function unsupportedSelectionFailure(): Result<never> {
+  return failure(
+    'invalid-input',
+    'export',
+    'Export request contains an unsupported identity, format or scope',
+  );
+}
+
+/** Makes the mistake for a scale outside 1 to 4: `invalid-input` at `export.scale`. */
+function scaleOutOfRangeFailure(): Result<never> {
+  return failure('invalid-input', 'export.scale', 'Export scale must be between 1 and 4');
 }

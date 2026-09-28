@@ -1,52 +1,64 @@
 /*
- * The session of one workspace: the core facade over the shared roles, per-request Authoring and
- * the export route, with a lifetime that drains admitted work, then closes the change channel and
- * the native handles. Construction starts no I/O; the caller keeps the workspace when close fails.
+ * Why this file exists
+ *
+ * The HTTP routes talk to one `WorkspaceSession`. Behind it sit Authoring, the shared parts
+ * (compose/shared-parts.ts) and the exporter (ports/export.ts). Closing it must not cut off a
+ * call that is still running.
+ *
+ * This file joins those parts into the session (core/session/facade.ts). Closing waits for running
+ * calls, then closes the change channel, then the stores. Building it reads no files.
  */
 import type { Authoring } from '@novakai/canvas-authoring';
-import type { NativeWorkspace, WorkspaceOptions } from '../records/workspace/startup.js';
-import type { BuiltinResources } from '../records/presets/builtins.js';
-import type { ExportHandler } from '../ports/export.js';
+import type { OpenStores, WorkspaceOptions } from '../records/workspace/startup.js';
+import type { PreparedBuiltins } from '../records/presets/builtins.js';
+import type { Exporter } from '../ports/export.js';
 import type { ChangeChannel } from '../ports/notifications.js';
 import type { WorkspaceSession } from '../types.js';
+import type { Result } from '../errors.js';
 import { createWorkspaceSession } from '../../core/session/facade.js';
 import { createSessionLifetime } from '../../core/session/lifetime.js';
-import type { WorkspaceRoles } from './workspace.js';
+import type { SharedParts } from './shared-parts.js';
 import { UNCANCELLED } from './authoring.js';
 
-/** What the session binds, besides Authoring and the export route. */
+/** What the session is built from, besides Authoring and the exporter. */
 export interface SessionInputs {
-  readonly native: Pick<NativeWorkspace, 'close'>;
-  readonly installation: BuiltinResources;
+  /** The workspace's open stores; the session closes them last. */
+  readonly stores: Pick<OpenStores, 'close'>;
+  readonly builtins: PreparedBuiltins;
   readonly options: Pick<WorkspaceOptions, 'workspace'>;
-  readonly roles: Pick<WorkspaceRoles, 'commands' | 'views' | 'renderer'>;
+  readonly shared: Pick<SharedParts, 'commands' | 'reader' | 'renderer'>;
   readonly changes: Pick<ChangeChannel, 'subscribe' | 'close'>;
 }
 
 /**
- * Binds the session facade; `authoring` is bound to one request's cancellation. See
- * `createWorkspaceSession` for the answers once the session is closing. Never fails.
+ * Builds the session of one workspace. `authoring` makes Authoring for one request. Never fails.
  */
-export function wireSession(
+export function buildSession(
   inputs: SessionInputs,
   authoring: (signal: AbortSignal) => Authoring,
-  exporter: ExportHandler,
+  exporter: Exporter,
 ): WorkspaceSession {
-  const { native, changes, roles } = inputs;
-  const lifetime = createSessionLifetime(async () => {
-    changes.close();
-    return native.close();
-  });
+  const { stores, changes, shared } = inputs;
+  const lifetime = createSessionLifetime(() => closeChangesThenStores(changes, stores));
   return createWorkspaceSession({
     workspace: inputs.options.workspace,
-    installation: inputs.installation,
-    resources: roles.commands,
-    views: roles.views,
+    builtins: inputs.builtins,
+    resources: shared.commands,
+    reader: shared.reader,
     changes,
     lifetime,
     readSignal: UNCANCELLED,
     authoring,
-    renderer: roles.renderer,
-    exporter: exporter.invoke,
+    renderer: shared.renderer,
+    exportFile: exporter.exportFile,
   });
+}
+
+/** Closes the change stream, then the workspace's stores. */
+async function closeChangesThenStores(
+  changes: Pick<ChangeChannel, 'close'>,
+  stores: Pick<OpenStores, 'close'>,
+): Promise<Result<void>> {
+  changes.close();
+  return stores.close();
 }

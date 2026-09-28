@@ -1,28 +1,22 @@
-/**
- * The package entry point of `@novakai/canvas-service` (see package.json `exports`). It lists the
- * 18 names apps/web and apps/cli import, plus `Result` and `Diagnostic`: the return types of
- * `prepareInstallation` and `readAgentCredential`.
+/*
+ * Why this file exists
  *
- * `projectCollection` (web) and `validReport` (CLI) come from `api.ts`, the only non-compose file
- * allowed to import core. `prepareInstallation`, `readAgentCredential` and
- * `createHeadlessBindings` come from the composition root. The two envelope schemas parse service
- * answers at the consumer edge; `inspectionReport` checks the CLI's inspect answer.
- * `hostPath` brands the paths the CLI chooses: the two it passes to `prepareInstallation` and the
- * libavoid wasm path of its headless render jobs. `generation` is the schema the web's readers
- * parse stored transport generations with.
- * Everything else is a type; `ErrorCode` and `OperationSource` type the web's service failures.
- * The service's own process entries (cli/) import compose.ts directly.
+ * The web app and the CLI use the service, but they may import only from `@novakai/canvas-service`,
+ * and that name points here. For example, the CLI calls `readAgentCredential` to find its token,
+ * and both check every service answer with `transportResponse`. The web app also checks drawn
+ * diagrams with `renderDocumentMessage` and builds catalog entries with `projectCollection`.
+ *
+ * This file lists everything they may import: a few functions and checks, and the types those
+ * return. Anything not listed here is private to the service. The service's own start files in
+ * `cli/` import `compose.ts` instead.
  */
-export { projectCollection, validReport } from './api.js';
-export { prepareInstallation, readAgentCredential, createHeadlessBindings } from './compose.js';
-export { responseEnvelope } from './records/transport/protocol.js';
+export { projectCollection } from './api.js';
+export { prepareBuiltins, readAgentCredential, createHeadlessBindings } from './compose.js';
+export { transportResponse } from './records/transport/protocol.js';
 export type { TransportResponse } from './records/transport/protocol.js';
-export type { OperationSource } from './records/transport/failure-source.js';
-export { renderEnvelope } from './records/rendering/worker.js';
+export { renderDocumentMessage } from './records/rendering/worker.js';
 export type { RenderingJob, RenderDocument } from './records/rendering/job.js';
-export { inspectionReport } from './records/rendering/inspection.js';
 export type { InspectionReport } from './records/rendering/inspection.js';
-export type { BuiltinResources } from './records/presets/builtins.js';
-export type { Result, Diagnostic, ErrorCode } from './errors.js';
-export { hostPath, generation } from './brands.js';
-export type { Generation } from './brands.js';
+export type { PreparedBuiltins } from './records/presets/builtins.js';
+export type { Result, Diagnostic } from './errors.js';
+export { hostPath } from './brands.js';

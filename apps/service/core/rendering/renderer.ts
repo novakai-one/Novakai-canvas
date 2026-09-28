@@ -1,10 +1,20 @@
 /*
- * Renders one committed collection for a read: select the bytes it pins, hold them under an
- * Assets read lease, build its render job and produce the document. Pure over the injected owners.
- * The renderer has no write authority; callers own retry and keep their last readable scene on
- * any failure.
+ * Why this file exists
+ *
+ * Drawing a saved collection takes a moment, and its font and image files must not vanish
+ * halfway. For example, clean-up must not remove a font `my-diagram` uses while it is being drawn.
+ *
+ * This file draws one saved collection: it holds the collection's stored files (a "lease") until
+ * the drawing is done, builds its `read` job and runs it. Each step answers a `Result` (see
+ * `contract/errors.ts`). It never saves, and never retries.
  */
-import type { Assets, Collection } from '../../contract/records/capabilities.js';
+import type {
+  Assets,
+  AuthoringDiagnostic,
+  Collection,
+  ReadLease,
+} from '../../contract/records/capability-types.js';
+import type { CapabilityFailure } from '../../contract/records/transport/failure-source.js';
 import type {
   CollectionRenderer,
   DiagramProducer,
@@ -13,60 +23,101 @@ import type {
 import type { ResourceSelector } from '../../contract/ports/workspace.js';
 import type { WorkspaceContents } from '../../contract/records/workspace/contents.js';
 import type { RenderDocument } from '../../contract/records/rendering/job.js';
-import { failure, type Result } from '../../contract/errors.js';
+import { failure, success, type Result } from '../../contract/errors.js';
 
-/** The owners one collection read needs: byte selection and leases, job building and the producer. */
-export interface CollectionRenderOwners {
+/** What the renderer uses to hold a collection's files, build its job and run it. */
+export interface CollectionRendererDependencies {
+  /** Assets, which holds stored files until they are let go. */
   readonly assets: Pick<Assets, 'acquire'>;
+  /** Builds the render job (jobs.ts). */
   readonly jobs: RenderJobs;
+  /** Runs a job on a render worker and checks the reply (produce.ts, behind cache.ts). */
   readonly producer: DiagramProducer;
-  readonly resources: Pick<ResourceSelector, 'forCollection'>;
-}
-
-/** Binds collection reads to the given owners; `render` behaves as `render` below. */
-export function createCollectionRenderer(owners: CollectionRenderOwners): CollectionRenderer {
-  return {
-    render: (collection, workspace, signal) => render(collection, workspace, signal, owners),
-  };
+  /** Lists the stored files a collection uses, by their content hashes. */
+  readonly resources: Pick<ResourceSelector, 'digestsForCollection'>;
 }
 
 /**
- * Selects the bytes the collection pins and holds them under a read lease until production
- * settles, so font and image payloads cannot vanish mid-render. Fails with `unavailable` at the
- * selector's path when the bytes cannot be selected, and at Assets' path when the lease cannot be
- * acquired (owner failure kept as source); otherwise answers as `produce`. The lease is always
- * released; its release result is ignored.
+ * Makes the renderer for saved collections. Its `render` draws one collection, holding its files
+ * until the drawing is done.
+ * Mistakes: `unavailable` when the files can't be found or held, or the job can't be built. So the
+ * job builder's `missing-asset` or `invalid-input` comes back as `unavailable`, kept as its source.
+ * The producer's own mistakes pass through.
  */
-async function render(
+export function createCollectionRenderer(
+  dependencies: CollectionRendererDependencies,
+): CollectionRenderer {
+  return {
+    render: (collection, contents, signal) =>
+      renderHoldingFiles(collection, contents, signal, dependencies),
+  };
+}
+
+/** Holds the collection's stored files, draws it, then lets the files go. */
+async function renderHoldingFiles(
   collection: Collection,
-  workspace: WorkspaceContents,
+  contents: WorkspaceContents,
   signal: AbortSignal,
-  owners: CollectionRenderOwners,
+  dependencies: CollectionRendererDependencies,
 ): Promise<Result<RenderDocument>> {
-  const resources = owners.resources.forCollection(collection, workspace);
-  if (!resources.ok)
-    return failure('unavailable', resources.error.path, resources.error.message, resources.error);
-  const lease = owners.assets.acquire(resources.value);
-  if (!lease.ok) return failure('unavailable', lease.error.path, lease.error.message, lease.error);
+  const lease = holdCollectionFiles(collection, contents, dependencies);
+  if (!lease.ok) {
+    return lease;
+  }
   try {
-    return await produce(collection, workspace, signal, owners);
+    return await produceReadJob(collection, contents, signal, dependencies);
   } finally {
+    // The files are always let go; what `release` answers is not used.
     lease.value.release();
   }
 }
 
-/**
- * Builds the `read` job and produces it. A stale read is discarded by the browser's
- * requested-generation check. Fails with `unavailable` at the job's path when the job cannot be
- * built (job failure kept as source); producer failures pass through.
- */
-async function produce(
+/** Finds the stored files the collection uses, then holds them so clean-up can't remove them. */
+function holdCollectionFiles(
   collection: Collection,
-  workspace: WorkspaceContents,
+  contents: WorkspaceContents,
+  dependencies: CollectionRendererDependencies,
+): Result<ReadLease> {
+  const digests = dependencies.resources.digestsForCollection(collection, contents);
+  if (!digests.ok) {
+    return filesUnavailableFailure(digests.error);
+  }
+  const lease = dependencies.assets.acquire(digests.value);
+  if (!lease.ok) {
+    return filesUnavailableFailure(lease.error);
+  }
+  return success(lease.value);
+}
+
+/**
+ * Builds the collection's `read` job and runs it; a stale drawing is dropped by the browser, which
+ * checks the generation it asked for.
+ */
+async function produceReadJob(
+  collection: Collection,
+  contents: WorkspaceContents,
   signal: AbortSignal,
-  owners: CollectionRenderOwners,
+  dependencies: CollectionRendererDependencies,
 ): Promise<Result<RenderDocument>> {
-  const job = owners.jobs.create(collection, workspace, 'read');
-  if (!job.ok) return failure('unavailable', job.error.path, job.error.message, job.error);
-  return owners.producer.produce(job.value, signal);
+  const job = dependencies.jobs.create(collection, contents, 'read');
+  if (!job.ok) {
+    return jobUnavailableFailure(job.error);
+  }
+  return dependencies.producer.produce(job.value, signal);
+}
+
+/**
+ * Makes the `unavailable` mistake for files that can't be found or held, at the refusing part's
+ * path, keeping its refusal as the source.
+ */
+function filesUnavailableFailure(refusal: CapabilityFailure): Result<never> {
+  return failure('unavailable', refusal.path, refusal.message, refusal);
+}
+
+/**
+ * Makes the `unavailable` mistake for a job that can't be built, at the job builder's path,
+ * keeping its refusal as the source.
+ */
+function jobUnavailableFailure(refusal: AuthoringDiagnostic): Result<never> {
+  return failure('unavailable', refusal.path, refusal.message, refusal);
 }

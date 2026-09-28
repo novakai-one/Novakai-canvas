@@ -1,127 +1,165 @@
 /*
- * Authoring's candidate validator role: the mandatory final gate over a stamped candidate. Every
- * collection, preset, metadata and asset-admission record is checked against its owner and its
- * retained bytes. Pure over the injected owners; every check returns its refusal as a value and
- * the first one stops validation. Authoring keeps the committed snapshot on rejection and owns
- * scope, commit and recovery.
+ * Why this file exists
+ *
+ * A planner only plans writes. Before Authoring saves them, the whole workspace as it would look
+ * afterwards (the "candidate") gets one last check. For example, if a saved theme's font file were
+ * missing from storage, the check would refuse the change and nothing would be saved.
+ *
+ * This file builds that check (`CandidateValidator`). It checks each collection here, then the
+ * presets and the other records (catalog-checks.ts). Each check answers a `Result`
+ * (contract/errors.ts), and the first mistake stops it. It never changes the candidate.
  */
 import type {
+  AuthoringDiagnostic,
   AuthoringResult,
   CandidateValidator,
   Collection,
   ReadVersion,
   Snapshot,
-} from '../../../contract/records/capabilities.js';
+  StoredRecord,
+} from '../../../contract/records/capability-types.js';
 import type { AuthoringDigest } from '../../../contract/brands.js';
 import type { ResourceSelector, WorkspaceReader } from '../../../contract/ports/workspace.js';
 import type { WorkspaceContents } from '../../../contract/records/workspace/contents.js';
-import { andThen, success } from '../../../contract/errors.js';
-import { checkMetadata, checkPresets, type CatalogCheckOwners } from './catalog-checks.js';
+import { success } from '../../../contract/errors.js';
 import {
-  allPassed,
-  invariantBroken,
-  requireFact,
+  checkMetadataRecords,
+  checkPresets,
+  type CatalogCheckDependencies,
+} from './catalog-checks.js';
+import {
+  checkEach,
+  invariantViolationFailure,
   requireRecord,
-  requireRetention,
+  requireExactFiles,
 } from './record-checks.js';
 
-/** What candidate validation reads; no validator can commit or alter the candidate it inspects. */
-export interface CandidateValidatorOwners extends CatalogCheckOwners {
+/** What the final check reads. Nothing here can save or change the candidate. */
+export interface CandidateValidatorDependencies extends CatalogCheckDependencies {
+  /** Reads the candidate into checked collections, catalog and presets. */
   readonly workspace: Pick<WorkspaceReader, 'read'>;
-  readonly resources: Pick<ResourceSelector, 'forCollection'>;
+  /** Works out which stored files each collection needs. */
+  readonly resources: Pick<ResourceSelector, 'digestsForCollection'>;
 }
 
 /**
- * Binds the validator. `validate` answers the read versions it consulted (history excluded), or
- * `invariant-violation` at `candidate` when a record is missing, a revision or retained byte
- * manifest differs, metadata is invalid or names another workspace, or bytes are missing (the
- * owner's failure kept as source where there is one). Reader failures pass through unchanged.
+ * Builds the final check (`CandidateValidator`). Its `validate` checks the workspace as the change
+ * would leave it, and answers the version each record it read had before the change. Authoring
+ * saves only if those versions are still current. Undo and redo records aren't in that list;
+ * Authoring guards those itself.
+ * Mistakes: `invariant-violation` at `candidate` when a record is missing or out of date, keeps the
+ * wrong files, names another workspace, or a file is gone. Reader mistakes pass through.
  */
-export function createCandidateValidator(owners: CandidateValidatorOwners): CandidateValidator {
-  return { validate: async (before, after) => validate(before, after, owners) };
+export function createCandidateValidator(
+  dependencies: CandidateValidatorDependencies,
+): CandidateValidator {
+  return { validate: async (before, after) => validateCandidate(before, after, dependencies) };
 }
 
-/**
- * Reads the candidate, checks it (see `checkCandidate`), then answers the version of every record
- * in `before` except history. Reader failures pass through unchanged.
- */
-function validate(
+/** Reads and checks the candidate, then lists the versions the save depends on. */
+function validateCandidate(
   before: Snapshot,
   after: Snapshot,
-  owners: CandidateValidatorOwners,
+  dependencies: CandidateValidatorDependencies,
 ): AuthoringResult<readonly ReadVersion[]> {
-  const view = owners.workspace.read(after);
-  if (!view.ok) return view;
-  const checked = checkCandidate(after, view.value, owners);
-  return andThen(checked, () => success(readVersions(before)));
+  const contents = dependencies.workspace.read(after);
+  if (!contents.ok) {
+    return contents;
+  }
+  const checked = checkCandidate(after, contents.value, dependencies);
+  if (!checked.ok) {
+    return checked;
+  }
+  const versions = listReadVersions(before);
+  return success(versions);
 }
 
-/**
- * Checks the collections, then the presets, then the metadata (see catalog-checks.ts), in that
- * order; the first failure stops the checks.
- */
+/** Checks the collections, then the presets, then the other records; the first mistake stops it. */
 function checkCandidate(
   snapshot: Snapshot,
-  view: WorkspaceContents,
-  owners: CandidateValidatorOwners,
+  contents: WorkspaceContents,
+  dependencies: CandidateValidatorDependencies,
 ): AuthoringResult<void> {
-  const collections = checkCollections(snapshot, view, owners);
-  const presets = andThen(collections, () => checkPresets(snapshot, view, owners));
-  return andThen(presets, () => checkMetadata(snapshot, view, owners));
+  const collections = checkCollections(snapshot, contents, dependencies);
+  if (!collections.ok) {
+    return collections;
+  }
+  const presets = checkPresets(snapshot, contents, dependencies);
+  if (!presets.ok) {
+    return presets;
+  }
+  return checkMetadataRecords(snapshot, contents, dependencies);
 }
 
-/** The version of every record in `before` except history. Never fails. */
-function readVersions(before: Snapshot): readonly ReadVersion[] {
-  return before.records
-    .filter((item) => item.key.kind !== 'history')
-    .map((item) => ({ key: item.key, version: item.version }));
+/** Lists the version of every record before the change, leaving out undo and redo records. */
+function listReadVersions(before: Snapshot): readonly ReadVersion[] {
+  const nonHistoryRecords = before.records.filter((record) => record.key.kind !== 'history');
+  return nonHistoryRecords.map((record) => ({ key: record.key, version: record.version }));
 }
 
-/**
- * Checks each collection in order (see `checkCollection`); the first failure stops the checks, so
- * later collections are not read through the selector.
- */
+/** Checks each collection in order; the first mistake stops the checks. */
 function checkCollections(
   snapshot: Snapshot,
-  view: WorkspaceContents,
-  owners: CandidateValidatorOwners,
+  contents: WorkspaceContents,
+  dependencies: CandidateValidatorDependencies,
 ): AuthoringResult<void> {
-  return allPassed(view.collections, (collection) =>
-    checkCollection(snapshot, collection, view, owners),
+  return checkEach(contents.collections, (collection) =>
+    checkCollection(snapshot, collection, contents, dependencies),
   );
 }
 
-/**
- * Checks one collection: its record exists at the collection's revision and retains exactly the
- * resources the selector expects. Fails with `invariant-violation` at `candidate` when the record
- * is missing, the revision or resources differ, or the selector fails (see `expectedResources`).
- */
+/** Checks one collection's record is current and keeps exactly the files the collection needs. */
 function checkCollection(
   snapshot: Snapshot,
   collection: Collection,
-  view: WorkspaceContents,
-  owners: CandidateValidatorOwners,
+  contents: WorkspaceContents,
+  dependencies: CandidateValidatorDependencies,
 ): AuthoringResult<void> {
-  const slot = requireRecord(snapshot, 'collection', collection.id);
-  if (!slot.ok) return slot;
-  const revision = requireFact(
-    slot.value.version === collection.revision,
-    `Collection revision differs: ${collection.id}`,
-  );
-  const expected = andThen(revision, () => expectedResources(collection, view, owners));
-  return andThen(expected, (digests) => requireRetention(slot.value, digests));
+  const record = requireCurrentRecord(snapshot, collection);
+  if (!record.ok) {
+    return record;
+  }
+  const expectedDigests = listExpectedFiles(collection, contents, dependencies);
+  if (!expectedDigests.ok) {
+    return expectedDigests;
+  }
+  return requireExactFiles(record.value, expectedDigests.value);
 }
 
-/**
- * The digests the selector expects the collection to retain. Fails with `invariant-violation` at
- * `candidate` with the selector's message when it refuses (its failure kept as source).
- */
-function expectedResources(
+/** Finds the collection's record, and checks it is at the collection's revision. */
+function requireCurrentRecord(
+  snapshot: Snapshot,
   collection: Collection,
-  view: WorkspaceContents,
-  owners: CandidateValidatorOwners,
+): AuthoringResult<StoredRecord> {
+  const record = requireRecord(snapshot, 'collection', collection.id);
+  if (!record.ok) {
+    return record;
+  }
+  if (record.value.version !== collection.revision) {
+    return collectionRevisionFailure(collection);
+  }
+  return success(record.value);
+}
+
+/** Asks the selector which stored files the collection needs. */
+function listExpectedFiles(
+  collection: Collection,
+  contents: WorkspaceContents,
+  dependencies: CandidateValidatorDependencies,
 ): AuthoringResult<readonly AuthoringDigest[]> {
-  const expected = owners.resources.forCollection(collection, view);
-  if (!expected.ok) return invariantBroken(expected.error.message, expected.error);
-  return expected;
+  const expectedDigests = dependencies.resources.digestsForCollection(collection, contents);
+  if (!expectedDigests.ok) {
+    return selectorRefusalFailure(expectedDigests.error);
+  }
+  return success(expectedDigests.value);
+}
+
+/** Makes the mistake for a collection record that isn't at the collection's revision. */
+function collectionRevisionFailure(collection: Collection): AuthoringResult<never> {
+  return invariantViolationFailure(`Collection revision differs: ${collection.id}`);
+}
+
+/** Makes the mistake for a collection whose files the selector refused, keeping its reason. */
+function selectorRefusalFailure(selectorMistake: AuthoringDiagnostic): AuthoringResult<never> {
+  return invariantViolationFailure(selectorMistake.message, selectorMistake);
 }

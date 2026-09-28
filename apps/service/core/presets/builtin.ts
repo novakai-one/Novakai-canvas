@@ -1,7 +1,12 @@
 /*
- * The installation's built-in presets: the Paper and Ink themes and one recipe per shipped
- * starter, admitted through Templates into one catalog. Nothing is written here. Pure over the
- * injected owners; startup submits the catalog through Authoring, which owns commit and recovery.
+ * Why this file exists
+ *
+ * Every new workspace starts with the same presets: the Paper (light) and Ink (dark) themes, and
+ * one recipe per shipped starter, such as `er`. They are made from the fonts, design tokens and
+ * recipe DSL shipped in `resources/`, and must pass the same checks as a preset a user saves.
+ *
+ * This file makes that catalog through Design System, Model and Templates, as a `Result`
+ * (contract/errors.ts). It saves nothing: start-up saves the catalog through Authoring.
  */
 import type { FailureSource } from '../../contract/records/transport/failure-source.js';
 import type {
@@ -12,45 +17,49 @@ import type {
   ResolvedResources,
   Templates,
   ThemePreset,
-} from '../../contract/records/capabilities.js';
+} from '../../contract/records/capability-types.js';
 import type {
   BuiltinFonts,
   BuiltinSources,
-  BuiltinResources,
+  PreparedBuiltins,
 } from '../../contract/records/presets/builtins.js';
-import { andThen, collect, failure, success, type Result } from '../../contract/errors.js';
+import { collect, failure, success, type Result } from '../../contract/errors.js';
 import { EMPTY_RESOURCES } from '../../contract/ports/capabilities.js';
-import { themeBinding, type BindingModel } from './theme-binding.js';
+import { checkThemeBinding, type BindingModel } from './theme-binding.js';
 
-/** The slice of ServiceCapabilities builtin preparation uses: theme binding, UI token resolution and preset admission. */
-export interface BuiltinPresetOwners {
+/** What making the built-in presets uses. The service's capabilities fit it. */
+export interface BuiltinPresetDependencies {
+  /** Model's check of a theme binding, so the recipes can use the new themes. */
   readonly model: BindingModel;
+  /** Design System, which works out the UI tokens each built-in theme starts from. */
   readonly system: Pick<DesignSystem, 'resolve'>;
+  /** Makes Templates for a set of themes and files; only its `planAdmission` is used. */
   templates(resources: ResolvedResources): Pick<Templates<LoweredIntent>, 'planAdmission'>;
 }
 
 /**
- * Prepares the complete installation preset set.
- *
- * Steps; the first failure stops the preparation:
- * 1. Name the shipped fonts by role (see `fontRoles`).
- * 2. Admit Paper (light) and Ink (dark) with those fonts (see `addThemes`).
- * 3. Admit each shipped recipe against those two themes (see `addRecipes`).
- *
- * Returns the sources, unchanged, with the admitted catalog. Fails with `invalid-input` at
- * `builtins` when a shipped font is missing or an owner rejects a shipped input (the owner's
- * failure kept as source).
+ * Makes the built-in preset catalog.
+ * Returns the shipped sources plus the new catalog under `presets`.
+ * 1. Names the shipped fonts by role: body, mono, strong.
+ * 2. Adds Paper (light) and Ink (dark) with those fonts.
+ * 3. Adds each shipped recipe, which may use those two themes.
+ * Fails with `invalid-input` at `builtins` when a shipped font is missing or a capability refuses
+ * a shipped input (its failure kept as the source).
  */
 export function prepareBuiltinPresets(
   sources: BuiltinSources,
-  owners: BuiltinPresetOwners,
-): Result<BuiltinResources> {
-  const fonts = fontRoles(sources.fonts);
-  if (!fonts.ok) return fonts;
-  const themes = addThemes({ tokens: sources.tokens, fonts: fonts.value }, owners);
-  if (!themes.ok) return themes;
-  const presets = addRecipes(themes.value, sources.recipes, owners);
-  return andThen(presets, (catalog) => success({ ...sources, presets: catalog }));
+  dependencies: BuiltinPresetDependencies,
+): Result<PreparedBuiltins> {
+  const fonts = nameFontRoles(sources.fonts);
+  if (!fonts.ok) {
+    return fonts;
+  }
+  const themeSources: ThemeSources = { tokens: sources.tokens, fonts: fonts.value };
+  const themes = addThemes(themeSources, dependencies);
+  if (!themes.ok) {
+    return themes;
+  }
+  return addShippedRecipes(sources, themes.value, dependencies);
 }
 
 /** What each bundled theme is built from: the Design System token sources and the fonts by role. */
@@ -59,16 +68,14 @@ interface ThemeSources {
   readonly fonts: BuiltinFonts;
 }
 
-/**
- * Names the shipped fonts by role, in their wire order: body, mono, strong. Fails with
- * `invalid-input` at `builtins` ("All shipped fonts are required") when fewer than three fonts are
- * shipped; a missing font never falls back to the OS.
- */
-function fontRoles(fonts: BuiltinSources['fonts']): Result<BuiltinFonts> {
+/** Names the shipped fonts by role, in their shipped order: body, mono, strong. */
+function nameFontRoles(fonts: BuiltinSources['fonts']): Result<BuiltinFonts> {
   const [body, mono, strong] = fonts;
-  if (!body || !mono || !strong)
-    return failure('invalid-input', 'builtins', 'All shipped fonts are required');
-  return success({ body, mono, strong });
+  if (body === undefined || mono === undefined || strong === undefined) {
+    return missingFontFailure();
+  }
+  const roles: BuiltinFonts = { body, mono, strong };
+  return success(roles);
 }
 
 /** A colour scheme with one bundled theme. */
@@ -81,76 +88,87 @@ type Scheme = 'light' | 'dark';
 const bundledThemes: Readonly<Record<Scheme, { readonly id: string; readonly title: string }>> =
   Object.freeze({ light: { id: 'paper', title: 'Paper' }, dark: { id: 'ink', title: 'Ink' } });
 
-/** Admits Paper, then Ink, into an empty catalog. Fails as `addTheme` fails. */
+/** Adds Paper, then Ink, to an empty catalog. */
 function addThemes(
   sources: ThemeSources,
-  owners: BuiltinPresetOwners,
+  dependencies: BuiltinPresetDependencies,
 ): Result<Catalog> {
-  const light = addTheme([], 'light', sources, owners);
-  return andThen(light, (catalog) => addTheme(catalog, 'dark', sources, owners));
+  const withPaper = addTheme([], 'light', sources, dependencies);
+  if (!withPaper.ok) {
+    return withPaper;
+  }
+  return addTheme(withPaper.value, 'dark', sources, dependencies);
 }
 
-/**
- * Admits the scheme's bundled theme (see `bundledThemes`) at version 1.1.0; Templates computes
- * its content hash. Returns the candidate catalog. Fails with `invalid-input` at `builtins` when
- * Design System or Templates rejects the input (its failure kept as source).
- */
+/** Has Templates add the scheme's bundled theme at version 1.1.0; Templates works out its hash. */
 function addTheme(
   catalog: Catalog,
   scheme: Scheme,
   sources: ThemeSources,
-  owners: BuiltinPresetOwners,
+  dependencies: BuiltinPresetDependencies,
 ): Result<Catalog> {
-  const raw = themeInput(sources, scheme, owners);
-  if (!raw.ok) return raw;
+  const settings = buildThemeSettings(sources, scheme, dependencies);
+  if (!settings.ok) {
+    return settings;
+  }
   const theme = bundledThemes[scheme];
-  const templates = owners.templates(EMPTY_RESOURCES);
-  const planned = fromOwner(
-    templates.planAdmission(catalog, {
-      schemaVersion: 1,
-      kind: 'theme',
-      id: theme.id,
-      version: '1.1.0',
-      title: theme.title,
-      description: 'Bundled diagram theme with pinned fonts.',
-      raw: raw.value,
-    }),
-  );
-  return andThen(planned, (plan) => success(plan.candidate));
+  const templates = dependencies.templates(EMPTY_RESOURCES);
+  const planned = templates.planAdmission(catalog, {
+    schemaVersion: 1,
+    kind: 'theme',
+    id: theme.id,
+    version: '1.1.0',
+    title: theme.title,
+    description: 'Bundled diagram theme with pinned fonts.',
+    raw: settings.value,
+  });
+  if (!planned.ok) {
+    return ownerRefusedFailure(planned.error);
+  }
+  return success(planned.value.candidate);
 }
 
+/** A bundled theme's settings (the preset's `raw` field): base, three fonts and no overrides. */
+interface BundledThemeSettings {
+  /** The scheme's interface tokens, pinned as Design System reported them (`provenance.ui`). */
+  readonly base: { readonly kind: 'ui'; readonly pin: unknown };
+  readonly fonts: Readonly<Record<keyof BuiltinFonts, FontPin>>;
+  readonly overrides: Readonly<Record<string, never>>;
+}
+
+/** Default preferences, so a person's own settings never become part of a saved theme. */
+const DEFAULT_PREFERENCES = Object.freeze({
+  schemaVersion: 1,
+  theme: { mode: 'system' },
+  textSize: 14,
+  density: 'comfortable',
+  motion: 'system',
+});
+
 /**
- * The theme's raw input: the Design System UI pin resolved for this scheme under default system
- * preferences (personal preferences never become diagram dependencies), the three shipped fonts
- * and no overrides. Fails with `invalid-input` at `builtins` when Design System rejects the token
- * sources (its failure kept as source).
+ * Builds a theme's settings: the scheme's interface tokens from Design System, the three shipped
+ * fonts and no overrides.
  */
-function themeInput(
+function buildThemeSettings(
   sources: ThemeSources,
   scheme: Scheme,
-  owners: BuiltinPresetOwners,
-): Result<unknown> {
-  const ui = fromOwner(
-    owners.system.resolve({
-      scope: 'ui',
-      sources: sources.tokens,
-      preferences: {
-        schemaVersion: 1,
-        theme: { mode: 'system' },
-        textSize: 14,
-        density: 'comfortable',
-        motion: 'system',
-      },
-      environment: { scheme, pointer: 'fine', reducedMotion: false, forcedColors: false },
-    }),
-  );
-  return andThen(ui, (resolved) =>
-    success({
-      base: { kind: 'ui', pin: resolved.provenance.ui },
-      fonts: fontPins(sources.fonts),
-      overrides: {},
-    }),
-  );
+  dependencies: BuiltinPresetDependencies,
+): Result<BundledThemeSettings> {
+  const resolved = dependencies.system.resolve({
+    scope: 'ui',
+    sources: sources.tokens,
+    preferences: DEFAULT_PREFERENCES,
+    environment: { scheme, pointer: 'fine', reducedMotion: false, forcedColors: false },
+  });
+  if (!resolved.ok) {
+    return ownerRefusedFailure(resolved.error);
+  }
+  const settings: BundledThemeSettings = {
+    base: { kind: 'ui', pin: resolved.value.provenance.ui },
+    fonts: fontPins(sources.fonts),
+    overrides: {},
+  };
+  return success(settings);
 }
 
 /** One theme font pin: the family Assets verified and its digest, approved. */
@@ -160,12 +178,12 @@ interface FontPin {
   readonly approved: true;
 }
 
-/** The theme's body, mono and strong font pins, in that order. */
+/** Pins the theme's body, mono and strong fonts, in that order. */
 function fontPins(fonts: BuiltinFonts): Readonly<Record<keyof BuiltinFonts, FontPin>> {
   return { body: fontPin(fonts.body), mono: fontPin(fonts.mono), strong: fontPin(fonts.strong) };
 }
 
-/** The pin of one shipped font. */
+/** Pins one shipped font. */
 function fontPin(font: FontSource): FontPin {
   return { family: font.family, digest: font.digest, approved: true };
 }
@@ -173,84 +191,101 @@ function fontPin(font: FontSource): FontPin {
 /** One shipped recipe: its family and DSL source. */
 type ShippedRecipe = BuiltinSources['recipes'][number];
 
-/**
- * Admits each shipped recipe in order, after the themes. Fails with the first recipe's failure
- * (see `addRecipe`); later recipes are skipped.
- */
-function addRecipes(
+/** One theme's binding under its ID, as Model checked it. */
+type BoundTheme = readonly [string, ResolvedResources['themes'][string]];
+
+/** Adds each shipped recipe after the themes, and answers the sources with the finished catalog. */
+function addShippedRecipes(
+  sources: BuiltinSources,
   themes: Catalog,
-  recipes: readonly ShippedRecipe[],
-  owners: BuiltinPresetOwners,
-): Result<Catalog> {
+  dependencies: BuiltinPresetDependencies,
+): Result<PreparedBuiltins> {
   // `addNext` passes the first failure along unchanged, so later recipes are skipped.
   const addNext = (catalog: Result<Catalog>, recipe: ShippedRecipe): Result<Catalog> =>
-    andThen(catalog, (current) => addRecipe(current, recipe, owners));
-  return recipes.reduce(addNext, success(themes));
+    addNextRecipe(catalog, recipe, dependencies);
+  const presets = sources.recipes.reduce(addNext, success(themes));
+  if (!presets.ok) {
+    return presets;
+  }
+  const prepared: PreparedBuiltins = { ...sources, presets: presets.value };
+  return success(prepared);
+}
+
+/** Adds the next recipe, or passes an earlier failure on unchanged. */
+function addNextRecipe(
+  catalog: Result<Catalog>,
+  recipe: ShippedRecipe,
+  dependencies: BuiltinPresetDependencies,
+): Result<Catalog> {
+  if (!catalog.ok) {
+    return catalog;
+  }
+  return addRecipe(catalog.value, recipe, dependencies);
 }
 
 /**
- * Admits one shipped recipe (ID and title are its family) at version 1.0.0, inspected against
- * the exact themes already in the catalog and no assets. Returns the candidate catalog. Fails
- * with `invalid-input` at `builtins` when Model or Templates rejects the input (its failure kept
- * as source).
+ * Has Templates add one shipped recipe at version 1.0.0, named after its family, using the themes
+ * already in the catalog and no images.
  */
 function addRecipe(
   catalog: Catalog,
   recipe: ShippedRecipe,
-  owners: BuiltinPresetOwners,
+  dependencies: BuiltinPresetDependencies,
 ): Result<Catalog> {
-  const themes = catalogThemes(catalog, owners);
-  if (!themes.ok) return themes;
-  const templates = owners.templates({ themes: themes.value, assets: {} });
-  const planned = fromOwner(
-    templates.planAdmission(catalog, {
-      schemaVersion: 1,
-      kind: 'recipe',
-      id: recipe.family,
-      version: '1.0.0',
-      title: recipe.family,
-      description: 'Editable diagram starter.',
-      source: recipe.source,
-      family: recipe.family,
-    }),
-  );
-  return andThen(planned, (plan) => success(plan.candidate));
+  const themes = bindCatalogThemes(catalog, dependencies);
+  if (!themes.ok) {
+    return themes;
+  }
+  const templates = dependencies.templates({ themes: themes.value, assets: {} });
+  const planned = templates.planAdmission(catalog, {
+    schemaVersion: 1,
+    kind: 'recipe',
+    id: recipe.family,
+    version: '1.0.0',
+    title: recipe.family,
+    description: 'Editable diagram starter.',
+    source: recipe.source,
+    family: recipe.family,
+  });
+  if (!planned.ok) {
+    return ownerRefusedFailure(planned.error);
+  }
+  return success(planned.value.candidate);
 }
 
-/**
- * Every theme already in the catalog, bound under its ID as Model checks it. Fails with
- * `invalid-input` at `builtins` when Model rejects a binding (its failure kept as source).
- */
-function catalogThemes(
+/** Has Model check a binding for every theme in the catalog, and keys them by theme ID. */
+function bindCatalogThemes(
   catalog: Catalog,
-  owners: BuiltinPresetOwners,
+  dependencies: BuiltinPresetDependencies,
 ): Result<ResolvedResources['themes']> {
-  const themes = catalog.filter((item) => item.kind === 'theme');
-  const bound = collect(themes, (theme) => boundTheme(theme, owners));
-  return andThen(bound, (entries) => success(Object.fromEntries(entries)));
+  const themes = catalog.filter((preset) => preset.kind === 'theme');
+  const bound = collect(themes, (theme) => bindTheme(theme, dependencies));
+  if (!bound.ok) {
+    return bound;
+  }
+  const themesById = Object.fromEntries(bound.value);
+  return success(themesById);
 }
 
-/** One theme under its ID, bound as Model checks it. Fails as `catalogThemes` names. */
-function boundTheme(
+/** Has Model check one theme's binding, and keeps it under the theme's ID. */
+function bindTheme(
   preset: ThemePreset,
-  owners: BuiltinPresetOwners,
-): Result<readonly [string, ResolvedResources['themes'][string]]> {
-  const binding = fromOwner(themeBinding(preset, owners.model));
-  return andThen(binding, (bound) => success([preset.id, bound] as const));
+  dependencies: BuiltinPresetDependencies,
+): Result<BoundTheme> {
+  const binding = checkThemeBinding(preset, dependencies.model);
+  if (!binding.ok) {
+    return ownerRefusedFailure(binding.error);
+  }
+  const bound: BoundTheme = [preset.id, binding.value];
+  return success(bound);
 }
 
-/**
- * The owner's result as a preparation result. Fails with `invalid-input` at `builtins` ("The
- * owning capability rejected this input", the owner's failure kept as source) when the owner
- * refused.
- */
-function fromOwner<T>(result: Result<T, FailureSource>): Result<T> {
-  if (!result.ok)
-    return failure(
-      'invalid-input',
-      'builtins',
-      'The owning capability rejected this input',
-      result.error,
-    );
-  return result;
+/** Makes the mistake for fewer than three shipped fonts: `invalid-input` at `builtins`. */
+function missingFontFailure(): Result<never> {
+  return failure('invalid-input', 'builtins', 'All shipped fonts are required');
+}
+
+/** Makes the mistake for a capability that refused a shipped input, keeping its own mistake. */
+function ownerRefusedFailure(source: FailureSource): Result<never> {
+  return failure('invalid-input', 'builtins', 'The owning capability rejected this input', source);
 }

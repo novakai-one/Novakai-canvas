@@ -1,19 +1,25 @@
 /*
- * Templates brands minted for preset payloads: a bare preset digest, and a theme pin in Templates'
- * own `Pin` form (bare digest, not the `sha256:`-pinned text Model reads). Pure. A value that does
- * not match its Templates schema is `invalid-input` at `preset` (codec-refusal.ts), and Authoring
- * owns recovery.
+ * Why this file exists
+ *
+ * Templates only accepts IDs, versions and digests it has checked itself. Model writes a digest as
+ * `sha256:` then hex; Templates wants the bare hex. For example, a recipe using the `ink` theme
+ * must name it as `ink`, `1.1.0` and the bare digest, each checked by Templates.
+ *
+ * This file runs those checks for the codecs. Text that fails a check is `invalid-input` at
+ * `preset` (codec-refusal.ts). It never adds or removes `sha256:`; the caller does that first.
  */
 import { presetId, presetVersion, presetDigest } from '../../contract/schemas.js';
-import type { PresetPin, TemplatesResult } from '../../contract/records/capabilities.js';
+import type { PresetPin, TemplatesResult } from '../../contract/records/capability-types.js';
+import type { PresetDigest } from '../../contract/brands.js';
 import { success } from '../../contract/errors.js';
-import { invalidIdentity } from './codec-refusal.js';
+import { invalidIdentityFailure } from './codec-refusal.js';
 
 /**
- * The theme pin (kind `theme`) with Templates' brands minted on its ID, version and bare digest.
- * Fails with `invalid-input` at `preset` when one of them does not match its Templates schema.
+ * Checks a theme pin's ID, version and bare digest with Templates, and answers the pin in
+ * Templates' checked form (kind `theme`). Each part is text as read; the digest has no `sha256:`.
+ * Fails with `invalid-input` at `preset` when a part fails Templates' check.
  */
-export function brandedThemePin(pin: {
+export function checkThemePin(pin: {
   readonly id: string;
   readonly version: string;
   readonly digest: string;
@@ -21,16 +27,26 @@ export function brandedThemePin(pin: {
   const id = presetId.safeParse(pin.id);
   const version = presetVersion.safeParse(pin.version);
   const digest = presetDigest.safeParse(pin.digest);
-  if (!id.success || !version.success || !digest.success) return invalidIdentity();
-  return success({ kind: 'theme', id: id.data, version: version.data, digest: digest.data });
+  if (!id.success || !version.success || !digest.success) {
+    return invalidIdentityFailure();
+  }
+  const checked: PresetPin = {
+    kind: 'theme',
+    id: id.data,
+    version: version.data,
+    digest: digest.data,
+  };
+  return success(checked);
 }
 
 /**
- * Bare digest text with Templates' digest brand minted. Fails with `invalid-input` at `preset`
- * when it is not a Templates digest.
+ * Checks bare digest text (no `sha256:`) with Templates, and answers it in Templates' checked
+ * form. Fails with `invalid-input` at `preset` when it isn't a Templates digest.
  */
-export function brandedDigest(text: string): TemplatesResult<PresetPin['digest']> {
+export function checkPresetDigest(text: string): TemplatesResult<PresetDigest> {
   const digest = presetDigest.safeParse(text);
-  if (!digest.success) return invalidIdentity();
+  if (!digest.success) {
+    return invalidIdentityFailure();
+  }
   return success(digest.data);
 }

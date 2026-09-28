@@ -1,4 +1,4 @@
-import { renderEnvelope } from '@novakai/canvas-service';
+import { renderDocumentMessage } from '@novakai/canvas-service';
 import type { RenderDocument } from '@novakai/canvas-service';
 import { validate, fieldTypeDisplay, typeUseDisplay } from '@novakai/canvas-model';
 import {
@@ -64,7 +64,7 @@ function layoutResult<T>(result: PresentationResult<T>): LayoutResult<T> {
 }
 /** Canonical shape, measured content, routing and engine versions all receive their owner's independent admission. */
 function decode(input: unknown): RenderDocument {
-  const payload = renderEnvelope.parse(input);
+  const payload = renderDocumentMessage.parse(input);
   const collection = accepted(validate(payload.collection));
   const domain = {
     read: (input: unknown): PresentationResult<typeof collection> => {

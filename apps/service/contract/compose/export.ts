@@ -1,58 +1,80 @@
 /*
- * The workspace export route, bound to Presentation's bindings for the installation fonts. The
- * rasterizer starts lazily, on the first PNG request. Every export only reads, through a leased
- * snapshot; the caller owns the retry.
+ * Why this file exists
+ *
+ * The exporter behind `POST /api/v1/export` needs a few things ready before its first request:
+ * Presentation set up with the shipped fonts, the shared parts (compose/shared-parts.ts), and a
+ * PNG encoder.
+ *
+ * This file builds the exporter for one workspace. The PNG encoder starts only on the first PNG
+ * request. An export only reads the workspace; it never changes it.
  */
-import { createReactBindings } from '@novakai/canvas-presentation';
+import {
+  createReactBindings,
+  type ReactBindings as PresentationBindings,
+} from '@novakai/canvas-presentation';
 import type { Assets } from '@novakai/canvas-assets';
 import type { Authoring } from '@novakai/canvas-authoring';
 import type { WorkspaceOptions } from '../records/workspace/startup.js';
-import type { BuiltinResources } from '../records/presets/builtins.js';
-import type { ExportHandler } from '../ports/export.js';
+import type { PreparedBuiltins } from '../records/presets/builtins.js';
+import type { Exporter } from '../ports/export.js';
 import type { ServiceCapabilities } from '../ports/capabilities.js';
 import type { Result } from '../errors.js';
 import { failure, success } from '../errors.js';
-import { createExportRoute } from '../../core/export/route.js';
-import { createRasterizer } from '../../adapters/raster/png-runtime.js';
-import type { WorkspaceRoles } from './workspace.js';
+import { createExporter, type ExporterDependencies } from '../../core/export/route.js';
+import { createPngEncoder } from '../../adapters/raster/png-runtime.js';
+import type { SharedParts } from './shared-parts.js';
 
-/** What the export route reads through, besides Authoring. */
+/** What the exporter is built from, besides Authoring. */
 export interface ExportInputs {
-  readonly native: { readonly assets: Pick<Assets, 'acquire'> };
-  readonly installation: Pick<BuiltinResources, 'fonts'>;
+  readonly stores: { readonly assets: Pick<Assets, 'acquire'> };
+  readonly builtins: Pick<PreparedBuiltins, 'fonts'>;
   readonly options: Pick<WorkspaceOptions, 'workspace'>;
   readonly capabilities: Pick<ServiceCapabilities, 'model' | 'language' | 'export'>;
-  readonly roles: Pick<WorkspaceRoles, 'views' | 'resources' | 'renderer'>;
+  readonly shared: Pick<SharedParts, 'reader' | 'resources' | 'renderer'>;
 }
 
 /**
- * Binds the export route of one workspace; `authoring` is bound to one request's cancellation.
- * Fails with `unavailable` at `startup` ("Workspace composition failed") when Presentation cannot
- * bind the installation fonts.
+ * Builds the exporter of one workspace. `authoring` makes Authoring for one request; the exporter
+ * uses it only to read the workspace. Fails with `unavailable` at `startup` when Presentation
+ * can't load the shipped fonts.
  */
-export async function wireExport(
+export async function buildExporter(
   inputs: ExportInputs,
   authoring: (signal: AbortSignal) => Authoring,
-): Promise<Result<ExportHandler>> {
-  const presentation = await createReactBindings(inputs.installation.fonts);
+): Promise<Result<Exporter>> {
+  const presentation = await createReactBindings(inputs.builtins.fonts);
   if (!presentation.ok) {
-    return failure('unavailable', 'startup', 'Workspace composition failed');
+    return fontsUnavailableFailure();
   }
+  const dependencies = exporterDependencies(inputs, presentation.value, authoring);
+  const exporter = createExporter(dependencies);
+  return success(exporter);
+}
+
+/** Gathers what the exporter reads and draws with; the PNG encoder waits for the first PNG. */
+function exporterDependencies(
+  inputs: ExportInputs,
+  presentation: PresentationBindings,
+  authoring: (signal: AbortSignal) => Authoring,
+): ExporterDependencies {
   const { model, language } = inputs.capabilities;
-  const { views, resources, renderer } = inputs.roles;
-  return success(
-    createExportRoute({
-      workspace: inputs.options.workspace,
-      model,
-      language,
-      export: inputs.capabilities.export,
-      presentation: presentation.value,
-      assets: inputs.native.assets,
-      views,
-      resources,
-      renderer,
-      rasterizer: createRasterizer(),
-      authoring,
-    }),
-  );
+  const { reader, resources, renderer } = inputs.shared;
+  return {
+    workspace: inputs.options.workspace,
+    model,
+    language,
+    export: inputs.capabilities.export,
+    presentation,
+    assets: inputs.stores.assets,
+    reader,
+    resources,
+    renderer,
+    pngEncoder: createPngEncoder(),
+    authoring,
+  };
+}
+
+/** The `unavailable` failure at `startup` for shipped fonts Presentation could not load. */
+function fontsUnavailableFailure(): Result<never> {
+  return failure('unavailable', 'startup', 'Workspace composition failed');
 }

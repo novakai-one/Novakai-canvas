@@ -1,87 +1,108 @@
 /*
- * The Language routes: `GET /api/v1/language` answers Language's vocabulary and
- * `GET /api/v1/source` prints one current collection as DSL for a scope. Pure over the injected
- * owners. A refused scope or print is the caller's to correct. A throw, Language's included,
- * reaches the HTTP server's `receive` (routes.ts).
+ * Why this file exists
+ *
+ * An agent can't look at a diagram's picture, so it reads the diagram as DSL text instead. For
+ * example, `GET /api/v1/source?id=walkthrough-modules&section=m-review-map` answers that one
+ * section as DSL.
+ *
+ * This file is the two source routes: `language` answers the DSL's vocabulary, and `source` prints
+ * one saved collection as DSL, whole or one section or object. The printer (source-printer.ts) does
+ * the printing; this file never learns the DSL's rules. A mistake names the part of the request it
+ * is about, such as `invalid-input` at `scope` (see `contract/errors.ts`).
  */
-import type { ApiCall, RouteKey } from '../../contract/records/transport/protocol.js';
-import type { WireOutcome } from '../../contract/records/transport/wire-codes.js';
-import type { Scope, Snapshot, StoredRecord } from '../../contract/records/capabilities.js';
+import type { ApiCall, ApiQuery, RouteKey } from '../../contract/records/transport/protocol.js';
+import type { HttpFailure, HttpOutcome } from '../../contract/records/transport/http-codes.js';
+import type { Snapshot, StoredRecord } from '../../contract/records/capability-types.js';
 import type { WorkspaceSession } from '../../contract/types.js';
 import { failure, success, type Result } from '../../contract/errors.js';
-import { liveRecord } from '../workspace/records.js';
-import { sourceScope } from './source-scope.js';
+import { findLiveRecord } from '../workspace/records.js';
+import type { SourcePrinter } from './source-printer.js';
+import { readSourceScope } from './source-scope.js';
 import { readLastValue } from './api-query.js';
-import { answerJson, type RouteHandler } from './route-answer.js';
+import { jsonRoute, type RouteHandler } from './route-answer.js';
 
-/** A Language route, as `METHOD path`. */
+/** A source route, as `METHOD path`. */
 export type SourceRouteKey = Extract<RouteKey, 'GET /api/v1/language' | 'GET /api/v1/source'>;
 
-/** Language's vocabulary and DSL printing, as the source routes read them. */
-export interface SourceReadout {
-  describe(): unknown;
-  print(
-    collection: unknown,
-    scope: Scope,
-  ): Result<unknown>;
-}
-
-/** The owners the Language routes forward to. */
-export interface SourceRouteOwners {
+/** What the source routes call: the workspace session's `read`, and the printer. */
+export interface SourceRouteDependencies {
   readonly session: Pick<WorkspaceSession, 'read'>;
-  readonly source: SourceReadout;
+  readonly printer: SourcePrinter;
 }
 
 /**
- * The frozen Language route table; both answer JSON. `language` cannot fail; `source` fails as
- * `source` below.
+ * Builds the two source routes; both answer JSON. `language` never fails. `source` answers
+ * `invalid-input` at `scope` for a bad `section` or `object`, `not-found` at `collection` when
+ * `?id` names no saved collection, and the printer's failure.
  */
 export function sourceRoutes(
-  owners: SourceRouteOwners,
+  dependencies: SourceRouteDependencies,
 ): Readonly<Record<SourceRouteKey, RouteHandler>> {
   return Object.freeze({
-    'GET /api/v1/language': answerJson(async () => success(owners.source.describe())),
-    'GET /api/v1/source': answerJson((call) => source(call, owners)),
+    'GET /api/v1/language': jsonRoute(() => describeLanguage(dependencies.printer)),
+    'GET /api/v1/source': jsonRoute((call) => printSource(call, dependencies)),
   });
 }
 
-/**
- * One current collection printed as DSL for the `section` or `object` scope (all when neither).
- * Fails with `invalid-input` at `scope` as `sourceScope` (source-scope.ts), and as
- * `readSourceRecord`.
- */
-async function source(
-  call: ApiCall,
-  owners: SourceRouteOwners,
-): Promise<WireOutcome> {
-  const scope = sourceScope(call.query);
-  if (!scope.ok) return scope;
-  return readSourceRecord(call, owners, scope.value);
+/** Answers the DSL's vocabulary, as Language describes it. */
+async function describeLanguage(printer: SourcePrinter): Promise<HttpOutcome> {
+  const vocabulary = printer.describe();
+  return success(vocabulary);
 }
 
 /**
- * Reads the live collection named by `?id` and prints it without reinterpreting its shape;
- * Language validates it. Fails with `not-found` at `collection` when `?id` is missing or the
- * collection is absent or deleted. Authoring's read failures and the readout's `invalid-input`
- * at `source` pass through.
+ * Prints the `?id` collection as DSL, whole or just the `section` or `object` the query asks for.
+ * Fails with `invalid-input` at `scope` as `readSourceScope` (source-scope.ts), and as
+ * `readStoredCollection`; the printer's `invalid-input` at `source` passes through.
  */
-async function readSourceRecord(
+async function printSource(
   call: ApiCall,
-  owners: SourceRouteOwners,
-  scope: Scope,
-): Promise<WireOutcome> {
-  const snapshot = await owners.session.read();
-  if (!snapshot.ok) return snapshot;
-  const record = sourceRecord(snapshot.value, readLastValue(call.query, 'id'));
-  if (!record) return failure('not-found', 'collection', 'Collection was not found');
-  return owners.source.print(record.value, scope);
+  dependencies: SourceRouteDependencies,
+): Promise<HttpOutcome> {
+  const scope = readSourceScope(call.query);
+  if (!scope.ok) {
+    return scope;
+  }
+  const collection = await readStoredCollection(call.query, dependencies.session);
+  if (!collection.ok) {
+    return collection;
+  }
+  return dependencies.printer.print(collection.value, scope.value);
 }
 
-/** The live collection record for `?id`; `undefined` when `?id` is missing or none is live. */
-function sourceRecord(
+/**
+ * Reads the saved collection named by `?id`, as stored; Language checks its shape. Fails with
+ * `not-found` at `collection` when `?id` is missing or the collection is absent or deleted.
+ * Authoring's read failures pass through.
+ */
+async function readStoredCollection(
+  query: ApiQuery,
+  session: SourceRouteDependencies['session'],
+): Promise<Result<unknown, HttpFailure>> {
+  const snapshot = await session.read();
+  if (!snapshot.ok) {
+    return snapshot;
+  }
+  const id = readLastValue(query, 'id');
+  const record = findCollectionRecord(snapshot.value, id);
+  if (record === undefined) {
+    return collectionNotFoundFailure();
+  }
+  return success(record.value);
+}
+
+/** Finds the live collection record for `?id`; none when `?id` is missing or none is live. */
+function findCollectionRecord(
   snapshot: Snapshot,
   id: string | undefined,
 ): StoredRecord | undefined {
-  if (id === undefined) return undefined;
-  return liveRecord(snapshot, 'collection', id);
+  if (id === undefined) {
+    return undefined;
+  }
+  return findLiveRecord(snapshot, 'collection', id);
+}
+
+/** Makes the mistake for a `?id` that names no saved collection. */
+function collectionNotFoundFailure(): Result<never> {
+  return failure('not-found', 'collection', 'Collection was not found');
 }

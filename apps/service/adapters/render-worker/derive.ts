@@ -1,8 +1,14 @@
 /*
- * The render worker's derivation: Presentation measures a job's collection and Layout arranges
- * it, with no database handle or mutable service state. Impure (native measurement and layout
- * engines). Runs in the render worker realm and the CLI's headless realm. A failed job keeps the
- * host's accepted scene; the host retries with corrected resources.
+ * Why this file exists
+ *
+ * A render job holds a collection and everything needed to draw it: fonts, style, images and
+ * layout options. For example, the job for `my-diagram` becomes a drawn document
+ * (`RenderDocument`): the collection with every node placed and every wire routed.
+ *
+ * This file does the drawing. Presentation measures the text and boxes, then Layout places the
+ * nodes and routes the wires, from scratch each time. Each step answers a `Result`
+ * (contract/errors.ts). It runs on a render worker thread and in `pnpm render:png`. It never reads
+ * the workspace, and never saves anything.
  */
 import type { FailureSource } from '../../contract/records/transport/failure-source.js';
 import { validate, fieldTypeDisplay, typeUseDisplay } from '@novakai/canvas-model';
@@ -12,20 +18,23 @@ import {
   readMeasuredContent,
 } from '@novakai/canvas-presentation';
 import type {
+  Diagnostic as PresentationDiagnostic,
   Result as PresentationResult,
   InputCollection,
   Owners as PresentationOwners,
+  Presentation,
   VisualAsset,
 } from '@novakai/canvas-presentation';
 import { composeLayout } from '@novakai/canvas-layout';
 import type {
+  Layout,
   Result as LayoutResult,
   LayoutOwners,
   ProjectionReader,
   Scene,
 } from '@novakai/canvas-layout';
 import type { RenderingJob, RenderDocument } from '../../contract/records/rendering/job.js';
-import { andThen, failure, success, type Result } from '../../contract/errors.js';
+import { failure, success, type Result } from '../../contract/errors.js';
 
 /** The collection as Presentation measured it. */
 interface MeasuredCollection {
@@ -34,67 +43,89 @@ interface MeasuredCollection {
 }
 
 /**
- * Renders the job's collection into a document.
- *
- * Steps; the first failure stops the render and no partial geometry is returned:
- * 1. Measure the collection with Presentation (see `measureCollection`).
- * 2. Arrange it with Layout, from scratch (see `arrangeCollection`).
- *
- * Fails with `invalid-input` at `render` ("A rendering owner rejected the input") when Model,
- * Presentation or Layout rejects the job, including a cancelled job (the owner's failure kept as
- * source). Fails with `unavailable` at `render` ("Diagram measurement or layout could not
- * complete") when native measurement or layout throws (caught here).
+ * Draws the job's collection and returns the drawn document. Presentation measures it, then Layout
+ * places and routes it.
+ * Mistakes: `invalid-input` at `render` when Model, Presentation or Layout refuses the job, and
+ * `unavailable` at `render` when measuring or layout crashes.
+ * `signal` is only there to fit the `DiagramProducer` port. Nothing aborts it: the worker pool
+ * cancels a job by ending its thread.
  */
 export async function produceDiagram(
   job: RenderingJob,
   signal: AbortSignal,
 ): Promise<Result<RenderDocument>> {
   try {
-    return await deriveDocument(job, signal);
+    return await drawDocument(job, signal);
   } catch {
-    return failure('unavailable', 'render', 'Diagram measurement or layout could not complete');
+    return drawingCrashedFailure();
   }
 }
 
-/** Measures, then arranges, then assembles the document (see `produceDiagram`). */
-async function deriveDocument(
+/** Measures the collection, then places and routes it, then puts the drawn document together. */
+async function drawDocument(
   job: RenderingJob,
   signal: AbortSignal,
 ): Promise<Result<RenderDocument>> {
   const measured = await measureCollection(job);
-  if (!measured.ok) return measured;
+  if (!measured.ok) {
+    return measured;
+  }
   const scene = await arrangeCollection(measured.value, job, signal);
-  return andThen(scene, (arranged) => success(renderDocument(job, measured.value, arranged)));
+  if (!scene.ok) {
+    return scene;
+  }
+  const drawn = assembleDocument(job, measured.value, scene.value);
+  return success(drawn);
 }
 
-/**
- * Composes Presentation for the job, then projects and measures its collection. Fails with
- * `invalid-input` at `render` when Presentation or Model rejects them (see `fromOwner`).
- */
+/** Sets up Presentation for the job, then measures the job's collection with it. */
 async function measureCollection(job: RenderingJob): Promise<Result<MeasuredCollection>> {
-  const composed = fromOwner(await composePresentation(presentationOwners(job), job.fonts));
-  if (!composed.ok) return composed;
-  const { presentation } = composed.value;
-  const projection = fromOwner(presentation.project(job.collection));
-  if (!projection.ok) return projection;
-  const measurements = fromOwner(presentation.supplement(job.collection));
-  return andThen(measurements, (supplemental) =>
-    success({ projection: projection.value, measurements: supplemental }),
-  );
+  const composed = await composePresentation(presentationOwners(job), job.fonts);
+  if (!composed.ok) {
+    return ownerRefusedFailure(composed.error);
+  }
+  return measureWith(composed.value.presentation, job.collection);
 }
 
-/**
- * Composes Layout for the job, keys the request, then arranges the measured collection. Fails with
- * `invalid-input` at `render` when Layout rejects the request or the job is cancelled (see
- * `fromOwner`).
- */
+/** Projects the collection, then measures the sizes of its text and boxes. */
+function measureWith(
+  presentation: Presentation,
+  collection: RenderingJob['collection'],
+): Result<MeasuredCollection> {
+  const projection = presentation.project(collection);
+  if (!projection.ok) {
+    return ownerRefusedFailure(projection.error);
+  }
+  const measurements = presentation.supplement(collection);
+  if (!measurements.ok) {
+    return ownerRefusedFailure(measurements.error);
+  }
+  const measured: MeasuredCollection = {
+    projection: projection.value,
+    measurements: measurements.value,
+  };
+  return success(measured);
+}
+
+/** Sets up Layout for the job, then places the nodes and routes the wires of the collection. */
 async function arrangeCollection(
   measured: MeasuredCollection,
   job: RenderingJob,
   signal: AbortSignal,
 ): Promise<Result<Scene>> {
-  const layout = fromOwner(await composeLayout(layoutOwners(job, signal)));
-  if (!layout.ok) return layout;
+  const layout = await composeLayout(layoutOwners(job, signal));
+  if (!layout.ok) {
+    return ownerRefusedFailure(layout.error);
+  }
+  return arrangeWith(layout.value, measured, job);
+}
+
+/** Works out the layout request's key, then asks Layout to arrange the request from scratch. */
+async function arrangeWith(
+  layout: Layout,
+  measured: MeasuredCollection,
+  job: RenderingJob,
+): Promise<Result<Scene>> {
   // Layout can keep a previous scene's geometry; the service always lays out from scratch.
   const request = {
     projection: measured.projection,
@@ -102,14 +133,20 @@ async function arrangeCollection(
     options: job.options,
     previous: null,
   };
-  const inputKey = fromOwner(layout.value.key(request));
-  if (!inputKey.ok) return inputKey;
+  const inputKey = layout.key(request);
+  if (!inputKey.ok) {
+    return ownerRefusedFailure(inputKey.error);
+  }
   const layoutJob = { id: job.id, inputKey: inputKey.value };
-  return fromOwner(await layout.value.arrange({ ...request, job: layoutJob }));
+  const scene = await layout.arrange({ ...request, job: layoutJob });
+  if (!scene.ok) {
+    return ownerRefusedFailure(scene.error);
+  }
+  return success(scene.value);
 }
 
-/** The document: the job's inputs with the measured collection and its scene. */
-function renderDocument(
+/** Puts the drawn document together: the job's inputs, the measured collection and its scene. */
+function assembleDocument(
   job: RenderingJob,
   measured: MeasuredCollection,
   scene: Scene,
@@ -125,33 +162,18 @@ function renderDocument(
   };
 }
 
-/**
- * The owner's value. An owner rejection becomes `invalid-input` at `render` ("A rendering owner
- * rejected the input") with the owner's failure as source; the caller corrects the resources.
- */
-function fromOwner<T>(outcome: Result<T, FailureSource>): Result<T> {
-  if (!outcome.ok)
-    return failure(
-      'invalid-input',
-      'render',
-      'A rendering owner rejected the input',
-      outcome.error,
-    );
-  return success(outcome.value);
-}
-
-/** Presentation's owners for one job: Model, the job's resolved style, the job's pinned media. */
+/** Gives Presentation what it needs for one job: Model, the job's style, the job's images. */
 function presentationOwners(job: RenderingJob): PresentationOwners {
   return {
     domain: presentationDomain,
-    themes: { resolve: () => ({ ok: true, value: job.style }) },
+    themes: { resolve: () => success(job.style) },
     assets: { read: (digest) => readPinnedAsset(digest, job.assets) },
   };
 }
 
 /**
- * Layout's owners for one job: the job's projection reader, its libavoid wasm, and cooperative
- * scheduling that stops once `signal` aborts.
+ * Gives Layout what it needs for one job: its projection reader, its libavoid file, and a check
+ * that stops the work once `signal` aborts.
  */
 function layoutOwners(
   job: RenderingJob,
@@ -164,43 +186,86 @@ function layoutOwners(
   };
 }
 
-/**
- * Model validates the canonical collection. Fails with Presentation's `invalid-input` at
- * `collection` ("Model rejected the rendering input", Model's failure as source); there is no
- * second domain validator.
- */
+/** Checks the collection with Model; there is no second checker. */
 function readCollection(input: unknown): PresentationResult<InputCollection> {
   const validated = validate(input);
-  if (validated.ok) return validated;
-  return {
-    ok: false,
-    error: {
-      code: 'invalid-input',
-      path: 'collection',
-      message: 'Model rejected the rendering input',
-      source: validated.error,
-      recovery: 'Correct the canonical collection through Authoring.',
-    },
-  };
+  if (!validated.ok) {
+    return modelRefusedFailure(validated.error);
+  }
+  return success(validated.value);
 }
 
-/** Presentation's domain reader: Model's validation and display names. */
+/** Presentation's domain reader: Model's check and display names. */
 const presentationDomain = {
   read: readCollection,
   resolveFieldType: fieldTypeDisplay,
   resolveTypeUse: typeUseDisplay,
 };
 
-/**
- * The job's pinned media with this digest. Fails with `missing-resource` at the digest ("Pinned
- * media is unavailable"); missing media is never replaced by an empty visual.
- */
+/** Finds the job's image with this digest. A missing image is never drawn as an empty one. */
 function readPinnedAsset(
   digest: string,
   assets: readonly VisualAsset[],
 ): PresentationResult<VisualAsset> {
-  const found = assets.find((pinned) => pinned.digest === digest);
-  if (found) return { ok: true, value: found };
+  const pinned = assets.find((asset) => asset.digest === digest);
+  if (pinned === undefined) {
+    return missingMediaFailure(digest);
+  }
+  return success(pinned);
+}
+
+/** Gives Layout a projection reader that decodes each input against the job's collection. */
+function projectionReader(job: RenderingJob): ProjectionReader {
+  return {
+    read: (input) => forLayout(readMeasuredProjection(input, job.collection, presentationDomain)),
+    content: (input) => forLayout(readMeasuredContent(input)),
+  };
+}
+
+/** Gives Presentation's answer in Layout's terms. */
+function forLayout<T>(outcome: PresentationResult<T>): LayoutResult<T> {
+  if (!outcome.ok) {
+    return layoutInputFailure(outcome.error);
+  }
+  return success(outcome.value);
+}
+
+/**
+ * Lets the event loop run, so an abort can arrive between native steps. Ending the worker thread
+ * is still the hard way to cancel.
+ */
+function yieldJob(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
+/** Makes the mistake for a job that Model, Presentation or Layout refused, keeping theirs. */
+function ownerRefusedFailure(ownerFailure: FailureSource): Result<never> {
+  return failure('invalid-input', 'render', 'A rendering owner rejected the input', ownerFailure);
+}
+
+/** Makes the mistake for measuring or layout that crashed. */
+function drawingCrashedFailure(): Result<never> {
+  return failure('unavailable', 'render', 'Diagram measurement or layout could not complete');
+}
+
+/** Makes Presentation's mistake for a collection Model refused, keeping Model's mistake. */
+function modelRefusedFailure(
+  modelFailure: PresentationDiagnostic['source'],
+): PresentationResult<never> {
+  return {
+    ok: false,
+    error: {
+      code: 'invalid-input',
+      path: 'collection',
+      message: 'Model rejected the rendering input',
+      source: modelFailure,
+      recovery: 'Correct the canonical collection through Authoring.',
+    },
+  };
+}
+
+/** Makes Presentation's mistake for an image the job doesn't carry, at its digest. */
+function missingMediaFailure(digest: string): PresentationResult<never> {
   return {
     ok: false,
     error: {
@@ -212,30 +277,15 @@ function readPinnedAsset(
   };
 }
 
-/** Presentation's failure in Layout's vocabulary: `invalid-input`, no targets, the original kept. */
-function forLayout<T>(outcome: PresentationResult<T>): LayoutResult<T> {
-  if (outcome.ok) return outcome;
+/** Makes Layout's mistake from Presentation's: `invalid-input`, no targets, Presentation's kept. */
+function layoutInputFailure(presentationFailure: PresentationDiagnostic): LayoutResult<never> {
   return {
     ok: false,
-    error: { ...outcome.error, code: 'invalid-input', targets: [], source: outcome.error },
+    error: {
+      ...presentationFailure,
+      code: 'invalid-input',
+      targets: [],
+      source: presentationFailure,
+    },
   };
-}
-
-/**
- * Layout's projection reader for one job: each read decodes its input against the job's
- * collection, through Presentation.
- */
-function projectionReader(job: RenderingJob): ProjectionReader {
-  return {
-    read: (input) => forLayout(readMeasuredProjection(input, job.collection, presentationDomain)),
-    content: (input) => forLayout(readMeasuredContent(input)),
-  };
-}
-
-/**
- * Yields to the event loop so an abort can arrive between native phases. Terminating the worker
- * remains the hard cancellation.
- */
-function yieldJob(): Promise<void> {
-  return new Promise((resolve) => setImmediate(resolve));
 }

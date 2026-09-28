@@ -1,38 +1,28 @@
 /*
- * The checked contents of one Authoring snapshot, and the Library input one collection projects
- * into. Declarations only; core/workspace/reader.ts builds the contents (through the
- * WorkspaceReader port) and core/workspace/collection-projection.ts the projection input. Authoring
- * keeps its snapshot when a read fails; Library owns any rejection of a projection.
+ * Why this file exists
+ *
+ * A snapshot is the workspace exactly as Authoring stores it: records and versions, not yet
+ * checked. Before the service can render a collection or plan a change, each record must be checked
+ * by its owner: Model checks collections, Library the catalog, Templates the presets.
+ *
+ * This file declares the checked result, `WorkspaceContents`. core/workspace/reader.ts builds it.
+ * Declarations only. A record that fails its check is reported; nothing stored is changed.
  */
-import type { Collection } from '../capabilities.js';
+import type { Collection } from '../capability-types.js';
 import type { Catalog as PresetCatalog } from '@novakai/canvas-templates';
-import type {
-  CollectionProjection,
-  LibrarySnapshot,
-  ObjectProjection,
-  SectionProjection,
-} from '@novakai/canvas-library';
+import type { LibrarySnapshot } from '@novakai/canvas-library';
 
-/** Checked owner data for one consistent Authoring snapshot; these are read projections, never writable replicas. */
+/**
+ * One snapshot's contents, each part checked by its owner. Read-only copies: changing them never
+ * changes what is stored.
+ */
 export interface WorkspaceContents {
+  /** Every collection, checked by Model. */
   readonly collections: readonly Collection[];
+  /**
+   * The catalog, checked by Library: folders and entries, each collection's entry, recent visits.
+   */
   readonly library: LibrarySnapshot;
+  /** The stored themes and recipes, checked by Templates. */
   readonly presets: PresetCatalog;
 }
-
-/**
- * The Library input for one collection: Library's own projection record, so a change to Library's
- * record fails typecheck here instead of failing every create at runtime. Model's identities carry
- * the same brands. Library still checks the input (nonblank titles, known sections) when it
- * validates a snapshot or plans a membership change.
- */
-export type CollectionProjectionInput = CollectionProjection;
-
-/** One section of the projection input: its ID and title. */
-export type SectionProjectionInput = SectionProjection;
-
-/**
- * One object of the projection input: its ID, label, text blocks joined by newlines as the
- * description, and the sections that show it.
- */
-export type ObjectProjectionInput = ObjectProjection;

@@ -1,37 +1,57 @@
 /*
- * Startup records: the host-selected workspace options, the trusted installation records the
- * bootstrap planner writes, whether a workspace was found, and the native storage handles.
- * Declarations only; compose/startup.ts opens and closes them, and a failed start leaves the
- * caller to close what opened and retry.
+ * Why this file exists
+ *
+ * `pnpm dev --workspace ./my-workspace` opens a folder that holds a SQLite database and the
+ * uploaded files. Start-up needs to know where things are, what a brand-new workspace starts with,
+ * and how to open and close those stores.
+ *
+ * This file declares those start-up values: the chosen folders and names (`WorkspaceOptions`), what
+ * a new workspace starts with (`NewWorkspaceSeed`), whether it is new (`StartupKind`), how to open
+ * the stores (`StoreOpeners`) and the open stores (`OpenStores`). Declarations only; a failed start
+ * closes what it opened.
  */
 import type { Assets, Result as AssetResult } from '@novakai/canvas-assets';
 import type { Persistence, Result as StorageResult } from '@novakai/canvas-persistence';
 import type { Catalog } from '@novakai/canvas-templates';
 import type { Result } from '../../errors.js';
 import type { HostPath, Timestamp, WorkspaceId } from '../../brands.js';
-/** Host-selected absolute locations never originate in diagram DSL or browser-authored content. */
+/**
+ * Where the workspace lives and what it is called, chosen at start-up. No request can change them.
+ */
 export interface WorkspaceOptions {
+  /** The workspace folder. */
   readonly directory: HostPath;
+  /** The workspace's ID. `pnpm dev` always uses `local`. */
   readonly workspace: WorkspaceId;
+  /** The title written into a new workspace. */
   readonly title: string;
+  /** The folder of shipped resources (fonts, recipes, libavoid's WebAssembly file). */
   readonly resourceRoot: HostPath;
+  /** The folder of the design token sources. */
   readonly tokenRoot: HostPath;
+  /** The creation time written only into a new workspace. */
   readonly createdAt: Timestamp;
 }
-/** Trusted startup input is fixed before registering its private planner; request payloads cannot replace these records. */
-export type Installation = Pick<WorkspaceOptions, 'workspace' | 'title' | 'createdAt'> & {
+/** What a brand-new workspace starts with: its ID, title, creation time and built-in presets. */
+export type NewWorkspaceSeed = Pick<WorkspaceOptions, 'workspace' | 'title' | 'createdAt'> & {
   readonly presets: Catalog;
 };
-/** Whether startup found a stored workspace (`existing`) or starts an empty one (`new`). */
-export type WorkspaceState = 'existing' | 'new';
-export interface NativeFactories {
+/** Whether start-up found a stored workspace (`existing`) or starts an empty one (`new`). */
+export type StartupKind = 'existing' | 'new';
+/**
+ * How to open the two stores in a workspace folder. Each path is plain text; the store checks it.
+ */
+export interface StoreOpeners {
+  /** Opens the uploaded-files store in the folder at `root`. */
   assets(root: string): AssetResult<Assets>;
+  /** Opens the SQLite database at `location` for this workspace. */
   storage(
     location: string,
     workspace: WorkspaceId,
   ): StorageResult<Persistence>;
 }
-export interface NativeWorkspace {
+/** A workspace folder's open stores: its uploaded files and its database, and how to close both. */
+export interface OpenStores {
   readonly assets: Assets;
   readonly storage: Persistence;
   close(): Promise<Result<void>>;

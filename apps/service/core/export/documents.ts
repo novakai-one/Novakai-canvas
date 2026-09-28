@@ -1,10 +1,13 @@
 /*
- * Export documents: Export's documents port — Model validation and Language printing — and the
- * route's Markdown text from Export's formatter. Pure over the injected capabilities; compose
- * passes Model, Language and Export's rules from ServiceCapabilities. Every returned failure is an
- * Export refusal; the export route releases its lease and the caller owns the retry. A throw from
- * Language or the formatter is not caught here; the caller answers it `encoding-failed` (text.ts
- * for DSL and Markdown, Export for its documents port).
+ * Why this file exists
+ *
+ * Export (the capability) makes SVG and PNG files, but it can't check a collection or write DSL by
+ * itself. It asks a "documents" helper that the service supplies. The DSL and Markdown exports
+ * (text.ts) need text too: the `.canvas` DSL, or Markdown, of `my-diagram` at revision 3.
+ *
+ * This file builds that helper from Model and Language, and writes a collection as DSL or Markdown.
+ * Each answers an Export `Result` (mistakes made in faults.ts). Export can ask the helper to read
+ * DSL back in (`parse`); that is always refused. A throw while writing the text isn't caught.
  */
 import type {
   Collection,
@@ -12,71 +15,109 @@ import type {
   ExportResult,
   Language,
   MarkdownScope,
-} from '../../contract/records/capabilities.js';
+} from '../../contract/records/capability-types.js';
 import type { ExportRules, ModelRules } from '../../contract/ports/capabilities.js';
-import { cancelledExport, exportRejection } from './faults.js';
+import { success } from '../../contract/errors.js';
+import { cancelledFailure, exportFailure } from './faults.js';
 
-/** The capabilities the documents port reads through. */
-export interface DocumentOwners {
+/** What the documents helper uses: Model to check a collection, Language to write its DSL. */
+export interface DocumentDependencies {
+  /** Model's check of a whole collection. */
   readonly model: Pick<ModelRules, 'validate'>;
+  /** Language, which writes a collection as DSL text. */
   readonly language: Pick<Language, 'print'>;
 }
 
 /**
- * The documents port: Model validates, Language prints whole collections; import is refused.
- * `read` fails with `invalid-input` at `collection`; `print` fails with `invalid-input` at
- * `source`; `parse` always fails with `invalid-import` at `source`.
+ * Builds the documents helper Export asks for. Its `read` checks a collection with Model, its
+ * `print` writes the whole collection as DSL, and its `parse` is always refused.
+ * Mistakes: `invalid-input` at `collection` or `source`, and `invalid-import` from `parse`.
  */
-export function exportDocuments(owners: DocumentOwners): Documents {
+export function createDocumentsForExport(dependencies: DocumentDependencies): Documents {
   return {
-    read: (value) => {
-      const checked = owners.model.validate(value);
-      return checked.ok
-        ? checked
-        : exportRejection('invalid-input', 'collection', 'Collection is invalid');
-    },
-    print: (collection) => printedSource(owners.language, collection),
-    parse: () =>
-      exportRejection('invalid-import', 'source', 'Import parsing is not part of browser export'),
+    read: (candidate) => checkCollection(dependencies.model, candidate),
+    print: (collection) => printCollectionDsl(dependencies.language, collection),
+    parse: () => importNotSupportedFailure(),
   };
 }
 
 /**
- * Canonical DSL of the whole collection. Fails with `invalid-input` at `source` when Language
- * cannot print. A throw from Language is not caught.
+ * Writes the whole collection as DSL text. Fails with `invalid-input` at `source` when Language
+ * can't print it. A throw from Language is not caught.
  */
-export function printedSource(
+export function printCollectionDsl(
   language: Pick<Language, 'print'>,
   collection: Collection,
 ): ExportResult<string> {
   const printed = language.print({ collection, scope: { kind: 'all' } });
-  if (!printed.ok)
-    return exportRejection('invalid-input', 'source', 'Collection could not be printed');
-  return { ok: true, value: printed.value.source };
+  if (!printed.ok) {
+    return unprintableCollectionFailure();
+  }
+  const dsl = printed.value.source;
+  return success(dsl);
 }
 
 /**
- * Markdown for one scope; cancellation is checked before and after formatting. Fails with
- * `cancelled` at `export` when the request aborted, and with `invalid-input` at `scope` when the
- * requested section does not exist. A throw from the formatter is not caught.
+ * Writes the collection, or the one section `scope` names, as Markdown text.
+ * Fails with `cancelled` at `export` when the export was stopped before or after writing, and
+ * `invalid-input` at `scope` when the section doesn't exist. A throw from the formatter is not
+ * caught.
  */
-export function markdownText(
+export function formatCollectionMarkdown(
   signal: AbortSignal,
   collection: Collection,
   scope: MarkdownScope,
   rules: Pick<ExportRules, 'formatMarkdown'>,
 ): ExportResult<string> {
-  if (signal.aborted) return cancelledExport();
-  const source = rules.formatMarkdown(collection, scope);
-  if (source === undefined)
-    return exportRejection('invalid-input', 'scope', 'The requested section does not exist');
-  return markdownCompletion(source, signal);
+  if (signal.aborted) {
+    return cancelledFailure();
+  }
+  const markdown = rules.formatMarkdown(collection, scope);
+  if (markdown === undefined) {
+    return missingSectionFailure();
+  }
+  return keepUnlessStopped(markdown, signal);
 }
 
-/** The formatted text; fails with `cancelled` at `export` when the request aborted meanwhile. */
-function markdownCompletion(
-  source: string,
+/** Has Model check a collection, and refuses one Model doesn't accept. */
+function checkCollection(
+  model: Pick<ModelRules, 'validate'>,
+  candidate: unknown,
+): ExportResult<Collection> {
+  const checked = model.validate(candidate);
+  if (!checked.ok) {
+    return invalidCollectionFailure();
+  }
+  return checked;
+}
+
+/** Gives back the written Markdown, unless the export was stopped while it was being written. */
+function keepUnlessStopped(
+  markdown: string,
   signal: AbortSignal,
 ): ExportResult<string> {
-  return signal.aborted ? cancelledExport() : { ok: true, value: source };
+  if (signal.aborted) {
+    return cancelledFailure();
+  }
+  return success(markdown);
+}
+
+/** Makes the mistake for a collection Model refuses: `invalid-input` at `collection`. */
+function invalidCollectionFailure(): ExportResult<never> {
+  return exportFailure('invalid-input', 'collection', 'Collection is invalid');
+}
+
+/** Makes the mistake for a collection Language can't print: `invalid-input` at `source`. */
+function unprintableCollectionFailure(): ExportResult<never> {
+  return exportFailure('invalid-input', 'source', 'Collection could not be printed');
+}
+
+/** Makes the mistake for a Markdown section that doesn't exist: `invalid-input` at `scope`. */
+function missingSectionFailure(): ExportResult<never> {
+  return exportFailure('invalid-input', 'scope', 'The requested section does not exist');
+}
+
+/** Makes the mistake for reading DSL back in, which an export never does: `invalid-import`. */
+function importNotSupportedFailure(): ExportResult<never> {
+  return exportFailure('invalid-import', 'source', 'Import parsing is not part of browser export');
 }

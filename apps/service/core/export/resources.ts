@@ -1,153 +1,165 @@
 /*
- * Export resource retention: the snapshot retains its pinned theme preset, every collection asset
- * and every document font, byte-for-byte through the lease. A missing theme refuses before any
- * read; otherwise every asset and font is read, and the first failure — assets before fonts —
- * refuses the snapshot. Pure; the guarded lease read is injected.
+ * Why this file exists
+ *
+ * Export draws an SVG or PNG only from what it is handed: the collection, its theme, and the bytes
+ * of every image and font it shows. For example, a diagram with a logo needs the logo's bytes and
+ * the font its text uses, exactly as stored.
+ *
+ * This file gathers those from the held files: the theme first, then the images, then the fonts.
+ * A missing theme or a file that can't be read refuses the export (`resource-rejected`). When
+ * Export later asks to check them again, this file passes them through unchanged. It only reads.
  */
 import type {
   AssetResult,
   Catalog,
   Collection,
   ExportResult,
+  Preset,
   Resource,
   Resources,
   StoredBlob,
   ThemePreset,
-} from '../../contract/records/capabilities.js';
-import type { ExportFailure } from '../../contract/records/export/snapshot.js';
+} from '../../contract/records/capability-types.js';
 import type { LeaseRead } from '../../contract/ports/export.js';
 import type { RenderDocument } from '../../contract/records/rendering/job.js';
-import { bareDigest } from '../../contract/brands.js';
-import { exportRejection } from './faults.js';
+import { removeDigestPrefix } from '../../contract/brands.js';
+import { collect, success } from '../../contract/errors.js';
+import { exportFailure } from './faults.js';
 
-/** Every retained resource: the theme preset, then collection assets, then document fonts. */
-export function retainedResources(
-  read: LeaseRead,
+/**
+ * Gathers the collection's theme, images and fonts, in that order, for Export. The theme comes
+ * from `presets`, the fonts are the ones the drawn `document` uses, and files are read with
+ * `readHeldFile`.
+ * Mistakes: `resource-rejected` at `resources.theme` when the pinned theme isn't in `presets`, or
+ * at the file's path when an image or font can't be read.
+ */
+export function gatherExportResources(
+  readHeldFile: LeaseRead,
   collection: Collection,
   document: RenderDocument,
   presets: Catalog,
 ): ExportResult<readonly Resource[]> {
-  const theme = themeResource(collection, presets);
-  if (theme === undefined)
-    return exportRejection(
-      'resource-rejected',
-      'resources.theme',
-      'The pinned theme is unavailable',
-    );
-  const assets = assetResources(read, collection);
-  const fonts = fontResources(read, document);
-  return combineResources(theme, assets, fonts);
+  const theme = findPinnedTheme(collection, presets);
+  if (theme === undefined) {
+    return missingThemeFailure();
+  }
+  return gatherHeldFiles(readHeldFile, collection, document, theme);
 }
 
-/** The resource port Export inspects through; it admits the retained resources as given. */
-export function resourceInspector(): Resources {
+/**
+ * Builds the resource check Export asks for (its `Resources`), which lets every resource through
+ * unchanged: `gatherExportResources` already checked them. Never fails.
+ */
+export function createPassThroughResources(): Resources {
   return {
-    inspect: async (items) => ({ ok: true, value: items }),
+    inspect: async (resources) => success(resources),
   };
 }
 
-/** The catalog preset matching the collection's pinned theme id and version. */
-function themeResource(
+/** One image a collection shows: its name, its digest (with `sha256:`) and its alt text. */
+type ImageBinding = Collection['assets'][number];
+
+/** One font the drawing uses: its family and the digest of its bytes. */
+type DrawnFont = RenderDocument['fonts'][number];
+
+/** Finds the saved theme the collection pins, by its ID and version. */
+function findPinnedTheme(
   collection: Collection,
   presets: Catalog,
 ): ThemePreset | undefined {
-  return presets.find(
-    (item): item is ThemePreset =>
-      item.kind === 'theme' &&
-      item.id === collection.theme.id &&
-      item.version === collection.theme.version,
-  );
+  const pin = collection.theme;
+  return presets.find((preset) => isPinnedTheme(preset, pin));
 }
 
-/** The theme preset's JSON bytes lead the list; an asset failure outranks a font failure. */
-function combineResources(
+/** Whether the preset is the theme `pin` names: a theme with the same ID and version. */
+function isPinnedTheme(
+  preset: Preset,
+  pin: Collection['theme'],
+): preset is ThemePreset {
+  return preset.kind === 'theme' && preset.id === pin.id && preset.version === pin.version;
+}
+
+/** Reads each image, then each font, and lists them after the theme. */
+function gatherHeldFiles(
+  readHeldFile: LeaseRead,
+  collection: Collection,
+  document: RenderDocument,
   theme: ThemePreset,
-  assets: ExportResult<readonly Resource[]>,
-  fonts: ExportResult<readonly Resource[]>,
 ): ExportResult<readonly Resource[]> {
-  if (!assets.ok) return assets;
-  if (!fonts.ok) return fonts;
+  const images = collect(collection.assets, (image) => readImage(readHeldFile, image));
+  if (!images.ok) {
+    return images;
+  }
+  const fonts = collect(document.fonts, (font) => readFont(readHeldFile, font));
+  if (!fonts.ok) {
+    return fonts;
+  }
+  const themeFile = themeResource(theme);
+  const resources = [themeFile, ...images.value, ...fonts.value];
+  return success(resources);
+}
+
+/** Turns the theme into a resource: its JSON text as bytes. */
+function themeResource(theme: ThemePreset): Resource {
+  const bytes = Buffer.from(JSON.stringify(theme));
   return {
-    ok: true,
-    value: [
-      {
-        kind: 'preset',
-        digest: theme.digest,
-        mediaType: 'application/json',
-        bytes: Buffer.from(JSON.stringify(theme)),
-        metadata: {},
-      },
-      ...assets.value,
-      ...fonts.value,
-    ],
+    kind: 'preset',
+    digest: theme.digest,
+    mediaType: 'application/json',
+    bytes,
+    metadata: {},
   };
 }
 
-/** Every collection asset, read by its bare digest and reported at its asset id. */
-function assetResources(
-  read: LeaseRead,
-  collection: Collection,
-): ExportResult<readonly Resource[]> {
-  return resourceList(
-    collection.assets.map((item) =>
-      resourceFromBlob(read(bareDigest(item.digest), `resources.${item.id}`), 'asset', {
-        alt: item.alt,
-      }),
-    ),
-  );
+/** Reads one image by its bare digest; a failed read is reported at `resources.<image name>`. */
+function readImage(
+  readHeldFile: LeaseRead,
+  image: ImageBinding,
+): ExportResult<Resource> {
+  const digest = removeDigestPrefix(image.digest);
+  const blob = readHeldFile(digest, `resources.${image.id}`);
+  return heldFileResource(blob, 'asset', { alt: image.alt });
 }
 
-/** Every document font, read and reported by its digest. */
-function fontResources(
-  read: LeaseRead,
-  document: RenderDocument,
-): ExportResult<readonly Resource[]> {
-  return resourceList(
-    document.fonts.map((font) =>
-      resourceFromBlob(read(font.digest, `resources.${font.digest}`), 'font', {
-        family: font.family,
-      }),
-    ),
-  );
+/** Reads one font by its digest; a failed read is reported at `resources.<digest>`. */
+function readFont(
+  readHeldFile: LeaseRead,
+  font: DrawnFont,
+): ExportResult<Resource> {
+  const blob = readHeldFile(font.digest, `resources.${font.digest}`);
+  return heldFileResource(blob, 'font', { family: font.family });
 }
 
-/** A leased blob as an Export resource; a failed read is a rejected resource at its path. */
-function resourceFromBlob(
+/** Turns one held file's read into an Export resource, refusing a file that couldn't be read. */
+function heldFileResource(
   blob: AssetResult<StoredBlob>,
   kind: Resource['kind'],
-  metadata: Record<string, string>,
+  metadata: Readonly<Record<string, string>>,
 ): ExportResult<Resource> {
-  return blob.ok
-    ? {
-        ok: true,
-        value: {
-          kind,
-          digest: blob.value.descriptor.digest,
-          mediaType: blob.value.descriptor.mediaType,
-          bytes: Buffer.from(blob.value.base64, 'base64'),
-          metadata,
-        },
-      }
-    : exportRejection('resource-rejected', blob.error.path, blob.error.message);
+  if (!blob.ok) {
+    return unreadableFileFailure(blob.error.path, blob.error.message);
+  }
+  const { descriptor, base64 } = blob.value;
+  const bytes = Buffer.from(base64, 'base64');
+  const resource: Resource = {
+    kind,
+    digest: descriptor.digest,
+    mediaType: descriptor.mediaType,
+    bytes,
+    metadata,
+  };
+  return success(resource);
 }
 
-/** The first failed read, or every resource in order. */
-function resourceList(
-  results: readonly ExportResult<Resource>[],
-): ExportResult<readonly Resource[]> {
-  const failed = results.find(isFailure);
-  if (failed !== undefined) return failed;
-  return { ok: true, value: results.filter(isRetained).map((result) => result.value) };
+/** Makes the mistake for a pinned theme that isn't saved: `resource-rejected`. */
+function missingThemeFailure(): ExportResult<never> {
+  return exportFailure('resource-rejected', 'resources.theme', 'The pinned theme is unavailable');
 }
 
-/** A read that failed. */
-function isFailure(result: ExportResult<Resource>): result is ExportFailure {
-  return !result.ok;
-}
-
-/** A read that retained its resource. */
-function isRetained(
-  result: ExportResult<Resource>,
-): result is { readonly ok: true; readonly value: Resource } {
-  return result.ok;
+/** Makes the mistake for a held file that couldn't be read: `resource-rejected` at its path. */
+function unreadableFileFailure(
+  path: string,
+  message: string,
+): ExportResult<never> {
+  return exportFailure('resource-rejected', path, message);
 }

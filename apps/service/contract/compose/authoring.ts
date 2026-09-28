@@ -1,14 +1,19 @@
 /*
- * Authoring for one workspace. The roles the service plugs into Authoring (store, planners,
- * candidate validation, resource leases, change notifications, feasibility) are bound once; one
- * Authoring is composed per request, so a request's cancellation reaches its own feasibility
- * renders without a global current-request variable. The store adapter loads lazily. Authoring
- * owns commit, receipts and recovery.
+ * Why this file exists
+ *
+ * Authoring decides whether a change is saved, but it needs the service's help: storage, planners
+ * that turn DSL or Model changes into writes, checks, file holds, change announcements, and a
+ * check that the result can be laid out. If a request is cancelled, only that request's renders
+ * should stop.
+ *
+ * This file builds those helpers once per workspace, and makes a fresh Authoring for each request
+ * with that request's signal. Authoring itself saves the change and writes the receipt.
  */
 import { composeAuthoring } from '@novakai/canvas-authoring';
 import type { Assets } from '@novakai/canvas-assets';
 import type {
   Authoring,
+  Cancellation,
   CandidateValidator,
   HistoryStatus,
   IntentPlanner,
@@ -17,147 +22,163 @@ import type {
   ResourceAdmission,
   Result as AuthoringResult,
 } from '@novakai/canvas-authoring';
-import type { Installation, WorkspaceOptions } from '../records/workspace/startup.js';
-import type { BuiltinResources } from '../records/presets/builtins.js';
+import type { NewWorkspaceSeed, WorkspaceOptions } from '../records/workspace/startup.js';
+import type { PreparedBuiltins } from '../records/presets/builtins.js';
 import type { ServiceCapabilities } from '../ports/capabilities.js';
 import type { AuthoringStore, ConditionalStorage } from '../ports/storage.js';
 import { createResourceAdmission } from '../../core/authoring-roles/resource-leases.js';
 import {
   createFeasibility,
-  type FeasibilityOwners,
+  type FeasibilityDependencies,
 } from '../../core/authoring-roles/feasibility.js';
 import { createCandidateValidator } from '../../core/authoring-roles/validation/candidate.js';
 import {
-  createInstallationPlanner,
-  installationRequest,
+  createBootstrapPlanner,
+  buildSeedRequest,
 } from '../../core/authoring-roles/planners/bootstrap.js';
 import { createCollectionPlanner } from '../../core/authoring-roles/planners/collection-proposal.js';
 import { createDslPlanner } from '../../core/authoring-roles/planners/dsl.js';
 import { createModelPlanner } from '../../core/authoring-roles/planners/model.js';
 import { createLibraryPlanner } from '../../core/authoring-roles/planners/library.js';
 import { createPresetPlanner } from '../../core/authoring-roles/planners/preset.js';
-import type { WorkspaceRoles } from './workspace.js';
+import type { SharedParts } from './shared-parts.js';
 
-/** A signal that never aborts. Reads, history adoption and the startup apply run under it. */
+/** A signal that never aborts. Reads, history set-up and the start-up apply run under it. */
 export const UNCANCELLED: AbortSignal = new AbortController().signal;
 
-/** What Authoring is bound over: the open workspace, its installation and the shared roles. */
+/**
+ * What Authoring's helpers are built from: the open stores, the built-in presets and the shared
+ * parts (compose/shared-parts.ts).
+ */
 export interface AuthoringInputs {
-  readonly native: {
+  readonly stores: {
     readonly storage: ConditionalStorage;
     readonly assets: Pick<Assets, 'resolve' | 'acquire'>;
   };
-  readonly installation: Pick<BuiltinResources, 'presets'>;
+  readonly builtins: Pick<PreparedBuiltins, 'presets'>;
   readonly options: Pick<WorkspaceOptions, 'workspace' | 'title' | 'createdAt'>;
   readonly capabilities: Pick<ServiceCapabilities, 'model' | 'library' | 'language'>;
-  readonly roles: Pick<WorkspaceRoles, 'views' | 'resources' | 'commands' | 'jobs' | 'producer'>;
+  readonly shared: Pick<SharedParts, 'reader' | 'resources' | 'commands' | 'jobs' | 'producer'>;
   /** Where Authoring publishes committed changes. */
   readonly changes: Notifications;
 }
 
-/** One workspace's Authoring, plus what startup validates, applies and adopts. */
-export interface WiredAuthoring {
-  /** Authoring bound to one request's cancellation. */
+/** One workspace's Authoring, and what start-up needs from it. */
+export interface BuiltAuthoring {
+  /** Makes Authoring for one request; its renders stop when `signal` aborts. */
   readonly authoring: (signal: AbortSignal) => Authoring;
-  readonly validation: CandidateValidator;
-  /** The installation request a new workspace applies once. */
-  readonly initialize: AuthoringResult<Request>;
-  /** Adopts the stored history, under `UNCANCELLED`. */
-  readonly adopt: () => Promise<AuthoringResult<HistoryStatus>>;
+  /**
+   * Checks the workspace as a change would leave it (the "candidate"). Start-up also runs it on the
+   * stored workspace.
+   */
+  readonly candidateCheck: CandidateValidator;
+  /**
+   * The request that fills a brand-new workspace with its seed (`NewWorkspaceSeed`). If the
+   * built-in presets are too big for Authoring, this holds that failure; only a new workspace uses
+   * it.
+   */
+  readonly seedRequest: AuthoringResult<Request>;
+  /** Starts undo history for a workspace that has none, or checks the history it has. */
+  readonly startHistory: () => Promise<AuthoringResult<HistoryStatus>>;
 }
 
 /**
- * Loads the store adapter and binds the workspace's Authoring roles. Rejects when the adapter
- * cannot load; compose startup answers `unavailable` and closes the native handles. An
- * installation over Authoring's proposal limits does not reject: it is carried as `initialize`'s
- * failure (`invalid-input` at `bootstrap.proposal`, see `installationRequest`), which startup
- * answers only for a new workspace.
+ * Builds Authoring's helpers for one workspace. Never fails; throws only if the storage code can't
+ * load.
  */
-export async function wireAuthoring(inputs: AuthoringInputs): Promise<WiredAuthoring> {
-  const storeModule = await import('../../adapters/storage/authoring-store.js');
-  const installation = installationRecords(inputs);
-  const store = storeModule.createAuthoringStore(inputs.native.storage);
-  const runtime = admissionRuntime(inputs, installation, store);
-  const startup = requestAuthoring(runtime, UNCANCELLED);
+export async function buildAuthoring(inputs: AuthoringInputs): Promise<BuiltAuthoring> {
+  const storageCode = await import('../../adapters/storage/authoring-store.js');
+  const seed = newWorkspaceSeed(inputs);
+  const store = storageCode.createAuthoringStore(inputs.stores.storage);
+  const roles = bindAuthoringRoles(inputs, seed, store);
+  const startupAuthoring = requestAuthoring(roles, UNCANCELLED);
   return {
-    authoring: (signal) => requestAuthoring(runtime, signal),
-    validation: runtime.validation,
-    initialize: installationRequest(installation),
-    adopt: () => startup.initializeHistory(inputs.options.workspace),
+    authoring: (signal) => requestAuthoring(roles, signal),
+    candidateCheck: roles.validation,
+    seedRequest: buildSeedRequest(seed),
+    startHistory: () => startupAuthoring.initializeHistory(inputs.options.workspace),
   };
 }
 
-/** The trusted installation records a new workspace starts with. Never fails. */
-function installationRecords(inputs: AuthoringInputs): Installation {
+/** Builds what a brand-new workspace starts with: its ID, title, creation time and presets. */
+function newWorkspaceSeed(inputs: AuthoringInputs): NewWorkspaceSeed {
   return {
     workspace: inputs.options.workspace,
     title: inputs.options.title,
     createdAt: inputs.options.createdAt,
-    presets: inputs.installation.presets,
+    presets: inputs.builtins.presets,
   };
 }
 
-/** The Authoring roles bound once per workspace; each request composes Authoring over them. */
-interface AdmissionRuntime {
+/** The helpers Authoring is given, built once per workspace and shared by every request. */
+interface AuthoringRoles {
   readonly store: AuthoringStore;
   readonly planners: readonly IntentPlanner[];
   readonly validation: CandidateValidator;
+  /** Holds the files a change uses while it is saved. */
   readonly resources: ResourceAdmission;
   readonly changes: Notifications;
-  /** Feasibility's owners; each request adds its own signal. */
-  readonly feasibility: Omit<FeasibilityOwners, 'signal'>;
+  /** What the layout check needs; each request adds its own signal. */
+  readonly feasibility: Omit<FeasibilityDependencies, 'signal'>;
 }
 
-/** Binds the store, planners, validator, leases, notifications and feasibility. Never fails. */
-function admissionRuntime(
+/** Builds the helpers Authoring is given: store, planners, checks, file holds and announcements. */
+function bindAuthoringRoles(
   inputs: AuthoringInputs,
-  installation: Installation,
+  seed: NewWorkspaceSeed,
   store: AuthoringStore,
-): AdmissionRuntime {
-  const { views, resources, jobs, producer } = inputs.roles;
-  const assets = inputs.native.assets;
+): AuthoringRoles {
+  const { reader, jobs, producer } = inputs.shared;
+  const selector = inputs.shared.resources;
+  const assets = inputs.stores.assets;
+  const planners = createPlanners(inputs, seed);
+  const validation = createCandidateValidator({ workspace: reader, resources: selector, assets });
+  const resourceAdmission = createResourceAdmission(selector, assets);
+  const feasibility = { workspace: reader, jobs, producer };
   return {
     store,
-    planners: planners(inputs, installation),
-    validation: createCandidateValidator({ workspace: views, resources, assets }),
-    resources: createResourceAdmission(resources, assets),
+    planners,
+    validation,
+    resources: resourceAdmission,
     changes: inputs.changes,
-    feasibility: { workspace: views, jobs, producer },
+    feasibility,
   };
 }
 
-/** The service planners, bootstrap first. Never fails. */
-function planners(
+/** Builds the service's planners, bootstrap first. */
+function createPlanners(
   inputs: AuthoringInputs,
-  installation: Installation,
+  seed: NewWorkspaceSeed,
 ): readonly IntentPlanner[] {
   const { model, library, language } = inputs.capabilities;
-  const { views, resources, commands } = inputs.roles;
-  const collections = createCollectionPlanner({ library, workspace: views, resources });
+  const { reader, resources, commands } = inputs.shared;
+  const collections = createCollectionPlanner({ library, workspace: reader, resources });
   return [
-    createInstallationPlanner(installation),
+    createBootstrapPlanner(seed),
     createPresetPlanner(commands),
-    createLibraryPlanner({ library, workspace: views }),
-    createDslPlanner({ language, workspace: views, resources, collections }),
-    createModelPlanner({ model, workspace: views, collections }),
+    createLibraryPlanner({ library, workspace: reader }),
+    createDslPlanner({ language, workspace: reader, resources, collections }),
+    createModelPlanner({ model, workspace: reader, collections }),
   ];
 }
 
 /**
- * Composes Authoring for one request; its feasibility renders run under that request's signal.
- * Throws only when a planner's `id` getter throws (see `composeAuthoring`).
+ * Makes Authoring for one request, whose layout-check renders stop when `signal` aborts; throws
+ * only when a planner's `id` getter throws (see `composeAuthoring`).
  */
 function requestAuthoring(
-  runtime: AdmissionRuntime,
+  roles: AuthoringRoles,
   signal: AbortSignal,
 ): Authoring {
+  const cancellation: Cancellation = { cancelled: () => signal.aborted };
+  const feasibility = createFeasibility({ ...roles.feasibility, signal });
   return composeAuthoring({
-    ...runtime.store,
-    planners: runtime.planners,
-    validation: runtime.validation,
-    resources: runtime.resources,
-    notifications: runtime.changes,
-    cancellation: { cancelled: () => signal.aborted },
-    feasibility: createFeasibility({ ...runtime.feasibility, signal }),
+    ...roles.store,
+    planners: roles.planners,
+    validation: roles.validation,
+    resources: roles.resources,
+    notifications: roles.changes,
+    cancellation,
+    feasibility,
   });
 }

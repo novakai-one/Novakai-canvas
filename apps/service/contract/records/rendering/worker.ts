@@ -1,16 +1,24 @@
 /*
- * The render worker's wire: the job envelope the worker decodes, the render envelope a reply's
- * value is checked against, and the result envelope that carries it. Declarations only; the
- * worker adapters decode with all three, and apps/web parses `renderEnvelope` through the public
- * index. Each capability checks its own payload. A refused reply keeps the caller's last accepted
- * scene. Web's bundle also carries the worker-only `resultEnvelope` and `diagnostic`.
+ * Why this file exists
+ *
+ * The service and its render worker threads talk by passing messages. A message crosses between
+ * threads as plain data, so each side must check what arrives. For example, a reply must have
+ * exactly the fields of a drawn document.
+ *
+ * This file holds the checks for every message: the worker's first "ready" message, a job, a reply,
+ * and the drawn document inside a reply. They check only the outer fields; each capability checks
+ * its own part. The web app checks drawn documents with `renderDocumentMessage` too.
  */
 import { z } from 'zod';
 import { failureSource } from '../transport/failure-source.js';
 import { hostPath, renderJobId } from '../../brands.js';
 import { errorCodes } from '../../errors.js';
-/** Transport validates only host-owned fields; capability payloads are checked by the corresponding public owners. */
-export const renderingEnvelope = z
+/**
+ * Checks a job as the worker receives it: the job ID, at most 2000 images, and the WebAssembly
+ * file path (libavoid), at most 4096 characters. The other fields are checked by their
+ * capabilities.
+ */
+export const renderJobMessage = z
   .strictObject({
     id: renderJobId,
     collection: z.unknown(),
@@ -21,8 +29,11 @@ export const renderingEnvelope = z
     wasmResource: z.string().max(4096).pipe(hostPath),
   })
   .readonly();
-/** Responses remain unknown until checked against the request's admitted collection and measurement sources. */
-export const renderEnvelope = z
+/**
+ * Checks the outer shape of a drawn document. Each field stays unchecked until it is compared with
+ * the job's own collection and inputs.
+ */
+export const renderDocumentMessage = z
   .strictObject({
     collection: z.unknown(),
     projection: z.unknown(),
@@ -33,7 +44,7 @@ export const renderEnvelope = z
     style: z.unknown(),
   })
   .readonly();
-/** A worker failure carries a service code; owner-specific detail stays in `source`. */
+/** Checks a worker's mistake: a service code, with a capability's own detail kept in `source`. */
 const diagnostic = z
   .strictObject({
     code: z.enum(errorCodes),
@@ -43,8 +54,20 @@ const diagnostic = z
     source: failureSource.optional(),
   })
   .readonly();
-/** An unknown success payload acquires its domain type only after owner decoding. */
-export const resultEnvelope = z.discriminatedUnion('ok', [
+/** Checks a worker's reply: `{ ok: true, value }` (not yet checked) or `{ ok: false, error }`. */
+export const workerReplyMessage = z.discriminatedUnion('ok', [
   z.strictObject({ ok: z.literal(true), value: z.unknown() }),
   z.strictObject({ ok: z.literal(false), error: diagnostic }),
 ]);
+/**
+ * Checks the first message a worker sends: `{ ready: true }` once it can take jobs, or
+ * `{ ready: false, error }` with the reason it could not start.
+ */
+export const workerHandshake = z.discriminatedUnion('ready', [
+  z.strictObject({ ready: z.literal(true) }),
+  z.strictObject({ ready: z.literal(false), error: diagnostic }),
+]);
+/** A worker's first message that passed {@link workerHandshake}. */
+export type WorkerHandshake = z.infer<typeof workerHandshake>;
+/** The message a worker sends once it can take jobs. */
+export const READY_HANDSHAKE: WorkerHandshake = Object.freeze({ ready: true });

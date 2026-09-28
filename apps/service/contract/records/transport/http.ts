@@ -1,43 +1,43 @@
 /*
- * The HTTP ingress vocabulary: the loopback address, the two callers credential admission grants,
- * the raw and read request headers, the body limit and the browser cookie name. Declarations and
- * fixed constants (loopback IP, the two callers, body limit, cookie name); the security secrets and
- * the admission port are in ports/transport.ts. A refused request is the caller's to correct and
- * resend; Authoring owns commit and receipt recovery.
+ * Why this file exists
+ *
+ * The service listens only at `127.0.0.1`, and only two callers may use it: the web app in a
+ * browser, and the CLI. Deciding who is calling means reading a few request headers. For example,
+ * `Host: 127.0.0.1:5174` with the right `Authorization: Bearer …` token is the CLI.
+ *
+ * This file holds the words and fixed values for that decision: the address, the two callers, the
+ * request headers, the largest body accepted and the start of the cookie's name. The secrets and
+ * the admission rules are in ports/transport.ts.
  */
 import type { ActorId } from '../../brands.js';
 import { actorId } from '../../schemas.js';
 
-/** The only IPv4 address the server binds; its clients connect to it. */
+/** The only address the server listens on, and the one its callers connect to. */
 export const loopbackIp = '127.0.0.1';
 
-/**
- * One server's loopback address, built by adapters/credentials from the port. `host` is the exact
- * Host header admission accepts (`127.0.0.1:<port>`); `origin` is `http://` plus `host`.
- */
+/** One server's address, built by adapters/credentials from its port. */
 export interface LoopbackAddress {
+  /** The exact `Host` header admission accepts, for example `127.0.0.1:5174`. */
   readonly host: string;
+  /** `http://` plus `host`, for example `http://127.0.0.1:5174`. */
   readonly origin: string;
 }
 
 /**
- * Who a request speaks for: the browser (a human) or the local CLI (an agent). Only credential
- * admission grants one; submitted authorship cannot choose privileges.
+ * Who a request speaks for: the browser (a person) or the CLI (an agent). Only admission decides
+ * this, from the cookie or token. A request can't choose it by claiming an author.
  */
 export type Caller =
   | { readonly kind: 'human'; readonly id: ActorId }
   | { readonly kind: 'agent'; readonly id: ActorId };
 
-/** The caller the browser session cookie grants. Parsed once at module load; the ID is valid. */
+/** The caller a valid browser session cookie stands for. Its ID is checked once, when loaded. */
 export const BROWSER_CALLER: Extract<Caller, { readonly kind: 'human' }> = Object.freeze({
   kind: 'human',
   id: actorId.parse('human:browser'),
 });
 
-/**
- * The caller the local agent credential grants; also the actor of a resource selection request.
- * Parsed once at module load; the ID is valid.
- */
+/** The caller a valid agent token stands for. Its ID is checked once, when loaded. */
 export const CLI_CALLER: Extract<Caller, { readonly kind: 'agent' }> = Object.freeze({
   kind: 'agent',
   id: actorId.parse('agent:cli'),
@@ -47,32 +47,37 @@ export const CLI_CALLER: Extract<Caller, { readonly kind: 'agent' }> = Object.fr
 export type HeaderLists = Readonly<Record<string, readonly string[] | undefined>>;
 
 /**
- * One request header, still untrusted: not sent, sent once with its text, or sent more than once.
- * A repeated header is ambiguous, so no admission check accepts it.
+ * One request header, not yet trusted: not sent, sent once with its text, or sent more than once.
+ * A repeated header is unclear, so no admission check accepts it.
  */
 export type HeaderValue =
   | { readonly kind: 'absent' }
   | { readonly kind: 'single'; readonly value: string }
   | { readonly kind: 'repeated' };
 
-/** The request head admission reads. Untrusted until the ingress policy admits it. */
+/** The method and headers admission reads. Not trusted until admission accepts them. */
 export interface HttpMetadata {
   /** The request method; empty text when the socket reports none. */
   readonly method: string;
+  /** `Host`. */
   readonly host: HeaderValue;
+  /** `Origin`. */
   readonly origin: HeaderValue;
-  /** `Sec-Fetch-Site`. */
+  /** `Sec-Fetch-Site`: whether the browser says the request came from this site. */
   readonly site: HeaderValue;
-  /** `Sec-Fetch-Mode`. */
+  /** `Sec-Fetch-Mode`: `navigate` when the browser is opening a page. */
   readonly mode: HeaderValue;
-  /** `Sec-Fetch-Dest`. */
+  /** `Sec-Fetch-Dest`: `document` when the request is for a whole page. */
   readonly destination: HeaderValue;
+  /** `Authorization`: the CLI's `Bearer` token. */
   readonly authorization: HeaderValue;
+  /** `Cookie`: the browser's session cookie. */
   readonly cookie: HeaderValue;
+  /** `Content-Type`. */
   readonly contentType: HeaderValue;
 }
 
-/** The largest request body the socket reader accepts, in bytes (24 MiB). */
+/** The largest request body accepted, in bytes (24 MiB). */
 export const httpBodyLimit = 24 * 1024 * 1024;
-/** The browser session cookie's base name; admission adds the loopback host. */
-export const browserCookieName = 'novakai_canvas_session';
+/** The start of the browser session cookie's name; admission adds the server's host to it. */
+export const browserCookiePrefix = 'novakai_canvas_session';

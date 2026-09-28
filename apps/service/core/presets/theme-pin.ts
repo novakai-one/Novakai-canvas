@@ -1,24 +1,30 @@
 /*
- * The one theme-pin grammar: `id@version#sha256:hex`, the exact pin Language prints and a retained
- * DSL request carries. Resource selection and freezing format it; theme admission parses a base
- * with it. Pure; neither function fails. Text that is not an exact pin is a theme ID, and
- * Templates refuses an ID, version or digest it does not store.
+ * Why this file exists
+ *
+ * A theme can be named two ways: by its ID alone, such as `ink`, meaning its latest version; or by
+ * an exact pin, such as `ink@1.1.0#sha256:8c3d…`, meaning that version with exactly that content.
+ *
+ * This file writes an exact pin, the way Language prints it, and reads theme text back as one of
+ * the two. Text that isn't an exact pin is taken as an ID. Neither function fails; Templates later
+ * refuses an ID, version or digest it doesn't store.
  */
-import { bareDigest, type PinnedDigest } from '../../contract/brands.js';
+import { removeDigestPrefix, type PrefixedDigest } from '../../contract/brands.js';
 
-/** Exact pin text: theme ID, `@`, version, `#`, then Model's pinned digest. */
-export type ThemePinText = `${string}@${string}#${PinnedDigest}`;
+/** Exact pin text: the theme ID, `@`, the version, `#`, then the digest with `sha256:`. */
+export type ThemePinText = `${string}@${string}#${PrefixedDigest}`;
 
-/** The parts of one exact pin. The digest is Model's pinned form (`sha256:` then hex). */
+/** The three parts of an exact pin. The digest keeps `sha256:`, as Model writes it. */
 export interface ThemePinParts {
+  /** The theme ID, such as `ink`. */
   readonly id: string;
+  /** The version, such as `1.1.0`. */
   readonly version: string;
-  readonly digest: PinnedDigest;
+  readonly digest: PrefixedDigest;
 }
 
 /**
- * What theme text selects: one exact version (its digest bare, as Templates checks it), or the
- * latest version of a theme ID.
+ * What theme text asks for: one exact version, or the latest version of an ID. The parts are text
+ * as read (the digest without `sha256:`); Templates checks them.
  */
 export type ThemeSelection =
   | {
@@ -29,18 +35,20 @@ export type ThemeSelection =
     }
   | { readonly kind: 'latest'; readonly id: string };
 
-/** The exact pin text of one theme version. Never fails. */
+/** Writes the exact pin text of one theme version, such as `ink@1.1.0#sha256:8c3d…`. */
 export function formatThemePin(pin: ThemePinParts): ThemePinText {
   return `${pin.id}@${pin.version}#${pin.digest}`;
 }
 
 /**
- * What theme text selects. Exact pin text selects that version and bare digest; any other text is
- * a theme ID whose latest version is selected. Never fails.
+ * Reads theme text as an exact pin or an ID. `ink@1.1.0#sha256:…` selects that version, with its
+ * digest's `sha256:` removed; any other text, such as `ink`, selects the latest `ink`.
  */
-export function parseThemePin(text: string): ThemeSelection {
-  if (!EXACT_PIN.test(text)) return { kind: 'latest', id: text };
-  return exactSelection(text);
+export function parseThemeSelection(text: string): ThemeSelection {
+  if (EXACT_PIN.test(text)) {
+    return exactSelection(text);
+  }
+  return latestSelection(text);
 }
 
 /**
@@ -49,17 +57,18 @@ export function parseThemePin(text: string): ThemeSelection {
  */
 const EXACT_PIN = /^[^@]+@[^#]+#sha256:[a-f0-9]{64}$/;
 
-/**
- * The parts of text that matched {@link EXACT_PIN}. The ID holds no `@`, so the first `@` ends it;
- * the version holds no `#`, so the first `#` after that ends the version.
- */
+/** Splits exact pin text into its ID, version and digest, removing the digest's `sha256:`. */
 function exactSelection(text: string): ThemeSelection {
-  const at = text.indexOf('@');
-  const hash = text.indexOf('#', at);
-  return {
-    kind: 'exact',
-    id: text.slice(0, at),
-    version: text.slice(at + 1, hash),
-    digest: bareDigest(text.slice(hash + 1)),
-  };
+  // The ID holds no `@`, so the first `@` ends it; the version holds no `#`, so the next `#` does.
+  const idEnd = text.indexOf('@');
+  const versionEnd = text.indexOf('#', idEnd);
+  const id = text.slice(0, idEnd);
+  const version = text.slice(idEnd + 1, versionEnd);
+  const digest = removeDigestPrefix(text.slice(versionEnd + 1));
+  return { kind: 'exact', id, version, digest };
+}
+
+/** Reads any other text as a theme ID, meaning the latest version of that theme. */
+function latestSelection(text: string): ThemeSelection {
+  return { kind: 'latest', id: text };
 }

@@ -1,215 +1,229 @@
 /*
- * The render worker pool: node:worker_threads realms that run one render job at a time. One
- * initialized worker waits idle between jobs; a concurrent job starts its own worker, and a worker
- * not kept as the idle one is terminated when its job settles. Impure (threads, timers).
- * Cancellation, a crash, an early exit or the time limit terminates that job's worker; the parent
- * (compose/producer.ts) keeps the prior scene and the caller retries.
+ * Why this file exists
+ *
+ * Drawing a diagram can be slow, or can crash, so each drawing runs on a worker thread of its own.
+ * For example, two `GET /api/v1/render` requests at once run on two threads, and a drawing that
+ * runs past its time limit is stopped without harming the server.
+ *
+ * This file keeps those threads. One ready thread waits between jobs; an extra job starts its own
+ * thread, which ends with its job. Cancelling, a crash or the time limit ends that job's thread.
+ * It checks only the outer shape of a reply; reply-reader.ts checks the drawing.
  */
 import { Worker as NodeWorker } from 'node:worker_threads';
 import type { RenderingJob } from '../../contract/records/rendering/job.js';
 import type { RenderTransport } from '../../contract/ports/rendering.js';
-import { resultEnvelope } from '../../contract/records/rendering/worker.js';
+import { workerReplyMessage, workerHandshake } from '../../contract/records/rendering/worker.js';
 import { failure, success, type Result } from '../../contract/errors.js';
+import type { CapabilityFailure } from '../../contract/records/transport/failure-source.js';
 
-/** A started worker and the outcome of its start-up handshake. */
+/** The render worker pool: `run` sends a job to a free worker and answers its unchecked reply. */
+export interface RenderWorkerPool extends RenderTransport {
+  /** Answers once the first worker has started, or `unavailable` at `worker` when it can't. */
+  readonly ready: Promise<Result<void>>;
+}
+
+/** A started worker, and the answer to whether it is ready for jobs. */
 interface WorkerSlot {
   readonly worker: NodeWorker;
   readonly ready: Promise<Result<void>>;
 }
 
-/** The pool's idle worker: `none`, or one initialized worker waiting for the next job. */
+/** The pool's idle worker: `none`, or one ready worker waiting for the next job. */
 type IdleWorker = { readonly kind: 'none' } | { readonly kind: 'ready'; readonly slot: WorkerSlot };
 
-/** A job's answer, and whether its worker is kept for the next job (`reuse`) or terminated. */
-interface JobEnd {
-  readonly result: Result<unknown>;
-  readonly settlement: 'reuse' | 'terminate';
-}
-
-/** What one job runs with: the idle-worker hand-off and the time limit. */
+/** The pool: the worker waiting for the next job (the one part that changes), and how to start one. */
 interface Pool {
-  /** The idle worker, or a new one when none is idle; no worker is idle afterwards. */
-  readonly take: () => WorkerSlot;
-  /** Keeps `slot` as the idle worker when none is idle; otherwise terminates it. */
-  readonly release: (slot: WorkerSlot) => void;
+  idle: IdleWorker;
+  readonly workerScript: URL;
   readonly timeoutMs: number;
 }
 
+/** How a job ended: its answer, and whether its worker is kept for the next job or ended. */
+interface JobEnd {
+  readonly answer: Result<unknown>;
+  readonly settlement: 'reuse' | 'terminate';
+}
+
+/** No worker is waiting. */
 const NO_IDLE: IdleWorker = Object.freeze({ kind: 'none' });
 
+/** Each way a worker can fail, and what its `unavailable` mistake at `worker` says. */
+const WORKER_MISTAKES = Object.freeze({
+  'start-crashed': 'Rendering worker initialization failed',
+  'start-exited': 'Rendering worker exited during initialization',
+  'start-timed-out': 'Rendering worker initialization timed out',
+  'bad-handshake': 'Invalid rendering worker initialization',
+  'not-started': 'Rendering worker could not start',
+  crashed: 'Rendering worker failed',
+  exited: 'Rendering worker ended without a result',
+  'timed-out': 'Rendering exceeded its time limit',
+  'end-unconfirmed': 'Worker termination could not be confirmed',
+  'bad-reply': 'Rendering worker returned a malformed result',
+});
+
+/** One way a worker can fail; see `WORKER_MISTAKES`. */
+type WorkerMistake = keyof typeof WORKER_MISTAKES;
+
 /**
- * Starts the pool with one idle worker; `ready` answers once it has loaded, or `unavailable` at
- * `worker` when it fails, exits or exceeds `timeoutMs` during start-up. `entry` is the worker
- * realm's script; compose names it. `run` fails with `cancelled` at `worker` when the signal
- * aborts, and `unavailable` at `worker` when a worker cannot start, fails, exits, exceeds
- * `timeoutMs` or returns a malformed result.
+ * Starts the render worker pool, with one worker that waits for the first job. `workerScript` is
+ * the file each worker thread runs (compose names it).
+ * Mistakes from `run`: `cancelled` at `worker` when the job is cancelled; `unavailable` at `worker`
+ * when a worker can't start, crashes, exits, runs past `timeoutMs` or sends a malformed reply.
  */
-export function createRenderTransport(
-  entry: URL,
+export function startRenderWorkerPool(
+  workerScript: URL,
   timeoutMs: number,
-): RenderTransport & { readonly ready: Promise<Result<void>> } {
-  let idle = NO_IDLE;
-  const retire = (worker: NodeWorker): void => {
-    if (idle.kind === 'ready' && idle.slot.worker === worker) idle = NO_IDLE;
-  };
-  const take = (): WorkerSlot => {
-    const current = idle;
-    idle = NO_IDLE;
-    if (current.kind === 'ready') return current.slot;
-    return startWorker(entry, timeoutMs, retire);
-  };
-  const release = (slot: WorkerSlot): void => {
-    if (idle.kind === 'ready') {
-      void slot.worker.terminate();
-      return;
-    }
-    slot.worker.unref();
-    idle = { kind: 'ready', slot };
-  };
-  const first = take();
-  release(first);
+): RenderWorkerPool {
+  const pool: Pool = { idle: NO_IDLE, workerScript, timeoutMs };
+  const firstWorker = takeWorker(pool);
+  releaseWorker(pool, firstWorker);
   return {
-    ready: first.ready,
-    run: (job, signal) => runJob(job, signal, { take, release, timeoutMs }),
+    ready: firstWorker.ready,
+    run: (job, signal) => runJob(job, signal, pool),
   };
 }
 
-/**
- * Starts one worker realm, unreferenced so a waiting worker never keeps the process alive.
- * `retire` hears its crash or exit. Its `ready` answers as `initialized` names.
- */
-function startWorker(
-  entry: URL,
-  timeoutMs: number,
-  retire: (worker: NodeWorker) => void,
-): WorkerSlot {
-  const worker = new NodeWorker(entry, { execArgv: [] });
-  const gone = (): void => retire(worker);
-  worker.on('error', gone);
-  worker.on('exit', gone);
-  worker.unref();
-  return { worker, ready: initialized(worker, timeoutMs) };
+/** Hands out the waiting worker, or starts a new one when none is waiting. */
+function takeWorker(pool: Pool): WorkerSlot {
+  const waiting = pool.idle;
+  pool.idle = NO_IDLE;
+  if (waiting.kind === 'ready') {
+    return waiting.slot;
+  }
+  return startWorker(pool);
+}
+
+/** Keeps the worker waiting for the next job when none is waiting; otherwise ends its thread. */
+function releaseWorker(
+  pool: Pool,
+  slot: WorkerSlot,
+): void {
+  if (pool.idle.kind === 'ready') {
+    void slot.worker.terminate();
+    return;
+  }
+  slot.worker.unref();
+  pool.idle = { kind: 'ready', slot };
+}
+
+/** Forgets the waiting worker when it is the one that crashed or exited. */
+function retireWorker(
+  pool: Pool,
+  worker: NodeWorker,
+): void {
+  const waiting = pool.idle;
+  if (waiting.kind === 'ready' && waiting.slot.worker === worker) {
+    pool.idle = NO_IDLE;
+  }
 }
 
 /**
- * Waits for the worker's `{ ready: true }` handshake; it loads code only and never computes a
- * diagram. Fails with `unavailable` at `worker` when the first message is anything else, or the
- * worker fails, exits or exceeds `timeoutMs` (the worker is then terminated).
+ * Starts one worker thread, and waits for it to say it is ready. The pool forgets it if it
+ * crashes or exits. A waiting thread never keeps the process alive.
  */
-function initialized(
+function startWorker(pool: Pool): WorkerSlot {
+  const worker = new NodeWorker(pool.workerScript, { execArgv: [] });
+  const forgetWorker = (): void => retireWorker(pool, worker);
+  worker.on('error', forgetWorker);
+  worker.on('exit', forgetWorker);
+  worker.unref();
+  const ready = waitUntilReady(worker, pool.timeoutMs);
+  return { worker, ready };
+}
+
+/**
+ * Waits for the thread's first message. A crash, an early exit or the time limit (which also ends
+ * the thread) ends the wait with a mistake. Whatever comes first stops the rest.
+ */
+function waitUntilReady(
   worker: NodeWorker,
   timeoutMs: number,
 ): Promise<Result<void>> {
   return new Promise((resolve) => {
-    function finish(result: Result<void>): void {
+    const finish = (startup: Result<void>): void => {
       clearTimeout(timer);
-      worker.removeListener('message', ready);
-      worker.removeListener('error', failed);
+      worker.removeListener('message', answered);
+      worker.removeListener('error', crashed);
       worker.removeListener('exit', exited);
-      resolve(result);
-    }
-    function ready(input: unknown): void {
-      if (!isReady(input)) return finish(notReady('Invalid rendering worker initialization'));
-      finish(success(undefined));
-    }
-    function failed(): void {
-      finish(notReady('Rendering worker initialization failed'));
-    }
-    function exited(): void {
-      finish(notReady('Rendering worker exited during initialization'));
-    }
-    const timer = setTimeout(() => {
+      resolve(startup);
+    };
+    const answered = (message: unknown): void => finish(readHandshake(message));
+    const crashed = (): void => finish(workerFailure('start-crashed'));
+    const exited = (): void => finish(workerFailure('start-exited'));
+    const timedOut = (): void => {
       void worker.terminate();
-      finish(notReady('Rendering worker initialization timed out'));
-    }, timeoutMs);
-    worker.once('message', ready);
-    worker.once('error', failed);
+      finish(workerFailure('start-timed-out'));
+    };
+    const timer = setTimeout(timedOut, timeoutMs);
+    worker.once('message', answered);
+    worker.once('error', crashed);
     worker.once('exit', exited);
   });
 }
 
-/** A failed handshake: `unavailable` at `worker`. */
-function notReady(message: string): Result<void> {
-  return failure('unavailable', 'worker', message);
+/** Reads the thread's first message: ready, or the reason it couldn't start. */
+function readHandshake(message: unknown): Result<void> {
+  const handshake = workerHandshake.safeParse(message);
+  if (!handshake.success) {
+    return workerFailure('bad-handshake');
+  }
+  if (!handshake.data.ready) {
+    return startupRefusedFailure(handshake.data.error);
+  }
+  return success(undefined);
 }
 
-/** True when `input` is the worker's `{ ready: true }` handshake. */
-function isReady(input: unknown): boolean {
-  return typeof input === 'object' && input !== null && 'ready' in input && input.ready === true;
-}
-
-/**
- * Runs one job on the idle worker, or on a new one. Fails with `unavailable` at `worker`
- * ("Rendering worker could not start") when the worker cannot start; otherwise as `observe`.
- */
+/** Runs one job on the waiting worker, or on a new one, once that worker is ready. */
 async function runJob(
   job: RenderingJob,
   signal: AbortSignal,
   pool: Pool,
 ): Promise<Result<unknown>> {
   try {
-    const slot = pool.take();
+    const slot = takeWorker(pool);
     const ready = await slot.ready;
-    if (!ready.ok) return notStarted();
-    return await observe(slot.worker, job, signal, pool.timeoutMs, () => pool.release(slot));
+    if (!ready.ok) {
+      return workerFailure('not-started');
+    }
+    return await runOnWorker(slot, job, signal, pool);
   } catch {
-    return notStarted();
+    return workerFailure('not-started');
   }
 }
 
-/** A job whose worker could not start: `unavailable` at `worker`. */
-function notStarted(): Result<unknown> {
-  return failure('unavailable', 'worker', 'Rendering worker could not start');
-}
-
 /**
- * Posts the job and answers with the worker's first outcome: a reply (worker reused through
- * `release`), or an error, exit, time limit or cancellation (worker terminated). The first outcome
- * removes the timer and every listener, so the job settles once. Fails with `cancelled` at
- * `worker` when the signal aborts, and `unavailable` at `worker` on a failure, an early exit, the
- * time limit, a malformed reply or an unconfirmed termination.
+ * Sends the job to the worker, and answers with whatever happens first: its reply, a crash, an
+ * early exit, cancelling or the time limit. The first one settles the job; the rest are ignored.
  */
-function observe(
-  worker: NodeWorker,
+function runOnWorker(
+  slot: WorkerSlot,
   job: RenderingJob,
   signal: AbortSignal,
-  timeoutMs: number,
-  release: () => void,
+  pool: Pool,
 ): Promise<Result<unknown>> {
+  const { worker } = slot;
   return new Promise((resolve) => {
-    function finish(end: JobEnd): void {
+    const finish = (end: JobEnd): void => {
       clearTimeout(timer);
-      signal.removeEventListener('abort', cancel);
-      worker.removeListener('message', message);
-      worker.removeListener('error', error);
+      signal.removeEventListener('abort', cancelled);
+      worker.removeListener('message', replied);
+      worker.removeListener('error', crashed);
       worker.removeListener('exit', exited);
-      void settle(worker, end, release).then(resolve);
-    }
-    function message(input: unknown): void {
-      finish({ result: reply(input), settlement: 'reuse' });
-    }
-    function error(): void {
-      finish(terminate('Rendering worker failed'));
-    }
-    function exited(): void {
-      finish(terminate('Rendering worker ended without a result'));
-    }
-    function cancel(): void {
-      finish({
-        result: failure('cancelled', 'worker', 'Rendering was cancelled'),
-        settlement: 'terminate',
-      });
-    }
-    const timer = setTimeout(
-      () => finish(terminate('Rendering exceeded its time limit')),
-      timeoutMs,
-    );
-    worker.once('message', message);
-    worker.once('error', error);
+      void settleJob(slot, end, pool).then(resolve);
+    };
+    const replied = (message: unknown): void => finish(keepWorkerWith(readReply(message)));
+    const crashed = (): void => finish(endThreadWith(workerFailure('crashed')));
+    const exited = (): void => finish(endThreadWith(workerFailure('exited')));
+    const cancelled = (): void => finish(endThreadWith(cancelledFailure()));
+    const timedOut = (): void => finish(endThreadWith(workerFailure('timed-out')));
+    const timer = setTimeout(timedOut, pool.timeoutMs);
+    worker.once('message', replied);
+    worker.once('error', crashed);
     worker.once('exit', exited);
-    signal.addEventListener('abort', cancel, { once: true });
+    signal.addEventListener('abort', cancelled, { once: true });
+    // A signal that aborted before the job was sent never fires 'abort', so it is checked by hand.
     if (signal.aborted) {
-      cancel();
+      cancelled();
       return;
     }
     worker.ref();
@@ -217,43 +231,62 @@ function observe(
   });
 }
 
-/** An `unavailable` answer at `worker` whose worker is terminated. */
-function terminate(message: string): JobEnd {
-  return { result: failure('unavailable', 'worker', message), settlement: 'terminate' };
+/** Ends a job with this answer, and keeps its worker for the next job. */
+function keepWorkerWith(answer: Result<unknown>): JobEnd {
+  return { answer, settlement: 'reuse' };
 }
 
-/**
- * Hands a `reuse` worker back to the pool at once, or terminates a `terminate` worker first.
- * Answers the job's result; an unconfirmed termination is `unavailable` at `worker`.
- */
-async function settle(
-  worker: NodeWorker,
+/** Ends a job with this answer, and ends its worker's thread. */
+function endThreadWith(answer: Result<unknown>): JobEnd {
+  return { answer, settlement: 'terminate' };
+}
+
+/** Gives a kept worker back to the pool, or ends the thread first; then answers the job. */
+async function settleJob(
+  slot: WorkerSlot,
   end: JobEnd,
-  release: () => void,
+  pool: Pool,
 ): Promise<Result<unknown>> {
-  if (end.settlement === 'terminate') return terminated(worker, end.result);
-  release();
-  return end.result;
+  if (end.settlement === 'terminate') {
+    return endThread(slot.worker, end.answer);
+  }
+  releaseWorker(pool, slot);
+  return end.answer;
 }
 
-/** `result` once the worker has terminated; `unavailable` at `worker` when that is not confirmed. */
-function terminated(
+/** Ends the worker's thread, then gives the job's answer, unless the end can't be confirmed. */
+async function endThread(
   worker: NodeWorker,
-  result: Result<unknown>,
+  answer: Result<unknown>,
 ): Promise<Result<unknown>> {
-  return worker.terminate().then(
-    () => result,
-    () => failure('unavailable', 'worker', 'Worker termination could not be confirmed'),
-  );
+  try {
+    await worker.terminate();
+    return answer;
+  } catch {
+    return workerFailure('end-unconfirmed');
+  }
 }
 
-/**
- * The worker's reply as a result envelope; its value stays unknown until the reply reader
- * rebuilds the scene. Fails with `unavailable` at `worker` when the reply is malformed.
- */
-function reply(input: unknown): Result<unknown> {
-  const parsed = resultEnvelope.safeParse(input);
-  if (!parsed.success)
-    return failure('unavailable', 'worker', 'Rendering worker returned a malformed result');
-  return parsed.data;
+/** Reads the worker's reply as an answer; reply-reader.ts checks what it holds later. */
+function readReply(message: unknown): Result<unknown> {
+  const reply = workerReplyMessage.safeParse(message);
+  if (!reply.success) {
+    return workerFailure('bad-reply');
+  }
+  return reply.data;
+}
+
+/** Makes the `unavailable` mistake at `worker` for one way a worker can fail. */
+function workerFailure(mistake: WorkerMistake): Result<never> {
+  return failure('unavailable', 'worker', WORKER_MISTAKES[mistake]);
+}
+
+/** Makes the mistake for a thread that said it couldn't start, keeping its reason. */
+function startupRefusedFailure(reason: CapabilityFailure): Result<never> {
+  return failure('unavailable', 'worker', 'Rendering worker reported a startup failure', reason);
+}
+
+/** Makes the mistake for a job that was cancelled. */
+function cancelledFailure(): Result<never> {
+  return failure('cancelled', 'worker', 'Rendering was cancelled');
 }

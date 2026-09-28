@@ -1,26 +1,31 @@
 /*
- * How a resource command refuses, as values: an owner's diagnostic passes through unchanged (owner
- * code, path and `source`), and a malformed input is `invalid-input` at `resources`. Pure; a
- * refusal happens before any write, and the caller corrects the input and prepares again.
+ * Why this file exists
+ *
+ * Any resource command can be sent a body it can't use. For example,
+ * `POST /api/v1/resources/prepare` with `{ "admission": 1, "extra": true }` fails its check. Every
+ * command should answer that the same way, without passing on the parser's own message.
+ *
+ * This file makes that mistake (`invalid-input` at `resources`), and passes any other mistake on
+ * as it is. A mistake is always found before anything is saved.
  */
 import type {
   ResourceDiagnostic,
   ResourceResult,
-} from '../../../contract/records/presets/preparation.js';
+} from '../../../contract/records/presets/resource-commands.js';
 
-/** The recovery of every refusal that names a malformed resource preparation input. */
+/** What the caller is told to do after an input mistake: fix the named input and prepare again. */
 export const INPUT_RECOVERY = 'Correct the named resource preparation input and prepare again.';
 
 /**
- * The refusal for input that does not decode: `invalid-input` at `resources` ("Resource
- * preparation input is invalid"). No native parser message leaks.
+ * Makes the mistake for a body or value that fails its check: `invalid-input` at `resources`,
+ * "Resource preparation input is invalid".
  */
-export function invalidPreparation(): ResourceResult<never> {
-  return preparationRefused(INVALID_INPUT);
+export function invalidInputFailure(): ResourceResult<never> {
+  return resourceFailure(INVALID_INPUT);
 }
 
-/** The refusal carrying this diagnostic unchanged. */
-export function preparationRefused(diagnostic: ResourceDiagnostic): ResourceResult<never> {
+/** Answers this mistake as a failed resource command, unchanged. */
+export function resourceFailure(diagnostic: ResourceDiagnostic): ResourceResult<never> {
   return { ok: false, error: diagnostic };
 }
 

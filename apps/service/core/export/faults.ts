@@ -1,79 +1,106 @@
 /*
- * Export failure vocabulary: every refusal the export route builds is an Export diagnostic with
- * one recovery text. Owner failures are translated by code, never by message; a cleanup failure
- * never hides the primary outcome; and the route turns the final diagnostic into the service
- * outcome, keeping the diagnostic as structured source evidence. Pure; the caller corrects its
- * request, or retries once the failed dependency is restored.
+ * Why this file exists
+ *
+ * An export can go wrong in many places: an old revision is asked for, rendering fails, or letting
+ * go of the held files fails afterwards. For example, asking for `my-diagram` at revision 2 when
+ * it is at revision 3 is `snapshot-mismatch` at `identity.revision`.
+ *
+ * This file makes those mistakes in Export's own form, and turns the mistake an export ends with
+ * into the service's answer (`invalid-input`, `cancelled` or `unavailable`), keeping Export's
+ * mistake as the source.
+ * A failure to let go never hides the export's own mistake. It never throws.
  */
 import { failure, type ErrorCode, type Result } from '../../contract/errors.js';
-import type { OperationSource } from '../../contract/records/transport/failure-source.js';
+import type { CapabilityFailure } from '../../contract/records/transport/failure-source.js';
 import type {
   AssetResult,
   AuthoringErrorCode,
   ExportDiagnostic,
   ExportErrorCode,
   ExportResult,
-} from '../../contract/records/capabilities.js';
+} from '../../contract/records/capability-types.js';
 import type { ExportFailure } from '../../contract/records/export/snapshot.js';
 
-/** An Export refusal carrying the route's one recovery text. */
-export function exportRejection(
+/**
+ * Makes an Export mistake: `code` at `path`, with `message`. Every export mistake carries the same
+ * advice: correct the input or repair the failing part, then try again.
+ */
+export function exportFailure(
   code: ExportErrorCode,
   path: string,
   message: string,
 ): ExportResult<never> {
-  return {
-    ok: false,
-    error: {
-      code,
-      path,
-      message,
-      recovery: 'Correct the input or repair the provider, then retry the read.',
-    },
-  };
+  return { ok: false, error: { code, path, message, recovery: EXPORT_RECOVERY } };
 }
 
-/** The refusal of a request whose signal aborted. */
-export function cancelledExport(): ExportResult<never> {
-  return exportRejection('cancelled', 'export', 'Export was cancelled');
+/** The advice every export mistake carries. */
+const EXPORT_RECOVERY = 'Correct the input or repair the provider, then retry the read.';
+
+/** Makes the mistake for an export that was stopped: `cancelled` at `export`. */
+export function cancelledFailure(): ExportResult<never> {
+  return exportFailure('cancelled', 'export', 'Export was cancelled');
 }
 
-/** An Authoring read or service render failure; the codes `ownerRejection` translates. */
-type OwnerFailure = { readonly code: AuthoringErrorCode | ErrorCode; readonly message: string };
+/** A failure from reading the workspace (Authoring) or from rendering (the service). */
+type ReadOrRenderError = {
+  readonly code: AuthoringErrorCode | ErrorCode;
+  readonly message: string;
+};
 
-/** An owner failure at `path`: cancellation stays cancellation, anything else failed encoding. */
-export function ownerRejection(
-  error: OwnerFailure,
+/**
+ * Turns a failure from reading the workspace or rendering into an Export mistake at `path`.
+ * `cancelled` stays `cancelled`; any other code becomes `encoding-failed`. The message is kept.
+ */
+export function readOrRenderFailure(
+  error: ReadOrRenderError,
   path: string,
 ): ExportResult<never> {
-  if (error.code === 'cancelled') return exportRejection('cancelled', path, error.message);
-  return exportRejection('encoding-failed', path, error.message);
-}
-
-/** A lease release in Export's vocabulary; a refused release is a cleanup failure. */
-export function releaseOutcome(release: AssetResult<void>): ExportResult<void> {
-  if (release.ok) return release;
-  return exportRejection('cleanup-failed', 'export.release', release.error.message);
-}
-
-/** The primary outcome; a failed cleanup replaces a success or nests under a primary failure. */
-export function settledFailure<T>(
-  primary: ExportResult<T>,
-  cleanup: ExportResult<void>,
-): ExportResult<T> {
-  if (cleanup.ok) return primary;
-  if (primary.ok) return cleanup;
-  return { ok: false, error: { ...primary.error, cleanup: cleanup.error } };
+  if (error.code === 'cancelled') {
+    return exportFailure('cancelled', path, error.message);
+  }
+  return exportFailure('encoding-failed', path, error.message);
 }
 
 /**
- * The service failure of an export: its code mapped by `ROUTE_CODE`, with Export's diagnostic
- * kept as source. `cancelled` stays `cancelled`, an input refusal is `invalid-input`, and
- * `encoding-failed`, `cleanup-failed` or `resource-rejected` is `unavailable`.
+ * Turns Assets' answer to letting go of held files into Export's answer. A refusal becomes
+ * `cleanup-failed` at `export.release`.
+ */
+export function translateRelease(release: AssetResult<void>): ExportResult<void> {
+  if (!release.ok) {
+    return releaseRefusedFailure(release.error.message);
+  }
+  return release;
+}
+
+/**
+ * Combines the export's own answer (`primary`) with the answer to letting go of its held files
+ * (`cleanup`). When `cleanup` worked, answers `primary`. When it failed, a working `primary`
+ * becomes the `cleanup` mistake, and a failed `primary` keeps its own mistake, with the `cleanup`
+ * mistake attached under `cleanup`.
+ */
+export function combineWithCleanup<T>(
+  primary: ExportResult<T>,
+  cleanup: ExportResult<void>,
+): ExportResult<T> {
+  if (cleanup.ok) {
+    return primary;
+  }
+  if (primary.ok) {
+    return cleanup;
+  }
+  return primaryWithCleanupFailure(primary, cleanup);
+}
+
+/**
+ * Turns an Export mistake into the service's failure, keeping Export's mistake as `source`.
+ * `cancelled` stays `cancelled`; a mistake in the request is `invalid-input`; a storage, render or
+ * clean-up fault is `unavailable`.
  */
 export function exportRouteFailure(refusal: ExportFailure): Result<never> {
-  const { code, path, message } = refusal.error;
-  return failure(ROUTE_CODE[code], path, message, exportSource(refusal.error));
+  const diagnostic = refusal.error;
+  const routeCode = ROUTE_CODE[diagnostic.code];
+  const source = exportSource(diagnostic);
+  return failure(routeCode, diagnostic.path, diagnostic.message, source);
 }
 
 /** The service codes an Export refusal becomes. */
@@ -98,8 +125,22 @@ const ROUTE_CODE: Readonly<Record<ExportErrorCode, RouteCode>> = Object.freeze({
   'resource-rejected': 'unavailable',
 });
 
-/** The diagnostic as source evidence; an absent cleanup stays an explicit undefined key. */
-function exportSource(diagnostic: ExportDiagnostic): OperationSource {
+/** Makes the mistake for Assets refusing to let go: `cleanup-failed` at `export.release`. */
+function releaseRefusedFailure(message: string): ExportResult<never> {
+  return exportFailure('cleanup-failed', 'export.release', message);
+}
+
+/** Keeps the export's own mistake, with the mistake from letting go attached under `cleanup`. */
+function primaryWithCleanupFailure(
+  primary: ExportFailure,
+  cleanup: ExportFailure,
+): ExportFailure {
+  const diagnostic = { ...primary.error, cleanup: cleanup.error };
+  return { ok: false, error: diagnostic };
+}
+
+/** Copies Export's mistake into a failure source; `cleanup` is always a key, undefined if none. */
+function exportSource(diagnostic: ExportDiagnostic): CapabilityFailure {
   return {
     code: diagnostic.code,
     path: diagnostic.path,
@@ -109,8 +150,10 @@ function exportSource(diagnostic: ExportDiagnostic): OperationSource {
   };
 }
 
-/** A nested cleanup failure as source evidence; undefined when the cleanup succeeded. */
-function cleanupSource(cleanup: ExportDiagnostic | undefined): OperationSource | undefined {
-  if (cleanup === undefined) return undefined;
+/** Copies the attached clean-up mistake into a failure source, or undefined when there is none. */
+function cleanupSource(cleanup: ExportDiagnostic | undefined): CapabilityFailure | undefined {
+  if (cleanup === undefined) {
+    return undefined;
+  }
   return exportSource(cleanup);
 }
