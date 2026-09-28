@@ -1,0 +1,208 @@
+canvas 1
+collection @rebuild-4-cli "Apps rebuild · 4 / CLI — before and target" description="apps/cli. Before = the code when the rebuild started (commit 5571c7e). Target = the finished CLI code." {
+
+  node @n-size concept "Headline numbers" size=large {
+    table @n-size-t columns=["Measure", "Before (5571c7e)", "Target"] {
+      row @n1 cells=["Code files", "44 (1 of them a test)", "109"]
+      row @n2 cells=["Lines", "5,238 (4,736 without the test)", "9,408"]
+      row @n3 cells=["Lines without comments or blank lines", "4,645 (4,153 without the test)", "6,390"]
+      row @n5 cells=["Folders holding code files", "12", "23"]
+      row @n6 cells=["Files over 300 lines", "2 (+1 test)", "0"]
+      row @n7 cells=["Largest file", "367 lines, adapters/edge/headless.ts", "232 lines, core/themes/grammar.ts"]
+      row @n8 cells=["throw statements", "14", "0"]
+      row @n9 cells=["Test files", "1 (502 lines)", "0. Removed"]
+      row @n10 cells=["README", "5 lines", "65 lines"]
+      row @n11 cells=["Exports in contract/index.ts", "17 (includes test hooks)", "7"]
+      row @n12 cells=["@novakai packages declared", "4", "10"]
+      row @n13 cells=["File that pnpm canvas runs", "cli/main.ts", "cli/canvas.ts"]
+    }
+    text @n-size-note "Counts are code files; README and package.json are not counted." role=caption
+  }
+  node @n-layers concept "Size by layer" size=large {
+    table @n-layers-t columns=["Layer", "Before: files / lines", "Target: files / lines"] {
+      row @l1 cells=["cli/", "2 / 69", "2 / 51"]
+      row @l2 cells=["contract/", "14 / 720", "36 / 2,288"]
+      row @l3 cells=["core/", "19 / 2,336", "60 / 5,887"]
+      row @l4 cells=["adapters/", "8 / 1,611", "11 / 1,182"]
+      row @l5 cells=["tests/", "1 / 502", "0"]
+      row @l6 cells=["Total", "44 / 5,238", "109 / 9,408"]
+    }
+    text @n-layers-note "Share of source lines in adapters/: 34% before, 13% target." role=caption
+  }
+
+  node @b-cli concept "cli/  -  2 files, 69 lines" { text @d "main.ts runs pnpm canvas. render.ts runs pnpm render:png and reads its own flags (throws TypeError)." }
+  node @b-contract concept "contract/ top level (6 files, 353 lines)" { text @d "index.ts (17 exports), api.ts, compose.ts (builds Language twice), errors.ts (code is any text), render.ts (render wiring, 202 lines), theme-reader.ts." }
+  node @b-ports concept "contract/ports/ (1 file, 70 lines)" { text @d "runtime.ts: one bag holding every outside dependency." }
+  node @b-records concept "contract/records/ (7 files, 297 lines)" { text @d "Data shapes. One flat Command record with optional fields. A copy of the service failure shape." }
+  node @b-commands concept "core/commands/ (6 files, 690 lines)" { text @d "Routing and read commands, authoring, presets, resources, profiles, help." }
+  node @b-output concept "core/output/ (1 file, 42 lines)" { text @d "Failure to terminal lines." }
+  node @b-profiles concept "core/profiles/ (2 files, 246 lines)" { text @d "build-spec@1 describe, lint entry." }
+  node @b-lint concept "core/profiles/lint/ (6 files, 1,123 lines)" role=warning { text @d "Lint rules. Holds a file over 300 lines: sections.ts (308)." }
+  node @b-render concept "core/render/ (4 files, 235 lines)" { text @d "Render faults, report, resources, source helpers." }
+  node @b-inputs concept "adapters/inputs/ (6 files, 1,172 lines)" { text @d "Flag rules (293), request building and answer decoding (290), presets, resource reads, .theme reader (throws), files." }
+  node @b-edge concept "adapters/edge/ (2 files, 439 lines)" role=warning { text @d "HTTP to the service (72). Holds a file over 300 lines: headless.ts (367), the whole render:png job in one file." }
+  node @b-tests concept "tests/  -  1 file, 502 lines" role=warning { text @d "Holds a file over 300 lines: commands.test.ts (502). Removed." }
+
+  node @t-cli concept "cli/  -  2 files, 51 lines" { text @d "The two commands you run. They print and set the exit code, nothing else." }
+  node @t-contract concept "contract/ top level (6 files, 510 lines)" { text @d "index.ts (7 exports), api.ts (core entry list), compose.ts (wiring), brands.ts (ID types), schemas.ts (outside schemas), errors.ts (fixed list of codes)." }
+  node @t-compose concept "contract/compose/ (8 files, 563 lines)" { text @d "Connects the real parts for each command group: service commands, profile commands, render. Builds Language once." }
+  node @t-records concept "contract/records/ (11 files, 834 lines)" { text @d "Data shapes: one per command, flags, saved request, font and image bytes, service answers, theme file, render request, report and failure, profiles." }
+  node @t-ports concept "contract/ports/ (11 files, 381 lines)" { text @d "One interface per outside thing: HTTP, service reads, authoring, resources, saved requests, local files, resource reader, DSL parse, collection check, request IDs, render." }
+  node @t-commands concept "core/commands/ (9 files, 1,195 lines)" { text @d "Typed words to a command, from one command table. Help text, routing, the one --out writer." }
+  node @t-reads concept "core/reads/ (4 files, 182 lines)" { text @d "describe, list, read, inspect, receipt: their text output." }
+  node @t-authoring concept "core/authoring/ (6 files, 571 lines)" { text @d "create, replace, patch, preview: build a saved request, then preview or apply. apply and retry check the receipt first." }
+  node @t-resources concept "core/resources/ (4 files, 266 lines)" { text @d "Font and image bytes: stage, back up, restore." }
+  node @t-presets concept "core/presets/ (2 files, 180 lines)" { text @d "theme admit, recipe admit." }
+  node @t-themes concept "core/themes/ (2 files, 434 lines)" { text @d "Reads .theme files." }
+  node @t-profiles concept "core/profiles/ + 4 subfolders (17 files, 1,578 lines)" { text @d "build-spec@1 describe, scaffold and lint. Runs with no service." }
+  node @t-render concept "core/render/ (12 files, 1,310 lines)" { text @d "render:png steps: flags, themes, collection, draw, snapshot, section files, report. Largest file: snapshot.ts, 194 lines." }
+  node @t-diagnostics concept "core/diagnostics/ (1 file, 78 lines)" { text @d "Failure to terminal lines." }
+  node @t-shared concept "core/shared/ (3 files, 93 lines)" { text @d "Result helpers, parse helper, checks." }
+  node @t-argv concept "adapters/argv/ (1 file, 153 lines)" { text @d "Node parseArgs to raw words and flags." }
+  node @t-http concept "adapters/service-http/ (4 files, 413 lines)" { text @d "HTTP to the local service: 127.0.0.1 only, token, no redirects, 35 s timeout. Read, authoring and resource calls." }
+  node @t-files concept "adapters/files/ (3 files, 416 lines)" { text @d "Source and --out files, saved-request journal, safe resource file reads." }
+  node @t-render-io concept "adapters/render/ (3 files, 200 lines)" { text @d "Temp asset folder, render file read and write, PNG engine start-up." }
+
+  node @jobs concept "Who does each job" size=large {
+    table @jobs-t columns=["Job", "Before: where", "Target: where"] {
+      row @j1 cells=["Run the command and print", "cli/main.ts, cli/render.ts. render.ts also reads its own flags and throws TypeError", "cli/canvas.ts, cli/render.ts. Print and set the exit code only"]
+      row @j2 cells=["Turn typed words into a command", "adapters/inputs/arguments.ts (293 lines)", "adapters/argv/ reads the words. core/commands/ checks them against one command table"]
+      row @j3 cells=["Pick which code runs", "contract/compose.ts, plus a switch in core/commands/execute.ts", "core/commands/dispatch.ts: one switch over every command"]
+      row @j4 cells=["describe, list, read, inspect, receipt", "core/commands/execute.ts and adapters/inputs/semantic-inputs.ts", "core/reads/"]
+      row @j5 cells=["create, replace, patch, preview, apply, retry", "core/commands/author.ts. semantic-inputs.ts (290 lines) builds requests and decodes answers", "core/authoring/ builds the request. contract/records/service-answers.ts decodes answers"]
+      row @j6 cells=["Talk to the local service", "adapters/edge/transport.ts takes any path. 11 route strings sit in 4 core files", "adapters/service-http/. A fixed list of 5 read and 8 write routes. Core names no routes"]
+      row @j7 cells=["Save a request so it can be retried", "adapters/inputs/files.ts", "adapters/files/ (request journal)"]
+      row @j8 cells=["Font and image bytes", "core/commands/resources.ts and adapters/inputs/resource-inputs.ts", "core/resources/ (stage, back up, restore) and adapters/files/resource-reader.ts"]
+      row @j9 cells=["Read .theme files", "adapters/inputs/theme-config.ts (throws)", "core/themes/ (returns errors as values)"]
+      row @j10 cells=["theme admit, recipe admit", "core/commands/presets.ts and adapters/inputs/preset-inputs.ts", "core/presets/"]
+      row @j11 cells=["Profiles (build-spec@1)", "core/profiles/ and core/profiles/lint/", "core/profiles/, split into build-spec/, lint/, lint/sections/, lint/repo/"]
+      row @j12 cells=["render:png", "adapters/edge/headless.ts (367) does the whole job. contract/render.ts (202) wires it", "core/render/ does the steps. adapters/render/ touches files. contract/compose/render*.ts wires it"]
+      row @j13 cells=["Connect the real parts", "contract/compose.ts builds Language twice, contract/render.ts once more", "contract/compose/. Language is built once"]
+      row @j14 cells=["Outside dependencies", "contract/ports/runtime.ts: one bag", "contract/ports/: 11 interfaces, one per outside thing"]
+      row @j15 cells=["Failure to terminal text", "core/output/diagnostics.ts", "core/diagnostics/format.ts"]
+    }
+  }
+
+  node @imports concept "Import rules" size=large {
+    table @imports-t columns=["Folder", "May import"] {
+      row @i1 cells=["core/", "core/, and contract/ records, ports, brands.ts (ID types), schemas.ts, errors.ts. No packages, no Node"]
+      row @i2 cells=["adapters/", "contract/ records, ports, brands.ts, schemas.ts, errors.ts, plus Node and packages. Never core/ or another adapter"]
+      row @i3 cells=["contract/ (outside compose/)", "Never adapters/. Only contract/api.ts reaches core/"]
+      row @i4 cells=["cli/", "contract/index.ts and Node only"]
+    }
+    text @imports-note "Before: the same folders, but rules sat in adapters/ (flag checks, request building) and core/ named 11 server routes." role=caption
+  }
+  node @dupes concept "Duplicates removed" size=large {
+    table @dupes-t columns=["Thing", "Before", "Target"] {
+      row @u1 cells=["Language built", "3 places", "1 (contract/compose/language.ts)"]
+      row @u2 cells=["sha256: to hex conversion", "4 places", "1 (core/resources/digests.ts)"]
+      row @u3 cells=["Code that wraps a change request for the service", "2 copies", "1 (core/authoring/envelope.ts)"]
+      row @u4 cells=["Font and image licence filter", "2 copies", "1 (core/resources/provenance.ts)"]
+      row @u5 cells=["Service route strings in core/", "11, in 4 files", "0"]
+      row @u6 cells=["--theme-file read", "3 times", "Once (no visible change)"]
+    }
+  }
+
+  node @ids concept "IDs" size=large {
+    table @ids-t columns=["Item", "Before", "Target"] {
+      row @id1 cells=["Collection ID, request ID, revision, generation, digests, server, workspace", "Plain text or number", "Checked types. A bad value is refused where it enters"]
+      row @id2 cells=["The CLI's own ID types", "3, render:png only", "7"]
+      row @id3 cells=["ID types reused from capabilities", "0", "12"]
+    }
+  }
+  node @codes concept "Error codes" size=large {
+    table @codes-t columns=["Item", "Before", "Target"] {
+      row @c1 cells=["Code type", "Open: any text", "Fixed list of 34 codes: the 32 CLI codes + service-rejected and credential-unavailable"]
+      row @c2 cells=["The CLI's own codes", "31 in use", "32: the same 31 + journal-corrupt. In 9 groups: arguments, files, saved requests, font and image files, source, themes, profiles, connection, setup"]
+      row @c3 cells=["Service or credential failure", "The service's error is returned as the CLI's error", "service-rejected or credential-unavailable, holding the owner's error whole. Printed the same"]
+      row @c4 cells=["render:png failure", "render-failed, 6 kinds, including invalid-theme", "render-failed, 6 kinds. invalid-theme moves to the main list. invalid-asset-pin is new"]
+      row @c5 cells=["profile lint result", "valid true or false, findings have no codes", "passed, failed (1 or more findings) or unsupported-source. 26 rule codes"]
+    }
+  }
+  node @shape concept "Command shape" size=large {
+    table @shape-t columns=["Item", "Before", "Target"] {
+      row @s1 cells=["Command record", "One flat record, 9 fields, most optional", "One shape per command: help, 10 service shapes (15 names), 3 profile shapes"]
+      row @s2 cells=["Where routing is decided", "contract/compose.ts, plus a switch in core", "The parsed command says it: help, profile or service"]
+      row @s3 cells=["Command names", "18", "18 (same)"]
+      row @s4 cells=["pnpm canvas flags", "15", "15 (same)"]
+      row @s5 cells=["render:png flags", "6: collection, theme, theme-file, out, format, labels", "6 (same)"]
+      row @s6 cells=["Defaults", "server http://127.0.0.1:5174, mode create, format png", "Same"]
+      row @s7 cells=["A flag the command does not use", "Silently ignored", "Refused: invalid-arguments"]
+    }
+  }
+  node @options concept "Flags each command takes" size=large {
+    table @options-t columns=["Command", "Takes", "Flags"] {
+      row @o1 cells=["describe, list", "nothing", "out, server, workspace"]
+      row @o2 cells=["read", "ID", "section, object, out, server, workspace"]
+      row @o3 cells=["inspect", "ID", "out, server, workspace"]
+      row @o4 cells=["create, theme admit", "FILE", "request, out, server, workspace"]
+      row @o5 cells=["replace, patch", "FILE", "revision, request, out, server, workspace"]
+      row @o6 cells=["preview", "FILE", "mode, revision, request, out, server, workspace"]
+      row @o7 cells=["recipe admit", "FILE", "id, version, family, title, request, out, server, workspace"]
+      row @o8 cells=["recipe instantiate", "PIN", "namespace, out, server, workspace"]
+      row @o9 cells=["apply, receipt, retry", "REQUEST_ID", "out, server, workspace"]
+      row @o10 cells=["profile describe", "build-spec@1", "out"]
+      row @o11 cells=["profile scaffold", "build-spec@1", "id, title, out"]
+      row @o12 cells=["profile lint", "FILE", "profile, out"]
+      row @o13 cells=["--help", "nothing", "Any other flag is ignored (same as before)"]
+    }
+    text @options-note "Before: every command took all 15 flags and ignored the ones it did not use. Only --section, --object, --profile, --id and --title were limited. Target: the table above; any other flag is refused." role=caption
+  }
+
+  node @f-headless concept "adapters/edge/headless.ts" role=warning { text @d "367 lines. The whole render:png job in one file." }
+  node @f-sections concept "core/profiles/lint/sections.ts" role=warning { text @d "308 lines. Lint rules for sections." }
+  node @f-test concept "tests/commands.test.ts" role=warning { text @d "502 lines. The CLI's only test file." }
+  node @f-near concept "Close to 300 lines" size=large { text @d "adapters/inputs/arguments.ts 293, adapters/inputs/semantic-inputs.ts 290." }
+  node @f-compose concept "contract/compose/render*.ts" { text @d "5 files, 437 lines. Connects the render's parts." }
+  node @f-lint concept "core/profiles/lint/ (4 files)" size=large { text @d "sections/appendix-sequence.ts 142, sections/required.ts 106, appendix-ids.ts 46, sections/identity.ts 32." }
+  node @f-gone concept "Removed" { text @d "All apps tests are removed." }
+  node @f-spread concept "Both deleted" size=large { text @d "Their work moved to core/commands/, adapters/argv/, core/authoring/, core/reads/ and contract/records/service-answers.ts." }
+  node @f-largest note "Target: the 5 largest files, all under 300 lines" size=large { list @l ["core/themes/grammar.ts 232", "contract/errors.ts 213", "adapters/files/resource-reader.ts 213", "core/commands/values.ts 205", "core/themes/lines.ts 202"] }
+
+  wire @fw1 @f-headless -> @t-render "split into" kind=flow
+  wire @fw2 @f-headless -> @t-render-io "split into" kind=flow
+  wire @fw3 @f-headless -> @f-compose "split into" kind=flow
+  wire @fw4 @f-sections -> @f-lint "split into" kind=flow
+  wire @fw5 @f-test -> @f-gone "removed" kind=flow
+  wire @fw6 @f-near -> @f-spread "deleted" kind=flow
+
+  node @changes-link note "The CLI's 14 behaviour changes, and what stays the same, are in collection 5b · What changes for you: service and CLI (rebuild-5b-service-cli-changes)." size=large {}
+
+  section @s1 "1 · apps/cli in numbers" mode=grid layout=grid columns=2 order=0 {
+    show @n-size @n-layers
+  }
+  section @s2 "2 · Folders — before and target" mode=modules layout=grid columns=2 order=1 {
+    group @gb "BEFORE · 44 files, 5,238 lines" layout=grid columns=1 {
+      show @b-cli
+      group @gb-contract "contract/ · 14 files, 720 lines" layout=grid columns=2 { show @b-contract @b-ports @b-records }
+      group @gb-core "core/ · 19 files, 2,336 lines" layout=grid columns=2 { show @b-commands @b-output @b-profiles @b-lint @b-render }
+      group @gb-adapters "adapters/ · 8 files, 1,611 lines" layout=grid columns=2 { show @b-inputs @b-edge }
+      show @b-tests
+    }
+    group @gt "TARGET · 109 files, 9,408 lines" layout=grid columns=1 {
+      show @t-cli
+      group @gt-contract "contract/ · 36 files, 2,288 lines" layout=grid columns=2 { show @t-contract @t-compose @t-records @t-ports }
+      group @gt-core "core/ · 60 files, 5,887 lines" layout=grid columns=2 { show @t-commands @t-reads @t-authoring @t-resources @t-presets @t-themes @t-profiles @t-render @t-diagnostics @t-shared }
+      group @gt-adapters "adapters/ · 11 files, 1,182 lines" layout=grid columns=2 { show @t-argv @t-http @t-files @t-render-io }
+    }
+  }
+  section @s4 "3 · Who does each job, before and target" mode=grid layout=grid columns=1 order=2 {
+    show @jobs
+  }
+  section @s5 "4 · Import rules and duplicates removed" mode=grid layout=grid columns=2 order=3 {
+    show @imports @dupes
+  }
+  section @s6 "5 · IDs and error codes" mode=grid layout=grid columns=2 order=4 {
+    show @ids @codes
+  }
+  section @s7 "6 · Commands and flags" mode=grid layout=grid columns=2 order=5 {
+    show @shape @options
+  }
+  section @s8 "7 · Files over 300 lines, before and target" mode=flow layout=layered direction=right order=6 {
+    show @f-headless @f-sections @f-test @f-near @t-render @t-render-io @f-compose @f-lint @f-gone @f-spread @f-largest
+    connect @fw1 @fw2 @fw3 @fw4 @fw5 @fw6
+  }
+  section @s9 "8 · Behaviour changes" mode=grid layout=grid columns=1 order=7 {
+    show @changes-link
+  }
+}

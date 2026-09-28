@@ -1,0 +1,228 @@
+canvas 1
+collection @rebuild-1a-web-journeys "Apps rebuild · 1a / Web journeys — open, add, connect: before and target" {
+
+  node @p-you start "You click or type" role=primary size=small {}
+  node @p-facade step "Entry point (facade)" { text @p-facade-d "The code a button or the Canvas calls. Makes any new IDs. Sends one event: a message saying what happened." }
+  node @p-runner step "Queue (runner)" { text @p-runner-d "Handles one event at a time. 1 file, ~140 lines." }
+  node @p-machine step "Rules (machines)" role=primary { text @p-machine-d "16 machines. They only decide: an event comes in; a new state and a list of I/O to do come out." }
+  node @p-exec step "I/O (executors)" role=supporting { text @p-exec-d "Fetch, save, draw. 6 files, ~710 lines." }
+  node @p-view step "React redraws once" role=success { text @p-view-d "When the queue is empty. Each button shows if it can be used, and why not." }
+  node @p-before note "Before: every journey runs inside workspace-session.ts. 1,746 lines, 170 functions, 14 shared variables, 50 places that redraw React." {}
+  node @p-key note "In the target diagrams below, 'Entry point', 'Rules' and 'I/O' are these three boxes." {}
+  wire @p-w1 @p-you -> @p-facade "click" kind=flow
+  wire @p-w2 @p-facade -> @p-runner "event" kind=flow
+  wire @p-w3 @p-runner -> @p-machine "next event" kind=flow
+  wire @p-w4 @p-machine -> @p-exec "I/O to do" kind=flow
+  wire @p-w5 @p-exec -> @p-runner "the answer, as an event" kind=flow style=dashed
+  wire @p-w6 @p-machine -> @p-view "new state" kind=flow
+
+  node @you participant "You" role=primary {}
+  node @ws participant "workspace-session.ts" role=warning {}
+  node @sub participant "submission-session.ts" {}
+  node @service participant "Service" role=supporting {}
+  node @canvas participant "Canvas" role=supporting {}
+  node @nav participant "Entry point: library" {}
+  node @forms-facade participant "Entry point: Add panel" {}
+  node @conn-facade participant "Entry point: wire panel" {}
+  node @intake participant "Entry point: Canvas" {}
+  node @m-diagram participant "Rules: open diagram" role=primary {}
+  node @m-forms participant "Rules: Add panel" role=primary {}
+  node @m-conn participant "Rules: new wire" role=primary {}
+  node @m-journal participant "Rules: saves" role=primary {}
+  node @x-service participant "I/O: server reads" role=supporting {}
+  node @x-scene participant "I/O: Canvas" role=supporting {}
+  node @x-stores participant "I/O: browser" role=supporting {}
+  node @x-storage participant "I/O: browser storage" role=supporting {}
+  node @x-apply participant "I/O: send to server" role=supporting {}
+
+  section @a1-pattern "1 · Target: how every journey runs" mode=flow layout=layered direction=right order=0 {
+    show @p-you @p-facade @p-runner @p-machine @p-exec @p-view @p-before @p-key
+    connect @p-w1 @p-w2 @p-w3 @p-w4 @p-w5 @p-w6
+  }
+
+  section @a2-open-before "2 · Open a diagram — before" mode=sequence direction=down gap=compact order=1 {
+    show @you @ws @service @canvas
+    event @ob1 @you -> @ws "Click a diagram in the library" kind=call activate=true
+    event @ob2 @ws -> @ws "Cancel the older render" kind=call
+    event @ob2b @ws -> @you "Status 'Rendering diagram…'" kind=return
+    event @ob3 @ws -> @service "GET /api/v1/render" kind=call
+    event @ob4 @service -> @ws "The drawing" kind=return
+    event @ob5 @ws -> @ws "Still the newest request?" kind=call
+    event @ob6 @ws -> @ws "4 checks" kind=call
+    fragment @ob-alt alt "Checks: server restarted? right diagram? in the library list? newest data?" {
+      branch @ob-pass "All pass" {
+        event @ob7 @ws -> @canvas "Reuse or open the Canvas. Keep the camera, close the old one" kind=call
+        event @ob8 @ws -> @ws "Record the visit, write the URL" kind=call
+        event @ob9 @ws -> @you "Diagram shown. Status 'Saved'" kind=return activate=false
+      }
+      branch @ob-newer "Newer data arrived while opening" {
+        event @ob10n @ws -> @service "Reread the workspace" kind=async
+        event @ob11n @ws -> @you "Opening fails, then reopens. From the chooser: 'Could not open' + Retry" kind=return activate=false
+      }
+      branch @ob-fail "Another check fails" {
+        event @ob10 @ws -> @service "Reread the workspace (not for 'wrong diagram')" kind=async
+        event @ob11 @ws -> @you "Current diagram stays. 'Could not open {title}'" kind=return activate=false
+      }
+    }
+  }
+
+  section @a3-open-target "3 · Open a diagram — target" mode=sequence direction=down gap=compact order=2 {
+    show @you @nav @m-diagram @x-service @x-scene @x-stores
+    event @ot1 @you -> @nav "Click a diagram in the library" kind=call activate=true
+    event @ot2 @nav -> @m-diagram "Open this diagram" kind=call
+    event @ot3 @m-diagram -> @m-diagram "Clear the problem bar" kind=call
+    event @ot4 @m-diagram -> @x-service "Ask for the drawing (GET /api/v1/render)" kind=call
+    fragment @ot-newer opt "Newer data arrives while waiting" {
+      event @ot4n @m-diagram -> @x-service "Ask again with the newer data. Nothing shown to you" kind=call
+    }
+    event @ot5 @x-service -> @m-diagram "The drawing" kind=return
+    event @ot6 @m-diagram -> @m-diagram "The same 4 checks" kind=call
+    fragment @ot-alt alt "Checks" {
+      branch @ot-pass "All pass" {
+        event @ot7 @m-diagram -> @x-scene "Reuse or open the Canvas" kind=call
+        event @ot8 @x-scene -> @m-diagram "Shown" kind=return
+        event @ot9 @m-diagram -> @x-stores "Record the visit, write the URL" kind=async
+        event @ot10 @m-diagram -> @you "Diagram shown. Status 'Saved'" kind=return activate=false
+      }
+      branch @ot-fail "A check fails" {
+        event @ot11a @m-diagram -> @x-service "Reread the workspace (not for 'wrong diagram')" kind=async
+        event @ot11 @m-diagram -> @you "Current diagram stays. 'Could not open {title}'" kind=return activate=false
+      }
+    }
+  }
+
+  section @a4-add-before "4 · Add an object — before" mode=sequence direction=down gap=compact order=3 {
+    show @you @ws @sub @service
+    event @ab1 @you -> @ws "Type in the Object form" kind=call activate=true
+    event @ab2 @ws -> @ws "Reads the collection once" kind=call
+    event @ab3 @you -> @ws "Click 'Add module'" kind=call
+    event @ab4 @ws -> @you "Button shows 'Adding…'" kind=return
+    event @ab5 @ws -> @ws "Then check the draft" kind=call
+    fragment @ab-alt alt "Draft" {
+      branch @ab-bad "Invalid" {
+        event @ab6 @ws -> @you "Draft kept, reason shown in the form" kind=return activate=false
+      }
+      branch @ab-ok "Valid" {
+        event @ab7 @ws -> @you "Status 'Saving…'" kind=return
+        event @ab8 @ws -> @sub "submit" kind=call
+        event @ab9 @sub -> @sub "Only now: its own checks" kind=call
+        event @ab9b @sub -> @sub "Save to browser storage" kind=call
+        event @ab10 @sub -> @service "POST /api/v1/authoring/apply" kind=call
+        event @ab11 @service -> @sub "Answer" kind=return
+        event @ab11b @sub -> @ws "Result" kind=return
+        fragment @ab-answer alt "Answer" {
+          branch @ab-saved "Saved" {
+            event @ab12 @ws -> @ws "Result passed to 7 places" kind=call
+            event @ab12b @ws -> @ws "one after another" kind=call
+            event @ab13 @ws -> @you "Form emptied. Diagram redrawn" kind=return activate=false
+          }
+          branch @ab-refused "Refused" {
+            event @ab14 @ws -> @you "Draft kept. Reason in the form and in the problem bar" kind=return activate=false
+          }
+          branch @ab-unclear "No clear answer" {
+            event @ab15 @ws -> @you "Draft kept. Retry resends the same request" kind=return activate=false
+          }
+        }
+      }
+    }
+  }
+
+  section @a5-add-target "5 · Add an object — target" mode=sequence direction=down gap=compact order=4 {
+    show @you @forms-facade @m-forms @m-journal @x-storage @x-apply
+    event @at1 @you -> @forms-facade "Type in the Object form" kind=call activate=true
+    event @at2 @forms-facade -> @m-forms "Draft changed" kind=call
+    event @at2b @m-forms -> @m-forms "Reads the collection each edit" kind=call
+    event @at3 @you -> @forms-facade "Click 'Add module'" kind=call
+    event @at4 @forms-facade -> @m-forms "Add, with a new object ID and request ID" kind=call
+    event @at5 @m-forms -> @m-forms "Check the draft FIRST" kind=call
+    fragment @at-alt alt "Draft" {
+      branch @at-bad "Invalid" {
+        event @at6 @m-forms -> @you "Reason shown. Nothing sent" kind=return activate=false
+      }
+      branch @at-ok "Valid" {
+        event @at7 @m-forms -> @m-journal "Send it. Form locked until the answer" kind=call
+        event @at8 @m-journal -> @m-journal "Same checks as every save" kind=call
+        event @at9 @m-journal -> @x-storage "Save the request in the browser" kind=call
+        event @at10 @x-storage -> @m-journal "Saved" kind=return
+        event @at11 @m-journal -> @x-apply "POST /api/v1/authoring/apply" kind=call
+        event @at12 @x-apply -> @m-journal "Answer" kind=return
+        fragment @at-answer alt "Answer" {
+          branch @at-saved "Saved" {
+            event @at13a @m-journal -> @m-forms "Saved" kind=return
+            event @at13 @m-forms -> @you "Form emptied. Diagram redrawn from the returned data" kind=return activate=false
+          }
+          branch @at-refused "Refused" {
+            event @at14a @m-journal -> @m-forms "Refused" kind=return
+            event @at14 @m-forms -> @you "Back to editing, same draft. Reason in the problem bar only" kind=return activate=false
+          }
+          branch @at-unclear "No clear answer" {
+            event @at15 @m-journal -> @you "Draft kept. Retry resends the same request (same as before)" kind=return activate=false
+          }
+        }
+      }
+    }
+  }
+
+  section @a6-connect-before "6 · Connect two nodes — before" mode=sequence direction=down gap=compact order=5 {
+    show @you @ws @sub @service
+    event @cb1 @you -> @ws "Drag from one node to another" kind=call activate=true
+    event @cb2 @ws -> @ws "Refuse if a move review is open" kind=call
+    event @cb3 @ws -> @ws "Build the draft" kind=call
+    event @cb3b @ws -> @you "Right panel opens. Status 'Review new connection'" kind=return
+    event @cb4 @you -> @ws "Set label and kind, click 'Apply connection'" kind=call
+    event @cb5 @ws -> @ws "Check, build the request" kind=call
+    event @cb5b @ws -> @ws "ID: 'relationship-' + drag ID" kind=call
+    event @cb6 @ws -> @sub "submit" kind=call
+    event @cb7 @sub -> @service "POST /api/v1/authoring/apply" kind=call
+    event @cb8 @service -> @sub "Answer" kind=return
+    event @cb8b @sub -> @ws "Result" kind=return
+    fragment @cb-alt alt "Answer" {
+      branch @cb-saved "Saved" {
+        event @cb9 @ws -> @you "Connection closed" kind=return activate=false
+      }
+      branch @cb-refused "Refused" {
+        event @cb10 @ws -> @you "Error shown. Dismiss: back to editing" kind=return activate=false
+      }
+    }
+    event @cb11 @ws -> @ws "Leave diagram: draft KEPT" kind=call
+  }
+
+  section @a7-connect-target "7 · Connect two nodes — target" mode=sequence direction=down gap=compact order=6 {
+    show @you @intake @conn-facade @m-conn @x-stores @m-journal
+    event @ct1 @you -> @intake "Drag from one node to another" kind=call activate=true
+    event @ct2 @intake -> @m-conn "Wire started" kind=call
+    event @ct3 @m-conn -> @m-conn "No move in progress?" kind=call
+    event @ct3b @m-conn -> @m-conn "Build the draft" kind=call
+    event @ct4 @m-conn -> @x-stores "Open the right panel" kind=call
+    event @ct5 @you -> @conn-facade "Set label and kind, click 'Apply connection'" kind=call
+    event @ct6 @conn-facade -> @m-conn "Apply, with a new wire ID and request ID" kind=call
+    event @ct7 @m-conn -> @m-conn "Same diagram version?" kind=call
+    event @ct7b @m-conn -> @m-conn "Label not blank?" kind=call
+    event @ct8 @m-conn -> @m-journal "Send it (same checks as every save)" kind=call
+    event @ct9 @m-journal -> @m-conn "Answer" kind=return
+    fragment @ct-alt alt "Answer" {
+      branch @ct-saved "Saved" {
+        event @ct10 @m-conn -> @you "Connection closed" kind=return activate=false
+      }
+      branch @ct-refused "Refused" {
+        event @ct11 @m-conn -> @you "Shown as refused until you dismiss it. Then back to editing" kind=return activate=false
+      }
+    }
+    event @ct12 @m-conn -> @m-conn "Leave diagram: draft DROPPED" kind=call
+  }
+
+  node @size concept "Where each journey's code lives" {
+    table @size-t columns=["Journey", "Before", "Target"] {
+      row @size-open cells=["Open a diagram", "Inside workspace-session.ts, mixed with every other journey", "Rules: open diagram. 9 files, ~1,013 lines"]
+      row @size-add cells=["Add an object", "Inside workspace-session.ts", "Rules: Add panel. 3 files, ~320 lines"]
+      row @size-conn cells=["Connect two nodes", "Inside workspace-session.ts", "Rules: new wire. 2 files, ~160 lines"]
+      row @size-save cells=["Every save", "submission-session.ts: 234 lines", "Rules: saves. 7 files, ~690 lines"]
+      row @size-file cells=["workspace-session.ts", "1,746 lines, 170 functions", "Deleted"]
+    }
+    text @size-note "Before, one file held every journey, so a single journey has no size of its own. Target sizes are the plan's estimates." role=caption
+  }
+
+  section @a8-size "8 · Where the code lives: before and target" mode=grid layout=grid columns=1 order=7 {
+    show @size
+  }
+}
