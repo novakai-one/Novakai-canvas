@@ -68,7 +68,7 @@ function renderJob(
   const library = headlessLibrary();
   if (!library.ok) return library;
   const view = { collections: [collection], presets: catalog, library: library.value };
-  return jobs.create(collection, view, null, 'headless');
+  return jobs.create(collection, view, 'headless');
 }
 
 /** The empty library snapshot headless renders run against. Fails with Library's diagnostics. */

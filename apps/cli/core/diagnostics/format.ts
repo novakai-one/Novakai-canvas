@@ -5,8 +5,10 @@
 import type { CliFailure, LocalFailure } from '../../contract/errors.js';
 import type { FailureSource, OperationSource } from '../../contract/records/foreign.js';
 
-/** A validation batch: the evidence that is not an operation failure. */
-type ValidationSource = Exclude<FailureSource, OperationSource>;
+/** A validation batch: the evidence that lists diagnostics. */
+type ValidationSource = Extract<FailureSource, { readonly diagnostics: unknown }>;
+/** A nested owner failure: the evidence that is not a validation batch. Its code is the owner's. */
+type NestedFailure = Exclude<FailureSource, ValidationSource>;
 /** One validation diagnostic: a record issue (code, path) or a Language issue (code, span). */
 type ValidationIssue = ValidationSource['diagnostics'][number];
 /** A Model record issue addressed by its path. */
@@ -50,7 +52,7 @@ function sourceLines(source: FailureSource | undefined): readonly string[] {
 }
 
 /** A nested owner failure keeps its order and its cleanup failure. */
-function operationLines(source: OperationSource): readonly string[] {
+function operationLines(source: NestedFailure): readonly string[] {
   return [
     `${source.code} ${source.path}: ${source.message}`,
     source.recovery,

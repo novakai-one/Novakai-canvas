@@ -10,6 +10,7 @@
 import { join } from 'node:path';
 import {
   createHeadlessBindings,
+  hostPath,
   prepareInstallation,
   validReport,
   type BuiltinResources,
@@ -95,8 +96,8 @@ async function environmentIn(
   store: TempAssetStore,
 ): Promise<Result<RenderEnvironment, RenderEvidence>> {
   const installation = await prepareInstallation(
-    join(request.root, 'resources'),
-    join(request.root, 'capability/design-system'),
+    hostPath.parse(join(request.root, 'resources')),
+    hostPath.parse(join(request.root, 'capability/design-system')),
     store.assets,
   );
   if (!installation.ok) return installation;
@@ -179,7 +180,9 @@ function serviceProduction(
   const jobs = owners.service.createRenderJobs({
     ...environment,
     sources: environment.installation.tokens,
-    wasmResource: join(owners.request.root, 'resources/vendor/layout/libavoid.wasm'),
+    wasmResource: hostPath.parse(
+      join(owners.request.root, 'resources/vendor/layout/libavoid.wasm'),
+    ),
   });
   return { jobs, produceDiagram: owners.service.produceDiagram, inspectDocument: validReport };
 }
