@@ -7,11 +7,17 @@
  * adapters both call them and core may import only records/, ports/, brands, schemas and errors.
  */
 import { filePath, type FilePath, type RequestId, type ResourceAlias } from './brands.js';
-import type { FailureSource, OperationSource, SourcePosition } from './records/foreign.js';
+import type {
+  FailureSource,
+  OperationSource,
+  SourcePosition,
+  ThemeSourceCode,
+} from './records/foreign.js';
 import type { NativeDetail, ProviderFault, RenderFault } from './records/render-fault.js';
 
 /**
- * A failure the CLI found itself.
+ * A failure in the CLI's local shape (`LocalFailure`). The CLI finds every code itself, except the
+ * theme codes at the end, which Templates writes.
  *
  * Arguments (nothing was read or sent; an empty FILE or --out path reports the local-file code its
  * read or write would give):
@@ -55,10 +61,7 @@ import type { NativeDetail, ProviderFault, RenderFault } from './records/render-
  * - `revision-required`: replace or patch without `--revision`.
  * - `revision-conflict`: `--revision` is not the collection's current revision.
  *
- * Themes, from Templates' theme grammar and passed on as it wrote them: `invalid-theme` (the file
- * does not match the grammar, or its header @id or version is not a preset ID or version),
- * `duplicate-token` (one token set twice). Profiles: `profile-structure` (lint findings, listed in
- * the message).
+ * Profiles: `profile-structure` (lint findings, listed in the message).
  *
  * Transport:
  * - `connection-uncertain`: no confirmed answer. Check the receipt before retrying.
@@ -70,6 +73,10 @@ import type { NativeDetail, ProviderFault, RenderFault } from './records/render-
  * Setup: `cli-unavailable` and `render-unavailable` (an unexpected throw at the entry point).
  *   `cli-unavailable` also reports a fresh request ID that fails Authoring's grammar; nothing was
  *   sent.
+ *
+ * Themes (`ThemeSourceCode`): Templates' `.theme` grammar (`readThemeSource`) returns these and
+ * the CLI passes them on as written: `invalid-theme` (the file does not match the grammar, or its
+ * header @id or version is not a preset ID or version), `duplicate-token` (one token set twice).
  */
 export type LocalCode =
   | 'invalid-command'
@@ -97,13 +104,12 @@ export type LocalCode =
   | 'already-exists'
   | 'revision-required'
   | 'revision-conflict'
-  | 'invalid-theme'
-  | 'duplicate-token'
   | 'profile-structure'
   | 'connection-uncertain'
   | 'invalid-response'
   | 'cli-unavailable'
-  | 'render-unavailable';
+  | 'render-unavailable'
+  | ThemeSourceCode;
 
 /**
  * A failure another owner wrote, kept whole in `foreign`.

@@ -24,6 +24,7 @@ export type {
   FontRole,
   ThemeAdmission,
   ThemeSource,
+  ThemeSourceCode,
   ThemeSourceFailure,
 } from '@novakai/canvas-templates';
 export type {
