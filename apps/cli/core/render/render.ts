@@ -112,11 +112,27 @@ function catchThrown<T>(
   return work.catch(providerFailure);
 }
 
-/** Admits the themes, loads the collection, then lays it out and exports it. */
+/** Loads the drawing, has the service lay it out, then exports every section to its file. */
 async function renderInEnvironment(
   request: RenderRequest,
   ports: JoinedPorts,
 ): Promise<Result<RenderReport, RenderFailureSource>> {
+  const drawing = await loadDrawing(request, ports);
+  if (!drawing.ok) {
+    return drawing;
+  }
+  const laidOut = await layOutDrawing(ports, drawing.value);
+  if (!laidOut.ok) {
+    return laidOut;
+  }
+  return exportDrawing(request, ports, laidOut.value);
+}
+
+/** Admits the themes, then loads the collection `request` names against them. */
+async function loadDrawing(
+  request: RenderRequest,
+  ports: JoinedPorts,
+): Promise<Result<Drawing, RenderFailureSource>> {
   const themes = await admitThemes(request, ports);
   if (!themes.ok) {
     return themes;
@@ -126,18 +142,14 @@ async function renderInEnvironment(
     return collection;
   }
   const drawing: Drawing = { collection: collection.value, catalog: themes.value.catalog };
-  return layOutDrawing(request, ports, drawing);
+  return success(drawing);
 }
 
-/**
- * Has the service lay out the drawing, builds the snapshot Export draws from, then exports every
- * section.
- */
+/** Has the service lay out the drawing, then builds the snapshot Export draws from. */
 async function layOutDrawing(
-  request: RenderRequest,
   ports: JoinedPorts,
   drawing: Drawing,
-): Promise<Result<RenderReport, RenderFailureSource>> {
+): Promise<Result<LaidOutDrawing, RenderFailureSource>> {
   const document = await ports.output.layOut(drawing.collection, drawing.catalog);
   if (!document.ok) {
     return document;
@@ -156,7 +168,7 @@ async function layOutDrawing(
     document: document.value,
     snapshot: snapshot.value,
   };
-  return exportDrawing(request, ports, laidOut);
+  return success(laidOut);
 }
 
 /**

@@ -138,6 +138,9 @@ function checkCollectionName(typedName: string): Result<CollectionSelector> {
 /** Checks `--out`, the folder to write to. */
 function checkOutFlag(rawArguments: RenderArguments): Result<FilePath> {
   const typedOut = flagText(rawArguments, 'out');
+  if (typedOut === undefined) {
+    return requiredFlagFailure('out');
+  }
   const out = filePath.safeParse(typedOut);
   if (!out.success) {
     return requiredFlagFailure('out');

@@ -56,7 +56,7 @@ export async function admitSourceAssets(
     return parsed;
   }
   const declarations = parsed.value.resources.filter(isAsset);
-  const records = await describeAssets(source.path, declarations, dependencies);
+  const records = await storeAssets(source.path, declarations, dependencies);
   if (!records.ok) {
     return records;
   }
@@ -72,20 +72,18 @@ function isAsset(declaration: ResourceRequest): boolean {
  * Stores every declared font and image, all at once, and writes Model's record of each. Gives
  * back the records in declaration order, or the first failure in that order.
  */
-async function describeAssets(
+async function storeAssets(
   file: FilePath,
   declarations: readonly ResourceRequest[],
   dependencies: AssetDependencies,
 ): Promise<Result<readonly CollectionAsset[], RenderFailureSource>> {
-  const describing = declarations.map((declaration) =>
-    describeAsset(file, declaration, dependencies),
-  );
-  const records = await Promise.all(describing);
+  const storing = declarations.map((declaration) => storeAsset(file, declaration, dependencies));
+  const records = await Promise.all(storing);
   return combined(records);
 }
 
 /** Stores one declared font or image, reads it back, and writes Model's record of it. */
-async function describeAsset(
+async function storeAsset(
   file: FilePath,
   declaration: ResourceRequest,
   dependencies: AssetDependencies,

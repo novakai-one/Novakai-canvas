@@ -46,9 +46,6 @@ interface AdmittedFile {
   readonly id: PresetId;
 }
 
-/** A catalog, or the evidence of the first theme that failed. */
-type CatalogResult = Result<Catalog, RenderFailureSource>;
-
 /**
  * Admits every repo theme and the `--theme-file`, if typed, then picks the theme to draw with.
  * The pick is `--theme`, else the `--theme-file`'s `@id`, else none (the collection keeps its own).
@@ -63,56 +60,48 @@ export async function admitThemes(
   if (!shippedPaths.ok) {
     return shippedPaths;
   }
-  const shippedCatalog = await admitShippedThemes(shippedPaths.value, dependencies);
+  const shippedCatalog = await admitShippedThemes(
+    shippedPaths.value,
+    dependencies.themes.catalog,
+    dependencies,
+  );
   if (!shippedCatalog.ok) {
     return shippedCatalog;
   }
-  return admitThemeFileFlag(themeFlags, shippedCatalog.value, dependencies);
+  return admitThemeFileAndPickTheme(themeFlags, shippedCatalog.value, dependencies);
 }
 
-/** Admits the shipped theme files one after another, each into the catalog the one before grew. */
-function admitShippedThemes(
+/**
+ * Admits the shipped theme files one after another, each into the catalog the one before grew.
+ * Stops at the first file that fails, so later files are not read.
+ */
+async function admitShippedThemes(
   paths: readonly FilePath[],
+  catalog: Catalog,
   dependencies: ThemeDependencies,
-): Promise<CatalogResult> {
-  const startingCatalog: Promise<CatalogResult> = Promise.resolve(
-    success(dependencies.themes.catalog),
-  );
-  // `admitNextThemeFile` passes the first failure along unchanged, so later files are not read.
-  return paths.reduce(
-    (catalogSoFar, path) => admitNextThemeFile(catalogSoFar, path, dependencies),
-    startingCatalog,
-  );
-}
-
-/** Admits one more theme file into the catalog so far, or passes an earlier failure on. */
-async function admitNextThemeFile(
-  catalogSoFar: Promise<CatalogResult>,
-  path: FilePath,
-  dependencies: ThemeDependencies,
-): Promise<CatalogResult> {
-  const catalog = await catalogSoFar;
-  if (!catalog.ok) {
-    return catalog;
+): Promise<Result<Catalog, RenderFailureSource>> {
+  const [path, ...rest] = paths;
+  if (path === undefined) {
+    return success(catalog);
   }
-  const admitted = await admitThemeFile(path, catalog.value, dependencies);
+  const admitted = await admitThemeFile(path, catalog, dependencies);
   if (!admitted.ok) {
     return admitted;
   }
-  return success(admitted.value.catalog);
+  return admitShippedThemes(rest, admitted.value.catalog, dependencies);
 }
 
 /**
  * Admits the `--theme-file` last, when typed, then picks the theme to draw with: `--theme`, else
  * the file's `@id`.
  */
-async function admitThemeFileFlag(
+async function admitThemeFileAndPickTheme(
   themeFlags: Pick<RenderChoice, 'theme' | 'themeFile'>,
   catalog: Catalog,
   dependencies: ThemeDependencies,
 ): Promise<Result<AdmittedThemes, RenderFailureSource>> {
   if (themeFlags.themeFile === undefined) {
-    const themes = chooseTheme(catalog, themeFlags.theme);
+    const themes = admittedThemes(catalog, themeFlags.theme);
     return success(themes);
   }
   const admitted = await admitThemeFile(themeFlags.themeFile, catalog, dependencies);
@@ -120,7 +109,7 @@ async function admitThemeFileFlag(
     return admitted;
   }
   const choice = themeFlags.theme ?? admitted.value.id;
-  const themes = chooseTheme(admitted.value.catalog, choice);
+  const themes = admittedThemes(admitted.value.catalog, choice);
   return success(themes);
 }
 
@@ -187,7 +176,7 @@ async function storeThemeFont(
 }
 
 /** Pairs the catalog with the theme to draw with. With no choice, the collection keeps its own. */
-function chooseTheme(
+function admittedThemes(
   catalog: Catalog,
   choice: ThemeChoice | undefined,
 ): AdmittedThemes {
