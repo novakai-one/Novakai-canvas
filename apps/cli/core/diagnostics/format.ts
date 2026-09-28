@@ -1,9 +1,9 @@
 /*
  * Why this file exists
  *
- * When a command fails, the agent reads why in the terminal, then fixes it. A source Language
- * can't parse prints `invalid-source: Language rejected this source`, then a line per problem,
- * such as `invalid-value 3:11 kind: Unknown enum value`, then what to do next.
+ * When a command fails, the agent reads why in the terminal, then fixes it. If Language can't
+ * parse a source, the CLI prints `invalid-source: Language rejected this source`, then a line per
+ * problem, such as `invalid-value 3:11 kind: Unknown enum value`, then what to do next.
  *
  * This file turns one failure into those lines. It only makes text: the failure stays a typed
  * value for code to branch on, and nothing reads these lines back.

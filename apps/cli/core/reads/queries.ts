@@ -6,8 +6,9 @@
  *
  * This file runs the five commands that only look: `describe`, `list`, `read`, `inspect` and
  * `receipt`. Each asks the service one question and answers with a `Result` (see
- * `contract/errors.ts`): the text to print, or the question's failure unchanged (no sure answer, a
- * bad answer, or the service said no). None of them changes the workspace.
+ * `contract/errors.ts`): the text to print, or the service's failure unchanged. The service may
+ * not answer (`connection-uncertain`), may send an answer that makes no sense, or may say no.
+ * None of these commands changes the workspace.
  */
 import type { CollectionValidator } from '../../contract/ports/collection-validator.js';
 import type { ServiceReads } from '../../contract/ports/service-reads.js';
