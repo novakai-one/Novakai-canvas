@@ -42,10 +42,11 @@ export interface CandidateValidatorDependencies extends CatalogCheckDependencies
 }
 
 /**
- * Builds the final check (`CandidateValidator`). Its `validate` checks the candidate and answers
- * the versions of the records as they were before the change (history left out). Mistakes:
- * `invariant-violation` at `candidate` when a record is missing or out of date, keeps the wrong
- * files, names another workspace, or a file is gone. The reader's pass through.
+ * Builds the final check (`CandidateValidator`). Its `validate` checks the candidate, then answers
+ * each record's version from before the change, so Authoring saves only if none changed since.
+ * Undo/redo history records are left out; Authoring tracks those itself.
+ * Mistakes: `invariant-violation` at `candidate` when a record is missing or out of date, keeps the
+ * wrong files, names another workspace, or a file is gone. Reader mistakes pass through.
  */
 export function createCandidateValidator(
   dependencies: CandidateValidatorDependencies,
@@ -55,7 +56,7 @@ export function createCandidateValidator(
 
 /**
  * Reads the candidate, checks it (see `checkCandidate`), then answers the version of every record
- * in `before` except history. Reader failures pass through unchanged.
+ * in `before` except undo/redo history records. Reader failures pass through unchanged.
  */
 function validate(
   before: Snapshot,
@@ -82,7 +83,7 @@ function checkCandidate(
   return andThen(presets, () => checkMetadataRecords(snapshot, view, dependencies));
 }
 
-/** The version of every record in `before` except history. Never fails. */
+/** The version of every record in `before` except undo/redo history records. Never fails. */
 function readVersions(before: Snapshot): readonly ReadVersion[] {
   return before.records
     .filter((item) => item.key.kind !== 'history')

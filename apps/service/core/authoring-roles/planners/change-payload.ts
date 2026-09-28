@@ -3,8 +3,8 @@
  *
  * Every planner first takes the change out of the request, and last checks its planned writes fit
  * Authoring's limits. When Model, Library or Language refuses a change, the planner must say so
- * and keep their reason. For example, a DSL change with a typo is refused with `invalid-input` at
- * `source`, and Language's own mistake rides along as its `source`.
+ * and keep their reason. For example, a DSL change with a typo is refused with `invalid-input`,
+ * pointing at the DSL text. Language's own mistake is kept inside the refusal, unchanged.
  *
  * This file holds those three shared steps, so every planner does them the same way. Each answers
  * Authoring's `Result` (contract/errors.ts). It never plans or saves anything itself.
@@ -26,7 +26,7 @@ export type CapabilityRefusalCode = Extract<
   'invalid-input' | 'invariant-violation'
 >;
 
-/** A capability's own mistake (for example Language's), kept unchanged as the `source`. */
+/** A capability's own mistake, like Language's, kept unchanged in the refusal's `source`. */
 export type CapabilityFailure = NonNullable<AuthoringDiagnostic['source']>;
 
 /**
