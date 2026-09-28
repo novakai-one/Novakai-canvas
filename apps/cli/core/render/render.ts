@@ -13,6 +13,7 @@ import type { InputFiles, RasterEngine, SectionFiles } from '../../contract/port
 import type { RenderOutput } from '../../contract/ports/render-output.js';
 import type { RenderSources } from '../../contract/ports/render-sources.js';
 import type { RenderThemes } from '../../contract/ports/render-themes.js';
+import type { ThemeGrammar } from '../../contract/ports/theme-grammar.js';
 import type { ResourceReader } from '../../contract/ports/resource-reader.js';
 import type {
   Catalog,
@@ -35,7 +36,10 @@ import { admitThemes } from './themes.js';
 const recovery =
   'Correct the named input or resource and rerun; stored collections were not changed.';
 
-/** What one open render runs with: the environment's ports, the file ports and resource reads. */
+/**
+ * What one open render runs with: the environment's ports, the file ports, resource reads and the
+ * theme grammar.
+ */
 interface JoinedPorts {
   readonly sources: RenderSources;
   readonly assets: RenderAssets;
@@ -45,6 +49,7 @@ interface JoinedPorts {
   readonly raster: RasterEngine;
   readonly sectionFiles: SectionFiles;
   readonly resources: ResourceReader;
+  readonly themeGrammar: ThemeGrammar;
 }
 
 /** A checked collection and the catalog it was drawn against. */
@@ -62,8 +67,8 @@ interface Produced extends Drawing {
 /**
  * Render every section of `request`'s collection to files and report them. Fails with
  * `render-failed` carrying the first failure: the CLI's own fault (`collection-selection`,
- * `missing-theme`, `provider-failed`, …), a CLI failure (theme grammar, resource reads,
- * `invalid-response`), or Language, Model, Assets, Templates, service, Presentation or Export
+ * `missing-theme`, `provider-failed`, …), a CLI failure (resource reads, `invalid-response`), or
+ * Language, Model, Assets, Templates (its theme grammar too), service, Presentation or Export
  * evidence kept whole.
  */
 export async function renderCollection(
@@ -77,7 +82,7 @@ export async function renderCollection(
   return closedAfter(rendered, await guarded(environment.close()));
 }
 
-/** The open environment's ports joined with the render's file ports and resource reads. */
+/** The open environment's ports joined with the render's file ports, resource reads and grammar. */
 function joinPorts(
   environment: RenderEnvironment,
   ports: RenderPorts,
@@ -91,6 +96,7 @@ function joinPorts(
     raster: ports.raster,
     sectionFiles: ports.sectionFiles,
     resources: ports.resources,
+    themeGrammar: ports.themeGrammar,
   };
 }
 

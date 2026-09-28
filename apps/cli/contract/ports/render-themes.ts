@@ -5,8 +5,7 @@
  * owner's evidence, returned as a value.
  */
 import type { RenderEvidence } from '../records/render-failure.js';
-import type { FontRole, ThemeAdmission } from '../records/theme-source.js';
-import type { Catalog } from '../records/foreign.js';
+import type { Catalog, FontRole, ThemeAdmission } from '../records/foreign.js';
 import type { AssetDigest } from '../brands.js';
 import type { Result } from '../errors.js';
 

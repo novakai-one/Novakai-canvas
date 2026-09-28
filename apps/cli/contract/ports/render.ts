@@ -1,9 +1,9 @@
 /*
  * What one headless render gets injected: an opener for the render's environment, the render's
- * three file ports and confined resource reads. The environment is four capability ports plus
- * `close`. Declarations only. Adapters in adapters/render/ implement the ports; compose builds the
- * adapters and the capability values and injects them. Every method returns its failure as a
- * value; core/render/render.ts decides what each one means.
+ * three file ports, confined resource reads and Templates' theme grammar. The environment is four
+ * capability ports plus `close`. Declarations only. Adapters in adapters/render/ implement the
+ * ports; compose builds the adapters and the capability values and injects them. Every method
+ * returns its failure as a value; core/render/render.ts decides what each one means.
  */
 import type { ResourceReader } from './resource-reader.js';
 import type { RenderAssets } from './render-assets.js';
@@ -11,6 +11,7 @@ import type { InputFiles, RasterEngine, SectionFiles } from './render-files.js';
 import type { RenderOutput } from './render-output.js';
 import type { RenderSources } from './render-sources.js';
 import type { RenderThemes } from './render-themes.js';
+import type { ThemeGrammar } from './theme-grammar.js';
 import type { RenderEvidence } from '../records/render-failure.js';
 import type { Result } from '../errors.js';
 
@@ -29,6 +30,8 @@ export interface RenderPorts {
   readonly sectionFiles: SectionFiles;
   /** Reads the fonts and images a source or theme file declares. */
   readonly resources: ResourceReader;
+  /** Reads a `.theme` file's text as its theme admission and fonts. */
+  readonly themeGrammar: ThemeGrammar;
 }
 
 /**

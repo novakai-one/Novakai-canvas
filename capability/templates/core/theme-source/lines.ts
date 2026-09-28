@@ -1,7 +1,7 @@
 /*
  * One `.theme` line at a time: where each declaration line sits in the file, and what one body line
  * declares (a font or a token override). Pure. A line that matches no declaration fails with
- * `invalid-theme`; the caller fixes the theme file and runs the command again.
+ * `invalid-theme`; the caller fixes the theme file and reads it again.
  */
 import { fontRoles } from '../../contract/records/theme-source.js';
 import type {
@@ -9,18 +9,19 @@ import type {
   FontRequest,
   OverrideValue,
   PixelDimension,
+  SourcePosition,
+  SourceSpan,
   TokenOverride,
 } from '../../contract/records/theme-source.js';
-import type { Span } from '../../contract/records/foreign.js';
 import { tokenName } from '../../contract/brands.js';
-import type { FailureInput, Result } from '../../contract/errors.js';
-import { failure, success } from '../../contract/errors.js';
-import { checked } from '../shared/checks.js';
+import type { ThemeSourceFailure } from '../../contract/errors.js';
+import { checked, failure, success } from './results.js';
+import type { ThemeResult } from './results.js';
 
 /** One declaration line: its text without surrounding whitespace, and where that text sits. */
 export interface ThemeLine {
   readonly text: string;
-  readonly span: Span;
+  readonly span: SourceSpan;
 }
 
 /** What one body line declares. */
@@ -28,11 +29,12 @@ export type BodyEntry =
   | { readonly kind: 'font'; readonly font: FontRequest }
   | { readonly kind: 'override'; readonly override: TokenOverride };
 
-/** The one `invalid-theme` text for any part of the file that does not match the grammar. */
-export const themeMismatch: FailureInput = Object.freeze({
+/** The one `invalid-theme` failure for any part of the file that does not match the grammar. */
+export const themeMismatch: ThemeSourceFailure = Object.freeze({
   code: 'invalid-theme',
   message:
     'Expected theme 1 @id "Title" version=X base=ALIAS, font body/mono/strong source="PATH", set color TOKEN="HEX", or set number TOKEN=VALUE',
+  recovery: 'Correct the named input and retry.',
 });
 
 /**
@@ -49,7 +51,7 @@ export function themeLines(source: string): readonly ThemeLine[] {
  * TOKEN=VALUE`. Fails with `invalid-theme` when the line is neither, its font role is not body,
  * mono or strong, or its `set number` value is not finite.
  */
-export function bodyLine(line: ThemeLine): Result<BodyEntry> {
+export function bodyLine(line: ThemeLine): ThemeResult<BodyEntry> {
   const [matched] = lineRules.flatMap((rule) => ruleMatch(rule, line.text));
   if (matched === undefined) return failure(themeMismatch);
   return matched.rule.read(matched.captures, line);
@@ -70,7 +72,7 @@ interface LineRule {
   read(
     captures: Captures,
     line: ThemeLine,
-  ): Result<BodyEntry>;
+  ): ThemeResult<BodyEntry>;
 }
 
 /** A rule whose pattern matched, with the captures it read. */
@@ -103,7 +105,7 @@ function position(
   lineStart: number,
   line: number,
   column: number,
-): Span['start'] {
+): SourcePosition {
   return { offset: lineStart + column, line, column: column + 1 };
 }
 
@@ -136,7 +138,7 @@ function captured(
 function fontEntry(
   captures: Captures,
   line: ThemeLine,
-): Result<BodyEntry> {
+): ThemeResult<BodyEntry> {
   const role = captures.name;
   if (!isFontRole(role)) return failure(themeMismatch);
   const font: FontRequest = { kind: 'font', alias: role, source: captures.value, span: line.span };
@@ -152,7 +154,7 @@ function isFontRole(text: string): text is FontRole {
 function colorEntry(
   captures: Captures,
   line: ThemeLine,
-): Result<BodyEntry> {
+): ThemeResult<BodyEntry> {
   return overrideEntry(captures, line, { type: 'color', value: captures.value });
 }
 
@@ -160,7 +162,7 @@ function colorEntry(
 function numberEntry(
   captures: Captures,
   line: ThemeLine,
-): Result<BodyEntry> {
+): ThemeResult<BodyEntry> {
   const value = finite(captures.value);
   if (!value.ok) return value;
   return overrideEntry(captures, line, { type: 'number', value: value.value });
@@ -173,13 +175,13 @@ function numberEntry(
 function dimensionEntry(
   captures: Captures,
   line: ThemeLine,
-): Result<BodyEntry> {
+): ThemeResult<BodyEntry> {
   const value: PixelDimension = { value: Number(captures.value), unit: 'px' };
   return overrideEntry(captures, line, { type: 'dimension', value });
 }
 
 /** The decimal text as a number. Fails with `invalid-theme` when it is too large to be finite. */
-function finite(text: string): Result<number> {
+function finite(text: string): ThemeResult<number> {
   const value = Number(text);
   if (!Number.isFinite(value)) return failure(themeMismatch);
   return success(value);
@@ -193,7 +195,7 @@ function overrideEntry(
   captures: Captures,
   line: ThemeLine,
   typed: OverrideValue,
-): Result<BodyEntry> {
+): ThemeResult<BodyEntry> {
   const token = checked(tokenName, captures.name, themeMismatch);
   if (!token.ok) return token;
   const override: TokenOverride = { ...typed, token: token.value, span: line.span };

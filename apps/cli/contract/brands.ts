@@ -17,8 +17,6 @@ export { presetId, version, digest as presetDigest } from '@novakai/canvas-templ
 export type { PresetId, Version, Digest as PresetDigest } from '@novakai/canvas-templates';
 export { digest as assetDigest } from '@novakai/canvas-assets';
 export type { Digest as AssetDigest } from '@novakai/canvas-assets';
-export { chromeName } from '@novakai/canvas-design-system';
-export type { ChromeName } from '@novakai/canvas-design-system';
 
 /**
  * A local file path: any non-empty text. Node resolves it against the working directory; the
@@ -95,18 +93,6 @@ export const themeName = z.string().min(1).brand<'ThemeName'>();
 export const resourceAlias = z.string().min(1).brand<'ResourceAlias'>();
 
 /**
- * A `.theme` token name as the file writes it (`set color TOKEN=…`). Design System checks it when
- * the theme is admitted. Minted by the theme grammar (`invalid-theme`).
- */
-export const tokenName = z.string().min(1).brand<'ThemeTokenName'>();
-
-/**
- * The theme a `.theme` file builds on (`base=…`): a theme ID or an exact theme pin. The service
- * resolves it when the theme is admitted. Minted by the theme grammar (`invalid-theme`).
- */
-export const baseTheme = z.string().min(1).brand<'BaseTheme'>();
-
-/**
  * Where a hand-set placement or route sits, as Language prints it (`@section/@object`). Minted by
  * the `read` answer's schema (`invalid-response`).
  */
@@ -147,12 +133,6 @@ export type ThemeName = z.infer<typeof themeName>;
 
 /** An alias that passed {@link resourceAlias}. */
 export type ResourceAlias = z.infer<typeof resourceAlias>;
-
-/** A token name that passed {@link tokenName}. */
-export type TokenName = z.infer<typeof tokenName>;
-
-/** A base theme that passed {@link baseTheme}. */
-export type BaseTheme = z.infer<typeof baseTheme>;
 
 /** An address that passed {@link manualAddress}. */
 export type ManualAddress = z.infer<typeof manualAddress>;

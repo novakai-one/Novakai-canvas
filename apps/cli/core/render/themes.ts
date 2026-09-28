@@ -1,21 +1,21 @@
 /*
  * The theme catalog one render lowers against, and the theme it draws with. The installation's
  * presets come first, then every shipped `.theme` file in name order, then the --theme-file; each
- * file is read and parsed once, its fonts are staged in the render's temporary asset store, and
- * the service's theme preparation admits it. Pure apart from the injected ports; nothing stored is
- * changed. The caller fixes the named theme file or font and runs render:png again.
+ * file is read once and parsed once by Templates' theme grammar, its fonts are staged in the
+ * render's temporary asset store, and the service's theme preparation admits it. Pure apart from
+ * the injected ports; nothing stored is changed. The caller fixes the named theme file or font and
+ * runs render:png again.
  */
 import type { InputFiles } from '../../contract/ports/render-files.js';
 import type { FontBinding, RenderThemes } from '../../contract/ports/render-themes.js';
-import type { Catalog } from '../../contract/records/foreign.js';
+import type { ThemeGrammar } from '../../contract/ports/theme-grammar.js';
+import type { Catalog, FontRequest, ThemeSource } from '../../contract/records/foreign.js';
 import type { RenderChoice, ThemeChoice } from '../../contract/records/render.js';
 import type { RenderEvidence } from '../../contract/records/render-failure.js';
-import type { FontRequest, ThemeSource } from '../../contract/records/theme-source.js';
 import type { FilePath, PresetId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
 import { combined, mapped } from '../shared/results.js';
-import { readThemeSource } from '../themes/grammar.js';
 import { admitResource, type AdmissionDependencies } from './resource-admission.js';
 
 /** The admitted catalog and, when one is asked for, the theme drawn in place of the collection's. */
@@ -24,9 +24,13 @@ export interface AdmittedThemes {
   readonly choice?: ThemeChoice;
 }
 
-/** What theme admission uses: the shipped and given theme files, fonts and the admission rule. */
+/**
+ * What theme admission uses: the shipped and given theme files, the theme grammar, fonts and the
+ * admission rule.
+ */
 export interface ThemeDependencies extends AdmissionDependencies {
   readonly themes: RenderThemes;
+  readonly themeGrammar: ThemeGrammar;
   readonly inputFiles: Pick<InputFiles, 'shippedThemes' | 'read'>;
 }
 
@@ -102,7 +106,7 @@ async function admitThemeFile(
 ): Promise<Result<AdmittedFile, RenderEvidence>> {
   const file = await dependencies.inputFiles.read(path);
   if (!file.ok) return file;
-  const theme = readThemeSource(file.value.source);
+  const theme = dependencies.themeGrammar.read(file.value.source);
   if (!theme.ok) return theme;
   return admitTheme(file.value.file, theme.value, catalog, dependencies);
 }

@@ -1,8 +1,8 @@
 /*
  * The `.theme` text grammar: a header, exactly one body, mono and strong font, and uniquely named
  * token overrides → a typed theme source. Pure. Every rule returns a Result and the first failure
- * wins: `invalid-theme` or `duplicate-token`. The caller fixes the theme file and runs the command
- * again. Design System checks token names and values later; the grammar only types them.
+ * wins: `invalid-theme` or `duplicate-token`. The caller fixes the theme file and reads it again.
+ * Design System checks token names and values later; the grammar only types them.
  */
 import { fontRoles } from '../../contract/records/theme-source.js';
 import type {
@@ -15,24 +15,29 @@ import type {
 } from '../../contract/records/theme-source.js';
 import { baseTheme, chromeName, presetId, version } from '../../contract/brands.js';
 import type { PresetId, TokenName, Version } from '../../contract/brands.js';
-import type { FailureInput, Result } from '../../contract/errors.js';
-import { failure, success } from '../../contract/errors.js';
-import { checked } from '../shared/checks.js';
-import { combined, joined, mapped } from '../shared/results.js';
+import type { ThemeSourceFailure } from '../../contract/errors.js';
+import { checked, combined, failure, joined, mapped, success } from './results.js';
+import type { ThemeResult } from './results.js';
 import { bodyLine, themeLines, themeMismatch } from './lines.js';
 import type { BodyEntry, ThemeLine } from './lines.js';
 
 /**
- * A `.theme` file as its Templates admission and its three fonts. Checks run in this order, and the
- * first failure is returned:
+ * A `.theme` file's text as its theme admission and its three fonts. Checks run in this order, and
+ * the first failure is returned:
  * 1. the header's shape, then each body line in file order (`invalid-theme`);
  * 2. no token set twice (`duplicate-token`, naming the earliest repeat's line);
- * 3. exactly one body, mono and strong font, then a chrome in Design System's chrome-name form
- *    (`invalid-theme`);
- * 4. the header's @id is a Templates preset ID, then its version a Templates version
- *    (`invalid-theme`, naming the rule).
+ * 3. exactly one body, mono and strong font, then a chrome in chrome-name form (`invalid-theme`);
+ * 4. the header's @id is a preset ID, then its version a preset version (`invalid-theme`, naming
+ *    the rule).
+ *
+ * Not done here: reading the file, staging the fonts, resolving the base, and checking token
+ * names and values. The host reads and stages; admission resolves and checks.
+ *
+ * @param source - The whole `.theme` file.
+ * @returns The theme's admission and fonts, or the first failure.
+ * @throws Never.
  */
-export function readThemeSource(source: string): Result<ThemeSource> {
+export function readThemeSource(source: string): ThemeResult<ThemeSource> {
   const [first, ...body] = themeLines(source);
   const header = headerText(first);
   if (!header.ok) return header;
@@ -45,7 +50,7 @@ export function readThemeSource(source: string): Result<ThemeSource> {
 const headerPattern =
   /^theme 1 @([\w-]+) "([^"]+)" version=([\w.-]+) base=(\S+)(?: chrome=([\w-]+))?$/;
 
-/** The recovery for a header @id or version Templates would reject. */
+/** The recovery for a header @id or version admission would reject. */
 const correctHeader = 'Correct the theme header and retry.';
 
 /** The header's text parts, before its @id, version and chrome are checked. */
@@ -65,7 +70,7 @@ interface ThemeBody {
 }
 
 /** The first declaration line's header parts. Fails with `invalid-theme` when it is no header. */
-function headerText(line: ThemeLine | undefined): Result<HeaderText> {
+function headerText(line: ThemeLine | undefined): ThemeResult<HeaderText> {
   const match = headerPattern.exec(line?.text ?? '');
   if (match === null) return failure(themeMismatch);
   return headerParts(match);
@@ -75,7 +80,7 @@ function headerText(line: ThemeLine | undefined): Result<HeaderText> {
  * The header's four required captures, then its chrome when written. Fails with `invalid-theme`
  * when a required capture is missing.
  */
-function headerParts(match: RegExpExecArray): Result<HeaderText> {
+function headerParts(match: RegExpExecArray): ThemeResult<HeaderText> {
   const [, id, title, versionText, base, chrome] = match;
   if (id === undefined || title === undefined || versionText === undefined || base === undefined)
     return failure(themeMismatch);
@@ -95,7 +100,7 @@ function withChrome(
  * Every body line, then unique tokens, then the three fonts. Fails as the first unreadable line
  * does, then with `duplicate-token`, then with `invalid-theme` for the fonts.
  */
-function themeBody(lines: readonly ThemeLine[]): Result<ThemeBody> {
+function themeBody(lines: readonly ThemeLine[]): ThemeResult<ThemeBody> {
   const entries = combined(lines.map(bodyLine));
   if (!entries.ok) return entries;
   return joined(
@@ -119,7 +124,9 @@ function overridesOf(entries: readonly BodyEntry[]): readonly TokenOverride[] {
  * The overrides when no token is set twice. Fails with `duplicate-token` at the earliest line that
  * repeats a token, so a repeat never silently changes the preset's identity.
  */
-function uniqueOverrides(overrides: readonly TokenOverride[]): Result<readonly TokenOverride[]> {
+function uniqueOverrides(
+  overrides: readonly TokenOverride[],
+): ThemeResult<readonly TokenOverride[]> {
   const firstLines = firstLineByToken(overrides);
   const repeat = overrides.find((item) => firstLines.get(item.token) !== lineOf(item));
   if (repeat === undefined) return success(overrides);
@@ -143,7 +150,7 @@ function lineOf(override: TokenOverride): number {
 }
 
 /** The fonts when there is exactly one per role. Fails with `invalid-theme` otherwise. */
-function threeFonts(fonts: readonly FontRequest[]): Result<FontTriple> {
+function threeFonts(fonts: readonly FontRequest[]): ThemeResult<FontTriple> {
   if (!isTriple(fonts) || new Set(fonts.map(roleOf)).size !== fontRoles.length)
     return failure(themeMismatch);
   return success(fonts);
@@ -160,13 +167,13 @@ function roleOf(font: FontRequest): FontRequest['alias'] {
 }
 
 /**
- * The admission and fonts. Fails with `invalid-theme`: chrome that is not a Design System chrome
- * name, then an @id or version Templates would reject.
+ * The admission and fonts. Fails with `invalid-theme`: chrome that is not a chrome name, then an
+ * @id or version admission would reject.
  */
 function themeSource(
   header: HeaderText,
   body: ThemeBody,
-): Result<ThemeSource> {
+): ThemeResult<ThemeSource> {
   const raw = themeRaw(header, body.overrides);
   if (!raw.ok) return raw;
   return joined(themeId(header.id), themeVersion(header.version), (id, checkedVersion) => ({
@@ -178,12 +185,12 @@ function themeSource(
 /**
  * The theme's `raw` input: base, chrome and each override's value by token, in that key order.
  * Fails with `invalid-theme` when the base is empty (the header pattern already refuses one) or
- * the chrome is not a Design System chrome name.
+ * the chrome is not a chrome name.
  */
 function themeRaw(
   header: HeaderText,
   overrides: readonly TokenOverride[],
-): Result<ThemeRaw> {
+): ThemeResult<ThemeRaw> {
   const base = checked(baseTheme, header.base, themeMismatch);
   if (!base.ok) return base;
   return mapped(chromeChoice(header.chrome), (chrome) => ({
@@ -194,16 +201,16 @@ function themeRaw(
 }
 
 /**
- * The header's chrome as a Design System chrome name. Absent chrome stays absent, so existing
- * immutable preset digests are unchanged. Fails with `invalid-theme`.
+ * The header's chrome as a chrome name. Absent chrome stays absent, so existing immutable preset
+ * digests are unchanged. Fails with `invalid-theme`.
  */
-function chromeChoice(text: string | undefined): Result<Pick<ThemeRaw, 'chrome'>> {
+function chromeChoice(text: string | undefined): ThemeResult<Pick<ThemeRaw, 'chrome'>> {
   if (text === undefined) return success({});
   return mapped(checked(chromeName, text, themeMismatch), (chrome) => ({ chrome }));
 }
 
-/** The header's @id as a Templates preset ID. Fails with `invalid-theme` naming the rule. */
-function themeId(text: string): Result<PresetId> {
+/** The header's @id as a preset ID. Fails with `invalid-theme` naming the rule. */
+function themeId(text: string): ThemeResult<PresetId> {
   return checked(
     presetId,
     text,
@@ -211,17 +218,17 @@ function themeId(text: string): Result<PresetId> {
   );
 }
 
-/** The header's version as a Templates version. Fails with `invalid-theme` naming the rule. */
-function themeVersion(text: string): Result<Version> {
+/** The header's version as a preset version. Fails with `invalid-theme` naming the rule. */
+function themeVersion(text: string): ThemeResult<Version> {
   return checked(version, text, headerFault('Theme version must be MAJOR.MINOR.PATCH'));
 }
 
-/** An `invalid-theme` failure for a header value Templates would reject. */
-function headerFault(message: string): FailureInput {
+/** An `invalid-theme` failure for a header value admission would reject. */
+function headerFault(message: string): ThemeSourceFailure {
   return { code: 'invalid-theme', message, recovery: correctHeader };
 }
 
-/** The Templates theme admission, keys in the order the service has always received them. */
+/** The theme admission, keys in the order the service has always received them. */
 function admission(
   header: HeaderText,
   id: PresetId,

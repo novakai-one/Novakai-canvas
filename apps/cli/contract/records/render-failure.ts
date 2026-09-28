@@ -8,8 +8,8 @@ import type { FailureSource } from './foreign.js';
 import type { RenderFault } from './render-fault.js';
 
 /**
- * What a failed render carries: the CLI's own fault, a CLI failure (theme grammar, resource
- * reads), or Language, Model, Assets, Templates, service or Export evidence kept whole.
+ * What a failed render carries: the CLI's own fault, a CLI failure (resource reads), or Language,
+ * Model, Assets, Templates (its theme grammar too), service or Export evidence kept whole.
  */
 export type RenderEvidence = RenderFault | CliFailure | FailureSource;
 

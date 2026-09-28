@@ -34,6 +34,7 @@ import type { RenderEvidence } from '../records/render-failure.js';
 import type { HeadlessBindings, Language } from '../records/foreign.js';
 import { faulted, nativeFault, success, type Result } from '../errors.js';
 import { composeLanguage } from './language.js';
+import { composeThemeGrammar } from './theme-grammar.js';
 
 /**
  * The ports of one render. Rejects when the service's render adapters cannot be imported; the
@@ -47,6 +48,7 @@ export async function renderPorts(request: RenderRequest): Promise<RenderPorts> 
     raster: createRaster(request.root),
     sectionFiles: createSectionFiles(request),
     resources: createResourceReader(),
+    themeGrammar: composeThemeGrammar(),
   };
 }
 

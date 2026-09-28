@@ -8,6 +8,9 @@ import { admit, plan } from '../core/admission/plan.js';
 import { select, list } from '../core/discovery/select.js';
 import { instantiate } from '../core/expansion/instantiate.js';
 
+/** The `.theme` grammar: a theme file's text as its admission and fonts. Pure; never throws. */
+export { readThemeSource } from '../core/theme-source/grammar.js';
+
 /**
  * Creates the Templates facade over the given providers. It keeps no state and saves nothing;
  * Authoring owns commits and recovery. `deps` is read on every call, inside `protect`, so a

@@ -8,10 +8,14 @@ import { z } from 'zod';
 import type { LoweredIntent } from '@novakai/canvas-language';
 import type { Templates } from '@novakai/canvas-templates';
 import type { RenderEvidence } from '../../contract/records/render-failure.js';
-import type { ThemeAdmission } from '../../contract/records/theme-source.js';
 import type { FontBinding, RenderThemes } from '../../contract/ports/render-themes.js';
 import { faulted, nativeFault, success, type Result } from '../../contract/errors.js';
-import type { Assets, Catalog, HeadlessBindings } from '../../contract/records/foreign.js';
+import type {
+  Assets,
+  Catalog,
+  HeadlessBindings,
+  ThemeAdmission,
+} from '../../contract/records/foreign.js';
 
 /** What theme admission runs over: the installation's presets, the asset store and Templates. */
 export interface ThemeOwners {

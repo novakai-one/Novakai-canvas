@@ -1,9 +1,9 @@
 /*
  * Service-command wiring: the workspace's agent credential, one HTTP transport and the service
- * calls over it, local files, the request journal, the resource reader, Language, Model's
- * collection check and request IDs. Not pure: reads the credential file, calls HTTP and mints
- * UUIDs. Failures are returned as values, never thrown; recovery after a sent request is `receipt`
- * then `retry`.
+ * calls over it, local files, the request journal, the resource reader, Language, Templates' theme
+ * grammar, Model's collection check and request IDs. Not pure: reads the credential file, calls
+ * HTTP and mints UUIDs. Failures are returned as values, never thrown; recovery after a sent
+ * request is `receipt` then `retry`.
  */
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
@@ -29,6 +29,7 @@ import {
   type RequestId,
 } from '../brands.js';
 import { composeLanguage } from './language.js';
+import { composeThemeGrammar } from './theme-grammar.js';
 
 /**
  * Runs one service command against the service at `options.server`. Fails as {@link readToken}
@@ -71,6 +72,7 @@ function servicePorts(
     reader: createResourceReader(),
     collections: { validate },
     language: composeLanguage(),
+    themeGrammar: composeThemeGrammar(),
     requestIds: { next: nextRequestId },
   };
 }
