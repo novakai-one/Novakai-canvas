@@ -79,7 +79,7 @@ export function preparePreset(
   return buildPreparation(planned.value, snapshot);
 }
 
-/** An admission checked as JSON, in the form a preparation retains. */
+/** An admission checked as JSON, as saving would store it. */
 type AdmissionJson = PresetPreparation['admission'];
 
 /** The checked request body, the stored catalog, and the admission translated against it. */
@@ -96,8 +96,8 @@ interface PlannedPreset {
   readonly pin: PresetPin;
 }
 
-/** The admission and the preset record, each in the JSON form a preparation retains. */
-interface RetainedJson {
+/** The admission and the preset record, each checked as the JSON saving would store. */
+interface SavedJson {
   readonly admission: AdmissionJson;
   readonly record: PresetPreparation['record'];
 }
@@ -176,9 +176,9 @@ function buildPreparation(
   planned: PlannedPreset,
   snapshot: Snapshot,
 ): ResourceResult<PresetPreparation> {
-  const retained = retainedJson(planned);
-  if (!retained.ok) {
-    return retained;
+  const saved = checkSavedJson(planned);
+  if (!saved.ok) {
+    return saved;
   }
   const key = presetKey(planned.pin);
   if (!key.ok) {
@@ -187,8 +187,8 @@ function buildPreparation(
   const resources = listPresetFileDigests(planned.preset);
   const reads = catalogReads(snapshot);
   return success({
-    admission: retained.value.admission,
-    record: retained.value.record,
+    admission: saved.value.admission,
+    record: saved.value.record,
     pin: planned.pin,
     key: key.value,
     resources,
@@ -196,9 +196,9 @@ function buildPreparation(
   });
 }
 
-/** Puts the admission and the planned preset into the JSON form a preparation retains. */
-function retainedJson(planned: PlannedPreset): ResourceResult<RetainedJson> {
-  const admission = retainedAdmission(planned.admission, planned.preset);
+/** Checks the admission and the planned preset as the JSON that saving would store. */
+function checkSavedJson(planned: PlannedPreset): ResourceResult<SavedJson> {
+  const admission = admissionToSave(planned.admission, planned.preset);
   if (!admission.ok) {
     return admission;
   }
@@ -213,7 +213,7 @@ function retainedJson(planned: PlannedPreset): ResourceResult<RetainedJson> {
  * Keeps a theme admission as it is, and gives a recipe admission the planned recipe's source,
  * printed with its themes and local files fixed to exact versions.
  */
-function retainedAdmission(
+function admissionToSave(
   admission: AdmissionJson,
   preset: Preset,
 ): ResourceResult<AdmissionJson> {

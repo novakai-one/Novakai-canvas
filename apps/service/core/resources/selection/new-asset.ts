@@ -7,6 +7,7 @@
  *
  * This file makes that one binding: Assets says the media type, and Model checks the rest. A file
  * Assets doesn't store, or a binding Model refuses, is `missing-asset`. It only reads.
+ * Each step answers a `Result` (contract/errors.ts).
  */
 import type {
   Assets,
@@ -66,13 +67,36 @@ function draftBinding(
   assetLine: ResourceRequest,
   mediaType: string,
 ): AssetDraft {
-  return {
+  const draft: AssetDraft = {
     id: upload.alias,
     digest: addDigestPrefix(upload.digest),
     mediaType,
     alt: assetLine.alt ?? upload.alias,
-    ...writtenCredits(assetLine),
   };
+  const licensed = addLicense(draft, assetLine);
+  return addAttribution(licensed, assetLine);
+}
+
+/** Adds the licence the asset line wrote; a line with none adds nothing. */
+function addLicense(
+  draft: AssetDraft,
+  assetLine: ResourceRequest,
+): AssetDraft {
+  if (assetLine.license === undefined) {
+    return draft;
+  }
+  return { ...draft, license: assetLine.license };
+}
+
+/** Adds the attribution the asset line wrote; a line with none adds nothing. */
+function addAttribution(
+  draft: AssetDraft,
+  assetLine: ResourceRequest,
+): AssetDraft {
+  if (assetLine.attribution === undefined) {
+    return draft;
+  }
+  return { ...draft, attribution: assetLine.attribution };
 }
 
 /** Takes the one binding Model checked, refusing an answer with none. */
@@ -82,21 +106,6 @@ function onlyBinding(bindings: readonly AssetBinding[]): AuthoringResult<AssetBi
     return bindingMissingFailure();
   }
   return success(validated);
-}
-
-/** Keeps the licence and attribution the line writes, and invents none. */
-function writtenCredits(assetLine: ResourceRequest): Readonly<Record<string, string>> {
-  const credits = Object.entries({
-    license: assetLine.license,
-    attribution: assetLine.attribution,
-  });
-  const written = credits.filter(isWrittenCredit);
-  return Object.fromEntries(written);
-}
-
-/** Whether a licence or attribution was written as text. */
-function isWrittenCredit(credit: [string, string | undefined]): credit is [string, string] {
-  return typeof credit[1] === 'string';
 }
 
 /** Makes the mistake for Model answering with no binding: `missing-asset` at `resources`. */

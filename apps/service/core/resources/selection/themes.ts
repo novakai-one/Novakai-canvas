@@ -86,7 +86,7 @@ export function listThemePresets(catalog: Catalog): readonly ThemePreset[] {
   return catalog.filter(isThemePreset);
 }
 
-/** One theme binding under its alias or exact pin text. */
+/** One theme binding under its name or exact pin text. */
 type ThemeEntry = readonly [string, ThemeBinding];
 
 /** Has Model check one stored theme version, and keys it by its exact pin text. */
@@ -162,25 +162,25 @@ function pointAtFrozenVersions(
   available: Themes,
 ): AuthoringResult<Themes> {
   const frozenPins = Object.entries(command.themePins ?? {});
-  const retained = collect(frozenPins, ([alias, exact]) => retainedEntry(available, alias, exact));
-  if (!retained.ok) {
-    return retained;
+  const frozen = collect(frozenPins, ([name, exactPin]) => frozenEntry(available, name, exactPin));
+  if (!frozen.ok) {
+    return frozen;
   }
-  const retainedThemes = Object.fromEntries(retained.value);
-  return success({ ...available, ...retainedThemes });
+  const frozenThemes = Object.fromEntries(frozen.value);
+  return success({ ...available, ...frozenThemes });
 }
 
 /** Keys a frozen theme name by the exact version it names, refusing a version no longer stored. */
-function retainedEntry(
+function frozenEntry(
   available: Themes,
-  alias: string,
-  exact: string,
+  name: string,
+  exactPin: string,
 ): AuthoringResult<ThemeEntry> {
-  const binding = available[exact];
+  const binding = available[exactPin];
   if (binding === undefined) {
-    return retainedPinUnavailableFailure(exact);
+    return frozenVersionMissingFailure(exactPin);
   }
-  const entry: ThemeEntry = [alias, binding];
+  const entry: ThemeEntry = [name, binding];
   return success(entry);
 }
 
@@ -211,6 +211,6 @@ function notAThemeFailure(): AuthoringResult<never> {
 }
 
 /** Makes the mistake for a frozen version no longer stored: `missing-asset` at `resources`. */
-function retainedPinUnavailableFailure(exact: string): AuthoringResult<never> {
-  return missingAssetFailure(`Retained theme pin unavailable: ${exact}`);
+function frozenVersionMissingFailure(exactPin: string): AuthoringResult<never> {
+  return missingAssetFailure(`Retained theme pin unavailable: ${exactPin}`);
 }

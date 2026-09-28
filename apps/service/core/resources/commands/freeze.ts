@@ -96,45 +96,40 @@ function pinSelectedThemes(
   selectedThemes: SelectedThemes,
 ): ResourceResult<Request> {
   const selectedEntries = Object.entries(selectedThemes);
-  const pins = collect(selectedEntries, frozenPin);
+  const pins = collect(selectedEntries, freezeTheme);
   if (!pins.ok) {
     return pins;
   }
-  return pinnedRequest(request, command, pins.value);
+  return writeFrozenPins(request, command, pins.value);
 }
 
-/** Freezes one selected theme to its exact pin, kept under the name the change uses. */
-function frozenPin([alias, theme]: readonly [string, ThemeBinding]): ResourceResult<FrozenPin> {
-  const pin = exactPin(theme);
-  if (!pin.ok) {
-    return pin;
+/**
+ * Freezes one selected theme to its exact pin, kept under the name the change uses. Refuses a
+ * digest without Model's `sha256:` prefix.
+ */
+function freezeTheme([name, theme]: readonly [string, ThemeBinding]): ResourceResult<FrozenPin> {
+  if (!hasDigestPrefix(theme.digest)) {
+    return unpinnedThemeFailure();
   }
-  const frozen: FrozenPin = [alias, pin.value];
+  const exactPin = formatThemePin({ id: theme.id, version: theme.version, digest: theme.digest });
+  const frozen: FrozenPin = [name, exactPin];
   return success(frozen);
 }
 
 /** Replaces the DSL change's `themePins` with the frozen pins, and checks the request again. */
-function pinnedRequest(
+function writeFrozenPins(
   request: Request,
   command: DslCommand,
   pins: readonly FrozenPin[],
 ): ResourceResult<Request> {
   const themePins = Object.fromEntries(pins);
-  const payload = { ...command, themePins };
-  const frozen = requestSchema.safeParse({ ...request, intent: { ...request.intent, payload } });
+  const frozenPayload = { ...command, themePins };
+  const frozenIntent = { ...request.intent, payload: frozenPayload };
+  const frozen = requestSchema.safeParse({ ...request, intent: frozenIntent });
   if (!frozen.success) {
     return invalidInputFailure();
   }
   return success(frozen.data);
-}
-
-/** Writes one selected theme's exact pin, refusing a digest without Model's `sha256:` prefix. */
-function exactPin(theme: ThemeBinding): ResourceResult<ThemePinText> {
-  if (!hasDigestPrefix(theme.digest)) {
-    return unpinnedThemeFailure();
-  }
-  const pin = formatThemePin({ id: theme.id, version: theme.version, digest: theme.digest });
-  return success(pin);
 }
 
 /**

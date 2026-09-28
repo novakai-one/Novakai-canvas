@@ -47,8 +47,10 @@ type DeclaredSources = Exclude<DeclaredResources, { readonly kind: 'theme-admiss
 interface BindingInputs {
   /** Pinned declarations first, then the request's own uploads. */
   readonly supplied: readonly Upload[];
-  readonly requests: readonly ResourceRequest[];
-  readonly previous: readonly AssetBinding[];
+  /** The theme and asset lines the change's source declares. */
+  readonly declaredLines: readonly ResourceRequest[];
+  /** The saved collection's bindings; none for a new collection. */
+  readonly earlier: readonly AssetBinding[];
 }
 
 /**
@@ -89,16 +91,16 @@ function bindingInputs(
   snapshot: Snapshot,
   dependencies: AssetBindingDependencies,
 ): AuthoringResult<BindingInputs> {
-  const previous = priorAssets(declared.collection, snapshot, dependencies.model);
-  if (!previous.ok) {
-    return previous;
+  const earlier = listEarlierBindings(declared.collection, snapshot, dependencies.model);
+  if (!earlier.ok) {
+    return earlier;
   }
   const pinned = pinnedUploads(declared.requests);
   if (!pinned.ok) {
     return pinned;
   }
   const supplied = [...pinned.value, ...request.assets];
-  return success({ supplied, requests: declared.requests, previous: previous.value });
+  return success({ supplied, declaredLines: declared.requests, earlier: earlier.value });
 }
 
 /** Binds every supplied upload over the earlier bindings, borrowing a theme for Model's check. */
@@ -108,8 +110,8 @@ function bindSupplied(
   dependencies: AssetBindingDependencies,
 ): AuthoringResult<AssetBindings> {
   if (inputs.supplied.length === 0) {
-    const earlier = keyById(inputs.previous);
-    return success(earlier);
+    const bindings = keyById(inputs.earlier);
+    return success(bindings);
   }
   const theme = borrowTheme(availableThemes);
   if (!theme.ok) {
@@ -130,12 +132,12 @@ function bindEachUpload(
   if (!bound.ok) {
     return bound;
   }
-  const bindings = keyById([...inputs.previous, ...bound.value]);
+  const bindings = keyById([...inputs.earlier, ...bound.value]);
   return success(bindings);
 }
 
 /** Lists the file bindings of the saved collection the change names, none for a new one. */
-function priorAssets(
+function listEarlierBindings(
   collectionId: string | null,
   snapshot: Snapshot,
   model: BindingModel,
@@ -147,11 +149,11 @@ function priorAssets(
   if (record === undefined) {
     return success(NO_EARLIER_BINDINGS);
   }
-  return storedCollectionAssets(record.value, model);
+  return listStoredBindings(record.value, model);
 }
 
 /** Has Model check the saved collection, then lists its file bindings. */
-function storedCollectionAssets(
+function listStoredBindings(
   storedCollection: Json,
   model: BindingModel,
 ): AuthoringResult<readonly AssetBinding[]> {
@@ -163,24 +165,26 @@ function storedCollectionAssets(
 }
 
 /** Turns each `asset` line whose source is a `sha256:` pin into an upload of those bytes. */
-function pinnedUploads(requests: readonly ResourceRequest[]): AuthoringResult<readonly Upload[]> {
-  const pinnedLines = requests.filter(isPinnedFileLine);
+function pinnedUploads(
+  declaredLines: readonly ResourceRequest[],
+): AuthoringResult<readonly Upload[]> {
+  const pinnedLines = declaredLines.filter(isPinnedFileLine);
   return collect(pinnedLines, pinnedUpload);
 }
 
 /** Whether a line declares a file (not a theme) whose source is a `sha256:` pin. */
-function isPinnedFileLine(request: ResourceRequest): boolean {
-  return request.kind !== 'theme' && hasDigestPrefix(request.source);
+function isPinnedFileLine(line: ResourceRequest): boolean {
+  return line.kind !== 'theme' && hasDigestPrefix(line.source);
 }
 
 /** Turns one pinned line into an upload, checking its digest as Authoring's. */
-function pinnedUpload(request: ResourceRequest): AuthoringResult<Upload> {
-  const bareDigest = removeDigestPrefix(request.source);
+function pinnedUpload(line: ResourceRequest): AuthoringResult<Upload> {
+  const bareDigest = removeDigestPrefix(line.source);
   const digest = checkDigest(bareDigest);
   if (!digest.ok) {
     return digest;
   }
-  const upload: Upload = { alias: request.alias, digest: digest.value };
+  const upload: Upload = { alias: line.alias, digest: digest.value };
   return success(upload);
 }
 
@@ -200,34 +204,34 @@ function bindUpload(
   theme: ThemeBinding,
   dependencies: AssetBindingDependencies,
 ): AuthoringResult<AssetBinding> {
-  const assetLine = findAssetLine(upload, inputs.requests);
+  const assetLine = findAssetLine(upload, inputs.declaredLines);
   if (assetLine !== undefined) {
     return bindNewAsset(upload, assetLine, theme, dependencies);
   }
-  return reuseEarlierBinding(upload, inputs.previous);
+  return reuseEarlierBinding(upload, inputs.earlier);
 }
 
 /** Finds the `asset` line that names this upload. */
 function findAssetLine(
   upload: Upload,
-  requests: readonly ResourceRequest[],
+  declaredLines: readonly ResourceRequest[],
 ): ResourceRequest | undefined {
-  return requests.find((request) => request.alias === upload.alias && request.kind !== 'theme');
+  return declaredLines.find((line) => line.alias === upload.alias && line.kind !== 'theme');
 }
 
 /** Finds the earlier binding with this upload's name and bytes, refusing an upload with none. */
 function reuseEarlierBinding(
   upload: Upload,
-  previous: readonly AssetBinding[],
+  earlier: readonly AssetBinding[],
 ): AuthoringResult<AssetBinding> {
   const prefixedDigest = addDigestPrefix(upload.digest);
-  const earlier = previous.find(
+  const reused = earlier.find(
     (binding) => binding.id === upload.alias && binding.digest === prefixedDigest,
   );
-  if (earlier === undefined) {
+  if (reused === undefined) {
     return missingMetadataFailure(upload.alias);
   }
-  return success(earlier);
+  return success(reused);
 }
 
 /** Keys the bindings by name; a later binding replaces an earlier one with the same name. */

@@ -65,8 +65,8 @@ export function buildSelectionRequest(
   if (!header.success) {
     return invalidInputFailure();
   }
-  const envelope = selectionEnvelope(input, header.data, snapshot);
-  const request = requestSchema.safeParse(envelope);
+  const draft = draftSelectionRequest(input, header.data, snapshot);
+  const request = requestSchema.safeParse(draft);
   if (!request.success) {
     return invalidInputFailure();
   }
@@ -89,8 +89,11 @@ function listStoredPresets(snapshot: Snapshot): readonly Json[] {
   return presetRecords.map((record) => record.value);
 }
 
-/** Builds the preset change request, unchecked, with an empty source for a theme. */
-function selectionEnvelope(
+/**
+ * Builds the preset change request as plain data; `requestSchema` checks it next. A theme has no
+ * DSL, so its `source` is empty.
+ */
+function draftSelectionRequest(
   input: PreparationInput,
   header: PresetHeader,
   snapshot: Snapshot,

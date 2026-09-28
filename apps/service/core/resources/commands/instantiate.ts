@@ -100,15 +100,18 @@ function findPinnedRecipe(
   request: InstantiateInput,
   dependencies: InstantiateDependencies,
 ): ResourceResult<FoundRecipe> {
-  const recipe = storedRecipe(catalog, request.pin, dependencies);
+  const recipe = readPinnedRecipe(catalog, request.pin, dependencies);
   if (!recipe.ok) {
     return recipe;
   }
   return success({ catalog, request, recipe: recipe.value });
 }
 
-/** Reads the preset the pin names, refusing one that is a theme rather than a recipe. */
-function storedRecipe(
+/**
+ * Reads the recipe the pin names. `pin` is the pin as sent; Templates checks it while reading.
+ * Refuses a pin that names a theme.
+ */
+function readPinnedRecipe(
   catalog: Catalog,
   pin: unknown,
   dependencies: InstantiateDependencies,
