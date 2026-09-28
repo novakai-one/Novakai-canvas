@@ -32,6 +32,12 @@ import { printCollection } from '../core/printing/document.js';
 import { describeLanguage } from '../core/vocabulary/description.js';
 
 /**
+ * Collection profiles (build-spec@1): a profile's descriptor, its named starter source and its
+ * structural lint over parsed source. Pure; they need no Model role and never throw.
+ */
+export { describeProfile, lintProfile, scaffoldProfile } from '../core/profiles/catalog.js';
+
+/**
  * Model's own acceptance tables (which layouts and wires fit which sections, and which endpoints
  * are allowed), published by `describe` as Model defines them. Language does not edit them;
  * `describe` returns a structured clone of them.

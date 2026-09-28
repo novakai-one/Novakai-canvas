@@ -1,18 +1,16 @@
 /*
  * The pins one render lowers against: every admitted theme preset as a Model theme pin keyed by its
  * ID, and the collection's own asset records keyed by asset ID. Pure; nothing can fail here.
- * Language checks each pin the source names when it lowers.
+ * Language checks each pin the source names when it lowers, and has Model check the records.
  */
 import type {
   Catalog,
   Collection,
+  CollectionAsset,
   ResolvedResources,
   ThemePreset,
 } from '../../contract/records/foreign.js';
 import { pinOf } from '../resources/digests.js';
-
-/** One asset record a collection declares. */
-type CollectionAsset = Collection['assets'][number];
 
 /** Theme pins from the admitted catalog, plus `assets`, the collection's own asset records. */
 export function pinResources(
@@ -23,7 +21,7 @@ export function pinResources(
 }
 
 /** Every admitted theme's pin, keyed by theme ID, in catalog order. */
-export function themePins(catalog: Catalog): ResolvedResources['themes'] {
+function themePins(catalog: Catalog): ResolvedResources['themes'] {
   return Object.fromEntries(catalog.filter(isTheme).map(themeEntry));
 }
 

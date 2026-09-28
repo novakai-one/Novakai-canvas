@@ -7,15 +7,15 @@ import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { initializeRaster } from '@novakai/canvas-export';
-import { nativeFault, type ProviderFault } from '../../contract/records/render-failure.js';
+import type { ProviderFault } from '../../contract/records/render-fault.js';
 import type { FilePath } from '../../contract/brands.js';
-import type { RenderFiles } from '../../contract/ports/render.js';
-import type { Result } from '../../contract/errors.js';
+import type { RasterEngine } from '../../contract/ports/render-files.js';
+import { nativeFault, type Result } from '../../contract/errors.js';
 
-/** Build the raster start-up for one repo root. */
-export function createRaster(root: FilePath): Pick<RenderFiles, 'prepareRaster'> {
+/** Build the raster engine for one repo root. Touches nothing until `prepare` runs. */
+export function createRaster(root: FilePath): RasterEngine {
   return {
-    prepareRaster: async () => {
+    prepare: async () => {
       const module = await compile(root);
       if (!module.ok) return module;
       return initializeRaster(module.value);

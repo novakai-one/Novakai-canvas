@@ -6,11 +6,18 @@
  */
 import type { HttpTransport, WriteRoute } from '../../contract/ports/http-transport.js';
 import type { ServiceAuthoring } from '../../contract/ports/service-authoring.js';
-import type { Receipt } from '../../contract/records/foreign.js';
 import type { RetainedRequest } from '../../contract/records/retained-request.js';
-import type { Observed, SubmitMode } from '../../contract/records/service-answers.js';
-import { appliedAnswer } from '../../contract/records/service-answers.js';
-import { receiptSchema } from '../../contract/schemas.js';
+import type {
+  ChangePreview,
+  Observed,
+  ReceiptLookup,
+  SubmitMode,
+} from '../../contract/records/service-answers.js';
+import {
+  appliedAnswer,
+  changePreview,
+  receiptAnswer,
+} from '../../contract/records/service-answers.js';
 import type { RequestId } from '../../contract/brands.js';
 import type { CliFailure, Result } from '../../contract/errors.js';
 import { failure, success, unconfirmedApply } from '../../contract/errors.js';
@@ -35,24 +42,35 @@ export function createServiceAuthoring(transport: TransportPost): ServiceAuthori
   };
 }
 
-/** Authoring's preview answer, unchecked: printed as JSON. Fails as {@link send} does. */
+/**
+ * Authoring's preview answer, checked only to be JSON: printed as it came. Fails as {@link send}
+ * does, or with `invalid-response` when the answer is not JSON; its recovery names the request's
+ * receipt, as {@link unconfirmed} does.
+ */
 async function preview(
   transport: TransportPost,
   retained: RetainedRequest,
-): Promise<Result<unknown>> {
+): Promise<Result<ChangePreview>> {
   const answer = await send(transport, retained, 'preview');
   if (!answer.ok) return answer;
-  return success(answer.value.value);
+  const checked = changePreview.safeParse(answer.value.value);
+  if (!checked.success)
+    return failure({
+      code: 'invalid-response',
+      message: 'Service returned an invalid preview',
+      recovery: receiptFirst(retained.request.request),
+    });
+  return success(checked.data);
 }
 
 /**
- * The receipt the apply answer carries, or `null` when it carries none. Fails as {@link send} or
+ * Whether the apply answer carries a committed receipt. Fails as {@link send} or
  * {@link appliedReceipt} does.
  */
 async function apply(
   transport: TransportPost,
   retained: RetainedRequest,
-): Promise<Result<Receipt | null>> {
+): Promise<Result<ReceiptLookup>> {
   const answer = await send(transport, retained, 'apply');
   if (!answer.ok) return answer;
   return appliedReceipt(answer.value.value, retained.request.request);
@@ -86,14 +104,13 @@ function unconfirmed(
   id: RequestId,
 ): Result<never> {
   if (error.code === 'connection-uncertain' || error.code === 'invalid-response')
-    return {
-      ok: false,
-      error: {
-        ...error,
-        recovery: `Run canvas receipt ${id}, then canvas retry ${id} only if no receipt exists.`,
-      },
-    };
+    return { ok: false, error: { ...error, recovery: receiptFirst(id) } };
   return { ok: false, error };
+}
+
+/** The recovery of an unconfirmed answer: check `id`'s receipt; retry only when there is none. */
+function receiptFirst(id: RequestId): string {
+  return `Run canvas receipt ${id}, then canvas retry ${id} only if no receipt exists.`;
 }
 
 /**
@@ -103,11 +120,11 @@ function unconfirmed(
 function appliedReceipt(
   value: unknown,
   request: RequestId,
-): Result<Receipt | null> {
+): Result<ReceiptLookup> {
   const answer = appliedAnswer.safeParse(value);
   if (!answer.success)
     return failure(unconfirmedApply(request, 'Service returned an invalid apply confirmation'));
-  const receipt = receiptSchema.nullable().safeParse(answer.data.receipt);
+  const receipt = receiptAnswer.safeParse(answer.data.receipt);
   if (!receipt.success)
     return failure(unconfirmedApply(request, 'Service returned an invalid receipt'));
   return success(receipt.data);

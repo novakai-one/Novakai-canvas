@@ -53,8 +53,7 @@ export function presetRequest(
       request: draft.request,
       expected,
       assets: draft.assets,
-      planner: 'preset',
-      payload: draft.preparation.document,
+      change: { planner: 'preset', payload: draft.preparation.document },
     },
     unpreparedPreset,
   );

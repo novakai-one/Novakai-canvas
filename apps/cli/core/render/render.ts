@@ -1,12 +1,19 @@
 /*
  * One read-only render, start to finish: open the render's environment, admit the themes, draw the
- * chosen collection, produce its document, snapshot it, export every section to its file, report.
+ * chosen collection, produce its document, snapshot it, export every section to its file, report
+ * with the service's inspection.
  * The environment is closed once, last, whatever happened. The first failure wins: a close failure
  * is reported only when the render itself succeeded. An owner that throws instead of returning its
  * failure ends the render as `provider-failed`. Pure apart from the injected ports; no stored
  * collection changes, so the caller fixes the named input and runs render:png again.
  */
-import type { RenderEnvironment, RenderFiles, RenderPorts } from '../../contract/ports/render.js';
+import type { RenderEnvironment, RenderPorts } from '../../contract/ports/render.js';
+import type { RenderAssets } from '../../contract/ports/render-assets.js';
+import type { InputFiles, RasterEngine, SectionFiles } from '../../contract/ports/render-files.js';
+import type { RenderOutput } from '../../contract/ports/render-output.js';
+import type { RenderSources } from '../../contract/ports/render-sources.js';
+import type { RenderThemes } from '../../contract/ports/render-themes.js';
+import type { ThemeGrammar } from '../../contract/ports/theme-grammar.js';
 import type { ResourceReader } from '../../contract/ports/resource-reader.js';
 import type {
   Catalog,
@@ -15,30 +22,34 @@ import type {
   RenderDocument,
 } from '../../contract/records/foreign.js';
 import type { RenderReport, RenderRequest } from '../../contract/records/render.js';
-import {
-  faulted,
-  nativeFault,
-  type RenderEvidence,
-  type RenderFailure,
-} from '../../contract/records/render-failure.js';
-import type { Result } from '../../contract/errors.js';
-import { mapped } from '../shared/results.js';
+import type { RenderEvidence, RenderFailure } from '../../contract/records/render-failure.js';
+import { faulted, nativeFault, success, type Result } from '../../contract/errors.js';
 import { chosenCollection } from './collection.js';
 import { pinResources } from './pins.js';
 import { renderReport } from './report.js';
+import { resourceInspector } from './retained-resources.js';
 import { exportSections } from './sections.js';
-import { renderSnapshot, resourceInspector } from './snapshot.js';
+import { renderSnapshot } from './snapshot.js';
 import { admitThemes } from './themes.js';
 
 /** What every render failure tells the caller to do: nothing stored changed. */
 const recovery =
   'Correct the named input or resource and rerun; stored collections were not changed.';
 
-/** What one open render runs with: its environment, its files and confined resource reads. */
-interface Rules {
-  readonly env: RenderEnvironment;
-  readonly files: RenderFiles;
+/**
+ * What one open render runs with: the environment's ports, the file ports, resource reads and the
+ * theme grammar.
+ */
+interface JoinedPorts {
+  readonly sources: RenderSources;
+  readonly assets: RenderAssets;
+  readonly themes: RenderThemes;
+  readonly output: RenderOutput;
+  readonly inputFiles: InputFiles;
+  readonly raster: RasterEngine;
+  readonly sectionFiles: SectionFiles;
   readonly resources: ResourceReader;
+  readonly themeGrammar: ThemeGrammar;
 }
 
 /** A checked collection and the catalog it was drawn against. */
@@ -56,8 +67,8 @@ interface Produced extends Drawing {
 /**
  * Render every section of `request`'s collection to files and report them. Fails with
  * `render-failed` carrying the first failure: the CLI's own fault (`collection-selection`,
- * `missing-theme`, `provider-failed`, …), a CLI failure (theme grammar, resource reads,
- * `invalid-response`), or Language, Model, Assets, Templates, service, Presentation or Export
+ * `missing-theme`, `provider-failed`, …), a CLI failure (resource reads, `invalid-response`), or
+ * Language, Model, Assets, Templates (its theme grammar too), service, Presentation or Export
  * evidence kept whole.
  */
 export async function renderCollection(
@@ -66,11 +77,27 @@ export async function renderCollection(
 ): Promise<Result<RenderReport, RenderFailure>> {
   const opened = await guarded(ports.open());
   if (!opened.ok) return rejected(opened.error);
-  const env = opened.value;
-  const rendered = await guarded(
-    renderIn(request, { env, files: ports.files, resources: ports.resources }),
-  );
-  return closedAfter(rendered, await guarded(env.close()));
+  const environment = opened.value;
+  const rendered = await guarded(renderIn(request, joinPorts(environment, ports)));
+  return closedAfter(rendered, await guarded(environment.close()));
+}
+
+/** The open environment's ports joined with the render's file ports, resource reads and grammar. */
+function joinPorts(
+  environment: RenderEnvironment,
+  ports: RenderPorts,
+): JoinedPorts {
+  return {
+    sources: environment.sources,
+    assets: environment.assets,
+    themes: environment.themes,
+    output: environment.output,
+    inputFiles: ports.inputFiles,
+    raster: ports.raster,
+    sectionFiles: ports.sectionFiles,
+    resources: ports.resources,
+    themeGrammar: ports.themeGrammar,
+  };
 }
 
 /** `work`'s own outcome; a rejection becomes `provider-failed` with its native evidence. */
@@ -102,13 +129,13 @@ function rejected(source: RenderEvidence): Result<never, RenderFailure> {
  */
 async function renderIn(
   request: RenderRequest,
-  rules: Rules,
+  ports: JoinedPorts,
 ): Promise<Result<RenderReport, RenderEvidence>> {
-  const themes = await admitThemes(request, rules);
+  const themes = await admitThemes(request, ports);
   if (!themes.ok) return themes;
-  const collection = await chosenCollection(request.collection, themes.value, rules);
+  const collection = await chosenCollection(request.collection, themes.value, ports);
   if (!collection.ok) return collection;
-  return drawn(request, rules, { collection: collection.value, catalog: themes.value.catalog });
+  return drawn(request, ports, { collection: collection.value, catalog: themes.value.catalog });
 }
 
 /**
@@ -117,14 +144,19 @@ async function renderIn(
  */
 async function drawn(
   request: RenderRequest,
-  rules: Rules,
+  ports: JoinedPorts,
   drawing: Drawing,
 ): Promise<Result<RenderReport, RenderEvidence>> {
-  const document = await rules.env.produce(drawing.collection, drawing.catalog);
+  const document = await ports.output.produce(drawing.collection, drawing.catalog);
   if (!document.ok) return document;
-  const snapshot = renderSnapshot(drawing.collection, document.value, drawing.catalog, rules.env);
+  const snapshot = renderSnapshot(
+    drawing.collection,
+    document.value,
+    drawing.catalog,
+    ports.assets,
+  );
   if (!snapshot.ok) return snapshot;
-  return exported(request, rules, {
+  return exported(request, ports, {
     ...drawing,
     document: document.value,
     snapshot: snapshot.value,
@@ -132,28 +164,24 @@ async function drawn(
 }
 
 /**
- * Export opened over the snapshot, every section written to its file, then the report. Fails with
- * Presentation's font failure, or as the section export does.
+ * Export opened over the snapshot, every section written to its file, then the report with the
+ * service's inspection of the document. Fails with Presentation's font failure, or as the section
+ * export does.
  */
 async function exported(
   request: RenderRequest,
-  rules: Rules,
+  ports: JoinedPorts,
   produced: Produced,
 ): Promise<Result<RenderReport, RenderEvidence>> {
-  const exporter = await rules.env.exporter({
+  const exporter = await ports.output.exporter({
     document: produced.document,
     snapshot: produced.snapshot,
     pins: pinResources(produced.catalog, produced.snapshot.collection.assets),
     resources: resourceInspector(produced.snapshot.resources),
   });
   if (!exporter.ok) return exporter;
-  const files = await exportSections(
-    request.format,
-    rules.files,
-    exporter.value,
-    produced.document,
-  );
-  return mapped(files, (written) =>
-    renderReport(written, produced.collection, produced.document, produced.catalog),
-  );
+  const files = await exportSections(request.format, ports, exporter.value, produced.document);
+  if (!files.ok) return files;
+  const inspection = ports.output.inspect(produced.document);
+  return success(renderReport(files.value, produced.collection, inspection, produced.catalog));
 }

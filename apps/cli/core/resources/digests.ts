@@ -6,7 +6,7 @@
  */
 import { assetDigest, pinnedDigest, presetDigest } from '../../contract/brands.js';
 import type { AssetDigest, PresetDigest } from '../../contract/brands.js';
-import type { Parser } from '../shared/checks.js';
+import type { Parser } from '../../contract/schemas.js';
 
 /** Model's pinned form of a hex digest. */
 export type PinnedDigest = `sha256:${string}`;

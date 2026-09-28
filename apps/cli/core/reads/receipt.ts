@@ -4,33 +4,34 @@
  * status. An unconfirmed apply names the request's receipt as the recovery.
  */
 import type { Receipt } from '../../contract/records/foreign.js';
+import type { ReceiptLookup } from '../../contract/records/service-answers.js';
 import type { RequestId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { failure, success, unconfirmedApply } from '../../contract/errors.js';
 
 /**
- * `receipt`'s text: an absent receipt is information, not a failure. Fails with
- * `invalid-response` when the receipt names another request.
+ * `receipt`'s text: no commit is information, not a failure. Fails with `invalid-response` when
+ * the receipt names another request.
  */
 export function lookedUpReceipt(
-  receipt: Receipt | null,
+  lookup: ReceiptLookup,
   request: RequestId,
 ): Result<string> {
-  if (receipt === null) return success('No committed receipt found.');
-  return matchedReceipt(receipt, request);
+  if (lookup.kind === 'none') return success('No committed receipt found.');
+  return matchedReceipt(lookup.receipt, request);
 }
 
 /**
- * An apply answer's text. Fails with `invalid-response`: no receipt (the recovery checks this
- * request's receipt), or a receipt for another request.
+ * An apply answer's text. Fails with `invalid-response`: no committed receipt (the recovery
+ * checks this request's receipt), or a receipt for another request.
  */
 export function appliedReceipt(
-  receipt: Receipt | null,
+  lookup: ReceiptLookup,
   request: RequestId,
 ): Result<string> {
-  if (receipt === null)
+  if (lookup.kind === 'none')
     return failure(unconfirmedApply(request, 'Apply returned no committed receipt'));
-  return matchedReceipt(receipt, request);
+  return matchedReceipt(lookup.receipt, request);
 }
 
 /**

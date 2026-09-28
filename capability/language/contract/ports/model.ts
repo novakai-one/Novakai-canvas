@@ -51,4 +51,5 @@ export type {
   Change,
   TypeExpression,
   DefinitionId,
+  Mode,
 } from '@novakai/canvas-model';

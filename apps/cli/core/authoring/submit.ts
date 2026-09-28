@@ -101,7 +101,7 @@ async function applied(
   retained: RetainedRequest,
   authoring: ServiceAuthoring,
 ): Promise<Result<string>> {
-  const receipt = await authoring.apply(retained);
-  if (!receipt.ok) return receipt;
-  return appliedReceipt(receipt.value, retained.request.request);
+  const lookup = await authoring.apply(retained);
+  if (!lookup.ok) return lookup;
+  return appliedReceipt(lookup.value, retained.request.request);
 }

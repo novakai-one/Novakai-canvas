@@ -3,13 +3,18 @@
  * through the injected transport; each failure is returned as a value. Nothing is written, so the
  * caller recovers by running the command again.
  */
-import type { z } from 'zod';
+import { inspectionReport } from '@novakai/canvas-service';
 import type { HttpTransport, RouteQuery } from '../../contract/ports/http-transport.js';
 import type { ServiceReads } from '../../contract/ports/service-reads.js';
 import type { ReadScope } from '../../contract/records/command.js';
 import type { Observed } from '../../contract/records/service-answers.js';
-import { readoutAnswer } from '../../contract/records/service-answers.js';
-import { receiptSchema, snapshotSchema } from '../../contract/schemas.js';
+import {
+  languageDescription,
+  readoutAnswer,
+  receiptAnswer,
+} from '../../contract/records/service-answers.js';
+import type { Parser } from '../../contract/schemas.js';
+import { snapshotSchema } from '../../contract/schemas.js';
 import type { CollectionId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
@@ -23,7 +28,14 @@ type TransportGet = Pick<HttpTransport, 'get'>;
  */
 export function createServiceReads(transport: TransportGet): ServiceReads {
   return {
-    language: () => value(transport.get('/api/v1/language')),
+    language: () =>
+      value(
+        observed(
+          transport.get('/api/v1/language'),
+          languageDescription,
+          'Service returned an invalid language description',
+        ),
+      ),
     workspace: () =>
       observed(
         transport.get('/api/v1/workspace'),
@@ -38,11 +50,18 @@ export function createServiceReads(transport: TransportGet): ServiceReads {
           'Service returned an invalid source readout',
         ),
       ),
-    inspect: (collection) => value(transport.get('/api/v1/inspect', { id: collection })),
+    inspect: (collection) =>
+      value(
+        observed(
+          transport.get('/api/v1/inspect', { id: collection }),
+          inspectionReport,
+          'Service returned an invalid inspection report',
+        ),
+      ),
     receipt: (request) =>
       observed(
         transport.get('/api/v1/receipt', { id: request }),
-        receiptSchema.nullable(),
+        receiptAnswer,
         'Service returned an invalid receipt',
       ),
   };
@@ -73,7 +92,7 @@ async function value<T>(pending: Promise<Result<Observed<T>>>): Promise<Result<T
  */
 async function observed<T>(
   pending: Promise<Result<Observed<unknown>>>,
-  schema: z.ZodType<T>,
+  schema: Parser<T>,
   invalid: string,
 ): Promise<Result<Observed<T>>> {
   const answer = await pending;

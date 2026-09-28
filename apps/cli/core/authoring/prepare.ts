@@ -8,7 +8,7 @@ import { prepareResources } from '../resources/stage.js';
 import type { ResourceDependencies } from '../resources/stage.js';
 import { parseSource } from '../shared/parse-source.js';
 import { changeRequest, collectionRecordId } from './change-request.js';
-import { requestIdFor } from './envelope.js';
+import { requestIdFor } from './request-id.js';
 import type { ChangeCommand, ChangeIntent, ChangeMode } from '../../contract/records/command.js';
 import type { CollectionReader } from '../../contract/ports/collection-reader.js';
 import type { LocalFiles } from '../../contract/ports/local-files.js';
@@ -69,7 +69,7 @@ async function prepareCaptured(
 
 /**
  * The change's Authoring request under the given `--request` or a fresh ID, for the collection
- * the source declares. Fails as `collectionRecordId` or `changeRequest` does.
+ * the source declares. Fails as `collectionRecordId`, `requestIdFor` or `changeRequest` does.
  */
 function requestOf(
   command: ChangeCommand,
@@ -81,8 +81,9 @@ function requestOf(
   const intent = intentOf(command);
   const collection = collectionRecordId(intent, declared);
   if (!collection.ok) return collection;
-  const request = requestIdFor(command, dependencies.requestIds);
-  const draft = { intent, collection: collection.value, source, request };
+  const requestId = requestIdFor(command, dependencies.requestIds);
+  if (!requestId.ok) return requestId;
+  const draft = { intent, collection: collection.value, source, request: requestId.value };
   return changeRequest(draft, snapshot, dependencies.collections);
 }
 

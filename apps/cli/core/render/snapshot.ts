@@ -1,30 +1,26 @@
 /*
  * The immutable export snapshot of one render: identity, collection, scene, paint, and every byte
- * it retains (collection assets, document fonts, catalog presets), plus the resource inspector that
- * lets Export check only what the snapshot retained. Pure; asset bytes resolve through the render's
- * asset store and base64 is decoded by the injected decoder. The caller fixes the named asset and
- * runs render:png again.
+ * it retains (collection assets, document fonts, catalog presets). Pure; asset bytes resolve
+ * through the render's asset store and base64 is decoded by the injected decoder. Export's check
+ * that it reads only these bytes lives in retained-resources.ts. The caller fixes the named asset
+ * and runs render:png again.
  */
-import type { RenderEnvironment } from '../../contract/ports/render.js';
+import type { RenderAssets } from '../../contract/ports/render-assets.js';
 import type {
   Catalog,
   Collection,
+  CollectionAsset,
   ExportSnapshot,
   RenderDocument,
   Resource,
-  Resources,
 } from '../../contract/records/foreign.js';
 import type { RenderEvidence } from '../../contract/records/render-failure.js';
-import { faulted } from '../../contract/records/render-failure.js';
-import type { Result } from '../../contract/errors.js';
+import { faulted, success, type Result } from '../../contract/errors.js';
 import { assetOfPin } from '../resources/digests.js';
 import { combined, mapped } from '../shared/results.js';
 
 /** What the snapshot reads: the stored asset bytes and the base64 decoder. */
-export type SnapshotEnvironment = Pick<RenderEnvironment, 'resolveAsset' | 'decodeBase64'>;
-
-/** One asset record the collection declares. */
-type CollectionAsset = Collection['assets'][number];
+export type SnapshotAssets = Pick<RenderAssets, 'resolve' | 'decodeBase64'>;
 
 /** One font the rendered document embeds. */
 type DocumentFont = RenderDocument['fonts'][number];
@@ -40,43 +36,17 @@ export function renderSnapshot(
   collection: Collection,
   document: RenderDocument,
   catalog: Catalog,
-  env: SnapshotEnvironment,
+  assets: SnapshotAssets,
 ): Result<ExportSnapshot, RenderEvidence> {
-  return mapped(retainedResources(document, catalog, collection, env), (resources) => ({
-    identity: {
-      collectionId: collection.id,
-      revision: collection.revision,
-      inputKey: document.scene.inputKey,
-      title: collection.title,
-    },
+  const resources = retainedResources(document, catalog, collection, assets);
+  if (!resources.ok) return resources;
+  return success({
+    identity: snapshotIdentity(collection, document),
     collection,
     scene: document.scene,
-    resources,
-    paint: {
-      fill: document.style.surface,
-      stroke: document.style.border,
-      text: document.style.text,
-    },
-  }));
-}
-
-/** Export may inspect only resources equal, byte for byte and in metadata, to retained ones. */
-export function resourceInspector(retained: readonly Resource[]): Resources {
-  return {
-    async inspect(items) {
-      if (!items.every((item) => isRetained(item, retained)))
-        return {
-          ok: false,
-          error: {
-            code: 'resource-rejected',
-            path: 'snapshot.resources',
-            message: 'Resource differs from its owner-admitted snapshot',
-            recovery: 'Rebuild the snapshot through its resource owners and retry.',
-          },
-        };
-      return { ok: true, value: items };
-    },
-  };
+    resources: resources.value,
+    paint: documentPaint(document),
+  });
 }
 
 /**
@@ -87,12 +57,12 @@ function retainedResources(
   document: RenderDocument,
   catalog: Catalog,
   collection: Collection,
-  env: SnapshotEnvironment,
+  assets: SnapshotAssets,
 ): Result<readonly Resource[], RenderEvidence> {
-  const assets = combined(collection.assets.map((asset) => assetResource(asset, env)));
-  return mapped(assets, (retained) => [
+  const assetResources = combined(collection.assets.map((asset) => assetResource(asset, assets)));
+  return mapped(assetResources, (retained) => [
     ...retained,
-    ...document.fonts.map((font) => fontResource(font, env)),
+    ...document.fonts.map((font) => fontResource(font, assets)),
     ...catalog.map(presetResource),
   ]);
 }
@@ -103,16 +73,16 @@ function retainedResources(
  */
 function assetResource(
   asset: CollectionAsset,
-  env: SnapshotEnvironment,
+  assets: SnapshotAssets,
 ): Result<Resource, RenderEvidence> {
   const digest = assetOfPin(asset.digest);
   if (digest === undefined)
     return faulted({ code: 'invalid-asset-pin', asset: asset.id, digest: asset.digest });
-  return mapped(env.resolveAsset(digest), (blob) => ({
+  return mapped(assets.resolve(digest), (blob) => ({
     kind: 'asset',
     digest: blob.descriptor.digest,
     mediaType: blob.descriptor.mediaType,
-    bytes: env.decodeBase64(blob.base64),
+    bytes: assets.decodeBase64(blob.base64),
     metadata: { alt: asset.alt },
   }));
 }
@@ -120,13 +90,13 @@ function assetResource(
 /** One embedded font's bytes with its family. */
 function fontResource(
   font: DocumentFont,
-  env: SnapshotEnvironment,
+  assets: SnapshotAssets,
 ): Resource {
   return {
     kind: 'font',
     digest: font.digest,
     mediaType: font.mediaType,
-    bytes: env.decodeBase64(font.base64),
+    bytes: assets.decodeBase64(font.base64),
     metadata: { family: font.family },
   };
 }
@@ -142,53 +112,24 @@ function presetResource(preset: Catalog[number]): Resource {
   };
 }
 
-/** Whether `item` equals one retained resource. */
-function isRetained(
-  item: Resource,
-  retained: readonly Resource[],
-): boolean {
-  return retained.some((candidate) => sameResource(item, candidate));
+/** The collection's ID, revision and title with the scene's input key. */
+function snapshotIdentity(
+  collection: Collection,
+  document: RenderDocument,
+): ExportSnapshot['identity'] {
+  return {
+    collectionId: collection.id,
+    revision: collection.revision,
+    inputKey: document.scene.inputKey,
+    title: collection.title,
+  };
 }
 
-/** Same kind, digest, media type, bytes and metadata: no retained identity can be borrowed. */
-function sameResource(
-  left: Resource,
-  right: Resource,
-): boolean {
-  return (
-    left.kind === right.kind &&
-    left.digest === right.digest &&
-    left.mediaType === right.mediaType &&
-    sameBytes(left.bytes, right.bytes) &&
-    sameMetadata(left.metadata, right.metadata)
-  );
-}
-
-/** Byte-for-byte equality. */
-function sameBytes(
-  left: Uint8Array,
-  right: Uint8Array,
-): boolean {
-  return left.length === right.length && left.every((byte, index) => byte === right[index]);
-}
-
-/** The same keys, each with the same value. */
-function sameMetadata(
-  left: Resource['metadata'],
-  right: Resource['metadata'],
-): boolean {
-  const entries = Object.entries(left);
-  return (
-    entries.length === Object.keys(right).length &&
-    entries.every(([key, value]) => hasEntry(right, key, value))
-  );
-}
-
-/** Whether `record` holds `key` with exactly `value`. */
-function hasEntry(
-  record: Resource['metadata'],
-  key: string,
-  value: unknown,
-): boolean {
-  return Object.hasOwn(record, key) && Object.is(record[key], value);
+/** The document's surface, border and text colours as Export's paint. */
+function documentPaint(document: RenderDocument): ExportSnapshot['paint'] {
+  return {
+    fill: document.style.surface,
+    stroke: document.style.border,
+    text: document.style.text,
+  };
 }

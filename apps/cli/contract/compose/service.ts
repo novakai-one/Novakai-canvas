@@ -1,8 +1,9 @@
 /*
  * Service-command wiring: the workspace's agent credential, one HTTP transport and the service
- * calls over it, local files, the request journal, the resource reader, Language, Model's
- * collection check and request IDs. Not pure: reads the credential file, calls HTTP and mints
- * UUIDs. Failures are returned as values; recovery after a sent request is `receipt` then `retry`.
+ * calls over it, local files, the request journal, the resource reader, Language, Templates' theme
+ * grammar, Model's collection check and request IDs. Not pure: reads the credential file, calls
+ * HTTP and mints UUIDs. Failures are returned as values, never thrown; recovery after a sent
+ * request is `receipt` then `retry`.
  */
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
@@ -17,7 +18,7 @@ import { createServiceAuthoring } from '../../adapters/service-http/authoring.js
 import { createServiceResources } from '../../adapters/service-http/resources.js';
 import { runServiceCommand } from '../api.js';
 import type { ServiceCommandDependencies } from '../api.js';
-import type { Result } from '../errors.js';
+import type { FailureInput, Result } from '../errors.js';
 import { failure, rejected, success } from '../errors.js';
 import type { ServiceCommand, ServerAndWorkspace } from '../records/command.js';
 import {
@@ -28,6 +29,7 @@ import {
   type RequestId,
 } from '../brands.js';
 import { composeLanguage } from './language.js';
+import { composeThemeGrammar } from './theme-grammar.js';
 
 /**
  * Runs one service command against the service at `options.server`. Fails as {@link readToken}
@@ -68,18 +70,28 @@ function servicePorts(
     resources: createServiceResources(transport),
     files,
     writer: files,
-    journal: createRequestJournal(resolve(options.workspace, 'requests')),
+    journal: createRequestJournal(options.workspace),
     reader: createResourceReader(),
     collections: { validate },
     language: composeLanguage(),
+    themeGrammar: composeThemeGrammar(),
     requestIds: { next: nextRequestId },
   };
 }
 
+/** Why a fresh request ID could not be minted. Nothing was sent. */
+const unmintedRequestId: FailureInput = Object.freeze({
+  code: 'cli-unavailable',
+  message: "A fresh request ID did not match Authoring's request ID grammar",
+  recovery: 'Rerun the command with --request and a valid request ID.',
+});
+
 /**
- * A fresh request ID. A UUID always matches Authoring's request ID grammar, so the parse cannot
- * fail; if it did, the throw would reach `cli/canvas.ts` before the Authoring request was sent.
+ * A fresh request ID. A UUID always matches Authoring's request ID grammar; if one did not, fails
+ * with `cli-unavailable` before any Authoring request is sent.
  */
-function nextRequestId(): RequestId {
-  return requestId.parse(randomUUID());
+function nextRequestId(): Result<RequestId> {
+  const minted = requestId.safeParse(randomUUID());
+  if (!minted.success) return failure(unmintedRequestId);
+  return success(minted.data);
 }

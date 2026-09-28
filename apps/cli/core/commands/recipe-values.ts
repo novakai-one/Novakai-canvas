@@ -15,7 +15,7 @@ import type { ExpansionRequest } from '../../contract/records/foreign.js';
 import type { FailureInput, Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 import { checked } from '../shared/checks.js';
-import type { Parser } from '../shared/checks.js';
+import type { Parser } from '../../contract/schemas.js';
 import { presetOfPin } from '../resources/digests.js';
 import type { FlagTextAsTyped } from './flags.js';
 

@@ -24,6 +24,7 @@ export {
   workspaceSnapshot,
 } from '../core/export/snapshot.js';
 export { resourceInspector } from '../core/export/resources.js';
+export { validReport } from '../core/rendering/inspection.js';
 export { artifactOutcome, dslFile, markdownFile } from '../core/export/files.js';
 export { historyVersionsOnly } from '../core/workspace/history-versions.js';
 /** Bind a persistent workspace to read, mutation and render consumers; HTTP owns authentication and caller identity. */

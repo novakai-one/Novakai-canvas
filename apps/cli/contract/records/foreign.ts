@@ -4,6 +4,8 @@
  */
 import type { TransportResponse, createHeadlessBindings } from '@novakai/canvas-service';
 import type { Admission } from '@novakai/canvas-templates';
+import type { Collection } from '@novakai/canvas-model';
+import type { Span } from '@novakai/canvas-language';
 export type { Collection, Mode, Result as ModelResult } from '@novakai/canvas-model';
 export type {
   Declaration,
@@ -13,10 +15,27 @@ export type {
   ResourceRequest,
   Span,
 } from '@novakai/canvas-language';
+/** Language's collection profile records: descriptor, starter names, lint finding and result. */
+export type {
+  ProfileDescriptor,
+  ProfileFinding,
+  ProfileLintResult,
+  ProfileStarter,
+} from '@novakai/canvas-language';
 export type { InspectionReport, RenderDocument } from '@novakai/canvas-service';
 export type { Assets, StageInput, StoredBlob, SupportedMedia } from '@novakai/canvas-assets';
 export type { Admission, Catalog, ExpansionRequest, ThemePreset } from '@novakai/canvas-templates';
+/** Templates' `.theme` grammar records: a theme file's admission and fonts, and its failure. */
 export type {
+  FontRequest,
+  FontRole,
+  ThemeAdmission,
+  ThemeSource,
+  ThemeSourceCode,
+  ThemeSourceFailure,
+} from '@novakai/canvas-templates';
+export type {
+  Diagnostic as ExportDiagnostic,
   Documents,
   Resource,
   Resources,
@@ -45,6 +64,12 @@ export type OperationSource = Extract<
 
 /** Evidence under a failure: Language or Model validation diagnostics, or a nested operation failure. */
 export type FailureSource = NonNullable<OperationSource['source']>;
+
+/** One asset record a collection declares, as Model types it. Model exports no name for it. */
+export type CollectionAsset = Collection['assets'][number];
+
+/** A point in a source: offset, 1-based line and column. Language exports no name for it. */
+export type SourcePosition = Span['start'];
 
 /** A recipe's diagram family, as Templates' admission declares it. */
 export type RecipeFamily = Extract<Admission, { readonly kind: 'recipe' }>['family'];

@@ -4,20 +4,21 @@
  * never trusted. Pure apart from the injected render files and parser. The caller names another
  * collection and runs render:png again.
  */
-import type { RenderEnvironment, RenderFiles } from '../../contract/ports/render.js';
+import type { InputFiles } from '../../contract/ports/render-files.js';
+import type { RenderSources } from '../../contract/ports/render-sources.js';
 import type { Catalog } from '../../contract/records/foreign.js';
 import type { CollectionSelector } from '../../contract/records/render.js';
-import type { RenderEvidence, RenderFault } from '../../contract/records/render-failure.js';
-import { faulted } from '../../contract/records/render-failure.js';
+import type { RenderEvidence } from '../../contract/records/render-failure.js';
+import type { RenderFault } from '../../contract/records/render-fault.js';
 import type { SourceFile } from '../../contract/records/source-file.js';
-import type { CollectionName } from '../../contract/brands.js';
+import { presetId, type CollectionName, type PresetId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
-import { success } from '../../contract/errors.js';
+import { faulted, success } from '../../contract/errors.js';
 
 /** What choosing a source uses: the render's file reads and Language's parse. */
 export interface SourceDependencies {
-  readonly files: Pick<RenderFiles, 'read' | 'recipeFile' | 'shippedCollections'>;
-  readonly env: Pick<RenderEnvironment, 'parse'>;
+  readonly inputFiles: Pick<InputFiles, 'read' | 'recipeFile' | 'shippedCollections'>;
+  readonly sources: Pick<RenderSources, 'parse'>;
 }
 
 /** A recipe in the admitted catalog. */
@@ -25,35 +26,43 @@ type RecipePreset = Extract<Catalog[number], { readonly kind: 'recipe' }>;
 
 /**
  * The source `selector` names, with the file its resources resolve against. Fails with
- * `provider-failed` when a file cannot be read, or `collection-selection` when a name is no recipe
- * and not exactly one shipped collection.
+ * `provider-failed` when a file cannot be read or its path fails its check, or
+ * `collection-selection` when a name is no recipe and not exactly one shipped collection.
  */
 export function collectionSource(
   selector: CollectionSelector,
   catalog: Catalog,
   dependencies: SourceDependencies,
 ): Promise<Result<SourceFile, RenderEvidence>> {
-  if (selector.kind === 'file') return dependencies.files.read(selector.path);
+  if (selector.kind === 'file') return dependencies.inputFiles.read(selector.path);
   return namedSource(selector.name, catalog, dependencies);
 }
 
 /**
  * A recipe's shipped source when `name` is a recipe ID; otherwise the shipped collection it names.
- * Fails as {@link shippedSource} does.
+ * Fails as {@link recipeSource} or {@link shippedSource} does.
  */
 function namedSource(
   name: CollectionName,
   catalog: Catalog,
   dependencies: SourceDependencies,
 ): Promise<Result<SourceFile, RenderEvidence>> {
-  const recipe = catalog.find((preset) => isRecipeNamed(preset, name));
+  const recipe = recipeNamed(catalog, name);
   if (recipe === undefined) return shippedSource(name, dependencies);
-  return Promise.resolve(
-    success({
-      source: recipe.payload.source,
-      file: dependencies.files.recipeFile(recipe.payload.family),
-    }),
-  );
+  return Promise.resolve(recipeSource(recipe, dependencies.inputFiles));
+}
+
+/**
+ * The recipe's source, with its family's shipped file for its resources to resolve against. Fails
+ * with `provider-failed` when that file's path fails its check.
+ */
+function recipeSource(
+  recipe: RecipePreset,
+  inputFiles: SourceDependencies['inputFiles'],
+): Result<SourceFile, RenderEvidence> {
+  const file = inputFiles.recipeFile(recipe.payload.family);
+  if (!file.ok) return file;
+  return success({ source: recipe.payload.source, file: file.value });
 }
 
 /**
@@ -64,9 +73,9 @@ async function shippedSource(
   name: CollectionName,
   dependencies: SourceDependencies,
 ): Promise<Result<SourceFile, RenderEvidence>> {
-  const sources = await dependencies.files.shippedCollections();
+  const sources = await dependencies.inputFiles.shippedCollections();
   if (!sources.ok) return sources;
-  const parse = dependencies.env.parse;
+  const parse = dependencies.sources.parse;
   return onlyMatch(
     name,
     sources.value.filter((source) => declares(source, name, parse)),
@@ -84,19 +93,32 @@ function onlyMatch(
   return success(match);
 }
 
-/** Whether a preset is the recipe named `name`. */
-function isRecipeNamed(
-  preset: Catalog[number],
+/**
+ * The recipe whose preset ID is `name`. None when `name` is not a Templates preset ID, since no
+ * preset can have it, or when no recipe has it.
+ */
+function recipeNamed(
+  catalog: Catalog,
   name: CollectionName,
+): RecipePreset | undefined {
+  const id = presetId.safeParse(name);
+  if (!id.success) return undefined;
+  return catalog.find((preset) => isRecipeWithId(preset, id.data));
+}
+
+/** Whether a preset is the recipe with preset ID `id`. */
+function isRecipeWithId(
+  preset: Catalog[number],
+  id: PresetId,
 ): preset is RecipePreset {
-  return preset.kind === 'recipe' && preset.id === String(name);
+  return preset.kind === 'recipe' && preset.id === id;
 }
 
 /** Whether Language parses `source` and its collection ID is `name`. */
 function declares(
   source: SourceFile,
   name: CollectionName,
-  parse: RenderEnvironment['parse'],
+  parse: RenderSources['parse'],
 ): boolean {
   const parsed = parse(source.source);
   return parsed.ok && parsed.value.collection === name;

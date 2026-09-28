@@ -9,9 +9,8 @@
  * writes a file.
  */
 import { collectionId } from '../../contract/brands.js';
-import type { CollectionId, FilePath } from '../../contract/brands.js';
+import type { CollectionId, FilePath, ProfileId } from '../../contract/brands.js';
 import type { ProfileCommand } from '../../contract/records/command.js';
-import type { ProfileId } from '../../contract/records/profiles.js';
 import type { Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 import { checked } from '../shared/checks.js';

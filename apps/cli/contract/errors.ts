@@ -1,13 +1,23 @@
 /*
  * The CLI's failure vocabulary: closed codes, the two failure shapes and the Result helpers every
- * layer returns. Pure. Nothing throws across a boundary; `cli/canvas.ts` prints the failure and
- * sets the exit code. Consumers branch on the code, never on the message.
+ * layer returns, plus the builders of render:png's own faults (`faulted`, and `nativeFault` for a
+ * native throw). Pure. Nothing throws across a boundary; `cli/canvas.ts` prints the failure and
+ * sets the exit code. Consumers branch on the code, never on the message. The fault builders are
+ * here, not in records/ (data only) or a file of their own, because render core and the render
+ * adapters both call them and core may import only records/, ports/, brands, schemas and errors.
  */
-import type { FilePath, RequestId } from './brands.js';
-import type { FailureSource, OperationSource } from './records/foreign.js';
+import { filePath, type FilePath, type RequestId, type ResourceAlias } from './brands.js';
+import type {
+  FailureSource,
+  OperationSource,
+  SourcePosition,
+  ThemeSourceCode,
+} from './records/foreign.js';
+import type { NativeDetail, ProviderFault, RenderFault } from './records/render-fault.js';
 
 /**
- * A failure the CLI found itself.
+ * A failure in the CLI's local shape (`LocalFailure`). The CLI finds every code itself, except the
+ * theme codes at the end, which Templates writes.
  *
  * Arguments (nothing was read or sent; an empty FILE or --out path reports the local-file code its
  * read or write would give):
@@ -51,16 +61,22 @@ import type { FailureSource, OperationSource } from './records/foreign.js';
  * - `revision-required`: replace or patch without `--revision`.
  * - `revision-conflict`: `--revision` is not the collection's current revision.
  *
- * Themes: `invalid-theme` (the file does not match the theme grammar, or its header @id or version
- * is not a Templates preset ID or version), `duplicate-token` (one token set twice). Profiles:
- * `profile-structure` (lint findings, listed in the message).
+ * Profiles: `profile-structure` (lint findings, listed in the message).
  *
  * Transport:
  * - `connection-uncertain`: no confirmed answer. Check the receipt before retrying.
- * - `invalid-response`: a service answer did not match its schema or lacks what the command
- *   needs, such as a committed receipt; or the service's credential reader returned no token.
+ * - `invalid-response`: an owner's answer broke its own contract. A service answer did not match
+ *   its schema or lacks what the command needs, such as a committed receipt; the service's
+ *   credential reader returned no token; or Language's parse gave an empty resource alias or an
+ *   asset alias that is not Model's asset ID.
  *
  * Setup: `cli-unavailable` and `render-unavailable` (an unexpected throw at the entry point).
+ *   `cli-unavailable` also reports a fresh request ID that fails Authoring's grammar; nothing was
+ *   sent.
+ *
+ * Themes (`ThemeSourceCode`): Templates' `.theme` grammar (`readThemeSource`) returns these and
+ * the CLI passes them on as written: `invalid-theme` (the file does not match the grammar, or its
+ * header @id or version is not a preset ID or version), `duplicate-token` (one token set twice).
  */
 export type LocalCode =
   | 'invalid-command'
@@ -88,13 +104,12 @@ export type LocalCode =
   | 'already-exists'
   | 'revision-required'
   | 'revision-conflict'
-  | 'invalid-theme'
-  | 'duplicate-token'
   | 'profile-structure'
   | 'connection-uncertain'
   | 'invalid-response'
   | 'cli-unavailable'
-  | 'render-unavailable';
+  | 'render-unavailable'
+  | ThemeSourceCode;
 
 /**
  * A failure another owner wrote, kept whole in `foreign`.
@@ -107,16 +122,14 @@ export type ForeignCode = 'service-rejected' | 'credential-unavailable';
 export type CliErrorCode = LocalCode | ForeignCode;
 
 /**
- * Where a source declares the font or image a failure is about. Printed as
- * `file:line:column asset @alias` before the message.
+ * Where a source declares the font or image a failure is about: the file, Language's 1-based line
+ * and column, and the alias. Printed as `file:line:column asset @alias` before the message.
  */
-export interface SourceLocation {
+export interface SourceLocation extends Pick<SourcePosition, 'line' | 'column'> {
   /** The DSL or theme file that declares the resource. */
   readonly file: FilePath;
-  readonly line: number;
-  readonly column: number;
   /** The name the declaration gives the resource. */
-  readonly alias: string;
+  readonly alias: ResourceAlias;
 }
 
 /** A failure the CLI found. */
@@ -225,4 +238,68 @@ export function rejected(
   foreign: OperationSource,
 ): Result<never, ForeignFailure> {
   return { ok: false, error: { code, foreign } };
+}
+
+/** Render fault `fault` as a failed Result, typed as its own fault; nothing else is returned. */
+export function faulted<F extends RenderFault>(fault: F): Result<never, F> {
+  return { ok: false, error: fault };
+}
+
+/**
+ * A thrown native error as `provider-failed` evidence: its message, path, OS code and syscall.
+ * Only data fields are read, never methods; absent evidence stays absent. Cannot fail.
+ */
+export function nativeFault(error: unknown): ProviderFault {
+  return {
+    code: 'provider-failed',
+    message: nativeMessage(error),
+    detail: nativeDetail(error),
+  };
+}
+
+/** The error's message as human context; no machine-readable field is invented. */
+function nativeMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
+/**
+ * The error's path, OS code and syscall, present ones only. When any present field is malformed
+ * (not text, or an empty path) none is kept, so checked and unchecked evidence never mix.
+ */
+function nativeDetail(error: unknown): NativeDetail {
+  const present = Object.fromEntries(
+    Object.entries(nativeFields(error)).filter((field) => field[1] !== undefined),
+  );
+  if (!isNativeDetail(present)) return {};
+  return present;
+}
+
+/** The three data fields of an object error under their detail names, unchecked; none otherwise. */
+function nativeFields(error: unknown): { readonly [K in keyof NativeDetail]?: unknown } {
+  if (typeof error !== 'object' || error === null) return {};
+  return {
+    path: Reflect.get(error, 'path'),
+    systemCode: Reflect.get(error, 'code'),
+    syscall: Reflect.get(error, 'syscall'),
+  };
+}
+
+/** Whether every present field has its type: a non-empty path, a text code and a text syscall. */
+function isNativeDetail(fields: object): fields is NativeDetail {
+  return (
+    isOptionalPath(Reflect.get(fields, 'path')) &&
+    isOptionalText(Reflect.get(fields, 'systemCode')) &&
+    isOptionalText(Reflect.get(fields, 'syscall'))
+  );
+}
+
+/** Whether `value` is absent or a non-empty path. */
+function isOptionalPath(value: unknown): value is FilePath | undefined {
+  return value === undefined || filePath.safeParse(value).success;
+}
+
+/** Whether `value` is absent or text. */
+function isOptionalText(value: unknown): value is string | undefined {
+  return value === undefined || typeof value === 'string';
 }

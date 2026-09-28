@@ -8,7 +8,7 @@
  */
 import { readFile, mkdir, open } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import type { RequestId } from '../../contract/brands.js';
+import type { FilePath, RequestId } from '../../contract/brands.js';
 import { journalFile } from '../../contract/records/retained-request.js';
 import type { JournalRecord, RetainedRequest } from '../../contract/records/retained-request.js';
 import type { RequestJournal } from '../../contract/ports/request-journal.js';
@@ -27,8 +27,12 @@ const unavailable: FailureInput = Object.freeze({
   message: 'Retained request could not be read; inspect its receipt before submitting another',
 });
 
-/** Bind one local request directory; each operation reports its own I/O failure and recovery. */
-export function createRequestJournal(root: string): RequestJournal {
+/**
+ * Binds the `requests` directory of `workspace`; each operation reports its own I/O failure and
+ * recovery.
+ */
+export function createRequestJournal(workspace: FilePath): RequestJournal {
+  const root = resolve(workspace, 'requests');
   return { save: (retained) => save(root, retained), read: (id) => read(root, id) };
 }
 /**

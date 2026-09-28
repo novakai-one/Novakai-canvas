@@ -4,8 +4,12 @@ import type { RenderDocument } from '../../contract/records/rendering.js';
 import type { Diagnostic, Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
 import { renderCollection } from './collection.js';
-/** Arranged scenes passed the independent inspector during derivation; the report surfaces their own warning record. */
-function report(document: RenderDocument): InspectionReport {
+/**
+ * The valid report of a freshly rendered document: the scene passed the independent inspector
+ * during derivation, so the report is its own warning record, the crossing and relaxed-constraint
+ * counts, the section count and the engine versions. Pure; cannot fail.
+ */
+export function validReport(document: RenderDocument): InspectionReport {
   const warnings = document.scene.warnings;
   return {
     valid: true,
@@ -46,5 +50,5 @@ export async function inspectCollection(
 ): Promise<Result<InspectionReport>> {
   const outcome = await renderCollection(id, signal, dependencies);
   if (!outcome.ok) return rejected(outcome.error);
-  return { ok: true, value: report(outcome.value) };
+  return { ok: true, value: validReport(outcome.value) };
 }

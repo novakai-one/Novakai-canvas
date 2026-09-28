@@ -4,14 +4,14 @@
  * source file is never written and nothing trusts its name. Pins are checked when the copy is
  * lowered. The caller picks another source or theme and runs render:png again.
  */
-import type { RenderEnvironment } from '../../contract/ports/render.js';
+import type { RenderSources } from '../../contract/ports/render-sources.js';
 import type { ParsedSource, Span } from '../../contract/records/foreign.js';
 import type { ThemeChoice } from '../../contract/records/render.js';
-import type { RenderEvidence, RenderFault } from '../../contract/records/render-failure.js';
-import { faulted } from '../../contract/records/render-failure.js';
+import type { RenderEvidence } from '../../contract/records/render-failure.js';
+import type { RenderFault } from '../../contract/records/render-fault.js';
 import type { SourceFile } from '../../contract/records/source-file.js';
 import type { Result } from '../../contract/errors.js';
-import { success } from '../../contract/errors.js';
+import { faulted, success } from '../../contract/errors.js';
 import { mapped } from '../shared/results.js';
 
 /**
@@ -23,7 +23,7 @@ import { mapped } from '../shared/results.js';
 export function withTheme(
   source: SourceFile,
   theme: ThemeChoice,
-  parse: RenderEnvironment['parse'],
+  parse: RenderSources['parse'],
 ): Result<SourceFile, RenderEvidence> {
   const parsed = parse(source.source);
   if (!parsed.ok) return parsed;
