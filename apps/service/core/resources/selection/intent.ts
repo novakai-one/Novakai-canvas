@@ -9,8 +9,8 @@ import type {
   Language,
   Request,
   ResourceRequest,
-} from '../../../contract/records/capabilities.js';
-import type { DslCommand, PresetAdmission } from '../../../contract/records/planning/commands.js';
+} from '../../../contract/records/capability-types.js';
+import type { DslCommand, PresetHeader } from '../../../contract/records/planning/commands.js';
 import {
   dslCommand,
   modelCommand,
@@ -28,7 +28,7 @@ export interface IntentOwners {
 export type Intent =
   | { readonly planner: 'dsl'; readonly command: DslCommand }
   | { readonly planner: 'model'; readonly collection: string }
-  | { readonly planner: 'preset'; readonly admission: PresetAdmission }
+  | { readonly planner: 'preset'; readonly admission: PresetHeader }
   | { readonly planner: 'other' };
 
 /** What the request's own source declares. A theme admission binds no assets. */
@@ -124,7 +124,7 @@ function dslSources(
  * the recipe source.
  */
 function presetSources(
-  admission: PresetAdmission,
+  admission: PresetHeader,
   owners: IntentOwners,
 ): AuthoringResult<Declared> {
   if (admission.kind === 'theme') return success({ kind: 'theme-admission' });

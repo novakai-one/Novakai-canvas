@@ -15,8 +15,8 @@ import type { Catalog, RecipePayload } from '@novakai/canvas-templates';
 /** What the service reads from `resources/` at start-up. Reading them saves nothing. */
 export interface BuiltinSources {
   /**
-   * The shipped fonts in role order: body, mono, strong. This array is the
-   * `/api/v1/installation` wire; core/presets/builtin.ts names the roles (`BuiltinFonts`).
+   * The shipped fonts in role order: body, mono, strong. This array is sent as-is by
+   * `GET /api/v1/installation`; core/presets/builtin.ts names the roles (`BuiltinFonts`).
    */
   readonly fonts: FontSet;
   /** The design token sources, as read from disk; Design System checks them on every use. */

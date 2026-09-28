@@ -9,7 +9,7 @@ import type {
   ApiCall,
   RouteKey,
 } from '../../contract/records/transport/protocol.js';
-import type { WireOutcome } from '../../contract/records/transport/wire-codes.js';
+import type { HttpOutcome } from '../../contract/records/transport/http-codes.js';
 import type { CommandDecoder, HttpAdmission } from '../../contract/ports/transport.js';
 import type { WorkspaceSession } from '../../contract/types.js';
 import type { Generation } from '../../contract/brands.js';
@@ -51,7 +51,7 @@ async function runMutation(
   call: ApiCall,
   owners: MutationRouteOwners,
   route: MutationRoute,
-): Promise<WireOutcome> {
+): Promise<HttpOutcome> {
   const mutation = owners.decoder.read(call.body, {
     caller: call.caller,
     metadata: call.metadata,
@@ -67,7 +67,7 @@ type MutationStep = (
   mutation: AdmittedMutation,
   signal: AbortSignal,
   session: MutationRouteOwners['session'],
-) => Promise<WireOutcome>;
+) => Promise<HttpOutcome>;
 
 /**
  * The session call of each step. `prepare` passes the envelope's prepare mode; `apply` its

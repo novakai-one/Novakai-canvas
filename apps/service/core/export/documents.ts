@@ -12,7 +12,7 @@ import type {
   ExportResult,
   Language,
   MarkdownScope,
-} from '../../contract/records/capabilities.js';
+} from '../../contract/records/capability-types.js';
 import type { ExportRules, ModelRules } from '../../contract/ports/capabilities.js';
 import { cancelledExport, exportRejection } from './faults.js';
 

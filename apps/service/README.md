@@ -24,6 +24,6 @@ Composes all capabilities: owns sessions, rendering and inspection jobs, resourc
 | `core/transport/`                              | HTTP policy: admission, routes, request reading, status, envelopes, events                                                                |
 | `adapters/`                                    | Real I/O, one leaf per medium: `http`, `credentials`, `render-worker`, `raster`, `files`, `storage`, `notifications`                      |
 
-Records that also carry methods: `NativeFactories` and `NativeWorkspace` (startup handles, `records/workspace/startup.ts`), `LocalServer` (server handle, `records/transport/server.ts`), `PresetContext` and `PresetCodecs` (codec shapes, `records/presets/codecs.ts`).
+Records that also carry methods: `StoreOpeners` and `OpenStores` (startup handles, `records/workspace/startup.ts`), `LocalServer` (server handle, `records/transport/server.ts`), `PresetContext` and `PresetCodecs` (codec shapes, `records/presets/codecs.ts`).
 
 An owner bag (the capabilities one core module reads) lives beside that module. The CLI-facing bags live in `contract/ports/headless.ts`.

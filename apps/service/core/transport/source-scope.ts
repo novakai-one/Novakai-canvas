@@ -2,7 +2,7 @@
  * The print scope of `GET /api/v1/source`, read from its query: the whole collection, one section
  * or one object. Pure. IDs follow Model's ID grammar. A refused scope is the caller's to correct.
  */
-import type { Scope } from '../../contract/records/capabilities.js';
+import type { Scope } from '../../contract/records/capability-types.js';
 import type { ApiQuery } from '../../contract/records/transport/protocol.js';
 import { objectId, sectionId } from '../../contract/schemas.js';
 import { failure, success, type Result } from '../../contract/errors.js';

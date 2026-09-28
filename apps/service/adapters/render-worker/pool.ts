@@ -8,9 +8,9 @@
 import { Worker as NodeWorker } from 'node:worker_threads';
 import type { RenderingJob } from '../../contract/records/rendering/job.js';
 import type { RenderTransport } from '../../contract/ports/rendering.js';
-import { resultEnvelope, workerHandshake } from '../../contract/records/rendering/worker.js';
+import { workerReplyMessage, workerHandshake } from '../../contract/records/rendering/worker.js';
 import { failure, success, type Result } from '../../contract/errors.js';
-import type { OperationSource } from '../../contract/records/transport/failure-source.js';
+import type { CapabilityFailure } from '../../contract/records/transport/failure-source.js';
 
 /** A started worker and the outcome of its start-up handshake. */
 interface WorkerSlot {
@@ -146,7 +146,7 @@ function notReady(message: string): Result<void> {
 }
 
 /** The worker's reported startup failure: `unavailable` at `worker`, `error` kept as source. */
-function startupRefused(error: OperationSource): Result<void> {
+function startupRefused(error: CapabilityFailure): Result<void> {
   return failure('unavailable', 'worker', 'Rendering worker reported a startup failure', error);
 }
 
@@ -264,7 +264,7 @@ function terminated(
  * rebuilds the scene. Fails with `unavailable` at `worker` when the reply is malformed.
  */
 function reply(input: unknown): Result<unknown> {
-  const parsed = resultEnvelope.safeParse(input);
+  const parsed = workerReplyMessage.safeParse(input);
   if (!parsed.success)
     return failure('unavailable', 'worker', 'Rendering worker returned a malformed result');
   return parsed.data;

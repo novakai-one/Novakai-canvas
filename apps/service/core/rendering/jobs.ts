@@ -11,7 +11,7 @@ import type {
   FontSource,
   ThemePreset,
   VisualAsset,
-} from '../../contract/records/capabilities.js';
+} from '../../contract/records/capability-types.js';
 import {
   fontSource,
   fontSet,
@@ -20,7 +20,7 @@ import {
   layoutOptions,
 } from '../../contract/schemas.js';
 import { andThen, collect, success } from '../../contract/errors.js';
-import { bareDigest } from '../../contract/brands.js';
+import { removeDigestPrefix } from '../../contract/brands.js';
 import type { RenderResourceOwners } from '../../contract/ports/headless.js';
 import type { WorkspaceContents } from '../../contract/records/workspace/contents.js';
 import type { RenderingJob, RenderPurpose } from '../../contract/records/rendering/job.js';
@@ -96,7 +96,7 @@ function assembleJob(
   const id = jobId(purpose, collection);
   if (!id.ok) return id;
   const images = collection.assets.filter((item) => item.mediaType.startsWith('image/'));
-  const assets = collect(images, (image) => asset(bareDigest(image.digest), owners));
+  const assets = collect(images, (image) => asset(removeDigestPrefix(image.digest), owners));
   if (!assets.ok) return assets;
   return andThen(scaledOptions(theme.style), (options) =>
     success({
@@ -126,7 +126,7 @@ function pinnedTheme(
       kind: 'theme',
       id: collection.theme.id,
       version: collection.theme.version,
-      digest: bareDigest(collection.theme.digest),
+      digest: removeDigestPrefix(collection.theme.digest),
     }),
   );
   if (!preset.ok) return preset;

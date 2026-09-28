@@ -17,7 +17,7 @@ import type {
   Snapshot,
   SnapshotLease,
   StoredBlob,
-} from '../../contract/records/capabilities.js';
+} from '../../contract/records/capability-types.js';
 import type { CollectionRenderer } from '../../contract/ports/rendering.js';
 import type { ResourceSelector, WorkspaceReader } from '../../contract/ports/workspace.js';
 import type {
@@ -38,7 +38,7 @@ export interface LeaseOwners {
   readonly workspace: WorkspaceId;
   readonly assets: Pick<Assets, 'acquire'>;
   readonly views: Pick<WorkspaceReader, 'read'>;
-  readonly resources: Pick<ResourceSelector, 'forCollection'>;
+  readonly resources: Pick<ResourceSelector, 'digestsForCollection'>;
   readonly renderer: CollectionRenderer;
   readonly authoring: (signal: AbortSignal) => Pick<Authoring, 'read'>;
 }
@@ -92,7 +92,7 @@ async function retainSnapshot(
   owners: LeaseOwners,
   signal: AbortSignal,
 ): Promise<ExportResult<SnapshotLease>> {
-  const digests = owners.resources.forCollection(selected.collection, selected.view);
+  const digests = owners.resources.digestsForCollection(selected.collection, selected.contents);
   if (!digests.ok) return exportRejection('resource-rejected', 'resources', digests.error.message);
   const lease = owners.assets.acquire(digests.value);
   if (!lease.ok) return exportRejection('resource-rejected', 'resources', lease.error.message);
@@ -133,7 +133,7 @@ async function prepareSnapshot(
 ): Promise<ExportResult<ExportSnapshot>> {
   try {
     const document = renderedDocument(
-      await owners.renderer.render(selected.collection, selected.view, signal),
+      await owners.renderer.render(selected.collection, selected.contents, signal),
     );
     if (!document.ok) return document;
     return exportSnapshot(

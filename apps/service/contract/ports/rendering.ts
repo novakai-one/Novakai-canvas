@@ -2,7 +2,7 @@
  * Why this file exists
  *
  * To show a collection, the service must measure its text, place every node and route every wire.
- * That slow native work runs on a separate render worker thread. For example,
+ * That slow work runs on a separate render worker thread. For example,
  * `GET /api/v1/render?id=my-diagram` becomes one render job; the worker lays it out, and its reply
  * is checked before it goes to the browser.
  *
@@ -11,7 +11,7 @@
  * last good picture in place.
  */
 import type { Result } from '../errors.js';
-import type { AuthoringResult, Collection } from '../records/capabilities.js';
+import type { AuthoringResult, Collection } from '../records/capability-types.js';
 import type { RenderDocument, RenderingJob, RenderPurpose } from '../records/rendering/job.js';
 import type { WorkspaceContents } from '../records/workspace/contents.js';
 
@@ -22,8 +22,8 @@ import type { WorkspaceContents } from '../records/workspace/contents.js';
 export interface DiagramProducer {
   /**
    * Renders one job and checks the result. Fails with `cancelled` when `signal` aborts,
-   * `unavailable` when the worker or native code can't finish, and `invalid-input` when a
-   * capability refuses the input or the reply doesn't match the job.
+   * `unavailable` when the worker or the compiled layout code can't finish, and `invalid-input`
+   * when a capability refuses the input or the reply doesn't match the job.
    */
   produce(
     job: RenderingJob,
@@ -58,17 +58,20 @@ export interface RenderReader {
   ): Result<RenderDocument>;
 }
 
-/** Builds render jobs. Separate from running them and from checking their replies. */
+/**
+ * Builds render jobs. Separate from running them and from checking their replies. Building a job
+ * answers Authoring's `Result`, because Authoring's layout check calls it.
+ */
 export interface RenderJobs {
   /**
-   * Builds the job for one collection, with its theme, fonts and images looked up in `view`. The
-   * job's ID says why it runs (`purpose`). Fails with `missing-asset` at `render-resources` when a
-   * file or theme can't be used or the pinned preset is not a theme, and `invalid-input` at
-   * `render-resources` when a resource is malformed.
+   * Builds the job for one collection, with its theme, fonts and images looked up in `contents`.
+   * `purpose` says why the job runs; it becomes the start of the job ID. Fails with
+   * `missing-asset` at `render-resources` when a file or theme can't be used or the chosen preset
+   * is not a theme, and `invalid-input` at `render-resources` when a resource is malformed.
    */
   create(
     collection: Collection,
-    view: WorkspaceContents,
+    contents: WorkspaceContents,
     purpose: RenderPurpose,
   ): AuthoringResult<RenderingJob>;
 }
@@ -84,7 +87,7 @@ export interface CollectionRenderer {
    */
   render(
     collection: Collection,
-    workspace: WorkspaceContents,
+    contents: WorkspaceContents,
     signal: AbortSignal,
   ): Promise<Result<RenderDocument>>;
 }

@@ -11,7 +11,7 @@ import type {
   ExportResult,
   ExportSnapshot,
   Snapshot,
-} from '../../contract/records/capabilities.js';
+} from '../../contract/records/capability-types.js';
 import type { WorkspaceContents } from '../../contract/records/workspace/contents.js';
 import type { RenderDocument } from '../../contract/records/rendering/job.js';
 import type { LeaseRead } from '../../contract/ports/export.js';
@@ -56,7 +56,12 @@ export function exportSnapshot(
   signal: AbortSignal,
 ): ExportResult<ExportSnapshot> {
   if (signal.aborted) return cancelledExport();
-  const resources = retainedResources(read, selected.collection, document, selected.view.presets);
+  const resources = retainedResources(
+    read,
+    selected.collection,
+    document,
+    selected.contents.presets,
+  );
   if (!resources.ok) return resources;
   return {
     ok: true,
@@ -91,5 +96,5 @@ function matchingRevision(
       'identity.revision',
       'Requested revision is no longer available',
     );
-  return { ok: true, value: { collection, view } };
+  return { ok: true, value: { collection, contents: view } };
 }

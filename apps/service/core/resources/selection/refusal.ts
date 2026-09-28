@@ -5,7 +5,7 @@
  * Authoring owns recovery.
  */
 import type { FailureSource } from '../../../contract/records/transport/failure-source.js';
-import type { AuthoringResult } from '../../../contract/records/capabilities.js';
+import type { AuthoringResult } from '../../../contract/records/capability-types.js';
 import { authoringFailure } from '../../../contract/errors.js';
 
 /**

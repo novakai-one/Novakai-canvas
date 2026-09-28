@@ -9,7 +9,7 @@ import type {
   RecordKey,
   Snapshot,
   StoredRecord,
-} from '../../contract/records/capabilities.js';
+} from '../../contract/records/capability-types.js';
 import type { AssetDigest } from '../../contract/brands.js';
 
 /** A record kind Authoring stores. */

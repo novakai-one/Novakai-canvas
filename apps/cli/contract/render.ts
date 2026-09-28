@@ -10,7 +10,7 @@ import { digest, plan, stage, validate } from '@novakai/canvas-model';
 import { createLanguage, type LoweredIntent } from '@novakai/canvas-language';
 import {
   hostPath,
-  prepareInstallation,
+  prepareBuiltins,
   type BuiltinResources,
   type RenderingJob,
 } from '@novakai/canvas-service';
@@ -117,7 +117,7 @@ export async function environment(
   assets: Pick<Assets, 'stage' | 'resolve'>,
 ): Promise<Environment> {
   const installation = accepted(
-    await prepareInstallation(
+    await prepareBuiltins(
       hostPath.parse(join(options.root, 'resources')),
       hostPath.parse(join(options.root, 'capability/design-system')),
       assets,

@@ -1,7 +1,7 @@
 /*
  * Why this file exists
  *
- * Authoring, the session and the export route all need the same workspace helpers: read a snapshot
+ * Authoring, the session and the exporter all need the same workspace helpers: read a snapshot
  * into checked contents, pick a request's themes and files, run resource commands, build render
  * jobs, and render a saved collection. They should share one of each, and one render cache.
  *
@@ -25,52 +25,55 @@ import { createCollectionRenderer } from '../../core/rendering/renderer.js';
 import { libavoidWasmPath } from './producer.js';
 
 /**
- * What the shared roles are built from: the open files store, the installation and the
+ * What the shared roles are built from: the workspace's file store, the built-in resources and the
  * capabilities.
  */
 export interface WorkspaceRoleInputs {
   readonly assets: Pick<Assets, 'stage' | 'resolve' | 'reserve' | 'acquire'>;
-  readonly installation: Pick<BuiltinResources, 'presets' | 'tokens'>;
+  readonly builtins: Pick<BuiltinResources, 'presets' | 'tokens'>;
   readonly resourceRoot: HostPath;
   readonly capabilities: Pick<
     ServiceCapabilities,
     'model' | 'library' | 'language' | 'system' | 'templates'
   >;
-  /** The render worker pool; the roles render through a cache in front of it. */
-  readonly worker: DiagramProducer;
+  /** The render workers; the roles render through a cache in front of them. */
+  readonly renderWorkers: DiagramProducer;
 }
 
-/** The roles one workspace shares between Authoring, the session and the export route. */
+/** The roles one workspace shares between Authoring, the session and the exporter. */
 export interface WorkspaceRoles {
-  /** Reads a snapshot into checked contents. */
-  readonly views: WorkspaceReader;
+  /** Reads a snapshot into `WorkspaceContents`, the checked collections, catalog and presets. */
+  readonly reader: WorkspaceReader;
   /** Picks the themes and files a request or collection uses. */
   readonly resources: ResourceSelector;
+  /** The commands behind `/api/v1/resources/…`: upload, restore, read files; prepare presets. */
   readonly commands: ResourceCommands;
+  /** Builds the render job for one collection. */
   readonly jobs: RenderJobs;
-  /** The cached producer: feasibility and the renderer share its memo. */
+  /** The render workers behind a cache; the layout check and the renderer share it. */
   readonly producer: DiagramProducer;
+  /** Renders one saved collection, holding its files until the workers are done. */
   readonly renderer: CollectionRenderer;
 }
 
 /** Builds the shared roles for one workspace. Never fails; reads no files. */
 export function wireWorkspaceRoles(inputs: WorkspaceRoleInputs): WorkspaceRoles {
-  const { assets, installation, capabilities } = inputs;
+  const { assets, builtins, capabilities } = inputs;
   const { model, library, language, system } = capabilities;
   const templates = capabilities.templates(EMPTY_RESOURCES);
-  const producer = cacheRenders(inputs.worker);
-  const views = createWorkspaceReader({ model, library, templates });
+  const producer = cacheRenders(inputs.renderWorkers);
+  const reader = createWorkspaceReader({ model, library, templates });
   const resources = createResourceSelector({
     model,
     assets,
     templates,
     language,
-    installation: installation.presets,
+    installation: builtins.presets,
   });
   const jobs = createRenderJobs({
     assets,
     system,
-    sources: installation.tokens,
+    sources: builtins.tokens,
     templates,
     wasmResource: libavoidWasmPath(inputs.resourceRoot),
   });
@@ -83,5 +86,5 @@ export function wireWorkspaceRoles(inputs: WorkspaceRoleInputs): WorkspaceRoles 
     templates: capabilities.templates,
   });
   const renderer = createCollectionRenderer({ assets, jobs, producer, resources });
-  return { views, resources, commands, jobs, producer, renderer };
+  return { reader, resources, commands, jobs, producer, renderer };
 }

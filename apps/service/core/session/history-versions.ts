@@ -2,7 +2,7 @@
  * Strips history contents from a snapshot, keeping navigation. Pure. Used by apply's post-commit
  * read and by the workspace route's `?history=versions`.
  */
-import type { Snapshot, StoredRecord } from '../../contract/records/capabilities.js';
+import type { Snapshot, StoredRecord } from '../../contract/records/capability-types.js';
 
 /** The ID of Authoring's undo/redo navigation record (kind `history`); its contents are kept. */
 const NAVIGATION_HISTORY_ID = 'navigation';

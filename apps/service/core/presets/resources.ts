@@ -2,7 +2,11 @@
  * The digests a preset's record retains: a theme's fonts, a recipe's assets. Pure and total.
  * Templates owns the preset and its digests; Authoring owns the record that retains them.
  */
-import type { Preset, RecipePayload, ThemePayload } from '../../contract/records/capabilities.js';
+import type {
+  Preset,
+  RecipePayload,
+  ThemePayload,
+} from '../../contract/records/capability-types.js';
 
 /** The digests a preset's record retains: a theme's fonts, a recipe's assets. Never fails. */
 export function presetResources(preset: Preset): ThemePayload['fonts'] | RecipePayload['assets'] {

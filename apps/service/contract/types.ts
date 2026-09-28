@@ -17,14 +17,14 @@ import type {
   Receipt,
   AuthoringResult,
   Request,
-} from './records/capabilities.js';
+} from './records/capability-types.js';
 import type { Preparation } from '@novakai/canvas-authoring';
 import type { BuiltinResources } from './records/presets/builtins.js';
 import type { CommittedChange } from './ports/notifications.js';
 import type { RenderDocument } from './records/rendering/job.js';
 import type { InspectionReport } from './records/rendering/inspection.js';
 import type { Result } from './errors.js';
-import type { StaticFile } from './records/transport/server.js';
+import type { SentFile } from './records/transport/server.js';
 import type { AppliedCommit, PrepareMode } from './records/workspace/session.js';
 import type { CollectionId, WorkspaceId } from './brands.js';
 /**
@@ -34,10 +34,8 @@ import type { CollectionId, WorkspaceId } from './brands.js';
 export interface WorkspaceSession {
   /** The workspace's ID. `pnpm dev` always opens `local`. */
   readonly workspace: WorkspaceId;
-  /**
-   * The shipped fonts, design tokens and recipe starters, and the preset catalog made from them.
-   */
-  readonly installation: BuiltinResources;
+  /** The shipped fonts, design tokens and recipe starters, and the built-in themes and recipes. */
+  readonly builtins: BuiltinResources;
   /** Upload, restore and read stored files; prepare themes and recipes (see `ResourceCommands`). */
   readonly resources: ResourceCommands;
   /**
@@ -72,9 +70,10 @@ export interface WorkspaceSession {
   ): Promise<AuthoringResult<AppliedCommit>>;
   /**
    * Finds the receipt of a request saved earlier, or `null` if none is stored. `requestId` is the
-   * text as sent in the query; Authoring checks it. Fails like `read`.
+   * `id` query text as sent, or `undefined` when none was sent; Authoring checks it. Fails like
+   * `read`.
    */
-  receipt(requestId: unknown): Promise<AuthoringResult<Receipt | null>>;
+  receipt(requestId: string | undefined): Promise<AuthoringResult<Receipt | null>>;
   /**
    * Lays out one saved collection: measured text, placed nodes and routed wires. Fails with
    * `not-found` when no collection has this ID, `unavailable` when the workspace can't be read or
@@ -94,14 +93,14 @@ export interface WorkspaceSession {
     signal: AbortSignal,
   ): Promise<Result<InspectionReport>>;
   /**
-   * Makes one export file (DSL, Markdown, SVG or PNG) from the request as sent; the export route
+   * Makes one export file (DSL, Markdown, SVG or PNG) from the request as sent; the exporter
    * checks it. Fails with `invalid-input` for a bad request, `unavailable` when a file can't be
-   * read or encoded, and `cancelled` when `signal` aborts (see `ExportRoute`).
+   * read or encoded, and `cancelled` when `signal` aborts (see `Exporter`).
    */
   exportArtifact(
     input: unknown,
     signal: AbortSignal,
-  ): Promise<Result<StaticFile>>;
+  ): Promise<Result<SentFile>>;
   /**
    * Calls `listener` after every saved change. Returns the function that stops listening.
    */

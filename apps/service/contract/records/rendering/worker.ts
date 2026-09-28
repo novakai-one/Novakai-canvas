@@ -7,17 +7,18 @@
  *
  * This file holds the checks for every message: the worker's first "ready" message, a job, a reply,
  * and the drawn document inside a reply. They check only the outer fields; each capability checks
- * its own part. The web app checks drawn documents with `renderEnvelope` too.
+ * its own part. The web app checks drawn documents with `renderDocumentMessage` too.
  */
 import { z } from 'zod';
 import { failureSource } from '../transport/failure-source.js';
 import { hostPath, renderJobId } from '../../brands.js';
 import { errorCodes } from '../../errors.js';
 /**
- * Checks a job as the worker receives it: the job ID, at most 2000 images, and a wire router file
- * path of at most 4096 characters. The other fields are checked by their capabilities.
+ * Checks a job as the worker receives it: the job ID, at most 2000 images, and the WebAssembly
+ * file path (libavoid), at most 4096 characters. The other fields are checked by their
+ * capabilities.
  */
-export const renderingEnvelope = z
+export const renderJobMessage = z
   .strictObject({
     id: renderJobId,
     collection: z.unknown(),
@@ -32,7 +33,7 @@ export const renderingEnvelope = z
  * Checks the outer shape of a drawn document. Each field stays unchecked until it is compared with
  * the job's own collection and inputs.
  */
-export const renderEnvelope = z
+export const renderDocumentMessage = z
   .strictObject({
     collection: z.unknown(),
     projection: z.unknown(),
@@ -54,7 +55,7 @@ const diagnostic = z
   })
   .readonly();
 /** Checks a worker's reply: `{ ok: true, value }` (not yet checked) or `{ ok: false, error }`. */
-export const resultEnvelope = z.discriminatedUnion('ok', [
+export const workerReplyMessage = z.discriminatedUnion('ok', [
   z.strictObject({ ok: z.literal(true), value: z.unknown() }),
   z.strictObject({ ok: z.literal(false), error: diagnostic }),
 ]);

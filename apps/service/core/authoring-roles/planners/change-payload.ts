@@ -11,7 +11,7 @@ import type {
   Json,
   Proposal,
   Request,
-} from '../../../contract/records/capabilities.js';
+} from '../../../contract/records/capability-types.js';
 import { proposalSchema } from '../../../contract/schemas.js';
 import { authoringFailure } from '../../../contract/errors.js';
 

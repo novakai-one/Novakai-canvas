@@ -10,7 +10,7 @@ import type {
   Preset,
   Snapshot,
   StoredRecord,
-} from '../../../contract/records/capabilities.js';
+} from '../../../contract/records/capability-types.js';
 import type { WorkspaceContents } from '../../../contract/records/workspace/contents.js';
 import { workspaceMetadata, assetMetadata } from '../../../contract/records/workspace/metadata.js';
 import { andThen } from '../../../contract/errors.js';

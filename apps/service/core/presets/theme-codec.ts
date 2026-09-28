@@ -11,9 +11,9 @@ import type {
   TemplatesResult,
   ThemePayload,
   ThemePreset,
-} from '../../contract/records/capabilities.js';
+} from '../../contract/records/capability-types.js';
 import type { PresetCodecs } from '../../contract/records/presets/codecs.js';
-import { themeInput, type ThemeInput } from '../../contract/records/presets/theme-input.js';
+import { exactTheme, type ExactTheme } from '../../contract/records/presets/theme-input.js';
 import { andThen, collect, success } from '../../contract/errors.js';
 import { rejected } from './codec-refusal.js';
 import { brandedDigest, brandedThemePin } from './branded-pin.js';
@@ -42,7 +42,7 @@ function theme(
   available: readonly ThemePreset[],
   context: ThemeCodecContext,
 ): TemplatesResult<ThemePayload> {
-  const input = themeInput.safeParse(raw);
+  const input = exactTheme.safeParse(raw);
   if (!input.success) return rejected('Theme admission requires a base, fonts and overrides');
   return resolvedTheme(input.data, available, context);
 }
@@ -54,7 +54,7 @@ function theme(
  * source), or as `checkedThemePayload` fails.
  */
 function resolvedTheme(
-  input: ThemeInput,
+  input: ExactTheme,
   available: readonly ThemePreset[],
   context: ThemeCodecContext,
 ): TemplatesResult<ThemePayload> {
@@ -75,7 +75,7 @@ function resolvedTheme(
  * no stored theme matches.
  */
 function selectedBase(
-  input: ThemeInput['base'],
+  input: ExactTheme['base'],
   available: readonly ThemePreset[],
 ): TemplatesResult<unknown> {
   if (input.kind === 'ui') return success(input);

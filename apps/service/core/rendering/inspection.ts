@@ -4,7 +4,7 @@
  */
 import type { InspectionReport } from '../../contract/records/rendering/inspection.js';
 import type { RenderDocument } from '../../contract/records/rendering/job.js';
-import type { SceneWarning } from '../../contract/records/capabilities.js';
+import type { SceneWarning } from '../../contract/records/capability-types.js';
 import type { Diagnostic, Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 import type { CollectionId } from '../../contract/brands.js';

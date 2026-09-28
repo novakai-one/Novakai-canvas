@@ -11,8 +11,8 @@ import type {
   ResolvedResources,
   ResourceRequest,
   Snapshot,
-} from '../../../contract/records/capabilities.js';
-import { bareDigest, isPinnedDigest, pinnedDigest } from '../../../contract/brands.js';
+} from '../../../contract/records/capability-types.js';
+import { removeDigestPrefix, hasDigestPrefix, addDigestPrefix } from '../../../contract/brands.js';
 import { andThen, collect, success } from '../../../contract/errors.js';
 import {
   assetBindings,
@@ -125,13 +125,13 @@ function priorAssets(
  * `invalid-input` at `resources` when a pinned digest is not an Authoring digest.
  */
 function pinnedUploads(requests: readonly ResourceRequest[]): AuthoringResult<readonly Upload[]> {
-  const pinned = requests.filter((item) => item.kind !== 'theme' && isPinnedDigest(item.source));
+  const pinned = requests.filter((item) => item.kind !== 'theme' && hasDigestPrefix(item.source));
   return collect(pinned, pinnedUpload);
 }
 
 /** One pinned declaration as an upload. Fails with `invalid-input` at `resources` on a malformed digest. */
 function pinnedUpload(request: ResourceRequest): AuthoringResult<Upload> {
-  const digest = checkedDigest(bareDigest(request.source));
+  const digest = checkedDigest(removeDigestPrefix(request.source));
   return andThen(digest, (checked) => success({ alias: request.alias, digest: checked }));
 }
 
@@ -161,7 +161,7 @@ function suppliedAsset(
   );
   if (metadata) return newAsset(upload, metadata, theme, owners);
   const existing = inputs.previous.find(
-    (item) => item.id === upload.alias && item.digest === pinnedDigest(upload.digest),
+    (item) => item.id === upload.alias && item.digest === addDigestPrefix(upload.digest),
   );
   if (!existing) return resourceRefused(`Missing authored asset metadata: ${upload.alias}`);
   return success(existing);
@@ -182,7 +182,7 @@ function newAsset(
   if (!blob.ok) return blob;
   const draft = {
     id: upload.alias,
-    digest: pinnedDigest(upload.digest),
+    digest: addDigestPrefix(upload.digest),
     mediaType: blob.value.descriptor.mediaType,
     alt: metadata.alt ?? upload.alias,
     ...optionalMetadata(metadata),

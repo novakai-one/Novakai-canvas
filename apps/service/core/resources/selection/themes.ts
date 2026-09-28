@@ -12,8 +12,8 @@ import type {
   ResolvedResources,
   Templates,
   ThemePreset,
-} from '../../../contract/records/capabilities.js';
-import { pinnedDigest } from '../../../contract/brands.js';
+} from '../../../contract/records/capability-types.js';
+import { addDigestPrefix } from '../../../contract/brands.js';
 import { andThen, collect, success } from '../../../contract/errors.js';
 import { themeBinding, type BindingModel, type ThemeBinding } from '../../presets/theme-binding.js';
 import { formatThemePin, type ThemePinText } from '../../presets/theme-pin.js';
@@ -99,7 +99,7 @@ function presetPin(preset: ThemePreset): ThemePinText {
   return formatThemePin({
     id: preset.id,
     version: preset.version,
-    digest: pinnedDigest(preset.digest),
+    digest: addDigestPrefix(preset.digest),
   });
 }
 

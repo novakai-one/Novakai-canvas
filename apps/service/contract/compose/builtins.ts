@@ -5,8 +5,9 @@
  * `resources/`. Before start-up can use them, they have to be read from disk, and the built-in
  * themes and recipes made from them.
  *
- * This file does that, through the real capabilities. It saves nothing. If it fails, the workspace
- * is left as it was; the person fixes the install and starts again.
+ * This file does that, through the real capabilities. It saves no record: start-up saves the
+ * built-in themes and recipes through Authoring. If it fails, the workspace is left as it was; the
+ * person fixes the install and starts again.
  */
 import { createTokenFileBindings } from '@novakai/canvas-design-system';
 import type { Assets } from '@novakai/canvas-assets';
@@ -18,17 +19,18 @@ import { prepareBuiltinPresets } from '../../core/presets/builtin.js';
 import { createServiceCapabilities } from './capabilities.js';
 
 /**
- * Reads the shipped resources and makes the built-in preset catalog from them. Fails with
- * `unavailable` when the token files or shipped resources can't be read, and `invalid-input` at
- * `builtins` when a built-in theme or recipe can't be made.
+ * Reads the shipped resources and makes the built-in themes and recipes (the preset catalog).
+ * Each shipped font is copied into `assets`, the workspace's file store, to get its digest; no
+ * record is saved. Fails with `unavailable` when the shipped files can't be read, and
+ * `invalid-input` at `builtins` when a built-in theme or recipe can't be made.
  */
-export async function prepareInstallation(
+export async function prepareBuiltins(
   resourceRoot: HostPath,
   tokenRoot: HostPath,
   assets: Pick<Assets, 'stage' | 'resolve'>,
 ): Promise<Result<BuiltinResources>> {
   try {
-    return await prepareInstallationInputs(resourceRoot, tokenRoot, assets);
+    return await readAndPrepareBuiltins(resourceRoot, tokenRoot, assets);
   } catch {
     return failure(
       'unavailable',
@@ -38,8 +40,8 @@ export async function prepareInstallation(
   }
 }
 
-/** Read and prepare shipped resources through their real owners; caller submits returned preset bindings through Authoring. */
-async function prepareInstallationInputs(
+/** Reads the shipped resources, then makes the built-in presets (see `prepareBuiltins`). */
+async function readAndPrepareBuiltins(
   resourceRoot: HostPath,
   tokenRoot: HostPath,
   assets: Pick<Assets, 'stage' | 'resolve'>,

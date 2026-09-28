@@ -5,7 +5,7 @@
  * is Templates' `invalid-input` at `preset` (codec-refusal.ts): the caller keeps the source,
  * corrects it and prepares again; Authoring owns commit.
  */
-import { bareDigest } from '../../contract/brands.js';
+import { removeDigestPrefix } from '../../contract/brands.js';
 import type {
   Language,
   LanguageResult,
@@ -13,7 +13,7 @@ import type {
   RecipePayload,
   ResolvedResources,
   TemplatesResult,
-} from '../../contract/records/capabilities.js';
+} from '../../contract/records/capability-types.js';
 import type { PresetCodecs } from '../../contract/records/presets/codecs.js';
 import { andThen, collect, success } from '../../contract/errors.js';
 import { rejected } from './codec-refusal.js';
@@ -89,12 +89,14 @@ function recipePayload(
   family: RecipePayload['family'],
 ): TemplatesResult<RecipePayload> {
   const collection = intent.collection;
-  const assets = collect(collection.assets, (binding) => brandedDigest(bareDigest(binding.digest)));
+  const assets = collect(collection.assets, (binding) =>
+    brandedDigest(removeDigestPrefix(binding.digest)),
+  );
   if (!assets.ok) return assets;
   const theme = brandedThemePin({
     id: collection.theme.id,
     version: collection.theme.version,
-    digest: bareDigest(collection.theme.digest),
+    digest: removeDigestPrefix(collection.theme.digest),
   });
   return andThen(theme, (pin) =>
     success({ languageVersion: 1, source, family, assets: assets.value, themes: [pin] }),

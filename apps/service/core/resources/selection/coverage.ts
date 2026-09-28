@@ -9,8 +9,8 @@ import type {
   Request,
   ResolvedResources,
   Snapshot,
-} from '../../../contract/records/capabilities.js';
-import { bareDigest, type AuthoringDigest } from '../../../contract/brands.js';
+} from '../../../contract/records/capability-types.js';
+import { removeDigestPrefix, type AuthoringDigest } from '../../../contract/brands.js';
 import type { ResourceSelection } from '../../../contract/records/planning/selection.js';
 import { andThen, collect, success } from '../../../contract/errors.js';
 import { checkedDigest, sortedDigests } from './digests.js';
@@ -33,7 +33,7 @@ export function coverage(
   ]);
   if (!held.ok) return held;
   const bytes = collect(Object.values(bound), (binding) =>
-    checkedDigest(bareDigest(binding.digest)),
+    checkedDigest(removeDigestPrefix(binding.digest)),
   );
   return andThen(bytes, (added) => success([...new Set([...held.value, ...added])]));
 }

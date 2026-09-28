@@ -6,8 +6,8 @@
  * `Host: 127.0.0.1:5174` with the right `Authorization: Bearer …` token is the CLI.
  *
  * This file holds the words and fixed values for that decision: the address, the two callers, the
- * request headers, the largest body accepted and the cookie's name. The secrets and the admission
- * rules are in ports/transport.ts.
+ * request headers, the largest body accepted and the start of the cookie's name. The secrets and
+ * the admission rules are in ports/transport.ts.
  */
 import type { ActorId } from '../../brands.js';
 import { actorId } from '../../schemas.js';
@@ -37,10 +37,7 @@ export const BROWSER_CALLER: Extract<Caller, { readonly kind: 'human' }> = Objec
   id: actorId.parse('human:browser'),
 });
 
-/**
- * The caller a valid agent token stands for. Also the author of the stand-in request that preset
- * preparation builds to pick a preset's files. Its ID is checked once, when loaded.
- */
+/** The caller a valid agent token stands for. Its ID is checked once, when loaded. */
 export const CLI_CALLER: Extract<Caller, { readonly kind: 'agent' }> = Object.freeze({
   kind: 'agent',
   id: actorId.parse('agent:cli'),
@@ -83,4 +80,4 @@ export interface HttpMetadata {
 /** The largest request body accepted, in bytes (24 MiB). */
 export const httpBodyLimit = 24 * 1024 * 1024;
 /** The start of the browser session cookie's name; admission adds the server's host to it. */
-export const browserCookieName = 'novakai_canvas_session';
+export const browserCookiePrefix = 'novakai_canvas_session';

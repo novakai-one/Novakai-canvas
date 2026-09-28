@@ -8,7 +8,7 @@ import { readFile, realpath } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
 import { failure, success, type Result } from '../../contract/errors.js';
 import type { StaticFiles } from '../../contract/ports/transport.js';
-import type { StaticFile } from '../../contract/records/transport/server.js';
+import type { SentFile } from '../../contract/records/transport/server.js';
 
 /** The media type of each served extension; any other extension is not a route. */
 const MEDIA_TYPES: Readonly<Record<string, string>> = Object.freeze({
@@ -33,7 +33,7 @@ export function createStaticFiles(root: string): StaticFiles {
 async function read(
   root: string,
   pathname: string,
-): Promise<Result<StaticFile>> {
+): Promise<Result<SentFile>> {
   try {
     const location = await locate(root, resourcePath(pathname));
     if (!location.ok) return location;
@@ -72,7 +72,7 @@ async function locate(
  * The file's bytes and media type. Fails with `not-found` at `file` for an unsupported extension;
  * throws when the file cannot be read.
  */
-async function load(path: string): Promise<Result<StaticFile>> {
+async function load(path: string): Promise<Result<SentFile>> {
   const mediaType = MEDIA_TYPES[extname(path)];
   if (!mediaType) return failure('not-found', 'file', 'Unsupported application resource');
   return success({ bytes: await readFile(path), mediaType });

@@ -9,7 +9,7 @@ import type {
   CandidateValidator,
   Request,
   Snapshot,
-} from '../../contract/records/capabilities.js';
+} from '../../contract/records/capability-types.js';
 import type { StartupKind } from '../../contract/records/workspace/startup.js';
 import type { WorkspaceSession } from '../../contract/types.js';
 import type { Result } from '../../contract/errors.js';
@@ -19,12 +19,12 @@ import { liveRecords } from '../workspace/records.js';
 /** What startup reads, validates, applies and adopts through. */
 export interface StartupOwners {
   readonly session: Pick<WorkspaceSession, 'read' | 'apply'>;
-  readonly validation: Pick<CandidateValidator, 'validate'>;
-  /** The installation request; only a new workspace applies it. */
-  readonly initialize: AuthoringResult<Request>;
-  /** The signal the installation apply runs under; compose passes one that never aborts. */
+  readonly existingWorkspaceCheck: Pick<CandidateValidator, 'validate'>;
+  /** The seed request; only a new workspace applies it. */
+  readonly seedRequest: AuthoringResult<Request>;
+  /** The signal the seed apply runs under; compose passes one that never aborts. */
   readonly signal: AbortSignal;
-  readonly adopt: () => Promise<AuthoringResult<unknown>>;
+  readonly startHistory: () => Promise<AuthoringResult<unknown>>;
 }
 
 /**
@@ -40,7 +40,7 @@ export async function startWorkspace(owners: StartupOwners): Promise<Result<void
   if (!snapshot.ok) return started(snapshot);
   const prepared = await prepare(workspaceState(snapshot.value), snapshot.value, owners);
   if (!prepared.ok) return prepared;
-  return started(await owners.adopt());
+  return started(await owners.startHistory());
 }
 
 /** The installation apply's options: none, so Authoring checks no candidate hash. */
@@ -76,7 +76,7 @@ async function validateExisting(
   snapshot: Snapshot,
   owners: StartupOwners,
 ): Promise<Result<void>> {
-  return started(await owners.validation.validate(snapshot, snapshot, []));
+  return started(await owners.existingWorkspaceCheck.validate(snapshot, snapshot, []));
 }
 
 /**
@@ -84,7 +84,7 @@ async function validateExisting(
  * be built, and `unavailable` at Authoring's path when Authoring refuses it.
  */
 async function initializeNew(owners: StartupOwners): Promise<Result<void>> {
-  const request = owners.initialize;
+  const request = owners.seedRequest;
   if (!request.ok) {
     return failure('invalid-input', request.error.path, request.error.message, request.error);
   }

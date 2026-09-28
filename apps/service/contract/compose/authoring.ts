@@ -21,7 +21,7 @@ import type {
   ResourceAdmission,
   Result as AuthoringResult,
 } from '@novakai/canvas-authoring';
-import type { Installation, WorkspaceOptions } from '../records/workspace/startup.js';
+import type { NewWorkspaceSeed, WorkspaceOptions } from '../records/workspace/startup.js';
 import type { BuiltinResources } from '../records/presets/builtins.js';
 import type { ServiceCapabilities } from '../ports/capabilities.js';
 import type { AuthoringStore, ConditionalStorage } from '../ports/storage.js';
@@ -46,17 +46,18 @@ import type { WorkspaceRoles } from './workspace.js';
 export const UNCANCELLED: AbortSignal = new AbortController().signal;
 
 /**
- * What Authoring's helpers are built from: the open stores, the installation and the shared roles.
+ * What Authoring's helpers are built from: the open stores, the built-in presets and the shared
+ * roles (compose/workspace.ts).
  */
 export interface AuthoringInputs {
-  readonly native: {
+  readonly stores: {
     readonly storage: ConditionalStorage;
     readonly assets: Pick<Assets, 'resolve' | 'acquire'>;
   };
-  readonly installation: Pick<BuiltinResources, 'presets'>;
+  readonly builtins: Pick<BuiltinResources, 'presets'>;
   readonly options: Pick<WorkspaceOptions, 'workspace' | 'title' | 'createdAt'>;
   readonly capabilities: Pick<ServiceCapabilities, 'model' | 'library' | 'language'>;
-  readonly roles: Pick<WorkspaceRoles, 'views' | 'resources' | 'commands' | 'jobs' | 'producer'>;
+  readonly roles: Pick<WorkspaceRoles, 'reader' | 'resources' | 'commands' | 'jobs' | 'producer'>;
   /** Where Authoring publishes committed changes. */
   readonly changes: Notifications;
 }
@@ -65,40 +66,46 @@ export interface AuthoringInputs {
 export interface WiredAuthoring {
   /** Makes Authoring for one request; its renders stop when `signal` aborts. */
   readonly authoring: (signal: AbortSignal) => Authoring;
-  /** The check start-up runs on an existing workspace. */
-  readonly validation: CandidateValidator;
-  /** The request that fills a new workspace with its installation, applied once. */
-  readonly installationRequest: AuthoringResult<Request>;
-  /** Adds undo history to a workspace that has none, or checks the history it has. */
-  readonly adopt: () => Promise<AuthoringResult<HistoryStatus>>;
+  /**
+   * Authoring's check of a "candidate" (the workspace as a change would leave it). Start-up also
+   * runs it on an existing workspace as stored.
+   */
+  readonly existingWorkspaceCheck: CandidateValidator;
+  /**
+   * The request that fills a brand-new workspace with its seed (`NewWorkspaceSeed`). If the
+   * built-in presets are too big for Authoring, this holds that failure; only a new workspace uses
+   * it.
+   */
+  readonly seedRequest: AuthoringResult<Request>;
+  /** Starts undo history for a workspace that has none, or checks the history it has. */
+  readonly startHistory: () => Promise<AuthoringResult<HistoryStatus>>;
 }
 
 /**
- * Builds Authoring's helpers for one workspace. Never fails: an installation too big for Authoring
- * becomes `installationRequest`'s failure, which only a new workspace sees. Rejects only if the
- * storage code can't load.
+ * Builds Authoring's helpers for one workspace. Never fails; rejects only if the storage code
+ * can't load.
  */
 export async function wireAuthoring(inputs: AuthoringInputs): Promise<WiredAuthoring> {
   const storeModule = await import('../../adapters/storage/authoring-store.js');
-  const installation = installationRecords(inputs);
-  const store = storeModule.createAuthoringStore(inputs.native.storage);
-  const runtime = admissionRuntime(inputs, installation, store);
+  const seed = newWorkspaceSeed(inputs);
+  const store = storeModule.createAuthoringStore(inputs.stores.storage);
+  const runtime = admissionRuntime(inputs, seed, store);
   const startup = requestAuthoring(runtime, UNCANCELLED);
   return {
     authoring: (signal) => requestAuthoring(runtime, signal),
-    validation: runtime.validation,
-    installationRequest: installationRequest(installation),
-    adopt: () => startup.initializeHistory(inputs.options.workspace),
+    existingWorkspaceCheck: runtime.validation,
+    seedRequest: installationRequest(seed),
+    startHistory: () => startup.initializeHistory(inputs.options.workspace),
   };
 }
 
-/** The trusted installation records a new workspace starts with. Never fails. */
-function installationRecords(inputs: AuthoringInputs): Installation {
+/** What a brand-new workspace starts with: its ID, title, creation time and built-in presets. */
+function newWorkspaceSeed(inputs: AuthoringInputs): NewWorkspaceSeed {
   return {
     workspace: inputs.options.workspace,
     title: inputs.options.title,
     createdAt: inputs.options.createdAt,
-    presets: inputs.installation.presets,
+    presets: inputs.builtins.presets,
   };
 }
 
@@ -116,35 +123,35 @@ interface AdmissionRuntime {
 /** Binds the store, planners, validator, leases, notifications and feasibility. Never fails. */
 function admissionRuntime(
   inputs: AuthoringInputs,
-  installation: Installation,
+  seed: NewWorkspaceSeed,
   store: AuthoringStore,
 ): AdmissionRuntime {
-  const { views, resources, jobs, producer } = inputs.roles;
-  const assets = inputs.native.assets;
+  const { reader, resources, jobs, producer } = inputs.roles;
+  const assets = inputs.stores.assets;
   return {
     store,
-    planners: planners(inputs, installation),
-    validation: createCandidateValidator({ workspace: views, resources, assets }),
+    planners: planners(inputs, seed),
+    validation: createCandidateValidator({ workspace: reader, resources, assets }),
     resources: createResourceAdmission(resources, assets),
     changes: inputs.changes,
-    feasibility: { workspace: views, jobs, producer },
+    feasibility: { workspace: reader, jobs, producer },
   };
 }
 
 /** The service planners, bootstrap first. Never fails. */
 function planners(
   inputs: AuthoringInputs,
-  installation: Installation,
+  seed: NewWorkspaceSeed,
 ): readonly IntentPlanner[] {
   const { model, library, language } = inputs.capabilities;
-  const { views, resources, commands } = inputs.roles;
-  const collections = createCollectionPlanner({ library, workspace: views, resources });
+  const { reader, resources, commands } = inputs.roles;
+  const collections = createCollectionPlanner({ library, workspace: reader, resources });
   return [
-    createInstallationPlanner(installation),
+    createInstallationPlanner(seed),
     createPresetPlanner(commands),
-    createLibraryPlanner({ library, workspace: views }),
-    createDslPlanner({ language, workspace: views, resources, collections }),
-    createModelPlanner({ model, workspace: views, collections }),
+    createLibraryPlanner({ library, workspace: reader }),
+    createDslPlanner({ language, workspace: reader, resources, collections }),
+    createModelPlanner({ model, workspace: reader, collections }),
   ];
 }
 

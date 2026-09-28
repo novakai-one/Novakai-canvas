@@ -5,8 +5,8 @@
  * reaches the HTTP server's `receive` (routes.ts).
  */
 import type { ApiCall, RouteKey } from '../../contract/records/transport/protocol.js';
-import type { WireOutcome } from '../../contract/records/transport/wire-codes.js';
-import type { Scope, Snapshot, StoredRecord } from '../../contract/records/capabilities.js';
+import type { HttpOutcome } from '../../contract/records/transport/http-codes.js';
+import type { Scope, Snapshot, StoredRecord } from '../../contract/records/capability-types.js';
 import type { WorkspaceSession } from '../../contract/types.js';
 import { failure, success, type Result } from '../../contract/errors.js';
 import { liveRecord } from '../workspace/records.js';
@@ -53,7 +53,7 @@ export function sourceRoutes(
 async function source(
   call: ApiCall,
   owners: SourceRouteOwners,
-): Promise<WireOutcome> {
+): Promise<HttpOutcome> {
   const scope = sourceScope(call.query);
   if (!scope.ok) return scope;
   return readSourceRecord(call, owners, scope.value);
@@ -69,7 +69,7 @@ async function readSourceRecord(
   call: ApiCall,
   owners: SourceRouteOwners,
   scope: Scope,
-): Promise<WireOutcome> {
+): Promise<HttpOutcome> {
   const snapshot = await owners.session.read();
   if (!snapshot.ok) return snapshot;
   const record = sourceRecord(snapshot.value, readLastValue(call.query, 'id'));

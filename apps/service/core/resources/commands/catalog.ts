@@ -11,15 +11,12 @@ import type {
   ResolvedResources,
   Snapshot,
   Templates,
-} from '../../../contract/records/capabilities.js';
+} from '../../../contract/records/capability-types.js';
 import type {
   PreparationInput,
   ResourceResult,
-} from '../../../contract/records/presets/preparation.js';
-import {
-  presetAdmission,
-  type PresetAdmission,
-} from '../../../contract/records/planning/commands.js';
+} from '../../../contract/records/presets/resource-commands.js';
+import { presetHeader, type PresetHeader } from '../../../contract/records/planning/commands.js';
 import { requestSchema } from '../../../contract/schemas.js';
 import { EMPTY_RESOURCES } from '../../../contract/ports/capabilities.js';
 import { CLI_CALLER } from '../../../contract/records/transport/http.js';
@@ -55,7 +52,7 @@ export function selectionRequest(
   value: PreparationInput,
   snapshot: Snapshot,
 ): ResourceResult<Request> {
-  const header = presetAdmission.safeParse(value.admission);
+  const header = presetHeader.safeParse(value.admission);
   if (!header.success) return invalidPreparation();
   const request = requestSchema.safeParse(selectionEnvelope(value, header.data, snapshot));
   if (!request.success) return invalidPreparation();
@@ -78,7 +75,7 @@ export function unboundTemplates<Bound>(owners: {
  */
 function selectionEnvelope(
   value: PreparationInput,
-  header: PresetAdmission,
+  header: PresetHeader,
   snapshot: Snapshot,
 ): unknown {
   return {

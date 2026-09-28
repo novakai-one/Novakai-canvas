@@ -8,7 +8,7 @@ import type {
   AuthoringResult,
   Snapshot,
   StoredRecord,
-} from '../../../contract/records/capabilities.js';
+} from '../../../contract/records/capability-types.js';
 import type { FailureSource } from '../../../contract/records/transport/failure-source.js';
 import { andThen, authoringFailure, collect, success } from '../../../contract/errors.js';
 import { liveRecord, type RecordKind } from '../../workspace/records.js';

@@ -21,7 +21,7 @@ import type { Digest as AuthoringDigest } from '@novakai/canvas-authoring';
 
 export type { WorkspaceId, PlannerId, ActorId, Timestamp } from '@novakai/canvas-authoring';
 export type { SectionId, ObjectId } from '@novakai/canvas-model';
-export type { AssetDigest, AuthoringDigest };
+export type { AssetDigest, PresetDigest, AuthoringDigest };
 
 /** 64 lowercase hex characters: what both service secrets look like. */
 const HEX_64 = /^[a-f0-9]{64}$/;
@@ -62,8 +62,7 @@ export const loopbackPort = z.number().int().min(1024).max(65535).brand<'Loopbac
 /**
  * Checks a path on this computer chosen at start-up: any non-empty text. cli/serve.ts checks the
  * workspace, web app and resource folders; the CLI checks the paths it renders with. A request
- * never supplies one. (compose/producer.ts builds the wire router's file path from the resource
- * folder; the render worker checks it again when a job arrives.)
+ * never supplies one.
  */
 export const hostPath = z.string().min(1).brand<'HostPath'>();
 
@@ -92,21 +91,23 @@ export type HostPath = z.infer<typeof hostPath>;
 export type RenderJobId = z.infer<typeof renderJobId>;
 
 /** A digest as Model writes it: `sha256:` and then the bare digest. */
-export type PinnedDigest = `sha256:${string}`;
+export type PrefixedDigest = `sha256:${string}`;
 
 /**
  * The prefix Model's digests have and the bare digests of Assets, Templates and Authoring don't.
  */
-const PIN_PREFIX = 'sha256:';
+const DIGEST_PREFIX = 'sha256:';
 
 /** Adds `sha256:` to a bare digest, as Model writes it. The one place the prefix is added. */
-export function pinnedDigest(bare: AssetDigest | PresetDigest | AuthoringDigest): PinnedDigest {
-  return `${PIN_PREFIX}${bare}`;
+export function addDigestPrefix(
+  bare: AssetDigest | PresetDigest | AuthoringDigest,
+): PrefixedDigest {
+  return `${DIGEST_PREFIX}${bare}`;
 }
 
 /** Whether the text starts with `sha256:`, as Model's digests do. */
-export function isPinnedDigest(text: string): text is PinnedDigest {
-  return text.startsWith(PIN_PREFIX);
+export function hasDigestPrefix(text: string): text is PrefixedDigest {
+  return text.startsWith(DIGEST_PREFIX);
 }
 
 /**
@@ -114,6 +115,6 @@ export function isPinnedDigest(text: string): text is PinnedDigest {
  * removed. It checks nothing, so it answers plain text: the caller checks it with the owning
  * capability's digest check, which refuses text that had no prefix.
  */
-export function bareDigest(pinned: string): string {
-  return pinned.slice(PIN_PREFIX.length);
+export function removeDigestPrefix(prefixed: string): string {
+  return prefixed.slice(DIGEST_PREFIX.length);
 }

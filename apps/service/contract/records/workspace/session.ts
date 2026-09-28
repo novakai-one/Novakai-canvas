@@ -8,7 +8,7 @@
  * This file declares the preview choice (`PrepareMode`) and what `apply` answers (`AppliedCommit`).
  * Declarations only. Authoring saves the change.
  */
-import type { Receipt, Snapshot } from '../capabilities.js';
+import type { Receipt, Snapshot } from '../capability-types.js';
 
 /** What `apply` answers: the receipt of the save, and the workspace right after it. */
 export interface AppliedCommit {

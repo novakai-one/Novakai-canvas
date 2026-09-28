@@ -3,7 +3,7 @@
  * injected Authoring. Authoring owns commit and receipt recovery; a failed read leaves the commit
  * standing and the client reconciles through the receipt lookup.
  */
-import type { Authoring, AuthoringResult } from '../../contract/records/capabilities.js';
+import type { Authoring, AuthoringResult } from '../../contract/records/capability-types.js';
 import type { AppliedCommit } from '../../contract/records/workspace/session.js';
 import { authoringFailure } from '../../contract/errors.js';
 import type { WorkspaceId } from '../../contract/brands.js';

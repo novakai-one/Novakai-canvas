@@ -9,8 +9,8 @@ import type {
   Preset,
   Proposal,
   Request,
-} from '../../../contract/records/capabilities.js';
-import type { Installation } from '../../../contract/records/workspace/startup.js';
+} from '../../../contract/records/capability-types.js';
+import type { NewWorkspaceSeed } from '../../../contract/records/workspace/startup.js';
 import { initializeCommand } from '../../../contract/records/planning/commands.js';
 import { actorId, plannerId, requestSchema } from '../../../contract/schemas.js';
 import { andThen, authoringFailure, success } from '../../../contract/errors.js';
@@ -30,7 +30,7 @@ const INSTALLATION_ACTOR: Request['actor'] = Object.freeze({
  * is not a change or its payload is not the initialize command, and `invalid-input` at
  * `bootstrap.proposal` when the trusted installation breaks Authoring's proposal limits.
  */
-export function createInstallationPlanner(installation: Installation): IntentPlanner {
+export function createInstallationPlanner(installation: NewWorkspaceSeed): IntentPlanner {
   return { id: plannerId.parse('bootstrap'), plan: async (request) => plan(request, installation) };
 }
 
@@ -40,7 +40,7 @@ export function createInstallationPlanner(installation: Installation): IntentPla
  * `bootstrap.proposal` when the installation breaks Authoring's proposal limits, and
  * `invalid-input` at `bootstrap` when Authoring's request schema rejects the request.
  */
-export function installationRequest(installation: Installation): AuthoringResult<Request> {
+export function installationRequest(installation: NewWorkspaceSeed): AuthoringResult<Request> {
   return andThen(proposal(installation), (planned) => requestFor(installation, planned));
 }
 
@@ -49,7 +49,7 @@ export function installationRequest(installation: Installation): AuthoringResult
  * when Authoring's request schema rejects it.
  */
 function requestFor(
-  installation: Installation,
+  installation: NewWorkspaceSeed,
   planned: Proposal,
 ): AuthoringResult<Request> {
   const writes = planned.writes;
@@ -67,7 +67,7 @@ function requestFor(
     return authoringFailure(
       'invalid-input',
       'bootstrap',
-      'Installation request could not be constructed',
+      'NewWorkspaceSeed request could not be constructed',
     );
   return success(parsed.data);
 }
@@ -79,7 +79,7 @@ function requestFor(
  */
 function plan(
   request: Request,
-  installation: Installation,
+  installation: NewWorkspaceSeed,
 ): AuthoringResult<Proposal> {
   const input = changePayload(request, 'bootstrap', 'Initialization requires a change request');
   if (!input.ok) return input;
@@ -93,7 +93,7 @@ function plan(
  * shipped preset, with no reads. Fails with `invalid-input` at `bootstrap.proposal` when the
  * installation exceeds Authoring's proposal limits.
  */
-function proposal(installation: Installation): AuthoringResult<Proposal> {
+function proposal(installation: NewWorkspaceSeed): AuthoringResult<Proposal> {
   return checkedProposal(
     {
       reads: [],
@@ -121,7 +121,7 @@ function proposal(installation: Installation): AuthoringResult<Proposal> {
       ],
     },
     'bootstrap.proposal',
-    'Installation exceeds proposal limits',
+    'NewWorkspaceSeed exceeds proposal limits',
   );
 }
 

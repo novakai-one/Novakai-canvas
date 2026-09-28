@@ -6,14 +6,14 @@
  * request, or retries once the failed dependency is restored.
  */
 import { failure, type ErrorCode, type Result } from '../../contract/errors.js';
-import type { OperationSource } from '../../contract/records/transport/failure-source.js';
+import type { CapabilityFailure } from '../../contract/records/transport/failure-source.js';
 import type {
   AssetResult,
   AuthoringErrorCode,
   ExportDiagnostic,
   ExportErrorCode,
   ExportResult,
-} from '../../contract/records/capabilities.js';
+} from '../../contract/records/capability-types.js';
 import type { ExportFailure } from '../../contract/records/export/snapshot.js';
 
 /** An Export refusal carrying the route's one recovery text. */
@@ -99,7 +99,7 @@ const ROUTE_CODE: Readonly<Record<ExportErrorCode, RouteCode>> = Object.freeze({
 });
 
 /** The diagnostic as source evidence; an absent cleanup stays an explicit undefined key. */
-function exportSource(diagnostic: ExportDiagnostic): OperationSource {
+function exportSource(diagnostic: ExportDiagnostic): CapabilityFailure {
   return {
     code: diagnostic.code,
     path: diagnostic.path,
@@ -110,7 +110,7 @@ function exportSource(diagnostic: ExportDiagnostic): OperationSource {
 }
 
 /** A nested cleanup failure as source evidence; undefined when the cleanup succeeded. */
-function cleanupSource(cleanup: ExportDiagnostic | undefined): OperationSource | undefined {
+function cleanupSource(cleanup: ExportDiagnostic | undefined): CapabilityFailure | undefined {
   if (cleanup === undefined) return undefined;
   return exportSource(cleanup);
 }

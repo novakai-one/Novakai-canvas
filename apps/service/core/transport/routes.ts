@@ -7,7 +7,7 @@
  * `unavailable` at `request`.
  */
 import type { RouteKey } from '../../contract/records/transport/protocol.js';
-import type { WireOutcome } from '../../contract/records/transport/wire-codes.js';
+import type { HttpOutcome } from '../../contract/records/transport/http-codes.js';
 import type { ApiRouter } from '../../contract/ports/transport.js';
 import { routeKeys } from '../../contract/records/transport/protocol.js';
 import { failure } from '../../contract/errors.js';
@@ -61,6 +61,6 @@ function isRouteKey(key: string): key is RouteKey {
 }
 
 /** `not-found` at `route`: no handler serves this method and path. */
-function noRoute(): WireOutcome {
+function noRoute(): HttpOutcome {
   return failure('not-found', 'route', 'This method and API route are not available');
 }

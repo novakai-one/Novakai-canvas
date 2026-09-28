@@ -6,8 +6,9 @@
  * `GET /api/v1/render?id=missing` answers `not-found` at `missing`.
  *
  * This file gives the service one way to answer: a `Result`, either `{ ok: true, value }` (it
- * worked) or `{ ok: false, error }` (the mistake it found). It lists the six failure codes and the
- * helpers that build and chain Results.
+ * worked) or `{ ok: false, error }` (the mistake it found). It lists the service's six failure
+ * codes and the helpers that build and chain Results. Parts that work for Authoring return
+ * Authoring's `Result`; every code an HTTP answer can carry is in records/transport/http-codes.ts.
  *
  * It never throws. Every failure carries the same advice: keep your draft and request ID, fix the
  * cause, and check the receipt before trying again.
@@ -127,8 +128,5 @@ const RECOVERY: Readonly<Record<ErrorCode, string>> = Object.freeze({
   cancelled: RETAIN_AND_RECONCILE,
 });
 
-/**
- * Authoring's own `failure`, for service parts that answer Authoring (planners, validators, the
- * feasibility check, leases, the session). Its codes and recovery text are Authoring's.
- */
+/** Authoring's own `failure`, for service parts that must return Authoring's `Result` and codes. */
 export { failure as authoringFailure } from '@novakai/canvas-authoring';

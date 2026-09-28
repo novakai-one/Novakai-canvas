@@ -3,16 +3,16 @@
  * selector chose, so a later apply uses the same theme version. Pure over the selector; every
  * refusal is a returned value (refusal.ts), and Authoring owns the canonical write and receipt.
  */
-import type { Json, Request, Snapshot } from '../../../contract/records/capabilities.js';
+import type { Json, Request, Snapshot } from '../../../contract/records/capability-types.js';
 import type {
   ResourceDiagnostic,
   ResourceResult,
-} from '../../../contract/records/presets/preparation.js';
+} from '../../../contract/records/presets/resource-commands.js';
 import type { ResourceSelector } from '../../../contract/ports/workspace.js';
 import type { DslCommand } from '../../../contract/records/planning/commands.js';
 import { dslCommand } from '../../../contract/records/planning/commands.js';
 import { requestSchema } from '../../../contract/schemas.js';
-import { isPinnedDigest } from '../../../contract/brands.js';
+import { hasDigestPrefix } from '../../../contract/brands.js';
 import { andThen, collect, success } from '../../../contract/errors.js';
 import type { ThemeBinding } from '../../presets/theme-binding.js';
 import { formatThemePin, type ThemePinText } from '../../presets/theme-pin.js';
@@ -111,6 +111,6 @@ const UNPINNED_THEME: ResourceDiagnostic = Object.freeze({
  * digest is not in Model's pinned form.
  */
 function exactPin(theme: ThemeBinding): ResourceResult<ThemePinText> {
-  if (!isPinnedDigest(theme.digest)) return preparationRefused(UNPINNED_THEME);
+  if (!hasDigestPrefix(theme.digest)) return preparationRefused(UNPINNED_THEME);
   return success(formatThemePin({ id: theme.id, version: theme.version, digest: theme.digest }));
 }

@@ -8,7 +8,7 @@
  * This file declares the checked result, `WorkspaceContents`. core/workspace/reader.ts builds it.
  * Declarations only. When a record fails its check, Authoring keeps its snapshot as it was.
  */
-import type { Collection } from '../capabilities.js';
+import type { Collection } from '../capability-types.js';
 import type { Catalog as PresetCatalog } from '@novakai/canvas-templates';
 import type { LibrarySnapshot } from '@novakai/canvas-library';
 

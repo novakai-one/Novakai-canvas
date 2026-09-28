@@ -6,16 +6,16 @@
 import type { TransportResponse } from '../../contract/records/transport/protocol.js';
 import type {
   HttpStatus,
-  WireErrorCode,
-  WireOutcome,
-} from '../../contract/records/transport/wire-codes.js';
+  HttpErrorCode,
+  HttpOutcome,
+} from '../../contract/records/transport/http-codes.js';
 import type { Generation } from '../../contract/brands.js';
 
 /** A status for a refused outcome. */
 type FailureStatus = Exclude<HttpStatus, 200>;
 
 /** 200 for a success; otherwise the status of the failure's wire code (`FAILURE_STATUS`). */
-export function httpStatus(outcome: WireOutcome): HttpStatus {
+export function httpStatus(outcome: HttpOutcome): HttpStatus {
   if (outcome.ok) return 200;
   return FAILURE_STATUS[outcome.error.code];
 }
@@ -25,14 +25,14 @@ export function httpStatus(outcome: WireOutcome): HttpStatus {
  * (a void owner success) carries an explicit JSON `null`, so the envelope stays valid.
  */
 export function transportResponse(
-  outcome: WireOutcome,
+  outcome: HttpOutcome,
   generation: Generation,
 ): TransportResponse {
   return { version: 1, generation, outcome: wireValue(outcome) };
 }
 
 /** The outcome as sent: a failure unchanged, a success with `undefined` replaced by `null`. */
-function wireValue(outcome: WireOutcome): WireOutcome {
+function wireValue(outcome: HttpOutcome): HttpOutcome {
   if (!outcome.ok) return outcome;
   return { ok: true, value: outcome.value ?? null };
 }
@@ -43,7 +43,7 @@ function wireValue(outcome: WireOutcome): WireOutcome {
  * `request-reused`) or a cancellation (`cancelled`), 503 an unavailable dependency, and 422 for
  * every other code, including `constraint-conflict` (the caller corrects its input).
  */
-const FAILURE_STATUS: Readonly<Record<WireErrorCode, FailureStatus>> = Object.freeze({
+const FAILURE_STATUS: Readonly<Record<HttpErrorCode, FailureStatus>> = Object.freeze({
   'invalid-input': 422,
   unauthorized: 401,
   'not-found': 404,

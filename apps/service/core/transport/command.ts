@@ -4,14 +4,14 @@
  * reconciles its original receipt first. Authoring owns commit and receipt recovery.
  */
 import type { AdmittedMutation } from '../../contract/records/transport/protocol.js';
-import type { CommandAdmission } from '../../contract/ports/transport.js';
+import type { BodyCheckContext } from '../../contract/ports/transport.js';
 import type { PrepareMode } from '../../contract/records/workspace/session.js';
-import { mutationEnvelope } from '../../contract/records/transport/protocol.js';
+import { changeRequestBody } from '../../contract/records/transport/protocol.js';
 import { failure, success, type Result } from '../../contract/errors.js';
 import { jsonBody } from './json-body.js';
 
 /** A body that passed the version 1 envelope schema. */
-type MutationEnvelope = ReturnType<typeof mutationEnvelope.parse>;
+type MutationEnvelope = ReturnType<typeof changeRequestBody.parse>;
 
 /**
  * The body as an admitted mutation. Fails with `invalid-input` at `content-type` or `body` as
@@ -19,7 +19,7 @@ type MutationEnvelope = ReturnType<typeof mutationEnvelope.parse>;
  */
 export function readCommand(
   body: string,
-  context: CommandAdmission,
+  context: BodyCheckContext,
 ): Result<AdmittedMutation> {
   const decoded = jsonBody(body, context.metadata.contentType, 'mutation');
   if (!decoded.ok) return decoded;
@@ -32,9 +32,9 @@ export function readCommand(
  */
 function admitEnvelope(
   input: unknown,
-  context: CommandAdmission,
+  context: BodyCheckContext,
 ): Result<AdmittedMutation> {
-  const parsed = mutationEnvelope.safeParse(input);
+  const parsed = changeRequestBody.safeParse(input);
   if (!parsed.success)
     return failure('invalid-input', 'body', 'Expected a version 1 mutation envelope');
   return admitCurrent(parsed.data, context);
@@ -47,7 +47,7 @@ function admitEnvelope(
  */
 function admitCurrent(
   envelope: MutationEnvelope,
-  context: CommandAdmission,
+  context: BodyCheckContext,
 ): Result<AdmittedMutation> {
   if (envelope.generation !== context.generation)
     return failure(

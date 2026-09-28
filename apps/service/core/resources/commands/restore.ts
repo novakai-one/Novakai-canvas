@@ -3,10 +3,10 @@
  * every settlement path. Pure over Assets; failures are returned, never thrown. Assets owns byte
  * recovery, and the caller keeps its local backup bytes.
  */
-import type { Assets, WriteLease } from '../../../contract/records/capabilities.js';
-import type { RestoreInput } from '../../../contract/records/presets/preparation.js';
+import type { Assets, WriteLease } from '../../../contract/records/capability-types.js';
+import type { RestoreInput } from '../../../contract/records/presets/resource-commands.js';
 import type { ResourceCommands } from '../../../contract/ports/workspace.js';
-import { restoreInput } from '../../../contract/records/presets/preparation.js';
+import { restoreInput } from '../../../contract/records/presets/resource-commands.js';
 
 /** The owner a restore writes through. */
 export interface RestoreOwners {

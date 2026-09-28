@@ -10,9 +10,9 @@ import type { HttpAdmission, HttpSecurity } from '../../contract/ports/transport
 import {
   BROWSER_CALLER,
   CLI_CALLER,
-  browserCookieName,
+  browserCookiePrefix,
 } from '../../contract/records/transport/http.js';
-import type { Request } from '../../contract/records/capabilities.js';
+import type { Request } from '../../contract/records/capability-types.js';
 import type { PlannerId } from '../../contract/brands.js';
 import { plannerId, requestSchema } from '../../contract/schemas.js';
 import { failure, success, type Result } from '../../contract/errors.js';
@@ -52,7 +52,7 @@ export function createAdmission(security: HttpSecurity): HttpAdmission {
  * carries its host and opening another app cannot replace this one's credential.
  */
 function sessionCookieName(host: string): string {
-  return `${browserCookieName}_${encodeURIComponent(host)}`;
+  return `${browserCookiePrefix}_${encodeURIComponent(host)}`;
 }
 
 /**

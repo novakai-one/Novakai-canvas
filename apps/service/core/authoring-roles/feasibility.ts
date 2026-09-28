@@ -13,7 +13,7 @@ import type {
   Json,
   RecordKey,
   Snapshot,
-} from '../../contract/records/capabilities.js';
+} from '../../contract/records/capability-types.js';
 import type { WorkspaceContents } from '../../contract/records/workspace/contents.js';
 import type { WorkspaceReader } from '../../contract/ports/workspace.js';
 import type { DiagramProducer, RenderJobs } from '../../contract/ports/rendering.js';
@@ -93,7 +93,7 @@ async function render(
   view: WorkspaceContents,
   owners: FeasibilityOwners,
 ): Promise<AuthoringResult<RenderDocument>> {
-  const job = owners.jobs.create(collection, view, 'admission');
+  const job = owners.jobs.create(collection, view, 'change-check');
   if (!job.ok) return job;
   const result = await owners.producer.produce(job.value, owners.signal);
   if (!result.ok)

@@ -15,10 +15,10 @@ import type { Scene, LayoutOptions, SupplementalMeasurements } from '@novakai/ca
 import type { HostPath, RenderJobId } from '../../brands.js';
 
 /**
- * Why a job runs; its ID starts with this. `read` draws a saved collection, `admission` a change
+ * Why a job runs; its ID starts with this. `read` draws a saved collection, `change-check` a change
  * not yet saved (to check it can be laid out), `headless` a diagram for the CLI with no service.
  */
-export type RenderPurpose = 'read' | 'admission' | 'headless';
+export type RenderPurpose = 'read' | 'change-check' | 'headless';
 
 /**
  * Everything the render worker needs to draw one collection. The worker can't read or save the
@@ -32,7 +32,7 @@ export interface RenderingJob {
   /** The collection's images. */
   readonly assets: readonly VisualAsset[];
   readonly options: LayoutOptions;
-  /** The path of the wire router's WebAssembly file (libavoid). */
+  /** The path of libavoid's WebAssembly file (libavoid routes the wires). */
   readonly wasmResource: HostPath;
 }
 

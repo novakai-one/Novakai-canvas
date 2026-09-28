@@ -6,10 +6,10 @@
  * format throws (text.ts). Pure over the owners compose injects; the caller owns retry.
  */
 import type { Result } from '../../contract/errors.js';
-import type { StaticFile } from '../../contract/records/transport/server.js';
-import type { PresentationBindings } from '../../contract/records/capabilities.js';
+import type { SentFile } from '../../contract/records/transport/server.js';
+import type { PresentationBindings } from '../../contract/records/capability-types.js';
 import type { ExportRules } from '../../contract/ports/capabilities.js';
-import type { ExportRoute, Rasterizer } from '../../contract/ports/export.js';
+import type { Exporter, PngEncoder } from '../../contract/ports/export.js';
 import type { ExportRequest } from '../../contract/records/export/request.js';
 import { readExportRequest } from './request.js';
 import { resourceInspector } from './resources.js';
@@ -22,19 +22,19 @@ import { exportDsl, exportMarkdown, type TextOwners } from './text.js';
 export interface ExportRouteOwners extends TextOwners, DocumentOwners {
   readonly export: Pick<ExportRules, 'compose' | 'formatMarkdown'>;
   readonly presentation: PresentationBindings;
-  readonly rasterizer: Rasterizer;
+  readonly pngEncoder: PngEncoder;
 }
 
 /**
- * The export route of one workspace; starts no I/O. `invoke` answers one file, or fails with
+ * The exporter of one workspace; starts no I/O. `exportFile` answers one file, or fails with
  * `invalid-input` for a refused request (see `readExportRequest`) or a DSL scope other than the
- * whole collection (at `scope`), `unavailable` at `export.png` when the rasterizer cannot start,
+ * whole collection (at `scope`), `unavailable` at `export.png` when the PNG encoder cannot start,
  * and otherwise as `exportRouteFailure`: an Export refusal is `cancelled`, `invalid-input` or
  * `unavailable`, with Export's diagnostic kept as source. Every export only reads; the caller
  * owns the retry.
  */
-export function createExportRoute(owners: ExportRouteOwners): ExportRoute {
-  return { invoke: (input, signal) => invokeExport(input, signal, owners) };
+export function createExporter(owners: ExportRouteOwners): Exporter {
+  return { exportFile: (input, signal) => invokeExport(input, signal, owners) };
 }
 
 /**
@@ -45,7 +45,7 @@ async function invokeExport(
   input: unknown,
   signal: AbortSignal,
   owners: ExportRouteOwners,
-): Promise<Result<StaticFile>> {
+): Promise<Result<SentFile>> {
   const request = readExportRequest(input);
   if (!request.ok) return request;
   return dispatchExport(request.value, owners, signal);
@@ -59,7 +59,7 @@ async function dispatchExport(
   request: ExportRequest,
   owners: ExportRouteOwners,
   signal: AbortSignal,
-): Promise<Result<StaticFile>> {
+): Promise<Result<SentFile>> {
   switch (request.format) {
     case 'dsl':
       return exportDsl(request, owners, signal);
@@ -71,28 +71,28 @@ async function dispatchExport(
 }
 
 /**
- * PNG first needs the rasterizer; an unavailable rasterizer refuses before any owner is read.
+ * PNG first needs the PNG encoder; an unavailable encoder refuses before any owner is read.
  * Fails with `unavailable` at `export.png` (see `prepareFormat`), or as `encodeNative`.
  */
 async function nativeExport(
   request: ExportRequest,
   owners: ExportRouteOwners,
   signal: AbortSignal,
-): Promise<Result<StaticFile>> {
+): Promise<Result<SentFile>> {
   const prepared = await prepareFormat(request.format, owners);
   if (!prepared.ok) return prepared;
   return encodeNative(request, owners, signal);
 }
 
 /**
- * The rasterizer for PNG; every other format needs nothing. Fails with `unavailable` at
- * `export.png` when the rasterizer cannot start.
+ * The PNG encoder for PNG; every other format needs nothing. Fails with `unavailable` at
+ * `export.png` when the PNG encoder cannot start.
  */
 async function prepareFormat(
   format: ExportRequest['format'],
   owners: ExportRouteOwners,
 ): Promise<Result<void>> {
-  return format === 'png' ? owners.rasterizer.prepare() : { ok: true, value: undefined };
+  return format === 'png' ? owners.pngEncoder.prepare() : { ok: true, value: undefined };
 }
 
 /**
@@ -105,7 +105,7 @@ async function encodeNative(
   request: ExportRequest,
   owners: ExportRouteOwners,
   signal: AbortSignal,
-): Promise<Result<StaticFile>> {
+): Promise<Result<SentFile>> {
   const exporter = owners.export.compose({
     presentation: owners.presentation,
     readerCss: '',

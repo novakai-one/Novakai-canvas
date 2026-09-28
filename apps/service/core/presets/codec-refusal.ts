@@ -4,7 +4,7 @@
  * source, corrects it and prepares again; Authoring owns commit.
  */
 import type { FailureSource } from '../../contract/records/transport/failure-source.js';
-import type { TemplatesResult } from '../../contract/records/capabilities.js';
+import type { TemplatesResult } from '../../contract/records/capability-types.js';
 
 /**
  * The codec failure: `invalid-input` at `preset` with this message and the owner's failure, if

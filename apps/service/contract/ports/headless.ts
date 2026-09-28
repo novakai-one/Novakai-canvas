@@ -17,7 +17,7 @@ import type {
   Json,
   LoweredIntent,
   Templates,
-} from '../records/capabilities.js';
+} from '../records/capability-types.js';
 import type { PresetCodecs, PresetContext } from '../records/presets/codecs.js';
 import type { HostPath } from '../brands.js';
 import type { DiagramProducer, RenderJobs } from './rendering.js';
@@ -31,23 +31,23 @@ export interface RenderResourceOwners {
   readonly assets: Pick<Assets, 'resolve'>;
   /** Resolves the theme's tokens and the diagram's style. */
   readonly system: Pick<DesignSystem, 'resolve' | 'projectDiagram'>;
-  /** The installation's design token sources, as read from disk; Design System checks them. */
+  /** The shipped design token sources, as read from disk; Design System checks them. */
   readonly sources: unknown;
-  /** Reads the pinned theme. */
+  /** Reads the exact theme version a collection names. */
   readonly templates: Pick<Templates<LoweredIntent>, 'read'>;
-  /** The path of the wire router's WebAssembly file (libavoid). */
+  /** The path of libavoid's WebAssembly file (libavoid routes the wires). */
   readonly wasmResource: HostPath;
 }
 
 /** What saving a theme reads from: Assets to check its fonts, Templates to find its base theme. */
-export interface ThemeAdmissionOwners {
+export interface ThemeSavingOwners {
   readonly assets: Pick<Assets, 'resolve'>;
   readonly templates: Pick<Templates<LoweredIntent>, 'read'>;
 }
 
 /**
  * One font name a theme uses, and the uploaded font file it stands for. Both are text as sent;
- * theme admission checks the digest with Assets.
+ * theme saving (core/presets/theme-admission.ts) checks the digest with Assets.
  */
 export interface FontBinding {
   /** The font name the theme uses, for example `body` in `font body source="…"`. */
@@ -61,23 +61,23 @@ export interface HeadlessBindings {
   /** Makes the recipe and theme codecs for one set of themes and files. Never fails. */
   readonly createPresetCodecs: (context: PresetContext) => PresetCodecs;
   /**
-   * Turns a theme written in source syntax into the theme Templates saves, with its fonts checked
-   * (core/presets/theme-admission.ts). Fails with `invalid-input` when the base theme can't be
-   * found, a font is not a checked upload, or the theme is malformed, and `missing-asset` when
-   * Assets can't find a font.
+   * Turns a theme written in source syntax into the theme as Templates saves it, with its fonts
+   * checked (core/presets/theme-admission.ts). Any other preset comes back unchanged. Fails with
+   * `invalid-input` when the base theme can't be found, a font is not a checked upload, or the
+   * theme is malformed, and `missing-asset` when Assets can't find a font.
    */
   readonly prepareTheme: (
-    admission: Json,
+    sourceTheme: Json,
     catalog: Catalog,
     bindings: readonly FontBinding[],
-    owners: ThemeAdmissionOwners,
+    owners: ThemeSavingOwners,
   ) => AuthoringResult<Json>;
   /** Makes the render-job builder for the given owners (see `RenderJobs.create`). Never fails. */
   readonly createRenderJobs: (owners: RenderResourceOwners) => RenderJobs;
   /**
    * Measures, lays out and routes one job right here, without a worker. Fails with `invalid-input`
-   * at `render` when a capability refuses the input, or `unavailable` at `render` when the native
-   * code fails.
+   * at `render` when a capability refuses the input, or `unavailable` at `render` when the
+   * compiled layout code fails.
    */
   readonly produceDiagram: DiagramProducer['produce'];
 }

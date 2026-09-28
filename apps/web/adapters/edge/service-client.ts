@@ -1,4 +1,4 @@
-import { responseEnvelope } from '@novakai/canvas-service';
+import { transportResponse } from '@novakai/canvas-service';
 import type { TransportResponse } from '@novakai/canvas-service';
 import { z } from 'zod';
 import { receiptSchema } from '@novakai/canvas-authoring';
@@ -33,7 +33,7 @@ async function request(
       headers: { 'Content-Type': 'application/json' },
     });
     const input: unknown = await response.json();
-    const checked = responseEnvelope.safeParse(input);
+    const checked = transportResponse.safeParse(input);
     if (!checked.success)
       return failure('invalid-response', 'The service returned an unreadable response');
     return { ok: true, value: checked.data };
@@ -94,7 +94,7 @@ async function bytes(
 
 async function binaryFailure(response: Response): Promise<Result<BinaryResponse>> {
   const input: unknown = await response.json();
-  const checked = responseEnvelope.safeParse(input);
+  const checked = transportResponse.safeParse(input);
   if (!checked.success)
     return failure('invalid-response', 'The service returned an unreadable response');
   return checked.data.outcome.ok

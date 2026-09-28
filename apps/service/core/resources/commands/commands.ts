@@ -12,8 +12,8 @@ import type {
   LoweredIntent,
   ResolvedResources,
   Templates,
-} from '../../../contract/records/capabilities.js';
-import type { ResourceResult } from '../../../contract/records/presets/preparation.js';
+} from '../../../contract/records/capability-types.js';
+import type { ResourceResult } from '../../../contract/records/presets/resource-commands.js';
 import type { ResourceCommands, ResourceSelector } from '../../../contract/ports/workspace.js';
 import { freeze } from './freeze.js';
 import { instantiate } from './instantiate.js';
@@ -46,8 +46,8 @@ export interface PresetOwners {
  */
 export function createResourceCommands(owners: PresetOwners): ResourceCommands {
   return {
-    stage: (input) => owners.assets.stage(input),
-    blob: (input) => owners.assets.resolve(input),
+    storeUpload: (input) => owners.assets.stage(input),
+    readFile: (input) => owners.assets.resolve(input),
     restore: (input) => restore(input, owners),
     freeze: (input, snapshot) => freeze(input, snapshot, owners),
     preparePreset: (input, snapshot) => prepare(input, snapshot, owners),

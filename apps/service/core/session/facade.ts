@@ -5,12 +5,12 @@
  * authentication and caller identity; the caller reconnects and retries after a closed answer.
  */
 import type { WorkspaceSession } from '../../contract/types.js';
-import type { Authoring, AuthoringResult } from '../../contract/records/capabilities.js';
+import type { Authoring, AuthoringResult } from '../../contract/records/capability-types.js';
 import type { BuiltinResources } from '../../contract/records/presets/builtins.js';
 import type { ResourceCommands, WorkspaceReader } from '../../contract/ports/workspace.js';
 import type { CollectionRenderer } from '../../contract/ports/rendering.js';
 import type { ChangeChannel } from '../../contract/ports/notifications.js';
-import type { ExportRoute } from '../../contract/ports/export.js';
+import type { Exporter } from '../../contract/ports/export.js';
 import type { PrepareMode } from '../../contract/records/workspace/session.js';
 import type { WorkspaceId } from '../../contract/brands.js';
 import { authoringFailure, failure, type Result } from '../../contract/errors.js';
@@ -22,11 +22,11 @@ import { commitThenRead } from './applied-commit.js';
 /** Lifecycles are already open when wiring this facade; construction starts no I/O and grants no alternative commit path. */
 export interface SessionOwners {
   readonly workspace: WorkspaceId;
-  readonly installation: BuiltinResources;
+  readonly builtins: BuiltinResources;
   readonly resources: ResourceCommands;
   readonly views: WorkspaceReader;
   readonly renderer: CollectionRenderer;
-  readonly exporter: ExportRoute['invoke'];
+  readonly exporter: Exporter['exportFile'];
   readonly changes: Pick<ChangeChannel, 'subscribe'>;
   readonly lifetime: SessionLifetime;
   readonly readSignal: AbortSignal;
@@ -47,7 +47,7 @@ export function createWorkspaceSession(owners: SessionOwners): WorkspaceSession 
   const lifetime = owners.lifetime;
   return {
     workspace: owners.workspace,
-    installation: owners.installation,
+    builtins: owners.builtins,
     resources: owners.resources,
     history: () =>
       lifetime.run(

@@ -6,8 +6,8 @@
  * and how to open and close those stores.
  *
  * This file declares those start-up values: the chosen folders and names (`WorkspaceOptions`), what
- * a new workspace starts with (`Installation`), whether it is new (`StartupKind`), and the open
- * stores (`NativeWorkspace`). Declarations only; a failed start closes what it opened.
+ * a new workspace starts with (`NewWorkspaceSeed`), whether it is new (`StartupKind`), and the open
+ * stores (`OpenStores`). Declarations only; a failed start closes what it opened.
  */
 import type { Assets, Result as AssetResult } from '@novakai/canvas-assets';
 import type { Persistence, Result as StorageResult } from '@novakai/canvas-persistence';
@@ -23,14 +23,14 @@ export interface WorkspaceOptions {
   readonly workspace: WorkspaceId;
   /** The title written into a new workspace. */
   readonly title: string;
-  /** The folder of shipped resources (fonts, recipes, the wire router's file). */
+  /** The folder of shipped resources (fonts, recipes, libavoid's WebAssembly file). */
   readonly resourceRoot: HostPath;
   /** The folder of the design token sources. */
   readonly tokenRoot: HostPath;
   readonly createdAt: Timestamp;
 }
-/** What a new workspace starts with. Fixed at start-up; no request can replace it. */
-export type Installation = Pick<WorkspaceOptions, 'workspace' | 'title' | 'createdAt'> & {
+/** What a brand-new workspace starts with: its ID, title, creation time and built-in presets. */
+export type NewWorkspaceSeed = Pick<WorkspaceOptions, 'workspace' | 'title' | 'createdAt'> & {
   readonly presets: Catalog;
 };
 /** Whether start-up found a stored workspace (`existing`) or starts an empty one (`new`). */
@@ -38,7 +38,7 @@ export type StartupKind = 'existing' | 'new';
 /**
  * How to open the two stores in a workspace folder. Each path is plain text; the store checks it.
  */
-export interface NativeFactories {
+export interface StoreOpeners {
   /** Opens the uploaded-files store in the folder at `root`. */
   assets(root: string): AssetResult<Assets>;
   /** Opens the SQLite database at `location` for this workspace. */
@@ -48,7 +48,7 @@ export interface NativeFactories {
   ): StorageResult<Persistence>;
 }
 /** A workspace folder's open stores: its uploaded files and its database, and how to close both. */
-export interface NativeWorkspace {
+export interface OpenStores {
   readonly assets: Assets;
   readonly storage: Persistence;
   close(): Promise<Result<void>>;

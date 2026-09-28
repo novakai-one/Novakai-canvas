@@ -11,7 +11,7 @@
  * Declarations only. A change is only a hint: a listener reads the workspace again to see what
  * changed, and keeps its own unsaved drafts.
  */
-import type { Notifications, Receipt } from '../records/capabilities.js';
+import type { Notifications, Receipt } from '../records/capability-types.js';
 import type { WorkspaceId } from '../brands.js';
 /** One saved change: which workspace, and the receipt Authoring wrote for it. */
 export interface CommittedChange {

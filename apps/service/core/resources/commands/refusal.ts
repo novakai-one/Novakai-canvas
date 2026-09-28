@@ -6,7 +6,7 @@
 import type {
   ResourceDiagnostic,
   ResourceResult,
-} from '../../../contract/records/presets/preparation.js';
+} from '../../../contract/records/presets/resource-commands.js';
 
 /** The recovery of every refusal that names a malformed resource preparation input. */
 export const INPUT_RECOVERY = 'Correct the named resource preparation input and prepare again.';

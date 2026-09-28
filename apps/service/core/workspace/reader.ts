@@ -11,7 +11,7 @@ import type {
   Snapshot,
   StoredRecord,
   Templates,
-} from '../../contract/records/capabilities.js';
+} from '../../contract/records/capability-types.js';
 import type { LibraryRules, ModelRules } from '../../contract/ports/capabilities.js';
 import type { WorkspaceContents } from '../../contract/records/workspace/contents.js';
 import type { WorkspaceReader } from '../../contract/ports/workspace.js';

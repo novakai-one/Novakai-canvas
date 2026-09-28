@@ -13,17 +13,17 @@ import type {
   ChromeName,
   Json,
   Preset,
-} from '../../contract/records/capabilities.js';
+} from '../../contract/records/capability-types.js';
 import {
   hexColour,
-  themeConfig,
-  type ThemeConfig,
+  sourceTheme,
+  type SourceTheme,
   type ThemeOverride,
 } from '../../contract/records/presets/theme-input.js';
-import { admissionFields } from '../../contract/records/presets/preparation.js';
+import { presetFields } from '../../contract/records/presets/preparation.js';
 import { chromeName } from '../../contract/schemas.js';
 import { authoringFailure, collect, success } from '../../contract/errors.js';
-import type { FontBinding, ThemeAdmissionOwners } from '../../contract/ports/headless.js';
+import type { FontBinding, ThemeSavingOwners } from '../../contract/ports/headless.js';
 import { parseThemePin } from './theme-pin.js';
 
 /** One font alias bound to the family Assets verified and the digest of its bytes. */
@@ -46,9 +46,9 @@ export function prepareTheme(
   admission: Json,
   catalog: Catalog,
   bindings: readonly FontBinding[],
-  owners: ThemeAdmissionOwners,
+  owners: ThemeSavingOwners,
 ): AuthoringResult<Json> {
-  const parsed = themeConfig.safeParse(admission);
+  const parsed = sourceTheme.safeParse(admission);
   if (!parsed.success) return success(admission);
   const base = owners.templates.read(catalog, selection(parsed.data.raw.base));
   if (!base.ok)
@@ -73,7 +73,7 @@ function selection(base: string): unknown {
  */
 function withFonts(
   admission: Json,
-  raw: ThemeConfig['raw'],
+  raw: SourceTheme['raw'],
   base: Preset,
   bindings: readonly FontBinding[],
   assets: Pick<Assets, 'resolve'>,
@@ -122,7 +122,7 @@ function withRaw(
   admission: Json,
   raw: Json,
 ): AuthoringResult<Json> {
-  const header = admissionFields.safeParse(admission);
+  const header = presetFields.safeParse(admission);
   if (!header.success) return preparationFailed();
   return { ok: true, value: { ...header.data, raw } };
 }
@@ -133,7 +133,7 @@ function withRaw(
  * `theme` when the chrome is not a Design System chrome name or an override is not a hex colour.
  */
 function rawBlock(
-  raw: ThemeConfig['raw'],
+  raw: SourceTheme['raw'],
   base: Preset,
   fonts: readonly FontEntry[],
 ): AuthoringResult<Json> {

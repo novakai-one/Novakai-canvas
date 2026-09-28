@@ -4,16 +4,16 @@
  * with it. Pure; neither function fails. Text that is not an exact pin is a theme ID, and
  * Templates refuses an ID, version or digest it does not store.
  */
-import { bareDigest, type PinnedDigest } from '../../contract/brands.js';
+import { removeDigestPrefix, type PrefixedDigest } from '../../contract/brands.js';
 
 /** Exact pin text: theme ID, `@`, version, `#`, then Model's pinned digest. */
-export type ThemePinText = `${string}@${string}#${PinnedDigest}`;
+export type ThemePinText = `${string}@${string}#${PrefixedDigest}`;
 
 /** The parts of one exact pin. The digest is Model's pinned form (`sha256:` then hex). */
 export interface ThemePinParts {
   readonly id: string;
   readonly version: string;
-  readonly digest: PinnedDigest;
+  readonly digest: PrefixedDigest;
 }
 
 /**
@@ -60,6 +60,6 @@ function exactSelection(text: string): ThemeSelection {
     kind: 'exact',
     id: text.slice(0, at),
     version: text.slice(at + 1, hash),
-    digest: bareDigest(text.slice(hash + 1)),
+    digest: removeDigestPrefix(text.slice(hash + 1)),
   };
 }

@@ -8,7 +8,7 @@ import type {
   AuthoringResult,
   Json,
   ResolvedResources,
-} from '../../../contract/records/capabilities.js';
+} from '../../../contract/records/capability-types.js';
 import { json } from '../../../contract/schemas.js';
 import { success } from '../../../contract/errors.js';
 import { undecodable } from './refusal.js';

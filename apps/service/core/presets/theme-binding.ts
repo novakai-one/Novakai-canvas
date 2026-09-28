@@ -5,11 +5,11 @@
  * it into `missing-asset`, built-in preparation into `invalid-input` at `builtins`. Authoring owns
  * recovery.
  */
-import type { Collection, ThemePreset } from '../../contract/records/capabilities.js';
+import type { Collection, ThemePreset } from '../../contract/records/capability-types.js';
 import type { FailureSource } from '../../contract/records/transport/failure-source.js';
 import type { ModelRules } from '../../contract/ports/capabilities.js';
 import { success, type Result } from '../../contract/errors.js';
-import { pinnedDigest, type PinnedDigest } from '../../contract/brands.js';
+import { addDigestPrefix, type PrefixedDigest } from '../../contract/brands.js';
 
 /** The one Model rule a binding needs. */
 export type BindingModel = Pick<ModelRules, 'validate'>;
@@ -21,7 +21,7 @@ export type AssetBinding = Collection['assets'][number];
 /** An asset binding before Model checks it; `digest` is pinned as `sha256:<hex>`. */
 export interface AssetDraft {
   readonly id: string;
-  readonly digest: PinnedDigest;
+  readonly digest: PrefixedDigest;
   readonly mediaType: string;
   readonly alt: string;
   readonly license?: string;
@@ -39,7 +39,7 @@ export function themeBinding(
   const theme = {
     id: preset.id,
     version: preset.version,
-    digest: pinnedDigest(preset.digest),
+    digest: addDigestPrefix(preset.digest),
     roles: preset.payload.roles,
   };
   const checked = bindingCollection({ title: 'Resource binding', theme }, model);

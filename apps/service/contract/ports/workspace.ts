@@ -10,7 +10,7 @@
  * Declarations only. Authoring still decides whether a change is saved.
  */
 import type {
-  Admission,
+  Admission as StoredUpload,
   AssetResult,
   AuthoringResult,
   Collection,
@@ -19,11 +19,12 @@ import type {
   Request,
   Snapshot,
   StoredBlob,
-} from '../records/capabilities.js';
+} from '../records/capability-types.js';
 import type { AuthoringDigest } from '../brands.js';
 import type { WorkspaceContents } from '../records/workspace/contents.js';
 import type { ResourceSelection } from '../records/planning/selection.js';
-import type { PresetPreparation, ResourceResult } from '../records/presets/preparation.js';
+import type { PresetPreparation } from '../records/presets/preparation.js';
+import type { ResourceResult } from '../records/presets/resource-commands.js';
 
 /** Reads a snapshot into checked contents, and turns one collection into its catalog entry. */
 export interface WorkspaceReader {
@@ -54,12 +55,12 @@ export interface ResourceSelector {
     snapshot: Snapshot,
   ): AuthoringResult<ResourceSelection>;
   /**
-   * The digests of the stored files one collection's pinned themes and images need. Fails like
-   * `select`.
+   * The digests of the stored files one collection's exact theme versions and images need. Fails
+   * like `select`.
    */
-  forCollection(
+  digestsForCollection(
     collection: Collection,
-    workspace: WorkspaceContents,
+    contents: WorkspaceContents,
   ): AuthoringResult<readonly AuthoringDigest[]>;
 }
 
@@ -77,12 +78,15 @@ export interface CollectionPlanner {
 }
 
 /**
- * The commands behind `/api/v1/resources/…`. Assets does the byte work; theme and recipe work reads
- * the snapshot passed in. Each `input` is the request body as sent; each command checks it.
+ * The commands behind `/api/v1/resources/…`. Each checks its `input`, the request body as sent.
+ * `ResourceResult` is a `Result` whose code can be Authoring's or Templates'.
  */
 export interface ResourceCommands {
-  /** Stores one uploaded file (a font or an image). Answers Assets' `stage` outcome unchanged. */
-  stage(input: unknown): Promise<AssetResult<Admission>>;
+  /**
+   * Stores one uploaded file (a font or an image) and answers its stored description (Assets calls
+   * it an `Admission`). Answers Assets' `stage` outcome unchanged.
+   */
+  storeUpload(input: unknown): Promise<AssetResult<StoredUpload>>;
   /**
    * Puts back the bytes of one file from a backup, under a hold so nothing else writes it. Fails
    * with `invalid-input` at `restore` for a malformed body; otherwise answers Assets' outcome
@@ -90,7 +94,7 @@ export interface ResourceCommands {
    */
   restore(input: unknown): Promise<AssetResult<void>>;
   /** Reads one stored file by its digest. Answers Assets' `resolve` outcome unchanged. */
-  blob(input: unknown): AssetResult<StoredBlob>;
+  readFile(input: unknown): AssetResult<StoredBlob>;
   /**
    * Fixes the themes a DSL request uses to exact versions ("freezing"). A theme named `paper`
    * becomes the exact `paper@1.0.0#sha256:…` stored now, so a later apply uses that same version.
@@ -103,7 +107,7 @@ export interface ResourceCommands {
   ): ResourceResult<Request>;
   /**
    * Prepares a theme or recipe for saving, without saving it. Fails with the diagnostic of
-   * Templates, theme admission or the selector, or `invalid-input` at `resources` for malformed
+   * Templates, theme saving or the selector, or `invalid-input` at `resources` for malformed
    * input.
    */
   preparePreset(
@@ -112,8 +116,9 @@ export interface ResourceCommands {
   ): ResourceResult<PresetPreparation>;
   /**
    * Turns one stored recipe into DSL text for a new collection. Fails with `invalid-input` at
-   * `preset.kind` when the pin is not a recipe, at `language` when the result can't be printed, at
-   * `resources` for malformed input, or with the diagnostic of Templates or the selector.
+   * `preset.kind` when the named preset is not a recipe, at `language` when the result can't be
+   * printed, at `resources` for malformed input, or with the diagnostic of Templates or the
+   * selector.
    */
   instantiate(
     input: unknown,

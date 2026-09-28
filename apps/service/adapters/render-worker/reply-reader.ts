@@ -15,12 +15,12 @@ import {
 import type { DomainReader, Result as PresentationResult } from '@novakai/canvas-presentation';
 import { readScene, defaultEngineVersions, options } from '@novakai/canvas-layout';
 import type { Result as LayoutResult, ProjectionReader, Scene } from '@novakai/canvas-layout';
-import { renderEnvelope } from '../../contract/records/rendering/worker.js';
+import { renderDocumentMessage } from '../../contract/records/rendering/worker.js';
 import type { RenderingJob, RenderDocument } from '../../contract/records/rendering/job.js';
 import { andThen, failure, success, type Result } from '../../contract/errors.js';
 
 /** A reply as the render envelope checked it; every payload is still unknown. */
-type RenderReply = z.infer<typeof renderEnvelope>;
+type RenderReply = z.infer<typeof renderDocumentMessage>;
 
 /** The reply's geometry, decoded and admitted. */
 interface AdmittedGeometry {
@@ -60,7 +60,7 @@ function readReply(
   input: unknown,
   job: RenderingJob,
 ): Result<RenderReply> {
-  const reply = decodeReplyPart(renderEnvelope, input);
+  const reply = decodeReplyPart(renderDocumentMessage, input);
   if (!reply.ok) return reply;
   const echoed = requireSameJson(
     [job.collection, job.fonts, job.style, job.options],

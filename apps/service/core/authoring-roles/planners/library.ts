@@ -9,7 +9,7 @@ import type {
   Proposal,
   Request,
   Snapshot,
-} from '../../../contract/records/capabilities.js';
+} from '../../../contract/records/capability-types.js';
 import type { LibraryRules } from '../../../contract/ports/capabilities.js';
 import type { WorkspaceReader } from '../../../contract/ports/workspace.js';
 import { libraryCommand } from '../../../contract/records/planning/commands.js';

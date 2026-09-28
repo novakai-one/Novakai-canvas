@@ -10,7 +10,7 @@
  *
  * Declarations only. Authoring decides whether the change is saved.
  */
-import type { Json, ReadVersion, ResolvedResources } from '../capabilities.js';
+import type { Json, ReadVersion, ResolvedResources } from '../capability-types.js';
 import type { AuthoringDigest } from '../../brands.js';
 
 /**
@@ -24,9 +24,9 @@ export interface ResourceSelection {
    * The same picked themes and files as plain JSON (`{ resources }`). Authoring keeps it with the
    * request, and the DSL planner compares it with its own pick.
    */
-  readonly pins: Json;
+  readonly resourcesJson: Json;
   /** The digest of every stored file the pick uses. */
-  readonly covered: readonly AuthoringDigest[];
+  readonly fileDigests: readonly AuthoringDigest[];
   /** The stored records the pick read, with their versions, so a later change to one is noticed. */
   readonly reads: readonly ReadVersion[];
 }

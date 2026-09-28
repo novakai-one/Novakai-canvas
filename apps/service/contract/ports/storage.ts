@@ -9,25 +9,25 @@
  * and `AuthoringStore` (the three roles Authoring is given). adapters/storage joins them.
  * Declarations only. Neither the web app nor the CLI can write a record except through Authoring.
  */
-import type { SnapshotReader, ReceiptReader, Committer } from '../records/capabilities.js';
-import type { Result, WorkspaceState, Receipt } from '@novakai/canvas-persistence';
+import type { SnapshotReader, ReceiptReader, Committer } from '../records/capability-types.js';
+import type { Result as StorageResult, WorkspaceState, Receipt } from '@novakai/canvas-persistence';
 /**
  * The part of Persistence the service uses: read, find a receipt, commit. It can't delete, back up
  * or close the database; compose keeps those.
  */
 export interface ConditionalStorage {
   /** Reads everything stored for the workspace, with each record's version. */
-  readSnapshot(): Result<WorkspaceState>;
+  readSnapshot(): StorageResult<WorkspaceState>;
   /**
    * Finds the receipt of a saved request, or `null`. `requestId` is Authoring's; Persistence checks
    * it.
    */
-  receipt(requestId: unknown): Result<Receipt | null>;
+  receipt(requestId: unknown): StorageResult<Receipt | null>;
   /**
    * Commits Authoring's commit request if every version it read is still current. Persistence
    * checks the request.
    */
-  commit(request: unknown): Result<Receipt>;
+  commit(request: unknown): StorageResult<Receipt>;
 }
 /** The three storage roles Authoring is given: read the workspace, find a receipt, commit. */
 export interface AuthoringStore {

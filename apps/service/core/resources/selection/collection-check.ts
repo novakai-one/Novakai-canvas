@@ -10,8 +10,8 @@ import type {
   LoweredIntent,
   Templates,
   ThemePreset,
-} from '../../../contract/records/capabilities.js';
-import { bareDigest, type AuthoringDigest } from '../../../contract/brands.js';
+} from '../../../contract/records/capability-types.js';
+import { removeDigestPrefix, type AuthoringDigest } from '../../../contract/brands.js';
 import type { WorkspaceContents } from '../../../contract/records/workspace/contents.js';
 import { andThen, collect, success } from '../../../contract/errors.js';
 import type { AssetBinding } from '../../presets/theme-binding.js';
@@ -48,7 +48,7 @@ export function collectionResources(
   if (!checked.ok) return checked;
   return sortedDigests([
     ...theme.value.payload.fonts,
-    ...collection.assets.map((item) => bareDigest(item.digest)),
+    ...collection.assets.map((item) => removeDigestPrefix(item.digest)),
   ]);
 }
 
@@ -67,7 +67,7 @@ function pinnedTheme(
       kind: 'theme',
       id: collection.theme.id,
       version: collection.theme.version,
-      digest: bareDigest(collection.theme.digest),
+      digest: removeDigestPrefix(collection.theme.digest),
     }),
   );
   if (!preset.ok) return preset;
@@ -132,7 +132,7 @@ function checkMediaType(
   binding: AssetBinding,
   owners: CollectionOwners,
 ): AuthoringResult<void> {
-  const blob = fromOwner(owners.assets.resolve(bareDigest(binding.digest)));
+  const blob = fromOwner(owners.assets.resolve(removeDigestPrefix(binding.digest)));
   if (!blob.ok) return blob;
   if (blob.value.descriptor.mediaType !== binding.mediaType)
     return resourceRefused(`Asset media type differs: ${binding.id}`);

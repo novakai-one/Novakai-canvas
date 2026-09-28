@@ -9,7 +9,7 @@ import { createRequire } from 'node:module';
 import { readFile } from 'node:fs/promises';
 import { initializeRaster } from '@novakai/canvas-export';
 import { failure, type Result } from '../../contract/errors.js';
-import type { Rasterizer } from '../../contract/ports/export.js';
+import type { PngEncoder } from '../../contract/ports/export.js';
 
 /** `unstarted` until the first `prepare`; `started` holds the one preparation every call shares. */
 type RasterPhase =
@@ -22,10 +22,10 @@ type StartedPhase = Extract<RasterPhase, { readonly kind: 'started' }>;
 const UNSTARTED: RasterPhase = Object.freeze({ kind: 'unstarted' });
 
 /**
- * A rasterizer that initializes on the first `prepare` and shares that outcome. `prepare` fails
+ * A PNG encoder that initializes on the first `prepare` and shares that outcome. `prepare` fails
  * with `unavailable` at `export.png` when the module cannot load or Export refuses it.
  */
-export function createRasterizer(): Rasterizer {
+export function createPngEncoder(): PngEncoder {
   let phase = UNSTARTED;
   return {
     prepare: () => {

@@ -11,12 +11,12 @@ import type { ServerBindings } from '../../contract/ports/transport.js';
 import type { Caller, HttpMetadata } from '../../contract/records/transport/http.js';
 import { loopbackIp } from '../../contract/records/transport/http.js';
 import type { RouteOutcome } from '../../contract/records/transport/protocol.js';
-import type { WireOutcome } from '../../contract/records/transport/wire-codes.js';
+import type { HttpOutcome } from '../../contract/records/transport/http-codes.js';
 import type {
   LocalServer,
   RequestKind,
   ServerOptions,
-  StaticFile,
+  SentFile,
 } from '../../contract/records/transport/server.js';
 import { eventStreamHeaders, isolationHeaders } from '../../contract/records/transport/server.js';
 import { failure, success, type Result } from '../../contract/errors.js';
@@ -201,7 +201,7 @@ async function serveFile({ response, url, bindings }: Exchange): Promise<void> {
 /** Writes the policy's status and envelope; nothing when the socket is already gone. */
 function writeJson(
   response: ServerResponse,
-  outcome: WireOutcome,
+  outcome: HttpOutcome,
   bindings: ServerBindings,
 ): void {
   if (response.destroyed) return;
@@ -214,7 +214,7 @@ function writeJson(
 /** Writes a file's bytes with its media type, download name and extra headers. */
 function writeBytes(
   response: ServerResponse,
-  file: StaticFile,
+  file: SentFile,
 ): void {
   setHeaders(response, isolationHeaders);
   response.statusCode = 200;

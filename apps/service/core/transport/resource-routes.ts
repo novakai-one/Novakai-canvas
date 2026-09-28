@@ -6,7 +6,7 @@
  * (routes.ts).
  */
 import type { ApiCall, RouteKey } from '../../contract/records/transport/protocol.js';
-import type { WireOutcome } from '../../contract/records/transport/wire-codes.js';
+import type { HttpOutcome } from '../../contract/records/transport/http-codes.js';
 import type { ResourceCommands } from '../../contract/ports/workspace.js';
 import type { WorkspaceSession } from '../../contract/types.js';
 import { jsonBody } from './json-body.js';
@@ -22,7 +22,7 @@ export interface ResourceRouteOwners {
 }
 
 /** One resource command run on the admitted body. */
-type ResourceHandler = (input: unknown) => Promise<WireOutcome>;
+type ResourceHandler = (input: unknown) => Promise<HttpOutcome>;
 /** The resource commands that bind the current snapshot. */
 type SnapshotCommand = 'freeze' | 'preparePreset' | 'instantiate';
 
@@ -35,9 +35,9 @@ export function resourceRoutes(
 ): Readonly<Record<ResourceRouteKey, RouteHandler>> {
   const { resources } = owners;
   return Object.freeze({
-    'POST /api/v1/resources/stage': resourceRoute((input) => resources.stage(input)),
+    'POST /api/v1/resources/stage': resourceRoute((input) => resources.storeUpload(input)),
     'POST /api/v1/resources/restore': resourceRoute((input) => resources.restore(input)),
-    'POST /api/v1/resources/blob': resourceRoute(async (input) => resources.blob(input)),
+    'POST /api/v1/resources/blob': resourceRoute(async (input) => resources.readFile(input)),
     'POST /api/v1/resources/freeze': resourceRoute(onSnapshot(owners, 'freeze')),
     'POST /api/v1/resources/prepare': resourceRoute(onSnapshot(owners, 'preparePreset')),
     'POST /api/v1/resources/instantiate': resourceRoute(onSnapshot(owners, 'instantiate')),
@@ -56,7 +56,7 @@ function resourceRoute(handler: ResourceHandler): RouteHandler {
 async function runOnJsonBody(
   call: ApiCall,
   handler: ResourceHandler,
-): Promise<WireOutcome> {
+): Promise<HttpOutcome> {
   const input = jsonBody(call.body, call.metadata.contentType, 'resource');
   if (!input.ok) return input;
   return handler(input.value);

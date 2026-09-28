@@ -57,7 +57,10 @@ const invalidReport = z.strictObject({
   engineVersions: z.tuple([]).readonly(),
 });
 
-/** Checks the quality report of one saved collection. `valid` says which kind it is. */
+/**
+ * Checks the quality report of one saved collection. Its fields: `valid`, `diagnostics`,
+ * `warnings`, `crossings`, `relaxed` (layout rules loosened), `sections`, `engineVersions`.
+ */
 export const inspectionReport = z
   .discriminatedUnion('valid', [validReport, invalidReport])
   .readonly();

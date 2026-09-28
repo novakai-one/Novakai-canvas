@@ -4,7 +4,7 @@
  * The renderer has no write authority; callers own retry and keep their last readable scene on
  * any failure.
  */
-import type { Assets, Collection } from '../../contract/records/capabilities.js';
+import type { Assets, Collection } from '../../contract/records/capability-types.js';
 import type {
   CollectionRenderer,
   DiagramProducer,
@@ -20,7 +20,7 @@ export interface CollectionRenderOwners {
   readonly assets: Pick<Assets, 'acquire'>;
   readonly jobs: RenderJobs;
   readonly producer: DiagramProducer;
-  readonly resources: Pick<ResourceSelector, 'forCollection'>;
+  readonly resources: Pick<ResourceSelector, 'digestsForCollection'>;
 }
 
 /** Binds collection reads to the given owners; `render` behaves as `render` below. */
@@ -43,7 +43,7 @@ async function render(
   signal: AbortSignal,
   owners: CollectionRenderOwners,
 ): Promise<Result<RenderDocument>> {
-  const resources = owners.resources.forCollection(collection, workspace);
+  const resources = owners.resources.digestsForCollection(collection, workspace);
   if (!resources.ok)
     return failure('unavailable', resources.error.path, resources.error.message, resources.error);
   const lease = owners.assets.acquire(resources.value);

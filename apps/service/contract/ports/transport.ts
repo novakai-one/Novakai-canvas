@@ -11,7 +11,7 @@
  */
 import type { WorkspaceSession } from '../types.js';
 import type { Result } from '../errors.js';
-import type { Request } from '../records/capabilities.js';
+import type { Request } from '../records/capability-types.js';
 import type { CommittedChange } from './notifications.js';
 import type { AgentToken, Generation, SessionToken } from '../brands.js';
 import type {
@@ -27,8 +27,8 @@ import type {
   RouteOutcome,
   TransportResponse,
 } from '../records/transport/protocol.js';
-import type { HttpStatus, WireOutcome } from '../records/transport/wire-codes.js';
-import type { BrowserGrant, RequestKind, StaticFile } from '../records/transport/server.js';
+import type { HttpStatus, HttpOutcome } from '../records/transport/http-codes.js';
+import type { BrowserGrant, RequestKind, SentFile } from '../records/transport/server.js';
 
 /**
  * One server's address and secrets, made by adapters/credentials when it starts. `equal` compares
@@ -83,16 +83,17 @@ export interface HttpAdmission {
 /** Answers one API call from a caller that has already been let in. */
 export interface ApiRouter {
   /**
-   * Runs the route for `METHOD path` and answers JSON or a file. Fails with `not-found` at `route`
-   * when no route matches.
+   * Runs the route for `METHOD path` and answers JSON or a file. A failure is inside the JSON
+   * outcome (`RouteOutcome` kind `json`): `not-found` at `route` when no route matches.
    */
   invoke(call: ApiCall): Promise<RouteOutcome>;
 }
 
 /**
- * What a mutation body is checked against: who sent it, its headers, this server run and admission.
+ * What a change request body is checked against: who sent it, its headers, this server run, and
+ * the check that admits its request.
  */
-export interface CommandAdmission {
+export interface BodyCheckContext {
   readonly caller: Caller;
   readonly metadata: HttpMetadata;
   /** This server run's label; a body made for another run is refused. */
@@ -100,16 +101,17 @@ export interface CommandAdmission {
   readonly admission: Pick<HttpAdmission, 'admitMutation'>;
 }
 
-/** Reads a mutation body into a request Authoring may run. */
+/** Reads a change request body into a request Authoring may run. */
 export interface CommandDecoder {
   /**
-   * Reads the body text as a mutation envelope and admits its request. Fails with `invalid-input`
-   * at `content-type` or `body` for a malformed envelope, `conflict` at `generation` when it was
-   * made for another server run, and otherwise as `HttpAdmission.admitMutation`.
+   * Reads the body text as a change request body (`changeRequestBody`) and admits its request.
+   * Fails with `invalid-input` at `content-type` or `body` for a malformed body, `conflict` at
+   * `generation` when it was made for another server run, and otherwise as
+   * `HttpAdmission.admitMutation`.
    */
   read(
     body: string,
-    context: CommandAdmission,
+    context: BodyCheckContext,
   ): Result<AdmittedMutation>;
 }
 
@@ -133,10 +135,13 @@ export interface TransportPolicy {
   /** Every value sent for each query key, in order. */
   query(params: URLSearchParams): ApiQuery;
   /** The HTTP status for an answer. */
-  status(outcome: WireOutcome): HttpStatus;
-  /** The JSON body for an answer, with its version and this server run's label. */
+  status(outcome: HttpOutcome): HttpStatus;
+  /**
+   * The JSON body for an answer: the outcome inside its envelope, the
+   * `{ version, generation, … }` wrapper every answer has.
+   */
   envelope(
-    outcome: WireOutcome,
+    outcome: HttpOutcome,
     generation: Generation,
   ): TransportResponse;
   /** Whether a web app file may be served, and the session cookie a direct page open is given. */
@@ -161,7 +166,7 @@ export interface EventFrames {
 /** The built web app's files, read from one folder chosen at start-up. */
 export interface StaticFiles {
   /** Reads the file at one URL path. Fails with `not-found` at `file`; never rejects. */
-  read(path: string): Promise<Result<StaticFile>>;
+  read(path: string): Promise<Result<SentFile>>;
 }
 
 /** What the HTTP server is started with. compose/serve.ts builds each part once. */

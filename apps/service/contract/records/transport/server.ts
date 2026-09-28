@@ -32,8 +32,8 @@ export interface LocalServer {
   close(): Promise<Result<void>>;
 }
 
-/** A file sent as it is: one of the web app's files, or an export file. */
-export interface StaticFile {
+/** A file the server sends as it is: one of the web app's files, or a newly made export file. */
+export interface SentFile {
   readonly bytes: Uint8Array;
   /** Its `Content-Type`, for example `image/png`. */
   readonly mediaType: string;

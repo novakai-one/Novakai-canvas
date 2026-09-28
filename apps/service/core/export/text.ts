@@ -8,13 +8,13 @@
  * leases whose owner process is gone.
  */
 import { failure, success, type Result } from '../../contract/errors.js';
-import type { StaticFile } from '../../contract/records/transport/server.js';
+import type { SentFile } from '../../contract/records/transport/server.js';
 import type {
   Collection,
   ExportResult,
   Language,
   SnapshotLease,
-} from '../../contract/records/capabilities.js';
+} from '../../contract/records/capability-types.js';
 import type { ExportRules } from '../../contract/ports/capabilities.js';
 import type { ExportRequest } from '../../contract/records/export/request.js';
 import { cancelledExport, exportRejection, exportRouteFailure, settledFailure } from './faults.js';
@@ -40,7 +40,7 @@ export async function exportDsl(
   request: ExportRequest,
   owners: TextOwners,
   signal: AbortSignal,
-): Promise<Result<StaticFile>> {
+): Promise<Result<SentFile>> {
   if (request.scope.kind !== 'all')
     return failure('invalid-input', 'scope', 'Canonical DSL export requires the whole collection');
   return exportText(request.identity, owners, signal, {
@@ -61,7 +61,7 @@ export async function exportMarkdown(
   request: ExportRequest,
   owners: TextOwners,
   signal: AbortSignal,
-): Promise<Result<StaticFile>> {
+): Promise<Result<SentFile>> {
   return exportText(request.identity, owners, signal, {
     name: 'markdown',
     produce: (collection) => markdownText(signal, collection, request.scope, owners.export),
@@ -79,7 +79,7 @@ type TextFormatName = 'dsl' | 'markdown';
 interface TextFormat {
   readonly name: TextFormatName;
   readonly produce: (collection: Collection) => ExportResult<string>;
-  readonly file: (text: string) => StaticFile;
+  readonly file: (text: string) => SentFile;
 }
 
 /**
@@ -91,7 +91,7 @@ async function exportText(
   owners: LeaseOwners,
   signal: AbortSignal,
   format: TextFormat,
-): Promise<Result<StaticFile>> {
+): Promise<Result<SentFile>> {
   const acquired = await acquireSnapshot(identity, owners, signal);
   if (!acquired.ok) return exportRouteFailure(acquired);
   const settled = await settleText(format, acquired.value);

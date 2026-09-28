@@ -7,7 +7,7 @@
  *
  * This file starts that pool and joins it to the reply checker, as one `DiagramProducer`. It also
  * names the worker's start file, the 30-second time limit, and where libavoid (the library that
- * routes wires) keeps its WebAssembly file. A failed job leaves the last good picture in place.
+ * routes wires) keeps its WebAssembly file.
  */
 import type { DiagramProducer } from '../ports/rendering.js';
 import type { Result } from '../errors.js';
@@ -21,14 +21,15 @@ const RENDER_TIMEOUT_MS = 30_000;
 /** The render worker's process entry. It boots the worker realm through compose/worker.ts. */
 const WORKER_ENTRY = new URL('../../cli/render-worker.mjs', import.meta.url);
 
-/** Where the libavoid wasm lives under the installation's resource root. */
+/** Where libavoid's WebAssembly file lives inside the resource folder. */
 const LIBAVOID_WASM = 'vendor/layout/libavoid.wasm';
 
 /**
- * Starts the render worker pool and waits until its first worker is ready. Fails with
- * `unavailable` at `render` when the worker code can't load or the first worker doesn't start.
+ * Starts the render worker pool and waits until its first worker is ready. Answers the pool joined
+ * to the reply check, as one `DiagramProducer`. Fails with `unavailable` at `render` when the
+ * worker code can't load or the first worker doesn't start.
  */
-export async function createDiagramProducer(): Promise<Result<DiagramProducer>> {
+export async function startRenderWorkers(): Promise<Result<DiagramProducer>> {
   try {
     const [worker, output] = await Promise.all([
       import('../../adapters/render-worker/pool.js'),

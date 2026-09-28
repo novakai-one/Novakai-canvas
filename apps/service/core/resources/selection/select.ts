@@ -15,7 +15,7 @@ import type {
   ResolvedResources,
   Snapshot,
   Templates,
-} from '../../../contract/records/capabilities.js';
+} from '../../../contract/records/capability-types.js';
 import type { ModelRules } from '../../../contract/ports/capabilities.js';
 import type { ResourceSelection } from '../../../contract/records/planning/selection.js';
 import type { ResourceSelector } from '../../../contract/ports/workspace.js';
@@ -46,7 +46,8 @@ export interface ResourceOwners {
 export function createResourceSelector(owners: ResourceOwners): ResourceSelector {
   return {
     select: (request, snapshot) => select(request, snapshot, owners),
-    forCollection: (collection, workspace) => collectionResources(collection, workspace, owners),
+    digestsForCollection: (collection, workspace) =>
+      collectionResources(collection, workspace, owners),
   };
 }
 
@@ -128,7 +129,7 @@ function selection(
   const covered = coverage(request, snapshot, catalog, resources.assets);
   if (!covered.ok) return covered;
   const reads = presetReads(snapshot);
-  return success({ resources, pins: pins.value, covered: covered.value, reads });
+  return success({ resources, resourcesJson: pins.value, fileDigests: covered.value, reads });
 }
 
 /** Bootstrap reads the fixed installation presets; every other request reads the stored ones. */

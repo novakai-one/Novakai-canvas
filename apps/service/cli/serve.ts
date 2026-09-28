@@ -51,7 +51,7 @@ async function main(): Promise<void> {
 
 /**
  * Real workspace initialization completes before the socket opens; failed socket startup closes
- * native handles. The workspace is `local`, created now when it is new.
+ * the workspace. The workspace is `local`, created now when it is new.
  */
 async function start(
   root: string,
@@ -106,7 +106,7 @@ function shutdown(
   );
 }
 
-/** Drain the listener before native owners; callers reconcile outstanding receipt IDs on restart. */
+/** Drain the listener, then the workspace; callers reconcile outstanding receipt IDs on restart. */
 async function stop(
   server: LocalServer,
   workspace: WorkspaceSession,

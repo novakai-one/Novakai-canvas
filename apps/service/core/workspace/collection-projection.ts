@@ -8,7 +8,7 @@ import type {
   CollectionProjection,
   ObjectProjection,
   SectionProjection,
-} from '../../contract/records/capabilities.js';
+} from '../../contract/records/capability-types.js';
 import type { ObjectId } from '../../contract/brands.js';
 
 /** One Model section. */

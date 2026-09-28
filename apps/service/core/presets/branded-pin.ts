@@ -5,7 +5,7 @@
  * owns recovery.
  */
 import { presetId, presetVersion, presetDigest } from '../../contract/schemas.js';
-import type { PresetPin, TemplatesResult } from '../../contract/records/capabilities.js';
+import type { PresetPin, TemplatesResult } from '../../contract/records/capability-types.js';
 import { success } from '../../contract/errors.js';
 import { invalidIdentity } from './codec-refusal.js';
 

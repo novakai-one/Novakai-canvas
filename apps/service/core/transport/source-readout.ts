@@ -3,7 +3,7 @@
  * vocabulary and a collection printed as DSL, so HTTP never learns the diagram syntax. Pure over
  * the injected Language. The caller keeps its draft on a refused print.
  */
-import type { Language, Scope } from '../../contract/records/capabilities.js';
+import type { Language, Scope } from '../../contract/records/capability-types.js';
 import type { SourceReadout } from './source-routes.js';
 import { failure, success, type Result } from '../../contract/errors.js';
 

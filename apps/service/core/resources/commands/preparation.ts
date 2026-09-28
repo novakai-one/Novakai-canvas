@@ -14,16 +14,14 @@ import type {
   ResolvedResources,
   Snapshot,
   Templates,
-} from '../../../contract/records/capabilities.js';
+} from '../../../contract/records/capability-types.js';
+import type { PresetPreparation } from '../../../contract/records/presets/preparation.js';
+import { presetFields } from '../../../contract/records/presets/preparation.js';
 import type {
   PreparationInput,
-  PresetPreparation,
   ResourceResult,
-} from '../../../contract/records/presets/preparation.js';
-import {
-  admissionFields,
-  preparationInput,
-} from '../../../contract/records/presets/preparation.js';
+} from '../../../contract/records/presets/resource-commands.js';
+import { preparationInput } from '../../../contract/records/presets/resource-commands.js';
 import type { ResourceSelector } from '../../../contract/ports/workspace.js';
 import { json, recordId } from '../../../contract/schemas.js';
 import { andThen, success } from '../../../contract/errors.js';
@@ -189,7 +187,7 @@ function normalizedAdmission(
   preset: Preset,
 ): ResourceResult<AdmissionJson> {
   if (preset.kind !== 'recipe') return success(admission);
-  const original = admissionFields.safeParse(admission);
+  const original = presetFields.safeParse(admission);
   if (!original.success) return invalidPreparation();
   return success({ ...original.data, source: preset.payload.source });
 }

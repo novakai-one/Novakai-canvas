@@ -4,13 +4,13 @@
  * artifact also carries its digest. A failed artifact becomes the route failure. Pure.
  */
 import { success, type Result } from '../../contract/errors.js';
-import type { StaticFile } from '../../contract/records/transport/server.js';
+import type { SentFile } from '../../contract/records/transport/server.js';
 import type { ExportRequest } from '../../contract/records/export/request.js';
-import type { Artifact, ExportResult } from '../../contract/records/capabilities.js';
+import type { Artifact, ExportResult } from '../../contract/records/capability-types.js';
 import { exportRouteFailure } from './faults.js';
 
 /** The artifact as a download, or its failure as the route failure (`exportRouteFailure`). */
-export function artifactOutcome(artifact: ExportResult<Artifact>): Result<StaticFile> {
+export function artifactOutcome(artifact: ExportResult<Artifact>): Result<SentFile> {
   if (!artifact.ok) return exportRouteFailure(artifact);
   return success(artifactFile(artifact.value));
 }
@@ -19,7 +19,7 @@ export function artifactOutcome(artifact: ExportResult<Artifact>): Result<Static
 export function markdownFile(
   request: Pick<ExportRequest, 'identity' | 'scope'>,
   source: string,
-): StaticFile {
+): SentFile {
   const scope = request.scope.kind === 'all' ? 'all' : request.scope.id;
   return {
     bytes: UTF8.encode(source),
@@ -33,7 +33,7 @@ export function markdownFile(
 export function dslFile(
   identity: ExportRequest['identity'],
   source: string,
-): StaticFile {
+): SentFile {
   return {
     bytes: UTF8.encode(source),
     mediaType: 'text/plain; charset=utf-8',
@@ -52,7 +52,7 @@ const REVISION_HEADER = 'X-Novakai-Export-Revision';
 const DIGEST_HEADER = 'X-Novakai-Export-Digest';
 
 /** The artifact's bytes, named by identity, scope and extension, with revision and digest. */
-function artifactFile(artifact: Artifact): StaticFile {
+function artifactFile(artifact: Artifact): SentFile {
   const name = `${artifact.identity.collectionId}-${artifact.identity.revision}-${artifact.scope.kind}.${artifact.extension}`;
   return {
     bytes: artifact.bytes,

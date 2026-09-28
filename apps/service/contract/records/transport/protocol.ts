@@ -3,26 +3,26 @@
  *
  * The browser and the CLI speak to the service in JSON over HTTP, and both sides must agree on the
  * shape. For example, a change is sent as `{ version: 1, generation, request, preview }`, and every
- * answer comes back as `{ version: 1, generation, outcome }`.
+ * answer comes back as `{ version: 1, generation, outcome }`. That wrapper is the "envelope".
  *
- * This file holds that agreement: the checks for a change body (`mutationEnvelope`) and for every
- * answer (`responseEnvelope`), the list of API routes, and a call and its answer as the routes see
- * them. The failure codes are in wire-codes.ts.
+ * This file holds that agreement: the checks for a change body (`changeRequestBody`) and for every
+ * answer (`transportResponse`), the list of API routes, and a call and its answer as the routes see
+ * them. The failure codes are in http-codes.ts.
  */
 import { z } from 'zod';
 import { generation } from '../../brands.js';
 import type { Caller, HttpMetadata } from './http.js';
-import type { Request } from '../capabilities.js';
+import type { Request } from '../capability-types.js';
 import type { PrepareMode } from '../workspace/session.js';
-import type { StaticFile } from './server.js';
-import { wireFailure, type WireOutcome } from './wire-codes.js';
+import type { SentFile } from './server.js';
+import { httpFailure, type HttpOutcome } from './http-codes.js';
 /**
  * Checks a change request's body: version 1, the server run it was made for (`generation`), the
  * Authoring request, whether to render preview images (`preview`, `false` when left out), and the
  * apply options (`{}` when left out). The `generation` stops a request made before a restart from
  * landing on the restarted workspace.
  */
-export const mutationEnvelope = z.strictObject({
+export const changeRequestBody = z.strictObject({
   version: z.literal(1),
   generation,
   request: z.unknown(),
@@ -69,8 +69,8 @@ export type RouteKey = (typeof routeKeys)[number];
 
 /** A route's answer: JSON, or a file sent as it is. */
 export type RouteOutcome =
-  | { readonly kind: 'json'; readonly outcome: WireOutcome }
-  | { readonly kind: 'bytes'; readonly file: StaticFile };
+  | { readonly kind: 'json'; readonly outcome: HttpOutcome }
+  | { readonly kind: 'bytes'; readonly file: SentFile };
 
 /** The query of an API call: every value sent for each key, in order. */
 export type ApiQuery = Readonly<Record<string, readonly string[]>>;
@@ -90,19 +90,19 @@ export interface ApiCall {
 /**
  * Checks every service answer: version 1, the server run that answered (`generation`), and the
  * outcome, `{ ok: true, value }` or `{ ok: false, error }`. The value is checked later by whoever
- * reads it. A failure's code is from the closed list (wire-codes.ts); its evidence keeps each
+ * reads it. A failure's code is from the closed list (http-codes.ts); its evidence keeps each
  * capability's own codes.
  */
-export const responseEnvelope = z.strictObject({
+export const transportResponse = z.strictObject({
   version: z.literal(1),
   generation,
   outcome: z.discriminatedUnion('ok', [
     z.strictObject({ ok: z.literal(true), value: z.unknown() }),
     z.strictObject({
       ok: z.literal(false),
-      error: wireFailure,
+      error: httpFailure,
     }),
   ]),
 });
-/** A service answer that passed {@link responseEnvelope}. */
-export type TransportResponse = z.infer<typeof responseEnvelope>;
+/** A service answer that passed {@link transportResponse}. */
+export type TransportResponse = z.infer<typeof transportResponse>;

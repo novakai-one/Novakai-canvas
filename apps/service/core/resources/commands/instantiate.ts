@@ -12,13 +12,13 @@ import type {
   ResolvedResources,
   Snapshot,
   Templates,
-} from '../../../contract/records/capabilities.js';
+} from '../../../contract/records/capability-types.js';
 import type {
   InstantiateInput,
   ResourceDiagnostic,
   ResourceResult,
-} from '../../../contract/records/presets/preparation.js';
-import { instantiateInput } from '../../../contract/records/presets/preparation.js';
+} from '../../../contract/records/presets/resource-commands.js';
+import { instantiateInput } from '../../../contract/records/presets/resource-commands.js';
 import type { ResourceSelector } from '../../../contract/ports/workspace.js';
 import { andThen, success } from '../../../contract/errors.js';
 import { selectionRequest, storedCatalog, unboundTemplates } from './catalog.js';

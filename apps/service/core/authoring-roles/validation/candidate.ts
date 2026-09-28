@@ -11,7 +11,7 @@ import type {
   Collection,
   ReadVersion,
   Snapshot,
-} from '../../../contract/records/capabilities.js';
+} from '../../../contract/records/capability-types.js';
 import type { AuthoringDigest } from '../../../contract/brands.js';
 import type { ResourceSelector, WorkspaceReader } from '../../../contract/ports/workspace.js';
 import type { WorkspaceContents } from '../../../contract/records/workspace/contents.js';
@@ -28,7 +28,7 @@ import {
 /** What candidate validation reads; no validator can commit or alter the candidate it inspects. */
 export interface CandidateValidatorOwners extends CatalogCheckOwners {
   readonly workspace: Pick<WorkspaceReader, 'read'>;
-  readonly resources: Pick<ResourceSelector, 'forCollection'>;
+  readonly resources: Pick<ResourceSelector, 'digestsForCollection'>;
 }
 
 /**
@@ -121,7 +121,7 @@ function expectedResources(
   view: WorkspaceContents,
   owners: CandidateValidatorOwners,
 ): AuthoringResult<readonly AuthoringDigest[]> {
-  const expected = owners.resources.forCollection(collection, view);
+  const expected = owners.resources.digestsForCollection(collection, view);
   if (!expected.ok) return invariantBroken(expected.error.message, expected.error);
   return expected;
 }

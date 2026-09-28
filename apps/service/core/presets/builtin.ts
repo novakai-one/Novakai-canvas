@@ -12,7 +12,7 @@ import type {
   ResolvedResources,
   Templates,
   ThemePreset,
-} from '../../contract/records/capabilities.js';
+} from '../../contract/records/capability-types.js';
 import type {
   BuiltinFonts,
   BuiltinSources,

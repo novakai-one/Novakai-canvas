@@ -11,7 +11,7 @@ import type {
   Proposal,
   Request,
   Snapshot,
-} from '../../../contract/records/capabilities.js';
+} from '../../../contract/records/capability-types.js';
 import type {
   CollectionPlanner,
   ResourceSelector,
@@ -98,7 +98,7 @@ function compile(
   selected: ResourceSelection,
   owners: DslPlannerOwners,
 ): AuthoringResult<Proposal> {
-  if (!samePins(pins, selected.pins))
+  if (!samePins(pins, selected.resourcesJson))
     return authoringFailure(
       'revision-conflict',
       'pins',

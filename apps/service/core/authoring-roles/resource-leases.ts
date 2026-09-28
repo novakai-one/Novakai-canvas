@@ -10,7 +10,7 @@ import type {
   ResourceAdmission,
   ResourceLease,
   Snapshot,
-} from '../../contract/records/capabilities.js';
+} from '../../contract/records/capability-types.js';
 import type { ResourceSelector } from '../../contract/ports/workspace.js';
 import { authoringFailure } from '../../contract/errors.js';
 
@@ -34,7 +34,7 @@ function acquire(
 ): AuthoringResult<ResourceLease> {
   const selected = selector.select(request, snapshot);
   if (!selected.ok) return selected;
-  const lease = assets.acquire(selected.value.covered);
+  const lease = assets.acquire(selected.value.fileDigests);
   if (!lease.ok)
     return authoringFailure(
       'missing-asset',
@@ -46,9 +46,9 @@ function acquire(
   return {
     ok: true,
     value: {
-      pins: selected.value.pins,
+      pins: selected.value.resourcesJson,
       reads: selected.value.reads,
-      covered: selected.value.covered,
+      covered: selected.value.fileDigests,
       release: async () => released(lease.value.release()),
     },
   };

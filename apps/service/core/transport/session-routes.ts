@@ -6,7 +6,7 @@
  * reaches the HTTP server's `receive` (routes.ts).
  */
 import type { ApiCall, RouteKey, RouteOutcome } from '../../contract/records/transport/protocol.js';
-import type { WireOutcome } from '../../contract/records/transport/wire-codes.js';
+import type { HttpOutcome } from '../../contract/records/transport/http-codes.js';
 import type { WorkspaceSession } from '../../contract/types.js';
 import { success } from '../../contract/errors.js';
 import type { CollectionId } from '../../contract/brands.js';
@@ -35,7 +35,7 @@ export interface SessionRouteOwners {
   readonly session: Pick<
     WorkspaceSession,
     | 'workspace'
-    | 'installation'
+    | 'builtins'
     | 'read'
     | 'history'
     | 'receipt'
@@ -61,7 +61,7 @@ export function sessionRoutes(
     'GET /api/v1/workspace': answerJson((call) => workspace(call, session)),
     'GET /api/v1/history': answerJson(() => session.history()),
     'GET /api/v1/installation': answerJson(async () =>
-      success({ fonts: session.installation.fonts, tokens: session.installation.tokens }),
+      success({ fonts: session.builtins.fonts, tokens: session.builtins.tokens }),
     ),
     'GET /api/v1/identity': answerJson(async () => success({ workspace: session.workspace })),
     'GET /api/v1/render': answerJson((call) =>
@@ -82,7 +82,7 @@ export function sessionRoutes(
 async function workspace(
   call: ApiCall,
   session: RouteSession,
-): Promise<WireOutcome> {
+): Promise<HttpOutcome> {
   const read = await session.read();
   if (!read.ok) return read;
   const versionsOnly = readLastValue(call.query, 'history') === 'versions';
@@ -111,8 +111,8 @@ async function exportArtifact(
  */
 async function withCollection(
   call: ApiCall,
-  step: (id: CollectionId) => Promise<WireOutcome>,
-): Promise<WireOutcome> {
+  step: (id: CollectionId) => Promise<HttpOutcome>,
+): Promise<HttpOutcome> {
   const text = readLastValue(call.query, 'id') ?? '';
   const id = collectionId.safeParse(text);
   if (!id.success) return missingCollection(text);

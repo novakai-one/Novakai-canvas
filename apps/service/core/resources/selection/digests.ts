@@ -2,10 +2,10 @@
  * The bytes a selection holds, as Authoring digests: each one checked, and a list of them distinct
  * and sorted. Pure; a malformed digest is `invalid-input` at `resources` (refusal.ts), and
  * Authoring owns recovery. Adding or removing Model's `sha256:` prefix is contract/brands.ts
- * (`pinnedDigest`, `bareDigest`).
+ * (`addDigestPrefix`, `removeDigestPrefix`).
  */
 import type { AuthoringDigest } from '../../../contract/brands.js';
-import type { AuthoringResult } from '../../../contract/records/capabilities.js';
+import type { AuthoringResult } from '../../../contract/records/capability-types.js';
 import { authoringDigest } from '../../../contract/schemas.js';
 import { collect, success } from '../../../contract/errors.js';
 import { undecodable } from './refusal.js';

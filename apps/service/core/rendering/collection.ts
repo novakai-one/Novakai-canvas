@@ -2,7 +2,7 @@
  * Renders one committed collection: read the workspace, check it, find the collection, render it.
  * Pure over the injected reads. The caller keeps its navigation and draft on any failure.
  */
-import type { Authoring } from '../../contract/records/capabilities.js';
+import type { Authoring } from '../../contract/records/capability-types.js';
 import type { WorkspaceContents } from '../../contract/records/workspace/contents.js';
 import type { WorkspaceReader } from '../../contract/ports/workspace.js';
 import type { CollectionRenderer } from '../../contract/ports/rendering.js';

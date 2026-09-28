@@ -5,7 +5,7 @@
  * keeps the prior scene when a job cannot be built.
  */
 import type { FailureSource } from '../../contract/records/transport/failure-source.js';
-import type { AuthoringResult } from '../../contract/records/capabilities.js';
+import type { AuthoringResult } from '../../contract/records/capability-types.js';
 import type { Result } from '../../contract/errors.js';
 import { authoringFailure } from '../../contract/errors.js';
 

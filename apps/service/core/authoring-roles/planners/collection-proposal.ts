@@ -8,7 +8,7 @@ import type {
   Collection,
   Proposal,
   Snapshot,
-} from '../../../contract/records/capabilities.js';
+} from '../../../contract/records/capability-types.js';
 import type { AuthoringDigest } from '../../../contract/brands.js';
 import type { LibraryRules } from '../../../contract/ports/capabilities.js';
 import type { WorkspaceContents } from '../../../contract/records/workspace/contents.js';
@@ -23,7 +23,7 @@ import { checkedProposal, ownerRejected } from './change-payload.js';
 export interface CollectionProposalOwners {
   readonly library: Pick<LibraryRules, 'planMembership'>;
   readonly workspace: WorkspaceReader;
-  readonly resources: Pick<ResourceSelector, 'forCollection'>;
+  readonly resources: Pick<ResourceSelector, 'digestsForCollection'>;
 }
 
 /**
@@ -46,7 +46,7 @@ function propose(
 ): AuthoringResult<Proposal> {
   const view = owners.workspace.read(snapshot);
   if (!view.ok) return view;
-  const blobs = owners.resources.forCollection(collection, view.value);
+  const blobs = owners.resources.digestsForCollection(collection, view.value);
   if (!blobs.ok) return blobs;
   return proposal(collection, view.value, blobs.value, owners);
 }

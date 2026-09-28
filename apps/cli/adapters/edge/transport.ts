@@ -1,4 +1,4 @@
-import { responseEnvelope } from '@novakai/canvas-service';
+import { transportResponse } from '@novakai/canvas-service';
 import type { TransportResponse } from '@novakai/canvas-service';
 import type { Transport } from '../../contract/ports/runtime.js';
 import type { Result } from '../../contract/errors.js';
@@ -43,7 +43,7 @@ async function send(
       body: body ?? null,
     });
     const input: unknown = await response.json();
-    const checked = responseEnvelope.safeParse(input);
+    const checked = transportResponse.safeParse(input);
     if (!checked.success)
       return failure('invalid-response', 'Service returned an invalid transport envelope');
     return { ok: true, value: checked.data };

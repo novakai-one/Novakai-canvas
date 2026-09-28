@@ -10,14 +10,16 @@ import type {
   Proposal,
   Request,
   Snapshot,
-} from '../../../contract/records/capabilities.js';
+} from '../../../contract/records/capability-types.js';
 import { presetCommand } from '../../../contract/records/presets/preparation.js';
 import type {
   PresetCommand,
   PresetPreparation,
+} from '../../../contract/records/presets/preparation.js';
+import type {
   ResourceDiagnostic,
   ResourceErrorCode,
-} from '../../../contract/records/presets/preparation.js';
+} from '../../../contract/records/presets/resource-commands.js';
 import type { ResourceCommands } from '../../../contract/ports/workspace.js';
 import { workspaceMetadata } from '../../../contract/records/workspace/metadata.js';
 import { plannerId } from '../../../contract/schemas.js';
