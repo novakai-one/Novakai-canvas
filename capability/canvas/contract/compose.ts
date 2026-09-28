@@ -40,6 +40,7 @@ export function createReactBindings(slots: RenderSlots): Promise<Result<ReactBin
       geometry,
       keyboard,
       browser,
+      gestureIds,
     ] = await Promise.all([
       import('../adapters/react-flow/CanvasSurface.js'),
       import('../adapters/react-flow/SceneNode.js'),
@@ -58,6 +59,7 @@ export function createReactBindings(slots: RenderSlots): Promise<Result<ReactBin
       import('../adapters/react-flow/geometry-gestures.js'),
       import('../adapters/react-flow/keyboard-commands.js'),
       import('../adapters/react-flow/browser-bindings.js'),
+      import('../adapters/react-flow/gesture-ids.js'),
     ]);
     const parts = {
       createGeometryGestures: geometry.createGeometryGestures,
@@ -68,8 +70,13 @@ export function createReactBindings(slots: RenderSlots): Promise<Result<ReactBin
       FontDefinitions: slots.FontDefinitions,
       createGraphSelector: records.createGraphSelector,
       useScene: scene.useScene,
-      createInteractions: (owners) =>
-        interactions.createInteractions(parts, { ...owners, input: browser.browserInput }),
+      createInteractions: (host) =>
+        interactions.createInteractions(parts, {
+          session: host.session,
+          input: browser.browserInput,
+          nextGestureId: gestureIds.createGestureIds(host),
+          onError: host.onError,
+        }),
       observeSize: browser.observeSize,
       SceneNode: node.createSceneNode({ ...slots, TreeRow: tree.createTreeRow(slots) }),
       SceneEdge: edge.createSceneEdge({

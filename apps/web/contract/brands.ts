@@ -28,6 +28,7 @@ export type {
 } from '@novakai/canvas-model';
 export type { FolderId } from '@novakai/canvas-library';
 export type { TransportGeneration } from '@novakai/canvas-service';
+export type { GestureId } from '@novakai/canvas-canvas';
 
 /** A workspace's commit count (Authoring). An alias, so a later Authoring brand arrives unchanged. */
 export type WorkspaceSequence = Snapshot['sequence'];
@@ -149,4 +150,3 @@ export const panelSectionIds = [
 export type PanelSectionId = (typeof panelSectionIds)[number];
 
 /* ObjectDraftKey, WireDraftKey, DefinitionDraftKey: string brands added in B6a. */
-/* GestureId: a Canvas brand, re-exported here from B5. */

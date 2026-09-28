@@ -3,31 +3,36 @@
  * become one `keyboard` event for the focused diagram item. Not pure: it reads the session and
  * stops the browser default for those keys. The host drains effects and owns recovery.
  */
+import type { KeyboardEvent } from 'react';
 import type { KeyboardCommand, KeyboardContext } from '../../contract/interaction-parts.js';
+import type { BrowserInput } from '../../contract/react-types.js';
 import type { Target } from '../../contract/records/selection.js';
 import type { SessionState } from '../../contract/records/state.js';
+
+/** The keys the canvas handles; every other key stays with the browser. */
+const canvasKeys: ReadonlySet<string> = new Set([
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowUp',
+  'ArrowDown',
+  'Enter',
+  'Delete',
+  'Backspace',
+  'Escape',
+]);
 
 /** Canvas handles only its documented key vocabulary; global browser and text-editor shortcuts remain native. */
 export function createKeyboardCommands(context: KeyboardContext): KeyboardCommand {
   const { owners, dispatch } = context;
   return function keyboard(event) {
-    if (event.defaultPrevented || owners.input.ownsNativeInput(event.target)) return;
-    const handled = [
-      'ArrowLeft',
-      'ArrowRight',
-      'ArrowUp',
-      'ArrowDown',
-      'Enter',
-      'Delete',
-      'Backspace',
-      'Escape',
-    ].includes(event.key);
-    if (!handled) return;
+    if (!handlesKey(event, owners.input)) return;
+    const gestureId = owners.nextGestureId();
+    if (!gestureId.ok) return;
     event.preventDefault();
     focusKeyboardTarget(context, event.target);
     dispatch({
       kind: 'keyboard',
-      id: owners.nextGestureId(),
+      id: gestureId.value,
       key: event.key,
       alt: event.altKey,
       shift: event.shiftKey,
@@ -35,6 +40,15 @@ export function createKeyboardCommands(context: KeyboardContext): KeyboardComman
       modal: false,
     });
   };
+}
+
+/** True for a canvas key that no earlier handler took and that was not typed into a native control. */
+function handlesKey(
+  event: KeyboardEvent<HTMLDivElement>,
+  input: Pick<BrowserInput, 'ownsNativeInput'>,
+): boolean {
+  if (event.defaultPrevented || input.ownsNativeInput(event.target)) return false;
+  return canvasKeys.has(event.key);
 }
 
 /** Keyboard commands follow the focused diagram item; an already-selected item preserves its multi-selection. */

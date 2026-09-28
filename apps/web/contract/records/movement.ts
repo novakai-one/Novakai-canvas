@@ -7,7 +7,7 @@ import type {
   Target,
 } from './owners.js';
 import type { Result } from '../errors.js';
-import type { CollectionId } from '../brands.js';
+import type { CollectionId, GestureId } from '../brands.js';
 import type { GeometryPreview } from '@novakai/canvas-canvas';
 import type { Box } from '@novakai/canvas-layout';
 
@@ -37,7 +37,8 @@ export interface MoveOption {
 }
 
 export interface MoveReview {
-  readonly id: string;
+  /** The move gesture under review. */
+  readonly id: GestureId;
   readonly intent: PlacementIntent;
   readonly stamp: SceneStamp;
   readonly collectionId: CollectionId;

@@ -18,6 +18,7 @@ import type { ActiveDiagram } from '../../contract/records/active-diagram.js';
 import type { WorkspaceScope } from '../../contract/records/workspace-scope.js';
 import type {
   CollectionId,
+  GestureId,
   RequestId,
   SectionId,
   TransportGeneration,
@@ -193,7 +194,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     ...source.getSnapshot(),
   };
   const listeners = new Set<() => void>();
-  const confirmedGestures = new Set<string>();
+  const confirmedGestures = new Set<GestureId>();
   let unsubscribe = (): void => undefined;
   let rendering: RenderRequest | null = null;
   let requestToken = 0;
@@ -796,8 +797,8 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     rejectMovementPreview(intent.id);
     return { ok: false, error: preview.error };
   }
-  function rejectMovementPreview(intentId: string): void {
-    const held = heldFor(movementSlot, intentId);
+  function rejectMovementPreview(gesture: GestureId): void {
+    const held = heldFor(movementSlot, gesture);
     if (held === null) return;
     showMovement(inPhase(held, 'rejected'));
     updateMutationAvailability();
@@ -918,7 +919,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   }
   function rejectBlocked(
     request: Request,
-    gesture: string | null,
+    gesture: GestureId | null,
   ): Result<void> {
     const allowed = submissionAllowed(historyGate, state.pending, request);
     if (allowed.ok) return allowed;
@@ -931,7 +932,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     request: Request,
     generation: TransportGeneration,
     sourceEdit: number,
-    gesture: string | null,
+    gesture: GestureId | null,
   ): Promise<Result<Receipt>> {
     const allowed = rejectBlocked(request, gesture);
     if (!allowed.ok) return allowed;
@@ -951,7 +952,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   }
   function handleSubmitFailure(
     error: Diagnostic,
-    gesture: string | null,
+    gesture: GestureId | null,
   ): void {
     report(error);
     void refresh();
@@ -959,7 +960,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
   }
   function handleGestureFailure(
     error: Diagnostic,
-    gesture: string,
+    gesture: GestureId,
   ): void {
     const held = heldFor(movementSlot, gesture);
     const retained = requestForGesture(state.pending, gesture);
@@ -980,7 +981,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     showMovement(inPhase(held, 'uncertain'));
   }
   function rejectGesture(
-    gesture: string,
+    gesture: GestureId,
     message: string,
   ): void {
     state.active?.session.dispatch({ kind: 'reject', id: gesture, message });
@@ -1013,7 +1014,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     connectionCapture = null;
     update({ connection: null });
   }
-  function clearConfirmedMovement(gesture: string | null): void {
+  function clearConfirmedMovement(gesture: GestureId | null): void {
     if (heldFor(movementSlot, gesture) === null) return;
     showMovement(null);
     updateMutationAvailability();
@@ -1035,7 +1036,7 @@ export function createWorkspaceController(bindings: WorkspaceBindings): Workspac
     return Promise.resolve();
   }
   /** Canvas is notified only when the receipt belongs to a submitted gesture. */
-  function confirmGesture(gesture: string | null): void {
+  function confirmGesture(gesture: GestureId | null): void {
     if (gesture === null) return;
     confirmedGestures.add(gesture);
     if (state.active !== null) releaseConfirmed(state.active.session);

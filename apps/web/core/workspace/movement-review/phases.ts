@@ -8,6 +8,7 @@
  * to the scene, sends requests and publishes `shown`.
  */
 import type { Result } from '../../../contract/errors.js';
+import type { GestureId } from '../../../contract/brands.js';
 import type { MoveOption } from '../../../contract/records/movement.js';
 import type { SceneStamp } from '../../../contract/records/owners.js';
 import type { Submission } from '../../../contract/records/submission.js';
@@ -37,7 +38,7 @@ export function heldMovement(
 /** The held review when it belongs to this gesture; null otherwise. */
 export function heldFor(
   slot: MovementSlot,
-  gesture: string | null,
+  gesture: GestureId | null,
 ): MovementHeld | null {
   return slot?.capture.intent.id === gesture ? slot : null;
 }

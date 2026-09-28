@@ -4,6 +4,7 @@ import { useReactFlow } from '@xyflow/react';
 import type { RouteHandlesProps } from '../../contract/react-types.js';
 import type { Point } from '../../contract/records/camera.js';
 import type { AttachmentSide } from '../../contract/records/draft.js';
+import type { GestureId } from '../../contract/brands.js';
 import styles from './RouteHandles.module.css';
 /** Bends expose equivalent pointer/keyboard controls; typed events leave feasibility with Layout/Authoring. */
 export function RouteHandles({
@@ -13,14 +14,20 @@ export function RouteHandles({
   nudge,
 }: RouteHandlesProps): ReactElement | null {
   const flow = useReactFlow();
-  const active = useRef<string | null>(null);
+  const active = useRef<GestureId | null>(null);
   /** Begin a single route gesture; capture is on the handle so leaving its tiny visible dot does not lose the drag. */
   function start(event: PointerEvent<SVGCircleElement>): void {
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
-    const id = actions.nextId();
-    active.current = id;
-    actions.dispatch({ kind: 'begin', id, gesture: 'route', targets: [edge.target] });
+    const gestureId = actions.nextGestureId();
+    if (!gestureId.ok) return;
+    active.current = gestureId.value;
+    actions.dispatch({
+      kind: 'begin',
+      id: gestureId.value,
+      gesture: 'route',
+      targets: [edge.target],
+    });
   }
   /** Translate browser client coordinates into the section-local route coordinate system exactly once. */
   function move(
@@ -51,7 +58,7 @@ export function RouteHandles({
   }
   /** Coordinate editing preserves the current displayed sides until the explicit side controls choose otherwise. */
   function update(
-    id: string,
+    id: GestureId,
     points: readonly Point[],
     sourceSide: AttachmentSide = 'preserve',
     targetSide: AttachmentSide = 'preserve',
@@ -60,7 +67,9 @@ export function RouteHandles({
   }
   /** Keyboard/form changes use the same begin-update-finish route lifecycle as pointer edits. */
   function commit(points: readonly Point[]): void {
-    const id = actions.nextId();
+    const gestureId = actions.nextGestureId();
+    if (!gestureId.ok) return;
+    const id = gestureId.value;
     actions.dispatch({ kind: 'begin', id, gesture: 'route', targets: [edge.target] });
     update(id, points);
     actions.dispatch({ kind: 'finish', id });

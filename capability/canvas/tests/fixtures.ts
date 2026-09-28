@@ -12,8 +12,15 @@ import type {
   SessionState,
   Target,
   CanvasEvent,
+  GestureId,
   Transition,
 } from '../contract/index.js';
+/** A gesture event with its identity as plain text; the transition parses it into a `GestureId`. */
+type TextIdentity<E> = E extends { readonly id: GestureId }
+  ? Omit<E, 'id'> & { readonly id: string }
+  : E;
+/** A Canvas event as a test writes it. */
+export type FixtureEvent = TextIdentity<CanvasEvent>;
 /** Public outcome extraction fails at the calling oracle instead of manufacturing an accepted value. */
 export function value<T>(
   result: { readonly ok: true; readonly value: T } | { readonly ok: false },
@@ -190,7 +197,7 @@ export function harness(
 export function step(
   canvas: Canvas,
   state: SessionState,
-  event: CanvasEvent,
+  event: FixtureEvent,
 ): Transition {
   return value(canvas.transition(state, event));
 }

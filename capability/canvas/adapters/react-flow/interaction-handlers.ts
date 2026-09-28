@@ -16,8 +16,14 @@ import type { HoverPause, InteractionParts } from '../../contract/interaction-pa
 import type { Target } from '../../contract/records/selection.js';
 import type { CanvasEvent } from '../../contract/events.js';
 import type { SessionState } from '../../contract/records/state.js';
+import type { Endpoint } from '../../contract/records/intent.js';
 /** The React Flow change records selection reads. */
 type FlowChange = NodeChange<FlowNode> | EdgeChange<FlowEdge>;
+/** The two node endpoints one React Flow connection joins. */
+interface ConnectionEnds {
+  readonly source: Endpoint;
+  readonly target: Endpoint;
+}
 /** Translate React Flow events to public Canvas commands; drag, resize and keys come from `parts`. */
 export function createInteractions(
   parts: InteractionParts,
@@ -75,21 +81,12 @@ export function createInteractions(
   }
   /** Connect callbacks resolve endpoint data through the admitted index and never assume a scene-ID encoding. */
   function connect(connection: Connection): void {
-    const state = owners.session.getSnapshot();
-    const source = state.index.targets[connection.source]?.target;
-    const target = state.index.targets[connection.target]?.target;
-    if (source?.kind !== 'node' || target?.kind !== 'node') return;
-    const id = owners.nextGestureId();
-    dispatch({
-      kind: 'connect',
-      id,
-      endpoint: { section: source.section, node: source.id, member: connection.sourceHandle },
-    });
-    dispatch({
-      kind: 'connect',
-      id,
-      endpoint: { section: target.section, node: target.id, member: connection.targetHandle },
-    });
+    const ends = connectionEnds(owners.session.getSnapshot(), connection);
+    if (ends === null) return;
+    const gestureId = owners.nextGestureId();
+    if (!gestureId.ok) return;
+    dispatch({ kind: 'connect', id: gestureId.value, endpoint: ends.source });
+    dispatch({ kind: 'connect', id: gestureId.value, endpoint: ends.target });
   }
   const actions: ViewActions = {
     dispatch,
@@ -97,7 +94,7 @@ export function createInteractions(
     resize: geometry.resize,
     finishGeometry: geometry.finishGeometry,
     cancelGeometry: geometry.cancelGeometry,
-    nextId: owners.nextGestureId,
+    nextGestureId: owners.nextGestureId,
     readPreview: owners.session.readPreview,
     subscribePreview: owners.session.subscribePreview,
   };
@@ -144,6 +141,19 @@ export function createInteractions(
       onConnectStart: () => suppressHover('connect'),
       onConnectEnd: () => resumeHover('connect'),
     },
+  };
+}
+/** The node endpoints a connection joins, read from the admitted index; null unless both ends are nodes. */
+function connectionEnds(
+  state: SessionState,
+  connection: Connection,
+): ConnectionEnds | null {
+  const source = state.index.targets[connection.source]?.target;
+  const target = state.index.targets[connection.target]?.target;
+  if (source?.kind !== 'node' || target?.kind !== 'node') return null;
+  return {
+    source: { section: source.section, node: source.id, member: connection.sourceHandle },
+    target: { section: target.section, node: target.id, member: connection.targetHandle },
   };
 }
 /** True when both targets name the same diagram item; the geometry and keyboard parts compare with it. */

@@ -1,3 +1,4 @@
+import type { GestureId } from '../brands.js';
 import type { Target, WireTarget } from './selection.js';
 import type { Box, Point } from './camera.js';
 import type { SceneStamp, RoutedWire } from './scene.js';
@@ -8,7 +9,7 @@ export interface GeometryEntry {
 }
 export interface PlacementDraft {
   readonly kind: 'move' | 'resize';
-  readonly id: string;
+  readonly id: GestureId;
   readonly generation: number;
   readonly base: SceneStamp;
   readonly original: readonly GeometryEntry[];
@@ -24,7 +25,7 @@ export interface RouteGeometry {
 }
 export interface RouteDraft {
   readonly kind: 'route';
-  readonly id: string;
+  readonly id: GestureId;
   readonly generation: number;
   readonly base: SceneStamp;
   readonly target: WireTarget;

@@ -1,5 +1,5 @@
 import type { Request, Receipt, Snapshot, Collection } from './owners.js';
-import type { RequestId, TransportGeneration, WorkspaceId } from '../brands.js';
+import type { GestureId, RequestId, TransportGeneration, WorkspaceId } from '../brands.js';
 import type { Result, Diagnostic } from '../errors.js';
 import type { ServiceClient } from '../ports/client.js';
 import type { DraftRetention } from '../ports/draft-retention.js';
@@ -9,7 +9,7 @@ export interface Submission {
   readonly request: Request;
   readonly generation: TransportGeneration;
   readonly sourceEdit: number;
-  readonly gesture: string | null;
+  readonly gesture: GestureId | null;
   readonly state: 'sending' | 'uncertain' | 'retryable' | 'rejected';
 }
 /** The workspace an apply answer committed, checked by the same reader as a workspace read. */

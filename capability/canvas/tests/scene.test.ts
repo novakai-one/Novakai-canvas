@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createCanvas, createSession } from '../contract/index.js';
+import { createCanvas, createSession, gestureId } from '../contract/index.js';
 import { harness, scene, admission, step, begin, alpha } from './fixtures.js';
 describe('Canvas scene admission contract', () => {
   it('8 displayed A/requested C rejects B and retains a human draft on valid C arrival', () => {
@@ -139,7 +139,7 @@ describe('Canvas scene admission contract', () => {
     remove();
     store.dispatch({ kind: 'select', targets: [], mode: 'replace' });
     expect(calls).toBe(1);
-    store.writePointer({ id: 'pointer', target: alpha, start: { x: 20, y: 40 } });
+    store.writePointer({ id: gestureId.parse('pointer'), target: alpha, start: { x: 20, y: 40 } });
     expect(store.readPointer()?.id).toBe('pointer');
     store.writePointer(null);
     expect(store.readPointer()).toBeNull();

@@ -4,6 +4,7 @@
  * session sends, and the journal owns recovery.
  */
 import type { Submission } from '../../contract/records/submission.js';
+import type { GestureId } from '../../contract/brands.js';
 
 /**
  * The newest journal entry sent for `gesture`; undefined when the journal keeps none. The newest
@@ -11,7 +12,7 @@ import type { Submission } from '../../contract/records/submission.js';
  */
 export function requestForGesture(
   pending: readonly Submission[],
-  gesture: string,
+  gesture: GestureId,
 ): Submission | undefined {
   return pending.findLast((item) => item.gesture === gesture);
 }

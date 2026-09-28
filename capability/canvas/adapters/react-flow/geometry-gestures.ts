@@ -9,6 +9,13 @@ import type { Target } from '../../contract/records/selection.js';
 import type { Box, Point } from '../../contract/records/camera.js';
 import type { PointerGesture } from '../../contract/ports/session.js';
 import type { SessionState } from '../../contract/records/state.js';
+import type { GestureId } from '../../contract/brands.js';
+
+/** A previewable drag: its gesture and the index keys that move with it. */
+interface LiveMove {
+  readonly id: GestureId;
+  readonly keys: ReadonlySet<string>;
+}
 
 /**
  * Builds the drag and resize handlers. A drag of plain nodes publishes only a live offset; tree
@@ -18,7 +25,7 @@ import type { SessionState } from '../../contract/records/state.js';
 export function createGeometryGestures(context: GeometryContext): GeometryGestures {
   const { owners, dispatch, sameTarget, suppressHover, resumeHover } = context;
   /** Keys that move with the current drag; null means the full per-frame path. */
-  let moved: { readonly id: string; readonly keys: ReadonlySet<string> } | null = null;
+  let moved: LiveMove | null = null;
   /** Release applies the last live offset once, then the usual finish. */
   function flushPreview(active: PointerGesture): void {
     const preview = owners.session.readPreview();
@@ -32,8 +39,10 @@ export function createGeometryGestures(context: GeometryContext): GeometryGestur
     nodes: readonly FlowNode[],
   ): void {
     if (owners.input.ownsNativeInput(event.target)) return;
+    const gestureId = owners.nextGestureId();
+    if (!gestureId.ok) return;
+    const id = gestureId.value;
     suppressHover('drag');
-    const id = owners.nextGestureId();
     owners.session.writePointer({
       id,
       target: node.data.view.target,
@@ -41,17 +50,7 @@ export function createGeometryGestures(context: GeometryContext): GeometryGestur
     });
     const targets = nodes.map((item) => item.data.view.target);
     dispatch({ kind: 'begin', id, gesture: 'move', targets });
-    const state = owners.session.getSnapshot();
-    const live = previewable(state, targets);
-    moved = live
-      ? {
-          id,
-          keys: movedKeys(
-            state,
-            nodes.map((item) => item.id),
-          ),
-        }
-      : null;
+    moved = liveMove(owners.session.getSnapshot(), id, nodes);
   }
   /** Frame updates carry a total delta from drag start; reducers retain original geometry for recovery. */
   function moveDrag(
@@ -65,7 +64,7 @@ export function createGeometryGestures(context: GeometryContext): GeometryGestur
   }
   /** Previewable drags publish only the offset; others take the full per-frame path. */
   function livePreview(
-    id: string,
+    id: GestureId,
     delta: Point,
   ): void {
     if (moved?.id === id) {
@@ -99,9 +98,10 @@ export function createGeometryGestures(context: GeometryContext): GeometryGestur
   }
   /** Resize controls operate on one target and retain the same gesture identity through their lifecycle. */
   function beginResize(target: Target): void {
-    const id = owners.nextGestureId();
-    owners.session.writePointer({ id, target, start: { x: 0, y: 0 } });
-    dispatch({ kind: 'begin', id, gesture: 'resize', targets: [target] });
+    const gestureId = owners.nextGestureId();
+    if (!gestureId.ok) return;
+    owners.session.writePointer({ id: gestureId.value, target, start: { x: 0, y: 0 } });
+    dispatch({ kind: 'begin', id: gestureId.value, gesture: 'resize', targets: [target] });
   }
   /** React Flow resize coordinates are parent-relative; add the displayed parent's world origin once. */
   function resize(
@@ -143,6 +143,20 @@ function stillActive(
 ): active is PointerGesture {
   if (active === null) return false;
   return owners.session.getSnapshot().draft?.id === active.id;
+}
+/** The drag's live move when every dragged node is previewable; null means the full per-frame path. */
+function liveMove(
+  state: SessionState,
+  id: GestureId,
+  nodes: readonly FlowNode[],
+): LiveMove | null {
+  const targets = nodes.map((item) => item.data.view.target);
+  if (!previewable(state, targets)) return null;
+  const keys = movedKeys(
+    state,
+    nodes.map((item) => item.id),
+  );
+  return { id, keys };
 }
 /** Sequence and tree sections draw from node positions outside the node itself; they keep the full per-frame path. */
 function previewable(
