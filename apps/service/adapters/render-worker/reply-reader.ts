@@ -71,8 +71,8 @@ function readReply(
 
 /**
  * Presentation decodes the measurements and the projection (see `readProjection`); Layout then
- * admits the scene (see `admitScene`). Fails with the response refusal when an owner rejects any
- * of them.
+ * admits the scene against them (see `admitScene`). Fails with the response refusal when an owner
+ * rejects any of them.
  */
 function admitGeometry(
   reply: RenderReply,
@@ -82,17 +82,16 @@ function admitGeometry(
   if (!measurements.ok) return measurements;
   const projection = readProjection(reply.projection, job);
   if (!projection.ok) return projection;
-  const scene = admitScene(reply, measurements.value, job);
+  const scene = admitScene(reply, measurements.value, projection.value);
   return andThen(scene, (admitted) =>
     success({ projection: projection.value, measurements: measurements.value, scene: admitted }),
   );
 }
 
 /**
- * The reply's projection, decoded through Presentation from its JSON copy. Layout decodes the
- * projection from a JSON copy of its input too, so the document carries the same projection
- * Layout admits the scene against. Fails with the response refusal when the projection is not
- * JSON (see `jsonCopy`) or Presentation rejects it.
+ * The reply's projection, decoded through Presentation from its JSON copy: the same value Layout
+ * reads from its own JSON snapshot of the reply (see `decodedProjectionReader`). Fails with the
+ * response refusal when the projection is not JSON (see `jsonCopy`) or Presentation rejects it.
  */
 function readProjection(
   input: unknown,
@@ -133,14 +132,14 @@ function assembleDocument(
 }
 
 /**
- * Layout's admission of the reply's scene against the known engine versions, reading the
- * projection and headings through `projectionReader`. Fails with the response refusal when Layout
- * rejects it.
+ * Layout's admission of the reply's scene against the known engine versions and the decoded
+ * projection (see `decodedProjectionReader`). Fails with the response refusal when Layout rejects
+ * it.
  */
 function admitScene(
   reply: RenderReply,
   measurements: RenderDocument['measurements'],
-  job: RenderingJob,
+  projection: RenderDocument['projection'],
 ): Result<Scene> {
   const candidate = {
     projection: reply.projection,
@@ -148,15 +147,21 @@ function admitScene(
     options: reply.options,
     candidate: reply.scene,
   };
-  const owners = { engineVersions: defaultEngineVersions, projection: projectionReader(job) };
+  const owners = {
+    engineVersions: defaultEngineVersions,
+    projection: decodedProjectionReader(projection),
+  };
   return fromOwner(readScene(candidate, owners));
 }
 
-/** Layout's projection reader for a reply: Presentation decodes against the job's collection. */
-function projectionReader(job: RenderingJob): ProjectionReader {
-  const domain = jobDomain(job);
+/**
+ * Layout's projection reader for a reply whose projection `readProjection` already decoded.
+ * Layout's input is a JSON snapshot of that same `reply.projection`, so `read` answers with the
+ * decoded projection instead of decoding it again. Headings are decoded by Presentation.
+ */
+function decodedProjectionReader(projection: RenderDocument['projection']): ProjectionReader {
   return {
-    read: (input) => translated(readMeasuredProjection(input, job.collection, domain)),
+    read: () => ({ ok: true, value: projection }),
     content: (input) => translated(readMeasuredContent(input)),
   };
 }

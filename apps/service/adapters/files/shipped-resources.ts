@@ -30,8 +30,8 @@ type ShippedRecipe = BuiltinSources['recipes'][number];
 interface ShippedManifest {
   /** The file of each font role, under `fonts/`. */
   readonly fonts: Readonly<Record<keyof BuiltinFonts, string>>;
-  /** The recipe families, in catalog order; each one is `recipes/<family>.canvas`. */
-  readonly recipes: readonly RecipePayload['family'][];
+  /** The starter file of each recipe family, under `recipes/`, in catalog order. */
+  readonly recipes: Readonly<Record<RecipePayload['family'], string>>;
 }
 
 /**
@@ -44,7 +44,14 @@ const SHIPPED_MANIFEST: ShippedManifest = Object.freeze({
     mono: 'jetbrains-mono-latin-400-normal.woff2',
     strong: 'inter-tight-latin-700-normal.woff2',
   }),
-  recipes: Object.freeze(['er', 'modules', 'sop', 'mindmap', 'sequence', 'infographic'] as const),
+  recipes: Object.freeze({
+    er: 'er.canvas',
+    modules: 'modules.canvas',
+    sop: 'sop.canvas',
+    mindmap: 'mindmap.canvas',
+    sequence: 'sequence.canvas',
+    infographic: 'infographic.canvas',
+  }),
 });
 
 /** The font roles in `BuiltinSources.fonts` wire order: body, mono, strong. */
@@ -161,30 +168,39 @@ function readStagedFont(
 }
 
 /** The Design System token sources. Fails with the builtins failure when it cannot read them. */
-async function readTokenSources(tokens: TokenSourceReader): Promise<Result<unknown>> {
+async function readTokenSources(
+  tokens: TokenSourceReader,
+): Promise<Result<BuiltinSources['tokens']>> {
   return fromOwner(await tokens.source.read());
 }
 
 /**
- * Every shipped recipe starter, read together, in catalog order. Fails as `readRecipe` fails (the
- * first failure in catalog order).
+ * Every shipped recipe starter, read together, in catalog order (the manifest's key order). Fails
+ * as `readRecipe` fails (the first failure in catalog order).
  */
 async function readRecipes(root: HostPath): Promise<Result<readonly ShippedRecipe[]>> {
-  const recipes = await Promise.all(
-    SHIPPED_MANIFEST.recipes.map((family) => readRecipe(root, family)),
-  );
+  const families = Object.keys(SHIPPED_MANIFEST.recipes).filter(isRecipeFamily);
+  const recipes = await Promise.all(families.map((family) => readRecipe(root, family)));
   return collect(recipes, (recipe) => recipe);
 }
 
 /**
- * The family's starter, `recipes/<family>.canvas`, as UTF-8 text. Fails with the builtins failure
- * when the file cannot be read.
+ * Whether the manifest key is a recipe family. Every key is one; this only narrows the strings
+ * `Object.keys` returns.
+ */
+function isRecipeFamily(key: string): key is RecipePayload['family'] {
+  return Object.hasOwn(SHIPPED_MANIFEST.recipes, key);
+}
+
+/**
+ * The family's starter file (see `SHIPPED_MANIFEST`) as UTF-8 text. Fails with the builtins
+ * failure when the file cannot be read.
  */
 async function readRecipe(
   root: HostPath,
   family: RecipePayload['family'],
 ): Promise<Result<ShippedRecipe>> {
-  const bytes = await readShippedFile(join(root, 'recipes', `${family}.canvas`));
+  const bytes = await readShippedFile(join(root, 'recipes', SHIPPED_MANIFEST.recipes[family]));
   return andThen(bytes, (source) => success({ family, source: source.toString('utf8') }));
 }
 
