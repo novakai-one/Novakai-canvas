@@ -17,7 +17,7 @@ import { andThen } from '../../../contract/errors.js';
 import { presetResources } from '../../presets/resources.js';
 import {
   assetRecordId,
-  liveRecords,
+  listLiveRecords,
   METADATA_RECORD_ID,
   presetRecordId,
 } from '../../workspace/records.js';
@@ -137,7 +137,7 @@ function checkAssets(
   snapshot: Snapshot,
   owners: CatalogCheckOwners,
 ): AuthoringResult<void> {
-  return allPassed(liveRecords(snapshot, 'asset-admission'), (record) =>
+  return allPassed(listLiveRecords(snapshot, 'asset-admission'), (record) =>
     checkAsset(record, owners),
   );
 }

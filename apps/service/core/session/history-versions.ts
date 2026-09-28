@@ -1,6 +1,12 @@
 /*
- * Strips history contents from a snapshot, keeping navigation. Pure. Used by apply's post-commit
- * read and by the workspace route's `?history=versions`.
+ * Why this file exists
+ *
+ * Authoring keeps each undo step as a `history` record, and those records grow with every edit.
+ * The browser only needs each record's version, to see that something changed. For example,
+ * `GET /api/v1/workspace?history=versions` answers every history record with its contents `null`.
+ *
+ * This file strips those contents from a snapshot. It keeps the `navigation` record whole, because
+ * that one says where undo and redo stand. It never changes what is stored.
  */
 import type { Snapshot, StoredRecord } from '../../contract/records/capability-types.js';
 
@@ -8,10 +14,10 @@ import type { Snapshot, StoredRecord } from '../../contract/records/capability-t
 const NAVIGATION_HISTORY_ID = 'navigation';
 
 /**
- * The snapshot with every history record's contents set to `null`, except navigation. The browser
- * needs history versions, not history contents (which grow with every edit). Never fails.
+ * Answers the snapshot with every history record's contents set to `null`, except `navigation`.
+ * Versions stay as they are. Never fails.
  */
-export function historyVersionsOnly(snapshot: Snapshot): Snapshot {
+export function stripHistoryContents(snapshot: Snapshot): Snapshot {
   return { ...snapshot, records: snapshot.records.map(versionOnly) };
 }
 

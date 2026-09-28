@@ -1,8 +1,13 @@
 /*
- * The workspace session facade: every read, mutation, render, inspection and export runs inside
- * the session lifetime, and it owns the answers a closing or closed session gives. Pure over the
- * injected owners; compose opens them before wiring and grants no other commit path. HTTP owns
- * authentication and caller identity; the caller reconnects and retries after a closed answer.
+ * Why this file exists
+ *
+ * The routes need one object for everything they ask of the open workspace: read it, save a change,
+ * render, export. Shutdown must refuse new calls but not cut off a call that is still running. For
+ * example, `GET /api/v1/render?id=my-diagram` becomes `session.render('my-diagram', signal)`; once
+ * the server is closing, it answers "Workspace is closing or closed" instead of starting.
+ *
+ * This file builds that `WorkspaceSession` from parts compose has already opened. Every call runs
+ * through the session's lifetime (lifetime.ts). It never opens files or checks who is calling.
  */
 import type { WorkspaceSession } from '../../contract/types.js';
 import type { Authoring, AuthoringResult } from '../../contract/records/capability-types.js';
@@ -19,66 +24,75 @@ import { inspectCollection } from '../rendering/inspection.js';
 import type { SessionLifetime } from './lifetime.js';
 import { commitThenRead } from './applied-commit.js';
 
-/** Lifecycles are already open when wiring this facade; construction starts no I/O and grants no alternative commit path. */
-export interface SessionOwners {
+/** The already-open parts the session is built from. Building the session starts no I/O. */
+export interface SessionDependencies {
+  /** The workspace's ID. */
   readonly workspace: WorkspaceId;
+  /** The shipped fonts, design tokens and built-in presets, handed on as they are. */
   readonly builtins: PreparedBuiltins;
+  /** The commands behind `/api/v1/resources/…`, handed on as they are. */
   readonly resources: ResourceCommands;
+  /** Checks a snapshot's collections, catalog and presets; render and inspect use it. */
   readonly views: WorkspaceReader;
+  /** Renders one checked collection. */
   readonly renderer: CollectionRenderer;
-  readonly exporter: Exporter['exportFile'];
+  /** Makes one export file (see `Exporter`). */
+  readonly exportFile: Exporter['exportFile'];
+  /** Where saved changes are announced. */
   readonly changes: Pick<ChangeChannel, 'subscribe'>;
+  /** Runs calls only while the session is open, and closes the workspace once (lifetime.ts). */
   readonly lifetime: SessionLifetime;
+  /** The signal reads run under; compose passes one that never aborts. */
   readonly readSignal: AbortSignal;
+  /** Makes Authoring for one call; that call stops when `signal` aborts. */
   authoring(signal: AbortSignal): Authoring;
 }
 
 /**
- * Binds one open workspace to its read, mutation, render, inspection and export calls, each run
- * inside the session lifetime. Once the session is closing or closed:
- * - `read`, `history`, `prepare`, `apply`, `receipt` answer `storage-unavailable` at `session`
- *   (`closedAuthoring`).
- * - `render`, `inspect` answer `unavailable` at `session` (`closedSession`).
- * - `exportFile` answers `unavailable` at `session`, reconnect and retry (`closedExport`).
- * While open, every failure passes through unchanged from Authoring, rendering and export.
- * `close` answers the owners' close failure, or `unavailable` (path `shutdown`) when their close throws.
+ * Builds the session of one open workspace. Each call runs only while the session is open.
+ * Once it is closing, the calls Authoring answers (`read`, `apply`, …) give `storage-unavailable`,
+ * and `render`, `inspect` and `exportFile` give `unavailable`. Otherwise failures pass through.
  */
-export function createWorkspaceSession(owners: SessionOwners): WorkspaceSession {
-  const lifetime = owners.lifetime;
+export function createWorkspaceSession(dependencies: SessionDependencies): WorkspaceSession {
+  const lifetime = dependencies.lifetime;
   return {
-    workspace: owners.workspace,
-    builtins: owners.builtins,
-    resources: owners.resources,
+    workspace: dependencies.workspace,
+    builtins: dependencies.builtins,
+    resources: dependencies.resources,
     history: () =>
       lifetime.run(
-        () => owners.authoring(owners.readSignal).history(owners.workspace),
+        () => dependencies.authoring(dependencies.readSignal).history(dependencies.workspace),
         closedAuthoring,
       ),
     read: () =>
       lifetime.run(
-        () => owners.authoring(owners.readSignal).read(owners.workspace),
+        () => dependencies.authoring(dependencies.readSignal).read(dependencies.workspace),
         closedAuthoring,
       ),
     prepare: (request, signal, mode) =>
       lifetime.run(
-        () => owners.authoring(signal).prepare(request, PREVIEW_FLAG[mode]),
+        () => dependencies.authoring(signal).prepare(request, PREVIEW_FLAG[mode]),
         closedAuthoring,
       ),
     apply: (request, signal, options) =>
       lifetime.run(
-        () => commitThenRead(owners.authoring(signal), owners.workspace, request, options),
+        () =>
+          commitThenRead(dependencies.authoring(signal), dependencies.workspace, request, options),
         closedAuthoring,
       ),
     receipt: (request) =>
       lifetime.run(
-        () => owners.authoring(owners.readSignal).receipt(owners.workspace, request),
+        () =>
+          dependencies.authoring(dependencies.readSignal).receipt(dependencies.workspace, request),
         closedAuthoring,
       ),
-    render: (id, signal) => lifetime.run(() => renderCollection(id, signal, owners), closedSession),
+    render: (id, signal) =>
+      lifetime.run(() => renderCollection(id, signal, dependencies), closedSession),
     inspect: (id, signal) =>
-      lifetime.run(() => inspectCollection(id, signal, owners), closedSession),
-    exportFile: (input, signal) => lifetime.run(() => owners.exporter(input, signal), closedExport),
-    subscribe: (listener) => owners.changes.subscribe(listener),
+      lifetime.run(() => inspectCollection(id, signal, dependencies), closedSession),
+    exportFile: (input, signal) =>
+      lifetime.run(() => dependencies.exportFile(input, signal), closedExport),
+    subscribe: (listener) => dependencies.changes.subscribe(listener),
     close: () => lifetime.close(),
   };
 }

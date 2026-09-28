@@ -15,7 +15,7 @@ import type { WorkspaceReader } from '../../../contract/ports/workspace.js';
 import { libraryCommand } from '../../../contract/records/planning/commands.js';
 import { plannerId } from '../../../contract/schemas.js';
 import { authoringFailure } from '../../../contract/errors.js';
-import { liveRecords } from '../../workspace/records.js';
+import { listLiveRecords } from '../../workspace/records.js';
 import { changePayload, checkedProposal, ownerRejected } from './change-payload.js';
 
 /** What the library planner uses; compose passes Library from ServiceCapabilities. */
@@ -86,7 +86,7 @@ function catalogProposal(
   organisation: unknown,
   snapshot: Snapshot,
 ): AuthoringResult<Proposal> {
-  const current = liveRecords(snapshot, 'catalog')[0];
+  const current = listLiveRecords(snapshot, 'catalog')[0];
   if (current === undefined)
     return authoringFailure('invariant-violation', 'catalog', 'A library catalog is required');
   return checkedProposal(

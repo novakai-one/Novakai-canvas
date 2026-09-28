@@ -15,7 +15,7 @@ import type { HttpOutcome } from '../../contract/records/transport/http-codes.js
 import type { Scope, Snapshot, StoredRecord } from '../../contract/records/capability-types.js';
 import type { WorkspaceSession } from '../../contract/types.js';
 import { failure, success } from '../../contract/errors.js';
-import { liveRecord } from '../workspace/records.js';
+import { findLiveRecord } from '../workspace/records.js';
 import type { SourcePrinter } from './source-printer.js';
 import { readSourceScope } from './source-scope.js';
 import { readLastValue } from './api-query.js';
@@ -82,5 +82,5 @@ function sourceRecord(
   id: string | undefined,
 ): StoredRecord | undefined {
   if (id === undefined) return undefined;
-  return liveRecord(snapshot, 'collection', id);
+  return findLiveRecord(snapshot, 'collection', id);
 }

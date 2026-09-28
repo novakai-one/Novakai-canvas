@@ -24,7 +24,7 @@ import type { ResourceCommands } from '../../../contract/ports/workspace.js';
 import { workspaceMetadata } from '../../../contract/records/workspace/metadata.js';
 import { plannerId } from '../../../contract/schemas.js';
 import { authoringFailure } from '../../../contract/errors.js';
-import { liveRecord, METADATA_RECORD_ID } from '../../workspace/records.js';
+import { findLiveRecord, METADATA_RECORD_ID } from '../../workspace/records.js';
 import { changePayload, checkedProposal } from './change-payload.js';
 
 /**
@@ -126,7 +126,7 @@ function compared(
 ): AuthoringResult<Proposal> {
   if (!sameContent(command, prepared))
     return authoringFailure('revision-conflict', 'preset', 'Prepared preset content changed');
-  if (liveRecord(snapshot, 'preset', prepared.key.id))
+  if (findLiveRecord(snapshot, 'preset', prepared.key.id))
     return presetProposal({
       reads: prepared.reads,
       writes: [],
@@ -191,7 +191,7 @@ function insertion(
   prepared: PresetPreparation,
   snapshot: Snapshot,
 ): AuthoringResult<Proposal> {
-  const metadata = liveRecord(snapshot, 'workspace', METADATA_RECORD_ID);
+  const metadata = findLiveRecord(snapshot, 'workspace', METADATA_RECORD_ID);
   if (!metadata)
     return authoringFailure('corrupt-record', 'metadata', 'Workspace metadata is missing');
   const parsed = workspaceMetadata.safeParse(metadata.value);

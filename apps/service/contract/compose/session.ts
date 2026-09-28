@@ -52,6 +52,6 @@ export function buildSession(
     readSignal: UNCANCELLED,
     authoring,
     renderer: shared.renderer,
-    exporter: exporter.exportFile,
+    exportFile: exporter.exportFile,
   });
 }

@@ -20,7 +20,7 @@ import {
   type BindingModel,
   type ThemeBinding,
 } from '../../presets/theme-binding.js';
-import { liveRecord } from '../../workspace/records.js';
+import { findLiveRecord } from '../../workspace/records.js';
 import type { Declared } from './intent.js';
 import type { Themes } from './themes.js';
 import { checkedDigest } from './digests.js';
@@ -113,7 +113,7 @@ function priorAssets(
   model: BindingModel,
 ): AuthoringResult<readonly AssetBinding[]> {
   if (id === null) return success([]);
-  const record = liveRecord(snapshot, 'collection', id);
+  const record = findLiveRecord(snapshot, 'collection', id);
   if (!record) return success([]);
   return andThen(fromOwner(model.validate(record.value)), (collection) =>
     success(collection.assets),

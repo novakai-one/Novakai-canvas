@@ -11,7 +11,7 @@ import type {
 } from '../../../contract/records/capability-types.js';
 import type { FailureSource } from '../../../contract/records/transport/failure-source.js';
 import { andThen, authoringFailure, collect, success } from '../../../contract/errors.js';
-import { liveRecord, type RecordKind } from '../../workspace/records.js';
+import { findLiveRecord, type RecordKind } from '../../workspace/records.js';
 
 /**
  * The refusal of a candidate that breaks an ownership invariant: `invariant-violation` at
@@ -42,7 +42,7 @@ export function requireRecord(
   kind: RecordKind,
   id: string,
 ): AuthoringResult<StoredRecord> {
-  const value = liveRecord(snapshot, kind, id);
+  const value = findLiveRecord(snapshot, kind, id);
   if (!value) return invariantBroken(`Missing canonical record ${kind}:${id}`);
   return success(value);
 }

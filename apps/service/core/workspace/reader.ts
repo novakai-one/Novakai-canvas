@@ -1,7 +1,14 @@
 /*
- * Reads one Authoring snapshot into checked workspace contents: Model checks every live collection,
- * Library checks the one catalog, Templates checks the stored presets. Pure over the injected
- * owners. On any rejection Authoring keeps its current snapshot; no partial contents are returned.
+ * Why this file exists
+ *
+ * Authoring stores a workspace as plain records. Before the service renders or searches them, each
+ * must be checked by the capability that owns it: collections by Model, the catalog by Library, the
+ * themes and recipes by Templates. For example, a stored collection that Model refuses stops the
+ * read with `invariant-violation` at that record's ID; it is never quietly skipped.
+ *
+ * This file runs those checks and answers the checked contents. Each check answers a `Result`
+ * (contract/errors.ts), and the first mistake stops the read. It never writes, and never answers
+ * half-checked contents.
  */
 import type {
   AuthoringResult,
@@ -17,21 +24,25 @@ import type { WorkspaceContents } from '../../contract/records/workspace/content
 import type { WorkspaceReader } from '../../contract/ports/workspace.js';
 import { authoringFailure, success } from '../../contract/errors.js';
 import { projectCollection } from './collection-projection.js';
-import { liveRecords } from './records.js';
+import { listLiveRecords } from './records.js';
 
-/** The capability checks the reader runs; compose passes them from ServiceCapabilities. */
-export interface WorkspaceReaderOwners {
+/** The capability checks the reader runs. Compose passes them in. */
+export interface WorkspaceReaderDependencies {
+  /** Model's check of one collection. */
   readonly model: Pick<ModelRules, 'validate'>;
+  /** Library's check of the catalog against the checked collections. */
   readonly library: Pick<LibraryRules, 'validateSnapshot'>;
+  /** Templates' check of the stored themes and recipes. */
   readonly templates: Pick<Templates<LoweredIntent>, 'readCatalog'>;
 }
 
 /**
- * Binds the workspace reader to its owners. `read` answers the checked contents or Authoring's
- * `invariant-violation` (see `read`); `project` is `projectCollection`. Starts no I/O.
+ * Builds the workspace reader (see `WorkspaceReader`). `read` answers the checked collections,
+ * catalog and presets, or `invariant-violation` for the first record a check refuses. `project`
+ * is `projectCollection`. Starts no I/O.
  */
-export function createWorkspaceReader(owners: WorkspaceReaderOwners): WorkspaceReader {
-  return { read: (snapshot) => read(snapshot, owners), project: projectCollection };
+export function createWorkspaceReader(dependencies: WorkspaceReaderDependencies): WorkspaceReader {
+  return { read: (snapshot) => read(snapshot, dependencies), project: projectCollection };
 }
 
 /**
@@ -43,15 +54,15 @@ export function createWorkspaceReader(owners: WorkspaceReaderOwners): WorkspaceR
  */
 function read(
   snapshot: Snapshot,
-  owners: WorkspaceReaderOwners,
+  dependencies: WorkspaceReaderDependencies,
 ): AuthoringResult<WorkspaceContents> {
-  const records = liveRecords(snapshot, 'collection');
+  const records = listLiveRecords(snapshot, 'collection');
   const collections = records.reduce<AuthoringResult<readonly Collection[]>>(
-    (checked, record) => collection(checked, record, owners.model),
+    (checked, record) => collection(checked, record, dependencies.model),
     success([]),
   );
   if (!collections.ok) return collections;
-  return complete(snapshot, collections.value, owners);
+  return complete(snapshot, collections.value, dependencies);
 }
 
 /**
@@ -61,7 +72,7 @@ function read(
 function collection(
   records: AuthoringResult<readonly Collection[]>,
   record: StoredRecord,
-  model: WorkspaceReaderOwners['model'],
+  model: WorkspaceReaderDependencies['model'],
 ): AuthoringResult<readonly Collection[]> {
   if (!records.ok) return records;
   return checkedCollection(records.value, record, model);
@@ -74,7 +85,7 @@ function collection(
 function checkedCollection(
   accepted: readonly Collection[],
   record: StoredRecord,
-  model: WorkspaceReaderOwners['model'],
+  model: WorkspaceReaderDependencies['model'],
 ): AuthoringResult<readonly Collection[]> {
   const checked = model.validate(record.value);
   if (!checked.ok)
@@ -95,16 +106,16 @@ function checkedCollection(
 function complete(
   snapshot: Snapshot,
   collections: readonly Collection[],
-  owners: WorkspaceReaderOwners,
+  dependencies: WorkspaceReaderDependencies,
 ): AuthoringResult<WorkspaceContents> {
-  const catalogs = liveRecords(snapshot, 'catalog');
+  const catalogs = listLiveRecords(snapshot, 'catalog');
   if (catalogs.length !== 1)
     return authoringFailure(
       'invariant-violation',
       'catalog',
       'Workspace requires exactly one catalog',
     );
-  return checkedLibrary(catalogs[0]?.value, snapshot, collections, owners);
+  return checkedLibrary(catalogs[0]?.value, snapshot, collections, dependencies);
 }
 
 /**
@@ -116,9 +127,9 @@ function checkedLibrary(
   catalog: unknown,
   snapshot: Snapshot,
   collections: readonly Collection[],
-  owners: WorkspaceReaderOwners,
+  dependencies: WorkspaceReaderDependencies,
 ): AuthoringResult<WorkspaceContents> {
-  const library = owners.library.validateSnapshot({
+  const library = dependencies.library.validateSnapshot({
     organisation: catalog,
     collections: collections.map(projectCollection),
     recent: [],
@@ -131,7 +142,7 @@ function checkedLibrary(
       [],
       library.error,
     );
-  return checkedPresets(snapshot, collections, library.value, owners.templates);
+  return checkedPresets(snapshot, collections, library.value, dependencies.templates);
 }
 
 /**
@@ -142,10 +153,10 @@ function checkedPresets(
   snapshot: Snapshot,
   collections: readonly Collection[],
   library: LibrarySnapshot,
-  templates: WorkspaceReaderOwners['templates'],
+  templates: WorkspaceReaderDependencies['templates'],
 ): AuthoringResult<WorkspaceContents> {
   const presets = templates.readCatalog(
-    liveRecords(snapshot, 'preset').map((record) => record.value),
+    listLiveRecords(snapshot, 'preset').map((record) => record.value),
   );
   if (!presets.ok)
     return authoringFailure(

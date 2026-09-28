@@ -1,7 +1,13 @@
 /*
- * Projects one Model collection into the input Library validates and searches: descriptions,
- * sections and where each object is visible. Pure and total; Library checks the result and owns
- * any rejection. Shared with apps/web through the public index.
+ * Why this file exists
+ *
+ * Library lists and searches collections, but it doesn't need a whole Model collection. It needs
+ * a short summary: titles, text, and which sections show each object. For example, an object `api`
+ * with the text "Handles requests", shown in section `overview`, becomes
+ * `{ id: 'api', label: 'API', description: 'Handles requests', visibleIn: ['overview'] }`.
+ *
+ * This file makes that summary (Library calls it a `CollectionProjection`). The web app uses it
+ * too, through contract/index.ts. It never checks the summary; Library does.
  */
 import type {
   Collection,
@@ -18,9 +24,8 @@ type ModelSection = Collection['sections'][number];
 type ModelObject = Collection['objects'][number];
 
 /**
- * Builds the Library projection input for one collection: its identity, title and description
- * (empty text when it has none), each section's ID and title, and each object's projection (see
- * `projectObject`). Never fails.
+ * Turns one collection into the summary Library keeps for it. An object's description is its text
+ * blocks joined by newlines; a collection with no description gets empty text. Never fails.
  */
 export function projectCollection(collection: Collection): CollectionProjection {
   return {

@@ -1,20 +1,28 @@
 /*
- * The session's lifetime: admit work while open, then drain it and close the owners once. Pure
- * promise bookkeeping; the owners' close is injected by compose. A failed close is returned, and
- * the caller keeps the workspace.
+ * Why this file exists
+ *
+ * When the server stops, a save may still be running, and closing the database under it would
+ * break that save. For example, if `pnpm dev` gets Ctrl-C while `pnpm canvas apply` is saving, the
+ * save must finish before the workspace files close.
+ *
+ * This file keeps track of running calls. Once closing starts, new calls get the "closed" answer,
+ * running ones finish, and then the workspace closes, once. It never cancels a running call.
  */
 import { failure, type Result } from '../../contract/errors.js';
 
-/** Shutdown rejects new work, drains every admitted operation and closes owners only after physical settlement. */
+/** Runs calls only while the session is open, then closes the workspace once they finish. */
 export interface SessionLifetime {
-  /** Runs `operation` while open (rethrowing what it throws), or answers `unavailable()` once closing. */
+  /**
+   * Runs `operation` while the session is open and answers what it answers (a throw is passed on).
+   * Once closing has started, answers `closedAnswer()` instead.
+   */
   run<T>(
     operation: () => Promise<T>,
-    unavailable: () => T,
+    closedAnswer: () => T,
   ): Promise<T>;
   /**
-   * Drains admitted work, then closes the owners once; every call shares that answer. Passes the
-   * owners' close failure through; fails with `unavailable` at `shutdown` when closing throws.
+   * Stops new calls, waits for running ones, then closes the workspace once; calling it again gets
+   * the same answer. Fails with the close's own failure, or `unavailable` at `shutdown` if it throws.
    */
   close(): Promise<Result<void>>;
 }
@@ -29,21 +37,21 @@ type ClosingPhase = Extract<LifetimePhase, { readonly kind: 'closing' }>;
 const OPEN: LifetimePhase = Object.freeze({ kind: 'open' });
 
 /**
- * Tracks the session's admitted work. `run` answers the caller's `unavailable()` once closing has
- * begun. `close` drains admitted work, then closes the owners once; every later call gets the same
- * answer. The owners' own close failure is returned as-is; a thrown close is `unavailable` (path
- * `shutdown`).
+ * Makes the lifetime of one session. `closeWorkspace` runs once, after every running call has
+ * finished. Never fails.
  */
-export function createSessionLifetime(close: () => Promise<Result<void>>): SessionLifetime {
+export function createSessionLifetime(
+  closeWorkspace: () => Promise<Result<void>>,
+): SessionLifetime {
   const active = new Set<Promise<unknown>>();
   let phase = OPEN;
   return {
-    async run<T>(operation: () => Promise<T>, unavailable: () => T): Promise<T> {
-      if (phase.kind === 'closing') return unavailable();
+    async run<T>(operation: () => Promise<T>, closedAnswer: () => T): Promise<T> {
+      if (phase.kind === 'closing') return closedAnswer();
       return track(active, operation);
     },
     close(): Promise<Result<void>> {
-      const closing = closingPhase(phase, () => shutdown([...active], close));
+      const closing = closingPhase(phase, () => shutdown([...active], closeWorkspace));
       phase = closing;
       return closing.closed;
     },

@@ -20,7 +20,7 @@ import type { ModelRules } from '../../../contract/ports/capabilities.js';
 import type { ResourceSelection } from '../../../contract/records/planning/selection.js';
 import type { ResourceSelector } from '../../../contract/ports/workspace.js';
 import { andThen, success } from '../../../contract/errors.js';
-import { liveRecords } from '../../workspace/records.js';
+import { listLiveRecords } from '../../workspace/records.js';
 import { boundAssets } from './asset-bindings.js';
 import { collectionResources } from './collection-check.js';
 import { coverage, presetReads } from './coverage.js';
@@ -153,6 +153,6 @@ function storedPresets(
   owners: ResourceOwners,
 ): AuthoringResult<Catalog> {
   return fromOwner(
-    owners.templates.readCatalog(liveRecords(snapshot, 'preset').map((item) => item.value)),
+    owners.templates.readCatalog(listLiveRecords(snapshot, 'preset').map((item) => item.value)),
   );
 }

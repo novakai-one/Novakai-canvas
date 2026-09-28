@@ -20,7 +20,7 @@ import { presetHeader, type PresetHeader } from '../../../contract/records/plann
 import { requestSchema } from '../../../contract/schemas.js';
 import { EMPTY_RESOURCES } from '../../../contract/ports/capabilities.js';
 import { CLI_CALLER } from '../../../contract/records/transport/http.js';
-import { liveRecords } from '../../workspace/records.js';
+import { listLiveRecords } from '../../workspace/records.js';
 import { success } from '../../../contract/errors.js';
 import { invalidPreparation } from './refusal.js';
 
@@ -39,7 +39,7 @@ export function storedCatalog(
   owners: CatalogOwners,
 ): ResourceResult<Catalog> {
   const templates = unboundTemplates(owners);
-  const records = liveRecords(snapshot, 'preset').map((item) => item.value);
+  const records = listLiveRecords(snapshot, 'preset').map((item) => item.value);
   return templates.readCatalog(records);
 }
 

@@ -17,7 +17,7 @@ import { success } from '../../contract/errors.js';
 import type { CollectionId } from '../../contract/brands.js';
 import { collectionId } from '../../contract/schemas.js';
 import { missingCollection } from '../rendering/collection.js';
-import { historyVersionsOnly } from '../session/history-versions.js';
+import { stripHistoryContents } from '../session/history-versions.js';
 import { readJsonBody } from './json-body.js';
 import { readLastValue } from './api-query.js';
 import { answerFile, answerJson, jsonRoute, type RouteHandler } from './route-answer.js';
@@ -86,7 +86,7 @@ async function workspace(
   if (!read.ok) return read;
   const versionsOnly = readLastValue(call.query, 'history') === 'versions';
   if (!versionsOnly) return read;
-  return success(historyVersionsOnly(read.value));
+  return success(stripHistoryContents(read.value));
 }
 
 /**
