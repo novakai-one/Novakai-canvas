@@ -3,7 +3,8 @@
  * route's Markdown text from Export's formatter. Pure over the injected capabilities; compose
  * passes Model, Language and Export's rules from ServiceCapabilities. Every returned failure is an
  * Export refusal; the export route releases its lease and the caller owns the retry. A throw from
- * Language or the formatter is not caught; the HTTP server's `receive` answers it `unavailable`.
+ * Language or the formatter is not caught here; the caller answers it `encoding-failed` (text.ts
+ * for DSL and Markdown, Export for its documents port).
  */
 import type {
   Collection,
