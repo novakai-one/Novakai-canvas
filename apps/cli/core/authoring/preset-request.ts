@@ -52,7 +52,7 @@ export function buildPresetRequest(
   }
   const expected = listPresetPreconditions(metadata, draft.preparation.key, snapshot);
   const requestDraft = draftPresetRequest(draft, snapshot.workspace, expected);
-  return buildAuthoringRequest(requestDraft, unpreparedPresetFailure());
+  return buildAuthoringRequest(requestDraft, unusablePresetFailure());
 }
 
 /** Whether the record is the workspace metadata record. */
@@ -108,10 +108,10 @@ function missingMetadataFailure(): Result<never, LocalFailure> {
 }
 
 /**
- * Makes the mistake for a prepared preset that fails Authoring's check (`invalid-response`): the
+ * Makes the mistake for a prepared preset that Authoring's check refuses (`invalid-response`): the
  * service's answer was wrong, not the agent's input.
  */
-function unpreparedPresetFailure(): Result<never, LocalFailure> {
+function unusablePresetFailure(): Result<never, LocalFailure> {
   return failure({
     code: 'invalid-response',
     message: 'Prepared preset cannot form an Authoring request',

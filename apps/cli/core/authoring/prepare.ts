@@ -23,7 +23,7 @@ import type { SourceParser } from '../../contract/ports/source-parser.js';
 import type { AuthoringRequest, WorkspaceSnapshot } from '../../contract/records/foreign.js';
 import type { ServiceAnswer } from '../../contract/records/service-answers.js';
 import type { RetainedRequest } from '../../contract/records/retained-request.js';
-import type { CollectionRevision, ServiceGeneration } from '../../contract/brands.js';
+import type { CollectionRevision } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 
 /**
@@ -57,14 +57,14 @@ export async function prepareChangeRequest(
   if (!workspace.ok) {
     return workspace;
   }
-  return buildAndStage(command, source.value, workspace.value, dependencies);
+  return buildAndStageRequest(command, source.value, workspace.value, dependencies);
 }
 
 /**
  * Builds the request from the source text and the workspace as read, then stages the fonts and
  * images the source names.
  */
-async function buildAndStage(
+async function buildAndStageRequest(
   command: ChangeCommand,
   source: string,
   workspace: ServiceAnswer<WorkspaceSnapshot>,
@@ -79,8 +79,12 @@ async function buildAndStage(
   if (!request.ok) {
     return request;
   }
-  const unstaged = keepWithoutBackups(request.value, workspace.generation);
-  return prepareResources(command.file, parsed.value.resources, unstaged, dependencies);
+  const retained: RetainedRequest = {
+    generation: workspace.generation,
+    request: request.value,
+    backups: [],
+  };
+  return prepareResources(command.file, parsed.value.resources, retained, dependencies);
 }
 
 /**
@@ -136,12 +140,4 @@ function intentForMode(
     return { mode };
   }
   return { mode, revision };
-}
-
-/** Wraps the request as the journal keeps it: with the service's generation, no byte copies yet. */
-function keepWithoutBackups(
-  request: AuthoringRequest,
-  generation: ServiceGeneration,
-): RetainedRequest {
-  return { generation, request, backups: [] };
 }

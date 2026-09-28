@@ -77,7 +77,13 @@ export function buildChangeRequest(
   if (!version.ok) {
     return version;
   }
-  return buildWithCatalog(draft, snapshot, version.value);
+  const catalog = findLiveCatalog(snapshot);
+  if (!catalog.ok) {
+    return catalog;
+  }
+  const expected = listPreconditions(draft, version.value, catalog.value);
+  const requestDraft = draftChangeRequest(draft, snapshot.workspace, expected);
+  return buildAuthoringRequest(requestDraft, invalidInputFailure());
 }
 
 /** Finds the record stored under the collection's ID, even a deleted collection's. */
@@ -152,21 +158,15 @@ function matchRevision(
 }
 
 /**
- * Builds the checked request; every change needs the live catalog in the snapshot, though only
- * `create` expects it, so the new collection registers in the same transaction.
+ * Finds the workspace's live catalog record, which every change needs, even a `replace`.
+ * The mistake it can find: no catalog, or only a deleted one (`invalid-response`).
  */
-function buildWithCatalog(
-  draft: ChangeDraft,
-  snapshot: WorkspaceSnapshot,
-  version: ReadVersion['version'],
-): Result<AuthoringRequest> {
+function findLiveCatalog(snapshot: WorkspaceSnapshot): Result<StoredRecord> {
   const catalog = snapshot.records.find(isLiveCatalog);
   if (catalog === undefined) {
     return missingCatalogFailure();
   }
-  const expected = listPreconditions(draft, version, catalog);
-  const requestDraft = draftChangeRequest(draft, snapshot.workspace, expected);
-  return buildAuthoringRequest(requestDraft, invalidInputFailure());
+  return success(catalog);
 }
 
 /** Whether the record is the workspace's catalog, and not deleted. */
@@ -174,7 +174,10 @@ function isLiveCatalog(record: StoredRecord): boolean {
   return record.key.kind === 'catalog' && !record.deleted;
 }
 
-/** Lists the records the change expects: the collection, then the catalog too for `create`. */
+/**
+ * Lists each record the change expects at the version read: the collection, and for `create` the
+ * catalog too, so the new collection is registered in the same save.
+ */
 function listPreconditions(
   draft: ChangeDraft,
   version: ReadVersion['version'],

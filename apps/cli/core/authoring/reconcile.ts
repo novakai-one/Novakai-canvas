@@ -15,7 +15,7 @@ import type { ServiceReads } from '../../contract/ports/service-reads.js';
 import type { RequestJournal } from '../../contract/ports/request-journal.js';
 import type { JournalRecord, RetainedRequest } from '../../contract/records/retained-request.js';
 import type { ServiceAnswer, ReceiptLookup } from '../../contract/records/service-answers.js';
-import type { RequestId, ServiceGeneration } from '../../contract/brands.js';
+import type { RequestId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 
 /** The tools a retry uses: the request journal, the receipt read, and the tools sending uses. */
@@ -46,7 +46,8 @@ export async function replayRetainedRequest(
 }
 
 /**
- * Gives back the receipt when the kept request was already saved, and otherwise sends it again.
+ * Gives back the receipt when the kept request was already saved. Otherwise sends it again, under
+ * the running service's generation.
  */
 async function showReceiptOrResend(
   kept: JournalRecord,
@@ -57,14 +58,6 @@ async function showReceiptOrResend(
   if (lookup.kind === 'committed') {
     return formatReceipt(lookup.receipt, kept.request.request);
   }
-  const resent = keepUnderGeneration(kept, receiptAnswer.generation);
+  const resent: RetainedRequest = { ...kept, generation: receiptAnswer.generation };
   return submitRequest(resent, 'apply', dependencies);
-}
-
-/** Labels the kept request with the running service's generation, to send it again under. */
-function keepUnderGeneration(
-  kept: JournalRecord,
-  generation: ServiceGeneration,
-): RetainedRequest {
-  return { ...kept, generation };
 }

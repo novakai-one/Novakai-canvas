@@ -70,11 +70,11 @@ export async function stageResources(
   declarations: readonly ResourceRequest[],
   dependencies: StagingDependencies,
 ): Promise<Result<readonly StagedBackup[]>> {
-  const read = await readEachDeclaredResource(file, declarations, dependencies.reader);
-  if (!read.ok) {
-    return read;
+  const resources = await readEachDeclaredResource(file, declarations, dependencies.reader);
+  if (!resources.ok) {
+    return resources;
   }
-  return stageEachResource(read.value, dependencies);
+  return stageEachResource(resources.value, dependencies);
 }
 
 /**
@@ -147,8 +147,8 @@ async function stageEachResource(
   dependencies: StagingDependencies,
 ): Promise<Result<readonly StagedBackup[]>> {
   const stageCalls = resources.map((resource) => stageResource(resource, dependencies));
-  const staged = await Promise.all(stageCalls);
-  return combined(staged);
+  const stagings = await Promise.all(stageCalls);
+  return combined(stagings);
 }
 
 /** Stages one font or image: a pinned one is only copied back, local bytes are stored first. */
@@ -243,7 +243,10 @@ function unnamedResourceFailure(): Result<never, LocalFailure> {
   return failure({ code: 'invalid-response', message: 'A resource declaration has no alias' });
 }
 
-/** Makes the read mistake again, adding where the file was declared; all else is kept. */
+/**
+ * Gives back the read failure with the declaration's place added; its code, message and recovery
+ * are kept.
+ */
 function locatedReadFailure(
   readFailure: LocalFailure,
   place: SourceLocation,

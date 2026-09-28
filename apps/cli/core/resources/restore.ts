@@ -27,19 +27,22 @@ export async function restoreResources(
   backups: readonly ByteBackup[],
   dependencies: RestoreDependencies,
 ): Promise<Result<void>> {
-  const restores = await restoreEachBackup(backups, dependencies);
-  const restored = combined(restores);
+  const restored = await restoreEachBackup(backups, dependencies);
   if (!restored.ok) {
     return restored;
   }
   return success(undefined);
 }
 
-/** Asks the service to store every kept copy again, all at once, and gives back each answer. */
-function restoreEachBackup(
+/**
+ * Asks the service to store every kept copy again, all at once.
+ * Gives back the first failure, if there is one.
+ */
+async function restoreEachBackup(
   backups: readonly ByteBackup[],
   dependencies: RestoreDependencies,
-): Promise<readonly Result<void>[]> {
+): Promise<Result<readonly void[]>> {
   const restoreCalls = backups.map((backup) => dependencies.resources.restore(backup));
-  return Promise.all(restoreCalls);
+  const restores = await Promise.all(restoreCalls);
+  return combined(restores);
 }
