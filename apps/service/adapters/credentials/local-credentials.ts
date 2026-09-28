@@ -37,7 +37,8 @@ const MAX_CREDENTIAL_BYTES = 1024;
 
 /**
  * Makes this start's secrets for 127.0.0.1:`port`: the CLI's token (making its file on the first
- * start), a new browser session secret and a new `Generation` label.
+ * start), a new browser session secret, and a new start label (`Generation`), so a change sent
+ * before a restart is refused.
  * Fails with `unavailable` at `credential` when the token file can't be made, is a link or not a
  * plain file, is readable by others, or is malformed.
  */

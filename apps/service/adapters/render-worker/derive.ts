@@ -2,12 +2,13 @@
  * Why this file exists
  *
  * A render job holds a collection and everything needed to draw it: fonts, style, images and
- * layout options. Something has to turn that into a picture. For example, the job for
- * `my-diagram` becomes a scene with every node placed and every wire routed.
+ * layout options. For example, the job for `my-diagram` becomes a drawn document
+ * (`RenderDocument`): the collection with every node placed and every wire routed.
  *
  * This file does the drawing. Presentation measures the text and boxes, then Layout places the
- * nodes and routes the wires, from scratch each time. It runs on a render worker thread, and in
- * `pnpm render:png`. It never reads the workspace, and never saves anything.
+ * nodes and routes the wires, from scratch each time. Each step answers a `Result`
+ * (contract/errors.ts). It runs on a render worker thread and in `pnpm render:png`. It never reads
+ * the workspace, and never saves anything.
  */
 import type { FailureSource } from '../../contract/records/transport/failure-source.js';
 import { validate, fieldTypeDisplay, typeUseDisplay } from '@novakai/canvas-model';
@@ -39,10 +40,12 @@ interface MeasuredCollection {
 }
 
 /**
- * Draws the job's collection: Presentation measures it, then Layout places and routes it.
+ * Draws the job's collection and returns the drawn document. Presentation measures it, then Layout
+ * places and routes it.
  * Mistakes: `invalid-input` at `render` when Model, Presentation or Layout refuses the job, and
- * `unavailable` at `render` when measuring or layout crashes. An aborted `signal` would also give
- * `invalid-input`, but callers never abort it: the worker pool cancels a job by ending its thread.
+ * `unavailable` at `render` when measuring or layout crashes.
+ * `signal` is only there to fit the `DiagramProducer` port. Nothing aborts it: the worker pool
+ * cancels a job by ending its thread.
  */
 export async function produceDiagram(
   job: RenderingJob,
