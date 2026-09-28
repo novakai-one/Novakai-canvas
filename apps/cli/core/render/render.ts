@@ -35,7 +35,7 @@ const recovery =
   'Correct the named input or resource and rerun; stored collections were not changed.';
 
 /** What one open render runs with: the environment's ports, the file ports and resource reads. */
-interface Rules {
+interface JoinedPorts {
   readonly sources: RenderSources;
   readonly assets: RenderAssets;
   readonly themes: RenderThemes;
@@ -71,21 +71,21 @@ export async function renderCollection(
 ): Promise<Result<RenderReport, RenderFailure>> {
   const opened = await guarded(ports.open());
   if (!opened.ok) return rejected(opened.error);
-  const env = opened.value;
-  const rendered = await guarded(renderIn(request, openRules(env, ports)));
-  return closedAfter(rendered, await guarded(env.close()));
+  const environment = opened.value;
+  const rendered = await guarded(renderIn(request, joinPorts(environment, ports)));
+  return closedAfter(rendered, await guarded(environment.close()));
 }
 
 /** The open environment's ports joined with the render's file ports and resource reads. */
-function openRules(
-  env: RenderEnvironment,
+function joinPorts(
+  environment: RenderEnvironment,
   ports: RenderPorts,
-): Rules {
+): JoinedPorts {
   return {
-    sources: env.sources,
-    assets: env.assets,
-    themes: env.themes,
-    output: env.output,
+    sources: environment.sources,
+    assets: environment.assets,
+    themes: environment.themes,
+    output: environment.output,
     inputFiles: ports.inputFiles,
     raster: ports.raster,
     sectionFiles: ports.sectionFiles,
@@ -122,13 +122,13 @@ function rejected(source: RenderEvidence): Result<never, RenderFailure> {
  */
 async function renderIn(
   request: RenderRequest,
-  rules: Rules,
+  ports: JoinedPorts,
 ): Promise<Result<RenderReport, RenderEvidence>> {
-  const themes = await admitThemes(request, rules);
+  const themes = await admitThemes(request, ports);
   if (!themes.ok) return themes;
-  const collection = await chosenCollection(request.collection, themes.value, rules);
+  const collection = await chosenCollection(request.collection, themes.value, ports);
   if (!collection.ok) return collection;
-  return drawn(request, rules, { collection: collection.value, catalog: themes.value.catalog });
+  return drawn(request, ports, { collection: collection.value, catalog: themes.value.catalog });
 }
 
 /**
@@ -137,19 +137,19 @@ async function renderIn(
  */
 async function drawn(
   request: RenderRequest,
-  rules: Rules,
+  ports: JoinedPorts,
   drawing: Drawing,
 ): Promise<Result<RenderReport, RenderEvidence>> {
-  const document = await rules.output.produce(drawing.collection, drawing.catalog);
+  const document = await ports.output.produce(drawing.collection, drawing.catalog);
   if (!document.ok) return document;
   const snapshot = renderSnapshot(
     drawing.collection,
     document.value,
     drawing.catalog,
-    rules.assets,
+    ports.assets,
   );
   if (!snapshot.ok) return snapshot;
-  return exported(request, rules, {
+  return exported(request, ports, {
     ...drawing,
     document: document.value,
     snapshot: snapshot.value,
@@ -162,17 +162,17 @@ async function drawn(
  */
 async function exported(
   request: RenderRequest,
-  rules: Rules,
+  ports: JoinedPorts,
   produced: Produced,
 ): Promise<Result<RenderReport, RenderEvidence>> {
-  const exporter = await rules.output.exporter({
+  const exporter = await ports.output.exporter({
     document: produced.document,
     snapshot: produced.snapshot,
     pins: pinResources(produced.catalog, produced.snapshot.collection.assets),
     resources: resourceInspector(produced.snapshot.resources),
   });
   if (!exporter.ok) return exporter;
-  const files = await exportSections(request.format, rules, exporter.value, produced.document);
+  const files = await exportSections(request.format, ports, exporter.value, produced.document);
   return mapped(files, (written) =>
     renderReport(written, produced.collection, produced.document, produced.catalog),
   );

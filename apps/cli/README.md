@@ -57,6 +57,7 @@ Add a command: its member in `contract/records/command.ts` → its row in `table
 | `adapters/`                                             | Never `contract/api.ts`, `index.ts` or compose.                                                     | no                             |
 | `contract/` outside compose                             | Never `adapters/`.                                                                                  | yes                            |
 | `contract/records/`, `ports/`, `brands.ts`, `errors.ts` | Never `core/`, `adapters/`, `api.ts`, `index.ts` or compose.                                        | yes                            |
+| `contract/ports/`, `contract/records/`                  | `@novakai/*` types only via `records/foreign.ts`. Records may use `zod`. No other packages or Node. | no                             |
 | `contract/` except `api.ts`                             | Never `core/`.                                                                                      | no                             |
 | `cli/`                                                  | `contract/index.ts` and Node only.                                                                  | no                             |
 

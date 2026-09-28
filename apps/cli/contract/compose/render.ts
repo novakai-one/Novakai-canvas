@@ -97,8 +97,8 @@ async function environmentIn(
     store.assets,
   );
   if (!installation.ok) return installation;
-  const env = capabilities(service, store.assets, installation.value);
-  return success(environmentPort(env, { service, request, store }));
+  const environment = capabilities(service, store.assets, installation.value);
+  return success(environmentPort(environment, { service, request, store }));
 }
 
 /** A step that threw instead of returning its failure, as `provider-failed` with its evidence. */
@@ -133,46 +133,48 @@ function capabilities(
 }
 
 /**
- * The environment port over `env`, joined from the render adapters: sources, assets, themes and
- * output. Closing it closes the store. Cannot fail.
+ * The environment port over `environment`, joined from the render adapters: sources, assets,
+ * themes and output. Closing it closes the store. Cannot fail.
  */
 function environmentPort(
-  env: Environment,
+  environment: Environment,
   owners: PortOwners,
 ): RenderEnvironment {
   return {
-    sources: createRenderSources(env.language),
-    assets: createRenderAssets(env.assets),
+    sources: createRenderSources(environment.language),
+    assets: createRenderAssets(environment.assets),
     themes: createRenderThemes({
-      presets: env.installation.presets,
-      assets: env.assets,
-      templates: env.templates,
+      presets: environment.installation.presets,
+      assets: environment.assets,
+      templates: environment.templates,
       prepareTheme: owners.service.prepareTheme,
     }),
-    output: renderOutput(env, owners),
+    output: renderOutput(environment, owners),
     close: () => owners.store.close(),
   };
 }
 
 /** The output port: the service's drawing and Export, each from its own adapter. */
 function renderOutput(
-  env: Environment,
+  environment: Environment,
   owners: PortOwners,
 ): RenderOutput {
   return {
-    ...createProduction(serviceProduction(env, owners)),
-    ...createExporter(exportChoices(env, owners.request)),
+    ...createProduction(serviceProduction(environment, owners)),
+    ...createExporter(exportChoices(environment, owners.request)),
   };
 }
 
-/** The service's render jobs over `env`, with the layout engine's wasm below the repo root. */
+/**
+ * The service's render jobs over `environment`, with the layout engine's wasm below the repo root.
+ */
 function serviceProduction(
-  env: Environment,
+  environment: Environment,
   owners: PortOwners,
 ): Production {
   const jobs = owners.service.createRenderJobs({
-    ...env,
-    sources: env.installation.tokens,
+    ...environment,
+    sources: environment.installation.tokens,
     wasmResource: join(owners.request.root, 'resources/vendor/layout/libavoid.wasm'),
   });
   return { jobs, produceDiagram: owners.service.produceDiagram };
@@ -180,12 +182,12 @@ function serviceProduction(
 
 /** The request's format and label mode, and Export's documents port over Language. */
 function exportChoices(
-  env: Environment,
+  environment: Environment,
   request: RenderRequest,
 ): ExportChoices {
   return {
     format: request.format,
     labels: request.labels,
-    documentsFor: (pins) => exportDocuments(env.language, pins),
+    documentsFor: (pins) => exportDocuments(environment.language, pins),
   };
 }

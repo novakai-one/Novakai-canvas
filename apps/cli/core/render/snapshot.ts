@@ -20,7 +20,7 @@ import { assetOfPin } from '../resources/digests.js';
 import { combined, mapped } from '../shared/results.js';
 
 /** What the snapshot reads: the stored asset bytes and the base64 decoder. */
-export type SnapshotEnvironment = Pick<RenderAssets, 'resolve' | 'decodeBase64'>;
+export type SnapshotAssets = Pick<RenderAssets, 'resolve' | 'decodeBase64'>;
 
 /** One asset record the collection declares. */
 type CollectionAsset = Collection['assets'][number];
@@ -39,9 +39,9 @@ export function renderSnapshot(
   collection: Collection,
   document: RenderDocument,
   catalog: Catalog,
-  env: SnapshotEnvironment,
+  assets: SnapshotAssets,
 ): Result<ExportSnapshot, RenderEvidence> {
-  return mapped(retainedResources(document, catalog, collection, env), (resources) => ({
+  return mapped(retainedResources(document, catalog, collection, assets), (resources) => ({
     identity: {
       collectionId: collection.id,
       revision: collection.revision,
@@ -86,12 +86,12 @@ function retainedResources(
   document: RenderDocument,
   catalog: Catalog,
   collection: Collection,
-  env: SnapshotEnvironment,
+  assets: SnapshotAssets,
 ): Result<readonly Resource[], RenderEvidence> {
-  const assets = combined(collection.assets.map((asset) => assetResource(asset, env)));
-  return mapped(assets, (retained) => [
+  const assetResources = combined(collection.assets.map((asset) => assetResource(asset, assets)));
+  return mapped(assetResources, (retained) => [
     ...retained,
-    ...document.fonts.map((font) => fontResource(font, env)),
+    ...document.fonts.map((font) => fontResource(font, assets)),
     ...catalog.map(presetResource),
   ]);
 }
@@ -102,16 +102,16 @@ function retainedResources(
  */
 function assetResource(
   asset: CollectionAsset,
-  env: SnapshotEnvironment,
+  assets: SnapshotAssets,
 ): Result<Resource, RenderEvidence> {
   const digest = assetOfPin(asset.digest);
   if (digest === undefined)
     return faulted({ code: 'invalid-asset-pin', asset: asset.id, digest: asset.digest });
-  return mapped(env.resolve(digest), (blob) => ({
+  return mapped(assets.resolve(digest), (blob) => ({
     kind: 'asset',
     digest: blob.descriptor.digest,
     mediaType: blob.descriptor.mediaType,
-    bytes: env.decodeBase64(blob.base64),
+    bytes: assets.decodeBase64(blob.base64),
     metadata: { alt: asset.alt },
   }));
 }
@@ -119,13 +119,13 @@ function assetResource(
 /** One embedded font's bytes with its family. */
 function fontResource(
   font: DocumentFont,
-  env: SnapshotEnvironment,
+  assets: SnapshotAssets,
 ): Resource {
   return {
     kind: 'font',
     digest: font.digest,
     mediaType: font.mediaType,
-    bytes: env.decodeBase64(font.base64),
+    bytes: assets.decodeBase64(font.base64),
     metadata: { family: font.family },
   };
 }
