@@ -50,7 +50,7 @@ export interface PreparationDependencies {
     catalog: Catalog,
     fonts: readonly FontBinding[],
   ): ResourceResult<Json>;
-  /** Gives Templates set up with the themes and files one call picked. */
+  /** Makes a Templates that can use only the themes and files picked for this preset. */
   templates(
     resources: ResolvedResources,
   ): Pick<Templates<LoweredIntent>, 'readCatalog' | 'planAdmission' | 'read'>;

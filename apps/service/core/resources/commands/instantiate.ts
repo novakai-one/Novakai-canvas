@@ -3,7 +3,8 @@
  *
  * A recipe is a stored starter diagram. An agent types
  * `pnpm canvas recipe instantiate er@1.0.0#sha256:… --namespace demo` to get a copy of it as DSL
- * text, for a new collection called `demo`. The copy must use the recipe exactly as stored.
+ * text. `er@1.0.0#sha256:…` is the recipe's pin: its name, version and digest. `demo` names the new
+ * collection. The copy must use the recipe exactly as stored.
  *
  * This file finds the recipe, picks the themes and files it names, has Templates fill it in, and
  * has Language print it as DSL. Each step answers a `Result` (contract/errors.ts); the first
@@ -36,7 +37,7 @@ export interface InstantiateDependencies {
   readonly selector: Pick<ResourceSelector, 'select'>;
   /** Language's printer, which turns the filled-in collection into DSL text. */
   readonly language: Pick<Language, 'print'>;
-  /** Gives Templates set up with the themes and files one call picked. */
+  /** Makes a Templates that can use only the themes and files picked for this recipe. */
   templates(
     resources: ResolvedResources,
   ): Pick<Templates<LoweredIntent>, 'readCatalog' | 'read' | 'instantiate'>;

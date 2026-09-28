@@ -6,8 +6,9 @@
  * theme would store. Other commands store an uploaded font or image, read one back, restore one
  * from a backup, fix a DSL change's themes to exact versions, and turn a recipe into DSL text.
  *
- * This file builds those commands (`ResourceCommands`) from the parts compose passes in. Only
- * upload and restore write, and only file bytes. Authoring saves every change to the workspace.
+ * This file builds those commands (`ResourceCommands`) from the parts that
+ * `contract/compose/shared-parts.ts` passes in. Only upload and restore write, and only file bytes.
+ * Authoring saves every change to the workspace.
  */
 import type {
   Assets,
@@ -26,7 +27,7 @@ import { instantiateRecipe } from './instantiate.js';
 import { preparePreset } from './preparation.js';
 import { restoreFile } from './restore.js';
 
-/** The parts the resource commands work through. Compose passes them in. */
+/** The parts the resource commands work through. */
 export interface ResourceCommandDependencies {
   /** Picks the themes and files a request uses (selection/select.ts). */
   readonly selector: Pick<ResourceSelector, 'select'>;
@@ -43,7 +44,7 @@ export interface ResourceCommandDependencies {
     catalog: Catalog,
     fonts: readonly FontBinding[],
   ): ResourceResult<Json>;
-  /** Gives Templates set up with the themes and files one call picked. */
+  /** Makes a Templates that can use only the themes and files picked for this request. */
   templates(
     resources: ResolvedResources,
   ): Pick<Templates<LoweredIntent>, 'readCatalog' | 'planAdmission' | 'read' | 'instantiate'>;

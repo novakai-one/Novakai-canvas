@@ -31,7 +31,10 @@ import { invalidInputFailure } from './refusal.js';
 
 /** What reading the stored catalog needs. */
 export interface CatalogDependencies {
-  /** Gives Templates set up with the themes and files one call picked; reading picks none. */
+  /**
+   * Makes a Templates that can use only the themes and files picked for this request. Reading the
+   * catalog picks none (`templatesWithoutResources`).
+   */
   templates(resources: ResolvedResources): Pick<Templates<LoweredIntent>, 'readCatalog'>;
 }
 
@@ -65,8 +68,8 @@ export function buildSelectionRequest(
 }
 
 /**
- * Gives Templates set up with no themes or files, which is all reading the catalog needs. It comes
- * back typed as the caller's own dependencies declare it. Never fails.
+ * Makes a Templates that can use no themes or files, which is all reading the catalog needs. It
+ * comes back typed as the caller's own dependencies declare it. Never fails.
  */
 export function templatesWithoutResources<CallerTemplates>(dependencies: {
   templates(resources: ResolvedResources): CallerTemplates;

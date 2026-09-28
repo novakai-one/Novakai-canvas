@@ -40,6 +40,9 @@ export interface AssetBindingDependencies {
   readonly assets: Pick<Assets, 'resolve'>;
 }
 
+/** The files a change can use, keyed by the name its DSL gives them, such as `logo`. */
+export type AssetBindings = ResolvedResources['assets'];
+
 /** One supplied upload: an alias and the Assets digest of its bytes. */
 type Upload = Request['assets'][number];
 
@@ -55,10 +58,10 @@ interface BindingInputs {
 }
 
 /**
- * Binds each file the change supplies over its collection's earlier bindings, keyed by name. A
- * theme being saved binds none. Fails with `missing-asset` at `resources` when a capability
- * refuses, when no theme was picked, or when a file has neither an `asset` line nor an earlier
- * binding; `invalid-input` at `resources` when an `asset` line's `sha256:` digest is malformed.
+ * Answers the collection's file bindings with this change's files added. A new file replaces the
+ * earlier binding with the same name. A theme being saved binds none.
+ * Fails with `missing-asset` when no theme was picked, when a file has neither an `asset` line nor
+ * an earlier binding, or when a capability refuses; `invalid-input` for a bad `sha256:` digest.
  */
 export function bindAssets(
   request: Request,
@@ -66,7 +69,7 @@ export function bindAssets(
   snapshot: Snapshot,
   resolvedThemes: Themes,
   dependencies: AssetBindingDependencies,
-): AuthoringResult<ResolvedResources['assets']> {
+): AuthoringResult<AssetBindings> {
   if (declared.kind === 'theme-admission') return success({});
   const inputs = bindingInputs(request, declared, snapshot, dependencies);
   if (!inputs.ok) return inputs;
@@ -100,7 +103,7 @@ function bindSupplied(
   inputs: BindingInputs,
   resolvedThemes: Themes,
   dependencies: AssetBindingDependencies,
-): AuthoringResult<ResolvedResources['assets']> {
+): AuthoringResult<AssetBindings> {
   if (inputs.supplied.length === 0) return success(byId(inputs.previous));
   const theme = firstTheme(resolvedThemes);
   if (!theme.ok) return theme;
@@ -219,6 +222,6 @@ function optionalMetadata(metadata: ResourceRequest): Readonly<Record<string, st
 }
 
 /** Asset bindings keyed by id; a later binding replaces an earlier one with the same id. */
-function byId(bindings: readonly AssetBinding[]): ResolvedResources['assets'] {
+function byId(bindings: readonly AssetBinding[]): AssetBindings {
   return Object.fromEntries(bindings.map((item) => [item.id, item]));
 }
