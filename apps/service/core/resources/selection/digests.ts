@@ -21,7 +21,8 @@ import { unreadableRequestFailure } from './refusal.js';
 export function checkDigests(
   bareDigests: readonly string[],
 ): AuthoringResult<readonly AuthoringDigest[]> {
-  return collect([...new Set(bareDigests)].toSorted(), checkDigest);
+  const sortedDigests = sortEachOnce(bareDigests);
+  return collect(sortedDigests, checkDigest);
 }
 
 /**
@@ -30,6 +31,14 @@ export function checkDigests(
  */
 export function checkDigest(bareDigest: string): AuthoringResult<AuthoringDigest> {
   const digest = authoringDigest.safeParse(bareDigest);
-  if (!digest.success) return unreadableRequestFailure();
+  if (!digest.success) {
+    return unreadableRequestFailure();
+  }
   return success(digest.data);
+}
+
+/** Sorts the digests, keeping each one once. */
+function sortEachOnce(bareDigests: readonly string[]): readonly string[] {
+  const distinctDigests = new Set(bareDigests);
+  return [...distinctDigests].toSorted();
 }

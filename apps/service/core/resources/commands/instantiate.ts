@@ -22,12 +22,11 @@ import type {
 } from '../../../contract/records/capability-types.js';
 import type {
   InstantiateInput,
-  ResourceDiagnostic,
   ResourceResult,
 } from '../../../contract/records/presets/resource-commands.js';
 import { instantiateInput } from '../../../contract/records/presets/resource-commands.js';
 import type { ResourceSelector } from '../../../contract/ports/workspace.js';
-import { andThen, success } from '../../../contract/errors.js';
+import { success } from '../../../contract/errors.js';
 import { buildSelectionRequest, readStoredCatalog, templatesWithoutResources } from './catalog.js';
 import { invalidInputFailure, resourceFailure } from './refusal.js';
 
@@ -55,9 +54,14 @@ export function instantiateRecipe(
   dependencies: InstantiateDependencies,
 ): ResourceResult<string> {
   const found = findRecipe(input, snapshot, dependencies);
-  if (!found.ok) return found;
+  if (!found.ok) {
+    return found;
+  }
   const expanded = expandRecipe(found.value, snapshot, dependencies);
-  return andThen(expanded, (collection) => printedRecipe(collection, dependencies));
+  if (!expanded.ok) {
+    return expanded;
+  }
+  return printRecipe(expanded.value, dependencies);
 }
 
 /** A stored recipe preset. */
@@ -66,96 +70,129 @@ type RecipePreset = Extract<Preset, { readonly kind: 'recipe' }>;
 /** The collection a recipe expands to. */
 type ExpandedCollection = LoweredIntent['collection'];
 
-/** The decoded request, the stored catalog it reads and the recipe it pins. */
+/** The checked request, the stored catalog it reads and the recipe it pins. */
 interface FoundRecipe {
   readonly catalog: Catalog;
   readonly request: InstantiateInput;
   readonly recipe: RecipePreset;
 }
 
-/**
- * Reads the stored catalog, decodes the request, then reads the recipe it pins. Fails with the
- * Templates diagnostic, `invalid-input` at `resources` for a malformed request, or as
- * `storedRecipe` fails.
- */
+/** Reads the stored catalog, checks the request body, then finds the recipe it pins. */
 function findRecipe(
-  raw: unknown,
+  body: unknown,
   snapshot: Snapshot,
   dependencies: InstantiateDependencies,
 ): ResourceResult<FoundRecipe> {
   const catalog = readStoredCatalog(snapshot, dependencies);
-  if (!catalog.ok) return catalog;
-  const request = instantiateInput.safeParse(raw);
-  if (!request.success) return invalidInputFailure();
-  const recipe = storedRecipe(catalog.value, request.data.pin, dependencies);
-  return andThen(recipe, (found) =>
-    success({ catalog: catalog.value, request: request.data, recipe: found }),
-  );
+  if (!catalog.ok) {
+    return catalog;
+  }
+  const request = instantiateInput.safeParse(body);
+  if (!request.success) {
+    return invalidInputFailure();
+  }
+  return findPinnedRecipe(catalog.value, request.data, dependencies);
 }
 
-/**
- * The stored preset the pin names, which must be a recipe. Fails with the Templates diagnostic,
- * or `invalid-input` at `preset.kind` ("Only recipes can be instantiated") for any other preset.
- */
+/** Finds the recipe the request pins in the stored catalog, and keeps it with the request. */
+function findPinnedRecipe(
+  catalog: Catalog,
+  request: InstantiateInput,
+  dependencies: InstantiateDependencies,
+): ResourceResult<FoundRecipe> {
+  const recipe = storedRecipe(catalog, request.pin, dependencies);
+  if (!recipe.ok) {
+    return recipe;
+  }
+  return success({ catalog, request, recipe: recipe.value });
+}
+
+/** Reads the preset the pin names, refusing one that is a theme rather than a recipe. */
 function storedRecipe(
   catalog: Catalog,
   pin: unknown,
   dependencies: InstantiateDependencies,
 ): ResourceResult<RecipePreset> {
-  const preset = templatesWithoutResources(dependencies).read(catalog, pin);
-  if (!preset.ok) return preset;
-  if (preset.value.kind !== 'recipe') return resourceFailure(NOT_A_RECIPE);
+  const templates = templatesWithoutResources(dependencies);
+  const preset = templates.read(catalog, pin);
+  if (!preset.ok) {
+    return preset;
+  }
+  if (preset.value.kind !== 'recipe') {
+    return notARecipeFailure();
+  }
   return success(preset.value);
 }
 
-/** The refusal for a pin that names a theme. */
-const NOT_A_RECIPE: ResourceDiagnostic = Object.freeze({
-  code: 'invalid-input',
-  path: 'preset.kind',
-  message: 'Only recipes can be instantiated',
-  recovery: 'Select an immutable recipe pin and prepare again.',
-});
-
-/**
- * Selects the recipe source's resources, then expands the recipe with them. Fails with
- * `invalid-input` at `resources` when the selection envelope does not parse, and with the
- * selector's or Templates' diagnostic.
- */
+/** Picks the themes and files the recipe uses, then has Templates fill the recipe in with them. */
 function expandRecipe(
   found: FoundRecipe,
   snapshot: Snapshot,
   dependencies: InstantiateDependencies,
 ): ResourceResult<ExpandedCollection> {
-  const admission = { kind: 'recipe', source: found.recipe.payload.source };
-  const selection = buildSelectionRequest({ admission, assets: [] }, snapshot);
-  if (!selection.ok) return selection;
-  const selected = dependencies.selector.select(selection.value, snapshot);
-  if (!selected.ok) return selected;
-  const templates = dependencies.templates(selected.value.resources);
-  const expanded = templates.instantiate(found.catalog, found.request);
-  return andThen(expanded, (expansion) => success(expansion.intent.collection));
+  const resources = selectRecipeResources(found.recipe, snapshot, dependencies);
+  if (!resources.ok) {
+    return resources;
+  }
+  const templates = dependencies.templates(resources.value);
+  const expansion = templates.instantiate(found.catalog, found.request);
+  if (!expansion.ok) {
+    return expansion;
+  }
+  const collection = expansion.value.intent.collection;
+  return success(collection);
 }
 
-/**
- * The expanded collection printed as DSL source. Fails with `invalid-input` at `language`
- * ("Language could not print the prepared recipe", Language's diagnostics kept as source).
- */
-function printedRecipe(
+/** Asks the selector which themes and files the recipe's source uses. */
+function selectRecipeResources(
+  recipe: RecipePreset,
+  snapshot: Snapshot,
+  dependencies: InstantiateDependencies,
+): ResourceResult<ResolvedResources> {
+  const admission = { kind: 'recipe', source: recipe.payload.source };
+  const selection = buildSelectionRequest({ admission, assets: [] }, snapshot);
+  if (!selection.ok) {
+    return selection;
+  }
+  const selected = dependencies.selector.select(selection.value, snapshot);
+  if (!selected.ok) {
+    return selected;
+  }
+  return success(selected.value.resources);
+}
+
+/** Has Language print the whole filled-in collection as DSL text. */
+function printRecipe(
   collection: ExpandedCollection,
   dependencies: InstantiateDependencies,
 ): ResourceResult<string> {
   const printed = dependencies.language.print({ collection, scope: { kind: 'all' } });
-  if (!printed.ok) return resourceFailure(languageRefusal(printed.error));
+  if (!printed.ok) {
+    return unprintableRecipeFailure(printed.error);
+  }
   return success(printed.value.source);
 }
 
-/** Language's complete diagnostic batch survives resource preparation under its typed source. */
-function languageRefusal(source: LanguageError): ResourceDiagnostic {
-  return {
+/** Makes the mistake for a pin that names a theme: `invalid-input` at `preset.kind`. */
+function notARecipeFailure(): ResourceResult<never> {
+  return resourceFailure({
+    code: 'invalid-input',
+    path: 'preset.kind',
+    message: 'Only recipes can be instantiated',
+    recovery: 'Select an immutable recipe pin and prepare again.',
+  });
+}
+
+/**
+ * Makes the mistake for a recipe Language could not print: `invalid-input` at `language`, with all
+ * of Language's diagnostics kept as `source`.
+ */
+function unprintableRecipeFailure(source: LanguageError): ResourceResult<never> {
+  return resourceFailure({
     code: 'invalid-input',
     path: 'language',
     message: 'Language could not print the prepared recipe',
     recovery: 'Correct the named source diagnostics and prepare again.',
     source,
-  };
+  });
 }

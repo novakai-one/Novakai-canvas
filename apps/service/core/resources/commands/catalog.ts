@@ -11,6 +11,7 @@
  */
 import type {
   Catalog,
+  Json,
   LoweredIntent,
   Request,
   ResolvedResources,
@@ -47,8 +48,8 @@ export function readStoredCatalog(
   dependencies: CatalogDependencies,
 ): ResourceResult<Catalog> {
   const templates = templatesWithoutResources(dependencies);
-  const records = listLiveRecords(snapshot, 'preset').map((item) => item.value);
-  return templates.readCatalog(records);
+  const storedPresets = listStoredPresets(snapshot);
+  return templates.readCatalog(storedPresets);
 }
 
 /**
@@ -61,9 +62,14 @@ export function buildSelectionRequest(
   snapshot: Snapshot,
 ): ResourceResult<Request> {
   const header = presetHeader.safeParse(input.admission);
-  if (!header.success) return invalidInputFailure();
-  const request = requestSchema.safeParse(selectionEnvelope(input, header.data, snapshot));
-  if (!request.success) return invalidInputFailure();
+  if (!header.success) {
+    return invalidInputFailure();
+  }
+  const envelope = selectionEnvelope(input, header.data, snapshot);
+  const request = requestSchema.safeParse(envelope);
+  if (!request.success) {
+    return invalidInputFailure();
+  }
   return success(request.data);
 }
 
@@ -77,15 +83,20 @@ export function templatesWithoutResources<CallerTemplates>(dependencies: {
   return dependencies.templates(EMPTY_RESOURCES);
 }
 
-/**
- * The selection envelope before Authoring's request schema checks it: a preset change carrying the
- * admission and its recipe source (empty for a theme). Never fails.
- */
+/** Lists what each live preset record holds, in snapshot order, for Templates to check. */
+function listStoredPresets(snapshot: Snapshot): readonly Json[] {
+  const presetRecords = listLiveRecords(snapshot, 'preset');
+  return presetRecords.map((record) => record.value);
+}
+
+/** Builds the preset change request, unchecked, with an empty source for a theme. */
 function selectionEnvelope(
-  value: PreparationInput,
+  input: PreparationInput,
   header: PresetHeader,
   snapshot: Snapshot,
 ): unknown {
+  const recipeSource = header.source ?? '';
+  const payload = { admission: input.admission, source: recipeSource };
   return {
     workspace: snapshot.workspace,
     request: 'resource-preparation',
@@ -93,11 +104,7 @@ function selectionEnvelope(
     actor: CLI_CALLER,
     scope: [],
     expected: [],
-    assets: value.assets,
-    intent: {
-      kind: 'change',
-      planner: 'preset',
-      payload: { admission: value.admission, source: header.source ?? '' },
-    },
+    assets: input.assets,
+    intent: { kind: 'change', planner: 'preset', payload },
   };
 }

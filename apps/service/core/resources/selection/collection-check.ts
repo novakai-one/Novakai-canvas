@@ -20,7 +20,7 @@ import type {
 } from '../../../contract/records/capability-types.js';
 import { removeDigestPrefix, type AuthoringDigest } from '../../../contract/brands.js';
 import type { WorkspaceContents } from '../../../contract/records/workspace/contents.js';
-import { andThen, collect, success } from '../../../contract/errors.js';
+import { collect, success } from '../../../contract/errors.js';
 import type { AssetBinding } from '../../presets/theme-binding.js';
 import { checkDigests } from './digests.js';
 import { fromCapability, missingAssetFailure } from './refusal.js';
@@ -45,98 +45,138 @@ export function checkCollectionFiles(
   dependencies: CollectionCheckDependencies,
 ): AuthoringResult<readonly AuthoringDigest[]> {
   const theme = pinnedTheme(collection, contents, dependencies);
-  if (!theme.ok) return theme;
+  if (!theme.ok) {
+    return theme;
+  }
   const checked = checkBindings(collection, theme.value, dependencies);
-  if (!checked.ok) return checked;
-  return checkDigests([
-    ...theme.value.payload.fonts,
-    ...collection.assets.map((item) => removeDigestPrefix(item.digest)),
-  ]);
+  if (!checked.ok) {
+    return checked;
+  }
+  const fileDigests = listFileDigests(collection, theme.value);
+  return checkDigests(fileDigests);
 }
 
-/**
- * The stored theme the collection pins. Fails with `missing-asset` at `resources` when Templates
- * refuses the pin (its failure kept in `source`), or ("Collection pin does not identify a theme")
- * when the pinned preset is not a theme.
- */
+/** The exact theme version a collection records, as text; Templates checks it when it reads it. */
+interface RecordedThemePin {
+  readonly kind: 'theme';
+  readonly id: string;
+  readonly version: string;
+  readonly digest: string;
+}
+
+/** Asks Templates for the exact theme version the collection records; it must be a theme. */
 function pinnedTheme(
   collection: Collection,
-  view: WorkspaceContents,
+  contents: WorkspaceContents,
   dependencies: CollectionCheckDependencies,
 ): AuthoringResult<ThemePreset> {
-  const preset = fromCapability(
-    dependencies.templates.read(view.presets, {
-      kind: 'theme',
-      id: collection.theme.id,
-      version: collection.theme.version,
-      digest: removeDigestPrefix(collection.theme.digest),
-    }),
-  );
-  if (!preset.ok) return preset;
-  if (preset.value.kind !== 'theme')
-    return missingAssetFailure('Collection pin does not identify a theme');
+  const themePin = recordedThemePin(collection);
+  const preset = fromCapability(dependencies.templates.read(contents.presets, themePin));
+  if (!preset.ok) {
+    return preset;
+  }
+  if (preset.value.kind !== 'theme') {
+    return pinNotAThemeFailure();
+  }
   return success(preset.value);
 }
 
-/** The theme roles, then every asset's media type (see `checkRoles`, `checkMediaTypes`). */
+/** Writes the exact theme version the collection records as a pin Templates reads, digest bare. */
+function recordedThemePin(collection: Collection): RecordedThemePin {
+  return {
+    kind: 'theme',
+    id: collection.theme.id,
+    version: collection.theme.version,
+    digest: removeDigestPrefix(collection.theme.digest),
+  };
+}
+
+/** Checks the theme roles first, then each image's media type. */
 function checkBindings(
   collection: Collection,
   theme: ThemePreset,
   dependencies: CollectionCheckDependencies,
 ): AuthoringResult<void> {
   const roles = checkRoles(collection.theme.roles, theme.payload.roles);
-  return andThen(roles, () => checkMediaTypes(collection.assets, dependencies));
+  if (!roles.ok) {
+    return roles;
+  }
+  return checkMediaTypes(collection.assets, dependencies);
 }
 
-/**
- * The collection's theme roles must equal the pinned preset's roles, in any order. Fails with
- * `missing-asset` at `resources` ("Collection theme roles differ from the pinned preset") when
- * they differ.
- */
+/** Checks the collection records the same theme roles as the stored theme, in any order. */
 function checkRoles(
-  pinned: readonly string[],
-  preset: readonly string[],
+  recorded: readonly string[],
+  stored: readonly string[],
 ): AuthoringResult<void> {
-  if (!sameRoles(pinned, preset))
-    return missingAssetFailure('Collection theme roles differ from the pinned preset');
+  if (rolesDiffer(recorded, stored)) {
+    return rolesDifferFailure();
+  }
   return success(undefined);
 }
 
-/** Whether both role lists hold the same roles, each as often, in any order. */
-function sameRoles(
-  pinned: readonly string[],
-  preset: readonly string[],
+/** Whether the two role lists differ, ignoring order but counting a repeated role each time. */
+function rolesDiffer(
+  recorded: readonly string[],
+  stored: readonly string[],
 ): boolean {
-  const left = pinned.toSorted();
-  const right = preset.toSorted();
-  return left.length === right.length && left.every((role, index) => role === right[index]);
+  const recordedSorted = recorded.toSorted();
+  const storedSorted = stored.toSorted();
+  if (recordedSorted.length !== storedSorted.length) {
+    return true;
+  }
+  return recordedSorted.some((role, index) => role !== storedSorted[index]);
 }
 
-/**
- * Each asset's stored bytes must still have the media type the collection records, checked in
- * collection order. Fails with the first asset's failure (see `checkMediaType`); later assets are
- * not read.
- */
+/** Checks each image's media type in collection order, stopping at the first that differs. */
 function checkMediaTypes(
   bindings: readonly AssetBinding[],
   dependencies: CollectionCheckDependencies,
 ): AuthoringResult<void> {
   const checked = collect(bindings, (binding) => checkMediaType(binding, dependencies));
-  return andThen(checked, () => success(undefined));
+  if (!checked.ok) {
+    return checked;
+  }
+  return success(undefined);
 }
 
-/**
- * One asset's stored bytes must have the media type it records. Fails with `missing-asset` at
- * `resources` when Assets refuses the digest (its failure kept in `source`), or ("Asset media type
- * differs: <id>") when the media type differs.
- */
+/** Checks one image's stored bytes still have the media type the collection records. */
 function checkMediaType(
   binding: AssetBinding,
   dependencies: CollectionCheckDependencies,
 ): AuthoringResult<void> {
-  const blob = fromCapability(dependencies.assets.resolve(removeDigestPrefix(binding.digest)));
-  if (!blob.ok) return blob;
-  if (blob.value.descriptor.mediaType !== binding.mediaType)
-    return missingAssetFailure(`Asset media type differs: ${binding.id}`);
+  const bareDigest = removeDigestPrefix(binding.digest);
+  const storedFile = fromCapability(dependencies.assets.resolve(bareDigest));
+  if (!storedFile.ok) {
+    return storedFile;
+  }
+  if (storedFile.value.descriptor.mediaType !== binding.mediaType) {
+    return mediaTypeDiffersFailure(binding.id);
+  }
   return success(undefined);
+}
+
+/** Lists the bare digests of the theme's fonts, then of the collection's images. */
+function listFileDigests(
+  collection: Collection,
+  theme: ThemePreset,
+): readonly string[] {
+  const fontDigests = theme.payload.fonts;
+  const imageDigests = collection.assets.map((binding) => removeDigestPrefix(binding.digest));
+  return [...fontDigests, ...imageDigests];
+}
+
+/** Makes the mistake for a recorded theme pin that names a recipe: `missing-asset`. */
+function pinNotAThemeFailure(): AuthoringResult<never> {
+  return missingAssetFailure('Collection pin does not identify a theme');
+}
+
+/** Makes the mistake for theme roles that differ from the stored theme's: `missing-asset`. */
+function rolesDifferFailure(): AuthoringResult<never> {
+  return missingAssetFailure('Collection theme roles differ from the pinned preset');
+}
+
+/** Makes the mistake for an image whose stored media type differs: `missing-asset`. */
+function mediaTypeDiffersFailure(assetId: string): AuthoringResult<never> {
+  return missingAssetFailure(`Asset media type differs: ${assetId}`);
 }

@@ -14,9 +14,11 @@ import type {
   ReadVersion,
   Request,
   Snapshot,
+  StoredRecord,
 } from '../../../contract/records/capability-types.js';
 import { removeDigestPrefix, type AuthoringDigest } from '../../../contract/brands.js';
-import { andThen, collect, success } from '../../../contract/errors.js';
+import { collect, success } from '../../../contract/errors.js';
+import type { AssetBinding } from '../../presets/theme-binding.js';
 import type { AssetBindings } from './asset-bindings.js';
 import { checkDigest, checkDigests } from './digests.js';
 import { listThemePresets } from './themes.js';
@@ -32,16 +34,17 @@ export function listDigestsToHold(
   catalog: Catalog,
   boundAssets: AssetBindings,
 ): AuthoringResult<readonly AuthoringDigest[]> {
-  const held = checkDigests([
-    ...snapshot.records.flatMap((item) => item.resources),
-    ...request.assets.map((item) => item.digest),
-    ...listThemePresets(catalog).flatMap((item) => item.payload.fonts),
-  ]);
-  if (!held.ok) return held;
-  const bytes = collect(Object.values(boundAssets), (binding) =>
-    checkDigest(removeDigestPrefix(binding.digest)),
-  );
-  return andThen(bytes, (added) => success([...new Set([...held.value, ...added])]));
+  const usedDigests = listUsedDigests(request, snapshot, catalog);
+  const held = checkDigests(usedDigests);
+  if (!held.ok) {
+    return held;
+  }
+  const bound = checkBoundDigests(boundAssets);
+  if (!bound.ok) {
+    return bound;
+  }
+  const digests = joinEachOnce(held.value, bound.value);
+  return success(digests);
 }
 
 /**
@@ -49,7 +52,46 @@ export function listDigestsToHold(
  * change if one of them moves before it is saved. Never fails.
  */
 export function listPresetReads(snapshot: Snapshot): readonly ReadVersion[] {
-  return snapshot.records
-    .filter((item) => item.key.kind === 'preset')
-    .map((item) => ({ key: item.key, version: item.version }));
+  const presetRecords = snapshot.records.filter(isPresetRecord);
+  return presetRecords.map((record) => ({ key: record.key, version: record.version }));
+}
+
+/** Lists the bare digests of the stored records' files, this change's uploads and theme fonts. */
+function listUsedDigests(
+  request: Request,
+  snapshot: Snapshot,
+  catalog: Catalog,
+): readonly string[] {
+  const recordFiles = snapshot.records.flatMap((record) => record.resources);
+  const uploads = request.assets.map((upload) => upload.digest);
+  const themeFonts = listThemePresets(catalog).flatMap((theme) => theme.payload.fonts);
+  return [...recordFiles, ...uploads, ...themeFonts];
+}
+
+/** Checks the digest of each file binding, in order, with its `sha256:` prefix taken off. */
+function checkBoundDigests(
+  boundAssets: AssetBindings,
+): AuthoringResult<readonly AuthoringDigest[]> {
+  const bindings = Object.values(boundAssets);
+  return collect(bindings, checkBoundDigest);
+}
+
+/** Checks one file binding's digest, with its `sha256:` prefix taken off. */
+function checkBoundDigest(binding: AssetBinding): AuthoringResult<AuthoringDigest> {
+  const bareDigest = removeDigestPrefix(binding.digest);
+  return checkDigest(bareDigest);
+}
+
+/** Joins two digest lists, keeping each digest once, in the order first seen. */
+function joinEachOnce(
+  first: readonly AuthoringDigest[],
+  second: readonly AuthoringDigest[],
+): readonly AuthoringDigest[] {
+  const distinctDigests = new Set([...first, ...second]);
+  return [...distinctDigests];
+}
+
+/** Whether a stored record is a preset. */
+function isPresetRecord(record: StoredRecord): boolean {
+  return record.key.kind === 'preset';
 }
