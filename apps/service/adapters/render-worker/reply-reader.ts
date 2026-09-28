@@ -1,3 +1,10 @@
+/*
+ * The parent realm's reading of a render worker reply. Pure. A reply is checked against the job
+ * that asked for it and decoded by its owners; no wire payload is cast into a trusted record.
+ * Every refusal is one `invalid-input` at `render-response`: the host keeps its prior scene and
+ * offers a retry instead of mounting unchecked data.
+ */
+import type { z } from 'zod';
 import {
   readMeasuredProjection,
   readMeasuredContent,
@@ -5,88 +12,224 @@ import {
   resolvedStyle,
   fontSet,
 } from '@novakai/canvas-presentation';
-import type { Result as PresentationResult } from '@novakai/canvas-presentation';
+import type { DomainReader, Result as PresentationResult } from '@novakai/canvas-presentation';
 import { readScene, defaultEngineVersions, options } from '@novakai/canvas-layout';
-import type { Result as LayoutResult } from '@novakai/canvas-layout';
+import type { Result as LayoutResult, ProjectionReader, Scene } from '@novakai/canvas-layout';
 import { renderEnvelope } from '../../contract/records/rendering/worker.js';
 import type { RenderingJob, RenderDocument } from '../../contract/records/rendering/job.js';
-import { failure, type Result } from '../../contract/errors.js';
-/** Typed local decoding failures are caught before the service exposes a worker response. */
-class ReadoutFault extends Error {}
-/** Owner rejection produces no partially admitted scene. */
-function accepted<T>(result: { readonly ok: true; readonly value: T } | { readonly ok: false }): T {
-  if (!result.ok) throw new ReadoutFault('Owner rejected rendering data');
-  return result.value;
+import { andThen, failure, success, type Result } from '../../contract/errors.js';
+
+/** A reply as the render envelope checked it; every payload is still unknown. */
+type RenderReply = z.infer<typeof renderEnvelope>;
+
+/** The reply's geometry, decoded and admitted. */
+interface AdmittedGeometry {
+  readonly projection: RenderDocument['projection'];
+  readonly measurements: RenderDocument['measurements'];
+  readonly scene: Scene;
 }
-/** Structured clone preserves property order; these fields must be exactly the admitted job's values. */
-function same(
-  expected: unknown,
-  actual: unknown,
-): void {
-  if (JSON.stringify(expected) !== JSON.stringify(actual))
-    throw new ReadoutFault('Worker response differs from its request');
-}
-/** Layout receives the Presentation failure in its own consumer vocabulary. */
-function translated<T>(result: PresentationResult<T>): LayoutResult<T> {
-  if (result.ok) return result;
-  return { ok: false, error: { ...result.error, code: 'invalid-input', targets: [] } };
-}
-/** Reconstruct all scene payloads using admitted job semantics; no wire payload is cast into trusted records. */
-function decode(
+
+/**
+ * The worker's reply as a RenderDocument for `job`.
+ *
+ * Steps; the first failure stops the reading:
+ * 1. Check the envelope, and that the reply echoes the job's inputs (see `readReply`).
+ * 2. Decode and admit its geometry (see `admitGeometry`).
+ * 3. Decode its fonts, style and options (see `assembleDocument`).
+ *
+ * Fails with `invalid-input` at `render-response` ("Rendering response does not match the
+ * admitted job") when any step fails. The owner's failure is not kept.
+ */
+export function readRenderDocument(
   input: unknown,
   job: RenderingJob,
-): RenderDocument {
-  const raw = renderEnvelope.parse(input);
-  same(
+): Result<RenderDocument> {
+  const reply = readReply(input, job);
+  if (!reply.ok) return reply;
+  const geometry = admitGeometry(reply.value, job);
+  if (!geometry.ok) return geometry;
+  return assembleDocument(reply.value, geometry.value, job);
+}
+
+/**
+ * The checked envelope, when its collection, fonts, style and options are exactly the job's.
+ * Structured clone keeps property order, so their JSON texts must match. Fails with the response
+ * refusal when the envelope is malformed or does not echo the job (see `requireSameJson`).
+ */
+function readReply(
+  input: unknown,
+  job: RenderingJob,
+): Result<RenderReply> {
+  const reply = decodeReplyPart(renderEnvelope, input);
+  if (!reply.ok) return reply;
+  const echoed = requireSameJson(
     [job.collection, job.fonts, job.style, job.options],
-    [raw.collection, raw.fonts, raw.style, raw.options],
+    [reply.value.collection, reply.value.fonts, reply.value.style, reply.value.options],
   );
-  const domain = {
+  return andThen(echoed, () => reply);
+}
+
+/**
+ * Presentation decodes the measurements and the projection (see `readProjection`); Layout then
+ * admits the scene (see `admitScene`). Fails with the response refusal when an owner rejects any
+ * of them.
+ */
+function admitGeometry(
+  reply: RenderReply,
+  job: RenderingJob,
+): Result<AdmittedGeometry> {
+  const measurements = fromOwner(readSupplementalMeasurements(reply.measurements));
+  if (!measurements.ok) return measurements;
+  const projection = readProjection(reply.projection, job);
+  if (!projection.ok) return projection;
+  const scene = admitScene(reply, measurements.value, job);
+  return andThen(scene, (admitted) =>
+    success({ projection: projection.value, measurements: measurements.value, scene: admitted }),
+  );
+}
+
+/**
+ * The reply's projection, decoded through Presentation from its JSON copy. Layout decodes the
+ * projection from a JSON copy of its input too, so the document carries the same projection
+ * Layout admits the scene against. Fails with the response refusal when the projection is not
+ * JSON (see `jsonCopy`) or Presentation rejects it.
+ */
+function readProjection(
+  input: unknown,
+  job: RenderingJob,
+): Result<RenderDocument['projection']> {
+  const copied = jsonCopy(input);
+  return andThen(copied, (copy) =>
+    fromOwner(readMeasuredProjection(copy, job.collection, jobDomain(job))),
+  );
+}
+
+/**
+ * The document: the job's collection, the admitted geometry, and the reply's fonts, style and
+ * options as Presentation and Layout decode them. Fails with the response refusal when one of
+ * them is rejected.
+ */
+function assembleDocument(
+  reply: RenderReply,
+  geometry: AdmittedGeometry,
+  job: RenderingJob,
+): Result<RenderDocument> {
+  const fonts = decodeReplyPart(fontSet, reply.fonts);
+  if (!fonts.ok) return fonts;
+  const style = decodeReplyPart(resolvedStyle, reply.style);
+  if (!style.ok) return style;
+  const layoutOptions = decodeReplyPart(options, reply.options);
+  return andThen(layoutOptions, (decodedOptions) =>
+    success({
+      collection: job.collection,
+      projection: geometry.projection,
+      measurements: geometry.measurements,
+      scene: geometry.scene,
+      fonts: fonts.value,
+      style: style.value,
+      options: decodedOptions,
+    }),
+  );
+}
+
+/**
+ * Layout's admission of the reply's scene against the known engine versions, reading the
+ * projection and headings through `projectionReader`. Fails with the response refusal when Layout
+ * rejects it.
+ */
+function admitScene(
+  reply: RenderReply,
+  measurements: RenderDocument['measurements'],
+  job: RenderingJob,
+): Result<Scene> {
+  const candidate = {
+    projection: reply.projection,
+    measurements,
+    options: reply.options,
+    candidate: reply.scene,
+  };
+  const owners = { engineVersions: defaultEngineVersions, projection: projectionReader(job) };
+  return fromOwner(readScene(candidate, owners));
+}
+
+/** Layout's projection reader for a reply: Presentation decodes against the job's collection. */
+function projectionReader(job: RenderingJob): ProjectionReader {
+  const domain = jobDomain(job);
+  return {
+    read: (input) => translated(readMeasuredProjection(input, job.collection, domain)),
+    content: (input) => translated(readMeasuredContent(input)),
+  };
+}
+
+/** Presentation's domain reader for a reply: the collection is always the job's, already valid. */
+function jobDomain(job: RenderingJob): DomainReader {
+  return {
     read: (): PresentationResult<RenderingJob['collection']> => ({
       ok: true,
       value: job.collection,
     }),
   };
-  let projection: ReturnType<typeof readMeasuredProjection> | undefined;
-  const measurements = accepted(readSupplementalMeasurements(raw.measurements));
-  const scene = accepted(
-    readScene(
-      { projection: raw.projection, measurements, options: raw.options, candidate: raw.scene },
-      {
-        engineVersions: defaultEngineVersions,
-        projection: {
-          read: (input) => {
-            projection = readMeasuredProjection(input, job.collection, domain);
-            return translated(projection);
-          },
-          content: (input) => translated(readMeasuredContent(input)),
-        },
-      },
-    ),
-  );
-  if (projection === undefined) throw new ReadoutFault('Layout omitted projection admission');
-  return {
-    collection: job.collection,
-    projection: accepted(projection),
-    measurements,
-    scene,
-    fonts: fontSet.parse(raw.fonts),
-    style: resolvedStyle.parse(raw.style),
-    options: options.parse(raw.options),
-  };
 }
-/** Reject stale/malformed worker output; host keeps the prior scene and exposes a retry instead of mounting unchecked data. */
-export function readRenderDocument(
-  input: unknown,
-  job: RenderingJob,
-): Result<RenderDocument> {
+
+/** Presentation's failure in Layout's vocabulary: `invalid-input` with no targets. */
+function translated<T>(outcome: PresentationResult<T>): LayoutResult<T> {
+  if (outcome.ok) return outcome;
+  return { ok: false, error: { ...outcome.error, code: 'invalid-input', targets: [] } };
+}
+
+/**
+ * Passes when both values have the same JSON text. Fails with the response refusal when they
+ * differ or cannot be written as JSON (`JSON.stringify`'s throw on a BigInt or a cycle, caught
+ * here).
+ */
+function requireSameJson(
+  expected: unknown,
+  actual: unknown,
+): Result<void> {
   try {
-    return { ok: true, value: decode(input, job) };
+    if (JSON.stringify(expected) !== JSON.stringify(actual)) return responseRefused();
+    return success(undefined);
   } catch {
-    return failure(
-      'invalid-input',
-      'render-response',
-      'Rendering response does not match the admitted job',
-    );
+    return responseRefused();
   }
+}
+
+/**
+ * The value as `JSON.stringify` writes it, read back. Fails with the response refusal when it
+ * cannot be written as JSON (`JSON.stringify`'s throw, or no text for `undefined`; caught here).
+ */
+function jsonCopy(value: unknown): Result<unknown> {
+  try {
+    const copy: unknown = JSON.parse(JSON.stringify(value));
+    return success(copy);
+  } catch {
+    return responseRefused();
+  }
+}
+
+/** The owner's value. An owner rejection becomes the response refusal. */
+function fromOwner<T>(
+  outcome: { readonly ok: true; readonly value: T } | { readonly ok: false },
+): Result<T> {
+  if (!outcome.ok) return responseRefused();
+  return success(outcome.value);
+}
+
+/** The reply part as the schema reads it. Fails with the response refusal when it is rejected. */
+function decodeReplyPart<T>(
+  schema: z.ZodType<T>,
+  input: unknown,
+): Result<T> {
+  const decoded = schema.safeParse(input);
+  if (!decoded.success) return responseRefused();
+  return success(decoded.data);
+}
+
+/** The one reply refusal: `invalid-input` at `render-response`. */
+function responseRefused(): Result<never> {
+  return failure(
+    'invalid-input',
+    'render-response',
+    'Rendering response does not match the admitted job',
+  );
 }
