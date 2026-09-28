@@ -5,63 +5,40 @@
  * way every time. `pnpm canvas create missing.canvas` prints
  * `source-unavailable: Cannot read UTF-8 source: missing.canvas`, then what to do next.
  *
- * This file holds the fixed list of failure codes, and `Result`: `Success` (it worked, here is the
- * value) or `Failure` (it found a mistake). A failure is either a mistake the CLI found itself
- * (`LocalFailure`), or a failure record the service package wrote, kept whole (`ForeignFailure`).
- * Code branches on the code, never on the message. Nothing here prints.
+ * This file holds `Result`: `Success` (it worked, here is the value) or `Failure` (it found a
+ * mistake), and the builders that make each failure. A failure is either a mistake the CLI found
+ * itself (`LocalFailure`), or a failure record the service package wrote, kept whole
+ * (`ForeignFailure`). The CLI's own codes, and the shape each code takes, are listed in
+ * `records/local-failure.ts`; they are passed on from here, so every part of the CLI imports its
+ * failures from this one file. Code branches on the code, never on the message. Nothing here
+ * prints.
  */
-import { filePath, type FilePath, type RequestId, type ResourceAlias } from './brands.js';
+import { filePath, type FilePath, type RequestId } from './brands.js';
+import type { ServiceFailureRecord } from './records/foreign.js';
 import type {
-  FailureSource,
-  ServiceFailureRecord,
-  SourcePosition,
-  ThemeSourceCode,
-} from './records/foreign.js';
+  EvidencedFailure,
+  LocalCode,
+  LocalFailure,
+  LocatedCode,
+  LocatedFailure,
+  PlainFailure,
+  ResourceReadFailure,
+  SourceLocation,
+} from './records/local-failure.js';
 import type { NativeDetail, ProviderFault, RenderFault } from './records/render-fault.js';
 
-/**
- * A mistake found on this machine, grouped by where it happens. The CLI finds all of them except
- * the last line, `ThemeSourceCode`: Templates' two `.theme` codes, passed on as written.
- */
-export type LocalCode =
-  // Typed wrong. Nothing was read or sent.
-  | 'invalid-command' // No such command.
-  | 'invalid-arguments' // A wrong flag, the wrong number of words, or a badly shaped value.
-  | 'invalid-mode' // `--mode` isn't create, replace or patch.
-  | 'invalid-revision' // `--revision` isn't a whole number from 0 up.
-  | 'invalid-server' // `--server` isn't an `http://127.0.0.1` address.
-  | 'invalid-request' // A typed request ID isn't one Authoring accepts.
-  | 'unknown-profile' // The profile isn't `build-spec@1`.
-  // Files on this machine.
-  | 'source-unavailable' // A source, font or image file can't be read.
-  | 'source-too-large' // The source file is over 16 MiB.
-  | 'output-unavailable' // The `--out` file can't be written. The command already ran.
-  // The request journal, where a request is saved before it is sent.
-  | 'retention-unavailable' // The request couldn't be saved, so it wasn't sent.
-  | 'request-unavailable' // The saved request is missing or can't be read.
-  | 'request-reused' // The request ID is already saved for a different request.
-  | 'journal-corrupt' // The saved file is damaged or holds another ID's request. Nothing was sent.
-  // A font or image a source declares. The failure's `location` names the declaration.
-  | 'absolute-path' // The path starts at the root of the disk.
-  | 'path-escape' // The path leaves the source file's folder.
-  | 'unsupported-media' // The file isn't a font or image type the CLI knows.
-  | 'resource-mismatch' // A font declaration names an image file, or the reverse.
-  | 'resource-too-large' // The file is over 16 MiB.
-  // The source, and what a change needs.
-  | 'invalid-source' // Language refused the source. The failure's `source` says why.
-  | 'invalid-input' // A whole change request failed Authoring's check, built here or sent back.
-  | 'not-found' // The collection to change doesn't exist.
-  | 'already-exists' // The collection to create already exists.
-  | 'revision-required' // `replace` or `patch` without `--revision`.
-  | 'revision-conflict' // `--revision` isn't the collection's current revision.
-  | 'profile-structure' // `profile lint` found problems. The message lists them.
-  // Talking to the service.
-  | 'connection-uncertain' // No sure answer. Check the receipt before trying again.
-  | 'invalid-response' // An answer broke its own contract, such as an apply with no receipt.
-  // The program itself.
-  | 'cli-unavailable' // The CLI couldn't finish: an unexpected throw, or a bad fresh request ID.
-  | 'render-unavailable' // render:png couldn't start.
-  | ThemeSourceCode; // `invalid-theme` or `duplicate-token`.
+export type {
+  EvidencedCode,
+  EvidencedFailure,
+  LocalCode,
+  LocalFailure,
+  LocatedCode,
+  LocatedFailure,
+  PlainCode,
+  PlainFailure,
+  ResourceReadFailure,
+  SourceLocation,
+} from './records/local-failure.js';
 
 /**
  * A failure record the service package wrote, kept whole in `foreign`: either from the running
@@ -73,30 +50,6 @@ export type ForeignCode =
 
 /** Every code a CLI failure can carry. */
 export type CliFailureCode = LocalCode | ForeignCode;
-
-/**
- * Where a source declares the font or image a failure is about. Printed before the message, as
- * `file:line:column asset @alias`. Lines and columns count from 1.
- */
-export interface SourceLocation extends Pick<SourcePosition, 'line' | 'column'> {
-  /** The `.canvas` or `.theme` file that declares the font or image. */
-  readonly file: FilePath;
-  /** The name the declaration gives the font or image. */
-  readonly alias: ResourceAlias;
-}
-
-/** A mistake the CLI found: its code, a message for people, and what to do next. */
-export interface LocalFailure {
-  readonly code: LocalCode;
-  /** For people to read. Its wording may change, so code never branches on it. */
-  readonly message: string;
-  /** What to do next, such as "Correct the named input and retry." */
-  readonly recovery: string;
-  /** For a font or image mistake: where the source declares it. */
-  readonly location?: SourceLocation;
-  /** Why Language, Model or the service refused, kept whole (see `records/foreign.ts`). */
-  readonly source?: FailureSource;
-}
 
 /** A failure record the service package wrote, kept whole and printed exactly as written. */
 export interface ForeignFailure {
@@ -125,8 +78,8 @@ export interface Failure<E> {
  */
 export type Result<T, E = CliFailure> = Success<T> | Failure<E>;
 
-/** A mistake to hand to `failure`: a `LocalFailure` whose `recovery` may be left out. */
-export type FailureInput = Omit<LocalFailure, 'recovery'> & { readonly recovery?: string };
+/** A mistake to hand to `failure`: a `PlainFailure` whose `recovery` may be left out. */
+export type FailureInput = Omit<PlainFailure, 'recovery'> & { readonly recovery?: string };
 
 /** The advice a mistake gets when it names no `recovery` of its own. */
 const correctAndRetry = 'Correct the named input and retry.';
@@ -137,11 +90,55 @@ export function success<T>(value: T): Result<T, never> {
 }
 
 /**
- * Makes a failed step from a mistake the CLI found. If `recovery` is left out, it becomes
+ * Makes a failed step from a plain mistake the CLI found. If `recovery` is left out, it becomes
  * "Correct the named input and retry."
  */
-export function failure(input: FailureInput): Result<never, LocalFailure> {
+export function failure(input: FailureInput): Result<never, PlainFailure> {
   const mistake = withRecovery(input);
+  return { ok: false, error: mistake };
+}
+
+/**
+ * Makes the failure the font and image reader gives back when it can't use a file. It has no
+ * place yet: the reader doesn't know which declaration asked for the file. Core adds the place
+ * with `located`.
+ */
+export function resourceReadFailure(
+  code: LocatedCode,
+  message: string,
+): Result<never, ResourceReadFailure> {
+  const readFailure: ResourceReadFailure = { code, message };
+  return { ok: false, error: readFailure };
+}
+
+/**
+ * Makes a failed step for a font or image the reader couldn't use, naming where the source
+ * declares it (`location`). The advice is always "Correct the named input and retry."
+ */
+export function located(
+  readFailure: ResourceReadFailure,
+  location: SourceLocation,
+): Result<never, LocatedFailure> {
+  const mistake: LocatedFailure = {
+    code: readFailure.code,
+    message: readFailure.message,
+    recovery: correctAndRetry,
+    location,
+  };
+  return { ok: false, error: mistake };
+}
+
+/**
+ * Makes a failed step that keeps why Language, Model or the service refused, in `source`. The
+ * fields are copied in the order they are printed: code, message, recovery, source.
+ */
+export function evidenced(input: EvidencedFailure): Result<never, EvidencedFailure> {
+  const mistake: EvidencedFailure = {
+    code: input.code,
+    message: input.message,
+    recovery: input.recovery,
+    source: input.source,
+  };
   return { ok: false, error: mistake };
 }
 
@@ -220,11 +217,11 @@ const noDetail: NativeDetail = Object.freeze({});
 
 /**
  * Fills in the mistake's `recovery` when it has none. The fields keep their order: code, message,
- * recovery, then the rest.
+ * recovery.
  */
-function withRecovery(input: FailureInput): LocalFailure {
-  const { code, message, recovery = correctAndRetry, ...context } = input;
-  return { code, message, recovery, ...context };
+function withRecovery(input: FailureInput): PlainFailure {
+  const { code, message, recovery = correctAndRetry } = input;
+  return { code, message, recovery };
 }
 
 /** Gives the thrown error's message, or the thrown thing as text when it isn't an `Error`. */

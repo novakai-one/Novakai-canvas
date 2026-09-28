@@ -165,13 +165,14 @@ function receiptFirstAdvice(request: RequestId): string {
 
 /**
  * Makes the mistake for a lost or unreadable answer: the transport's mistake, with advice to check
- * the request's receipt, never to send a new request.
+ * the request's receipt, never to send a new request. Everything else about the mistake is kept.
  */
 function unconfirmedAnswerFailure(
   transportFailure: LocalFailure,
   request: RequestId,
 ): Result<never, LocalFailure> {
-  return failure({ ...transportFailure, recovery: receiptFirstAdvice(request) });
+  const advised: LocalFailure = { ...transportFailure, recovery: receiptFirstAdvice(request) };
+  return { ok: false, error: advised };
 }
 
 /** Makes the mistake for a preview answer that isn't JSON (`invalid-response`). */

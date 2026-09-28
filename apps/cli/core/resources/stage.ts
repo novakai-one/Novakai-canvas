@@ -21,7 +21,7 @@ import type { ResourceRequest, StageInput } from '../../contract/records/foreign
 import { resourceAlias } from '../../contract/brands.js';
 import type { AssetDigest, FilePath, ResourceAlias } from '../../contract/brands.js';
 import type { LocalFailure, Result, SourceLocation } from '../../contract/errors.js';
-import { failure, success } from '../../contract/errors.js';
+import { failure, located, success } from '../../contract/errors.js';
 import { combined } from '../shared/results.js';
 import { parseAssetPin } from './digests.js';
 import { buildStageInput } from './provenance.js';
@@ -216,7 +216,7 @@ async function readLocalResource(
   const bytes = await reader.read(file, declaration);
   if (!bytes.ok) {
     const place = declarationPlace(file, declaration, alias);
-    return locatedReadFailure(bytes.error, place);
+    return located(bytes.error, place);
   }
   const input = buildStageInput(declaration, bytes.value);
   const local: ResourceToStage = { kind: 'local', alias, input };
@@ -241,15 +241,4 @@ function pairAliasWithDigest(resource: StagedBackup): NamedAssetDigest {
 /** Makes the mistake for a declaration Language or the theme grammar gave no alias. */
 function unnamedResourceFailure(): Result<never, LocalFailure> {
   return failure({ code: 'invalid-response', message: 'A resource declaration has no alias' });
-}
-
-/**
- * Gives back the read failure with the declaration's place added; its code, message and recovery
- * are kept.
- */
-function locatedReadFailure(
-  readFailure: LocalFailure,
-  place: SourceLocation,
-): Result<never, LocalFailure> {
-  return failure({ ...readFailure, location: place });
 }

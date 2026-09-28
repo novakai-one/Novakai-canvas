@@ -10,8 +10,10 @@
  */
 import type {
   CliFailure,
+  EvidencedFailure,
   ForeignFailure,
   LocalFailure,
+  LocatedFailure,
   SourceLocation,
 } from '../../contract/errors.js';
 import type { FailureSource, ServiceFailureRecord } from '../../contract/records/foreign.js';
@@ -47,32 +49,55 @@ function isForeignFailure(error: CliFailure): error is ForeignFailure {
 
 /** Writes a failure record the service package wrote, with the service's own code and message. */
 function foreignFailureLines(foreign: ServiceFailureRecord): readonly string[] {
-  return failureLines(foreign, foreign.message);
+  return failureLines(foreign, foreign.message, foreign.source);
 }
 
-/** Writes a mistake the CLI found, naming the font or image declaration first when there is one. */
+/**
+ * Writes a mistake the CLI found, naming the font or image declaration first when there is one,
+ * and Language's or Model's reasons when it keeps them.
+ */
 function localFailureLines(local: LocalFailure): readonly string[] {
   const message = locatedMessage(local);
-  return failureLines(local, message);
+  const evidence = keptEvidence(local);
+  return failureLines(local, message, evidence);
 }
 
 /** Writes `code: message` first, then the lines saying why, then what to do next. */
 function failureLines(
   failureRecord: LocalFailure | ServiceFailureRecord,
   message: string,
+  evidence: FailureSource | undefined,
 ): readonly string[] {
   const headline = `${failureRecord.code}: ${message}`;
-  const reasons = reasonLines(failureRecord.source);
+  const reasons = reasonLines(evidence);
   return [headline, ...reasons, failureRecord.recovery];
 }
 
 /** Puts the place of the font or image declaration before the message, when the mistake has one. */
 function locatedMessage(local: LocalFailure): string {
-  if (local.location === undefined) {
-    return local.message;
+  if (isLocatedFailure(local)) {
+    const place = declarationPlace(local.location);
+    return `${place}: ${local.message}`;
   }
-  const place = declarationPlace(local.location);
-  return `${place}: ${local.message}`;
+  return local.message;
+}
+
+/** Gives why Language, Model or the service refused, when the mistake keeps it. */
+function keptEvidence(local: LocalFailure): FailureSource | undefined {
+  if (isEvidencedFailure(local)) {
+    return local.source;
+  }
+  return undefined;
+}
+
+/** Whether the mistake names a font or image declaration (`location`). */
+function isLocatedFailure(local: LocalFailure): local is LocatedFailure {
+  return 'location' in local;
+}
+
+/** Whether the mistake keeps why another part refused (`source`). */
+function isEvidencedFailure(local: LocalFailure): local is EvidencedFailure {
+  return 'source' in local;
 }
 
 /** Writes where a source declares a font or image, such as `walk.canvas:4:1 asset @logo`. */
