@@ -6,6 +6,7 @@
  */
 import { z } from 'zod';
 import type { assetId, collectionId } from '@novakai/canvas-model';
+import { profileIds } from '@novakai/canvas-language';
 
 export { recordId, requestId, workspaceId } from '@novakai/canvas-authoring';
 export type { RecordId, RequestId, WorkspaceId } from '@novakai/canvas-authoring';
@@ -17,6 +18,14 @@ export { presetId, version, digest as presetDigest } from '@novakai/canvas-templ
 export type { PresetId, Version, Digest as PresetDigest } from '@novakai/canvas-templates';
 export { digest as assetDigest } from '@novakai/canvas-assets';
 export type { Digest as AssetDigest } from '@novakai/canvas-assets';
+/** A collection profile Language knows. Language owns the profiles; the CLI only checks the name. */
+export type { ProfileId } from '@novakai/canvas-language';
+
+/**
+ * A profile name, checked against Language's `profileIds`. Minted from `profile describe|scaffold`
+ * operands and `profile lint --profile` by core's argument checks (`unknown-profile`).
+ */
+export const profileId = z.enum(profileIds);
 
 /**
  * A local file path: any non-empty text. Node resolves it against the working directory; the

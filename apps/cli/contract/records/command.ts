@@ -10,12 +10,12 @@ import type {
   LoopbackOrigin,
   ObjectId,
   PresetId,
+  ProfileId,
   RequestId,
   SectionId,
   Version,
 } from '../brands.js';
 import type { ExpansionRequest, RecipeFamily } from './foreign.js';
-import type { ProfileId } from './profiles.js';
 
 /** How a DSL source changes a collection. */
 export type ChangeMode = 'create' | 'replace' | 'patch';

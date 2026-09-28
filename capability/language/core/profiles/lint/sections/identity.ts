@@ -3,12 +3,13 @@
  * its findings. A required slot's mode is checked once, in required.ts (`section-mode`).
  */
 import type { ProfileFinding } from '../../../../contract/records/profiles.js';
-import { id, type Declaration, type DeclarationIndex } from '../declarations.js';
+import type { SectionId } from '../../../../contract/brands.js';
+import { sectionIdOf, type Declaration, type DeclarationIndex } from '../declarations.js';
 import { fieldFinding } from '../findings.js';
 
 /** Duplicate-id findings, section by section in document order. */
 export function lintSectionIdentity(indexed: DeclarationIndex): readonly ProfileFinding[] {
-  const sectionIds = indexed.sections.map(id);
+  const sectionIds = indexed.sections.map(sectionIdOf);
   return indexed.sections.flatMap((section, index) =>
     duplicateFinding(section, sectionIds.slice(0, index)),
   );
@@ -17,9 +18,9 @@ export function lintSectionIdentity(indexed: DeclarationIndex): readonly Profile
 /** A section id an earlier section already uses is a duplicate; a section without an id is not. */
 function duplicateFinding(
   section: Declaration,
-  earlier: readonly (string | undefined)[],
+  earlier: readonly (SectionId | undefined)[],
 ): readonly ProfileFinding[] {
-  const sectionId = id(section);
+  const sectionId = sectionIdOf(section);
   if (sectionId === undefined || !earlier.includes(sectionId)) return [];
   return [
     fieldFinding(section, 'id', {

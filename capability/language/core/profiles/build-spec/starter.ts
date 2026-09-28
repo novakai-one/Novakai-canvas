@@ -1,11 +1,11 @@
 /*
- * The build-spec@1 starter DSL and `profile scaffold`, which names it with the caller's collection
- * ID and title. Pure; the caller writes the text and owns recovery.
+ * The build-spec@1 starter source, and the scaffold that names it with the caller's collection ID
+ * and title. Pure; the host writes the text and owns recovery.
  */
-import type { CollectionId } from '../../../contract/brands.js';
+import type { ProfileStarter } from '../../../contract/records/profiles.js';
 
-/** Small native current-DSL starter; profile commands never depend on a service or workspace. */
-export const buildSpecStarter = String.raw`# Editable build-spec@1 starter using current native DSL.
+/** Small native current-DSL starter; scaffolding never depends on a service or workspace. */
+const buildSpecStarter = String.raw`# Editable build-spec@1 starter using current native DSL.
 # Sequence lifelines reuse canonical modules; the interface uses a linked participant proxy.
 canvas 1
 collection @build-spec-starter "Edit a title safely — build spec starter" theme=paper {
@@ -104,19 +104,19 @@ collection @build-spec-starter "Edit a title safely — build spec starter" them
   }
 }`;
 
-/** The starter renamed to collection `@id` titled `title`, with the title's quotes and backslashes escaped. */
-export function scaffoldBuildSpec(
-  id: CollectionId,
-  title: string,
-): string {
-  const escapedTitle = title.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+/**
+ * The starter renamed to collection `@<collection>` titled `title`, with the title's quotes and
+ * backslashes escaped.
+ */
+export function scaffoldBuildSpec(starter: ProfileStarter): string {
+  const escapedTitle = starter.title.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
   return buildSpecStarter
     .replace(
       'collection @build-spec-starter "Edit a title safely — build spec starter"',
-      `collection @${id} "${escapedTitle}"`,
+      `collection @${starter.collection} "${escapedTitle}"`,
     )
     .replace(
       '# Editable build-spec@1 starter using current native DSL.',
-      `# Editable build-spec@1 starter for ${id}.`,
+      `# Editable build-spec@1 starter for ${starter.collection}.`,
     );
 }

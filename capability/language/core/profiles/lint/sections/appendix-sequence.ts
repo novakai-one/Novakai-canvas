@@ -5,6 +5,7 @@
  * returned.
  */
 import type { ProfileFinding } from '../../../../contract/records/profiles.js';
+import { buildSpecSlots } from '../../build-spec/descriptor.js';
 import { collectAppendices, type Appendix } from '../appendix-ids.js';
 import {
   order,
@@ -65,8 +66,9 @@ function appendixSequenceFindings(
 
 /** The ownership section's order anchors the appendix sequence. */
 function ownershipOrder(sections: readonly Declaration[]): number | undefined {
-  const ownership = sectionById(sections, 'ownership');
-  return ownership === undefined ? undefined : order(ownership);
+  const ownership = sectionById(sections, buildSpecSlots.ownership.id);
+  if (ownership === undefined) return undefined;
+  return order(ownership);
 }
 
 /**

@@ -1,42 +1,64 @@
 /*
- * The build-spec profile vocabulary: the profiles the CLI knows, the descriptor `profile describe`
- * prints, the rule code on every lint finding and the lint result. Pure declarations plus the
- * profile check; core builds and reads them.
+ * Collection profiles: named conventions an ordinary collection can follow, such as build-spec@1.
+ * The profiles Language knows, the descriptor a host prints, what a starter is named with, the
+ * rule code on every lint finding and the lint result. Pure declarations; core builds and reads
+ * them. Lint only reports: the author corrects the source and lints again.
  */
-import { z } from 'zod';
-import type { Mode, Span } from './foreign.js';
+import type { Mode } from '@novakai/canvas-model';
+import type { CollectionId, SectionId } from '../brands.js';
+import type { Span } from './syntax.js';
 
-/** Every profile the CLI knows. `profile describe|scaffold|lint` accept only these (`unknown-profile`). */
-export const profileId = z.enum(['build-spec@1']);
+/** Every collection profile Language knows. A host accepts only these. */
+export const profileIds = Object.freeze(['build-spec@1'] as const);
 
-/** A profile that passed {@link profileId}. */
-export type ProfileId = z.infer<typeof profileId>;
+/** A collection profile Language knows. */
+export type ProfileId = (typeof profileIds)[number];
 
-/** Section modes a slot or appendix accepts; the first is the one a required slot must use. */
+/** Section modes an appendix may use; each is also the prefix of an appendix's ID. */
 export type ProfileModes = readonly [Mode, ...Mode[]];
 
-/** One required logical document: a section `@id` with a fixed place in the order. */
+/**
+ * A logical document's number: build-spec@1 numbers its four required slots 1 to 4, and every
+ * appendix shares 5 (appendix 5.1, 5.2, ...). A profile with more documents widens this.
+ */
+export type DocumentNumber = 1 | 2 | 3 | 4 | 5;
+
+/** One required logical document: the section that holds it, its number and its mode. */
 export interface ProfileSlot {
-  readonly id: string;
-  readonly order: number;
+  /** The section ID the document uses, without its `@`: slot `repo` is section `@repo`. */
+  readonly id: SectionId;
+  readonly number: DocumentNumber;
+  /** The one mode the section must use. */
+  readonly mode: Mode;
+  readonly description: string;
+}
+
+/** The appendix rule: numbered sections after the required slots, each a flow, sequence or state. */
+export interface ProfileAppendix {
+  /** The document number every appendix shares: section `@flow-51` is appendix 5.1. */
+  readonly number: DocumentNumber;
+  /** The appendix ID shape as text, built from `modes` and `number`: `@(flow|sequence|state)-5N`. */
+  readonly idPattern: string;
   readonly modes: ProfileModes;
   readonly description: string;
 }
 
-/** What `profile describe` prints and lint reads its slots from. */
+/** What a host prints to describe a profile and what lint reads its slots and appendix rule from. */
 export interface ProfileDescriptor {
   readonly id: ProfileId;
   readonly name: string;
   readonly description: string;
-  readonly commands: Readonly<Record<'describe' | 'scaffold' | 'lint', string>>;
+  /** The required slots, in document order. */
   readonly slots: readonly ProfileSlot[];
-  readonly appendix: {
-    readonly idPattern: string;
-    readonly modes: ProfileModes;
-    readonly description: string;
-  };
+  readonly appendix: ProfileAppendix;
   readonly conventions: readonly string[];
   readonly notes: readonly string[];
+}
+
+/** What a profile's starter source is named with: the new collection's ID and its title. */
+export interface ProfileStarter {
+  readonly collection: CollectionId;
+  readonly title: string;
 }
 
 /**
@@ -45,7 +67,7 @@ export interface ProfileDescriptor {
  * Sections:
  * - `duplicate-section`: a section ID is used twice.
  * - `missing-section`: a required slot has no section.
- * - `section-mode`: a required section does not use its slot's first mode.
+ * - `section-mode`: a required section does not use its slot's mode.
  * - `section-order`: a required section's order does not increase after the previous one.
  * - `missing-appendix`: no `@flow-5N`, `@sequence-5N` or `@state-5N` appendix.
  * - `duplicate-appendix-number`: an appendix reuses an earlier appendix's number; reported once on
@@ -98,10 +120,23 @@ export type ProfileRuleCode =
   | 'appendix-native-nodes'
   | 'appendix-native-wires';
 
-/** One broken rule: its code, the declaration path it names, the message and where it is. */
+/**
+ * The declaration a finding names, as text: `section @repo`, `section @repo show @web`,
+ * `node @receipt`, `wire @tree-root-web`, `row @receipt-row`, `table` or `appendices`. An ID the
+ * source leaves out prints as `?`.
+ */
+export type ProfilePath =
+  | 'appendices'
+  | 'table'
+  | `section @${string}`
+  | `node @${string}`
+  | `wire @${string}`
+  | `row @${string}`;
+
+/** One broken rule: its code, the declaration it names, the message and where it is. */
 export interface ProfileFinding {
   readonly code: ProfileRuleCode;
-  readonly path: string;
+  readonly path: ProfilePath;
   readonly message: string;
   readonly span: Span;
 }

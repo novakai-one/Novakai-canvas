@@ -1,6 +1,6 @@
 # CLI host
 
-Two executables. The CLI parses argv, binds ports and prints. Capabilities and the local service decide domain rules, with one exception in `core/`: the build-spec@1 lint rules (`core/profiles/lint/`; a follow-up moves them into a capability). The `.theme` grammar is Templates' `readThemeSource`; the CLI reads the file and calls it.
+Two executables. The CLI parses argv, binds ports and prints. Capabilities and the local service decide domain rules. The `.theme` grammar is Templates' `readThemeSource`; the CLI reads the file and calls it. The build-spec@1 profile (descriptor, starter, lint rules) is Language's; the CLI reads the lint file, calls Language and prints.
 
 | Run                                                      | Entry           | Does                                                                                                                                                                                                         |
 | -------------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -17,7 +17,7 @@ Two executables. The CLI parses argv, binds ports and prints. Capabilities and t
 | `apply`, `retry`                                       | `core/authoring/reconcile.ts` (receipt first, then the identical request) | journal, service reads + resources + authoring                                                                     |
 | `theme admit`, `recipe admit`                          | `core/presets/admit.ts` (`.theme` grammar: Templates)                     | local files, Language, theme grammar, request IDs, resource reader, service reads + resources + authoring, journal |
 | `recipe instantiate`                                   | `core/commands/dispatch.ts` (one service call)                            | service resources                                                                                                  |
-| `profile describe`, `profile scaffold`, `profile lint` | `core/profiles/commands.ts` (lint rules in `core/profiles/lint/`)         | local files, Language. No service.                                                                                 |
+| `profile describe`, `profile scaffold`, `profile lint` | `core/profiles/commands.ts` (profile and lint rules: Language)            | local files, Language, profiles. No service.                                                                       |
 | `render:png`                                           | `core/render/render.ts` (argv in `request.ts`)                            | render ports (`contract/ports/render*.ts`), resource reader, theme grammar                                         |
 
 Argv → command: `core/commands/parse.ts` checks words against `table.ts` (one row per command: operands, flags, help lines). Values are minted in `values.ts`, `operands.ts`, `recipe-values.ts`, `profile-operands.ts`. `dispatch.ts` routes and is the one `--out` writer.
@@ -33,14 +33,14 @@ Add a command: its member in `contract/records/command.ts` → its row in `table
 | `contract/api.ts`                               | Core entry points for compose. The only contract file that imports core.                                                                                          |
 | `contract/compose.ts`, `contract/compose/`      | Composition root: builds and injects ports (`service.ts`, `profiles.ts`, `render.ts`; shared `language.ts`, `theme-grammar.ts`). Only these import adapters.      |
 | `contract/brands.ts`, `schemas.ts`, `errors.ts` | Branded IDs (capability brands re-exported), foreign schemas, closed failure codes, `Result`, and the builders of render:png's faults (`faulted`, `nativeFault`). |
-| `contract/records/`                             | Data shapes: command union, argv, retained request, service answers, render request/report/faults/failure, profiles; `foreign.ts` re-exports capability records.  |
-| `contract/ports/`                               | One interface per I/O seam: HTTP transport, service calls, journal, local files, resource reader, Language, theme grammar, Model check, request IDs, render.      |
+| `contract/records/`                             | Data shapes: command union, argv, retained request, service answers, render request/report/faults/failure; `foreign.ts` re-exports capability records.            |
+| `contract/ports/`                               | One interface per seam: HTTP transport, service calls, journal, files, resource reader, Language, profiles, theme grammar, Model check, request IDs, render.      |
 | `core/commands/`                                | Argv grammar, command table, help, routing.                                                                                                                       |
 | `core/reads/`                                   | Read-only service commands and their text.                                                                                                                        |
 | `core/authoring/`                               | DSL change → retained Authoring request → preview/apply; retry.                                                                                                   |
 | `core/resources/`                               | Stage, back up and restore font/image bytes; `sha256:` digests.                                                                                                   |
 | `core/presets/`                                 | Theme/recipe admission.                                                                                                                                           |
-| `core/profiles/`                                | build-spec@1: descriptor, starter, lint rules. Local only.                                                                                                        |
+| `core/profiles/`                                | Profile commands: call Language's profiles; format the descriptor and the findings. Local only.                                                                   |
 | `core/render/`                                  | `render:png` workflow: themes, font/image admission, asset records, collection, snapshot, Export's retained-resource check, sections, report.                     |
 | `core/diagnostics/`, `core/shared/`             | Failure → terminal lines; Result and parse helpers.                                                                                                               |
 | `adapters/argv/`                                | Node `parseArgs` → raw arguments.                                                                                                                                 |

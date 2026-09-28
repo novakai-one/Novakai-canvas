@@ -3,16 +3,20 @@
  * one CRUD table, with the fixed columns and one five-cell `<entity-id>-row` row per entity.
  * Pure; the findings are returned.
  */
-import type { ProfileFinding } from '../../../contract/records/profiles.js';
+import { descendantId } from '../../../contract/brands.js';
+import type { DescendantId, ObjectId } from '../../../contract/brands.js';
+import type { ProfileFinding, ProfilePath } from '../../../contract/records/profiles.js';
+import type { SyntaxValue } from '../../../contract/records/syntax.js';
+import { buildSpecSlots } from '../build-spec/descriptor.js';
 import {
   descendants,
   field,
-  id,
+  nodeById,
+  rowIdOf,
   shown,
   text,
   type Declaration,
   type DeclarationIndex,
-  type SyntaxValue,
 } from './declarations.js';
 import { fieldFinding, findingAt } from './findings.js';
 
@@ -20,7 +24,7 @@ import { fieldFinding, findingAt } from './findings.js';
 export function crudFindings(
   indexed: DeclarationIndex,
   ownership: Declaration,
-  entityIds: readonly string[],
+  entityIds: readonly ObjectId[],
 ): readonly ProfileFinding[] {
   const tables = crudTables(indexed, ownership);
   const [table] = tables;
@@ -28,12 +32,12 @@ export function crudFindings(
     return [
       findingAt(ownership, {
         code: 'crud-table',
-        path: 'section @ownership',
+        path: `section @${buildSpecSlots.ownership.id}`,
         message: 'Ownership must show one note containing exactly one CRUD table.',
       }),
     ];
   const rows = descendants(table, 'row');
-  const expectedRows = new Set(entityIds.map((entityId) => `${entityId}-row`));
+  const expectedRows = new Set(entityIds.flatMap(entityRowId));
   return [
     ...columnFinding(table),
     ...rows.flatMap((row) => crudRowFindings(row, expectedRows)),
@@ -48,10 +52,20 @@ function crudTables(
   ownership: Declaration,
 ): readonly Declaration[] {
   return shown(ownership).flatMap((objectId) => {
-    const note = indexed.nodes.find((node) => id(node) === objectId);
+    const note = nodeById(indexed.nodes, objectId);
     if (!isNoteNode(note)) return [];
     return descendants(note, 'table');
   });
+}
+
+/**
+ * An entity's CRUD row ID, `<entity-id>-row`, as Model's `DescendantId`, as a list of one. An
+ * entity ID always makes a valid row ID; the check only brands it.
+ */
+function entityRowId(entityId: ObjectId): readonly DescendantId[] {
+  const rowId = descendantId.safeParse(`${entityId}-row`);
+  if (!rowId.success) return [];
+  return [rowId.data];
 }
 
 /** The declaration exists, is a node, and its kind field is 'note'. */
@@ -72,7 +86,7 @@ function columnFinding(table: Declaration): readonly ProfileFinding[] {
 }
 
 /** The columns field is exactly {@link crudColumns}. */
-function validColumns(columns: SyntaxValue): boolean {
+function validColumns(columns: SyntaxValue | undefined): boolean {
   return (
     Array.isArray(columns) &&
     columns.length === crudColumns.length &&
@@ -86,17 +100,17 @@ const crudColumns = Object.freeze(['Object', 'Create', 'Read', 'Update', 'Delete
 /** One row's id finding first, then its cell-count finding. */
 function crudRowFindings(
   row: Declaration,
-  expectedRows: ReadonlySet<string>,
+  expectedRows: ReadonlySet<DescendantId>,
 ): readonly ProfileFinding[] {
-  const rowId = id(row);
+  const rowId = rowIdOf(row);
   return [...rowIdFinding(row, rowId, expectedRows), ...rowCellsFinding(row, rowId)];
 }
 
 /** A row id must be one entity's stable `<entity-id>-row` id. */
 function rowIdFinding(
   row: Declaration,
-  rowId: string | undefined,
-  expectedRows: ReadonlySet<string>,
+  rowId: DescendantId | undefined,
+  expectedRows: ReadonlySet<DescendantId>,
 ): readonly ProfileFinding[] {
   if (rowId !== undefined && expectedRows.has(rowId)) return [];
   return [
@@ -111,7 +125,7 @@ function rowIdFinding(
 /** A row must contain one cell per CRUD column. */
 function rowCellsFinding(
   row: Declaration,
-  rowId: string | undefined,
+  rowId: DescendantId | undefined,
 ): readonly ProfileFinding[] {
   const cells = field(row, 'cells');
   if (Array.isArray(cells) && cells.length === crudColumns.length) return [];
@@ -124,8 +138,8 @@ function rowCellsFinding(
   ];
 }
 
-/** The display path of a row whose id may be missing. */
-function rowLabel(rowId: string | undefined): string {
+/** The display path of a row whose ID may be missing. */
+function rowLabel(rowId: DescendantId | undefined): ProfilePath {
   return `row @${rowId ?? '?'}`;
 }
 
@@ -133,7 +147,7 @@ function rowLabel(rowId: string | undefined): string {
 function missingRowFindings(
   table: Declaration,
   rows: readonly Declaration[],
-  expectedRows: ReadonlySet<string>,
+  expectedRows: ReadonlySet<DescendantId>,
 ): readonly ProfileFinding[] {
   return [...expectedRows].flatMap((expectedRow) => missingRowFinding(table, rows, expectedRow));
 }
@@ -142,9 +156,9 @@ function missingRowFindings(
 function missingRowFinding(
   table: Declaration,
   rows: readonly Declaration[],
-  expectedRow: string,
+  expectedRow: DescendantId,
 ): readonly ProfileFinding[] {
-  if (rows.some((row) => id(row) === expectedRow)) return [];
+  if (rows.some((row) => rowIdOf(row) === expectedRow)) return [];
   return [
     findingAt(table, {
       code: 'crud-missing-row',
@@ -156,14 +170,14 @@ function missingRowFinding(
 
 /** A row id used more than once is reported once, at its first row. */
 function duplicateRowFindings(rows: readonly Declaration[]): readonly ProfileFinding[] {
-  const rowIds = rows.map(id);
+  const rowIds = rows.map(rowIdOf);
   return rows.flatMap((row, index) => duplicateRowFinding(row, rowIds, index));
 }
 
 /** The row at `index` is reported when it is the first of a repeated row id. */
 function duplicateRowFinding(
   row: Declaration,
-  rowIds: readonly (string | undefined)[],
+  rowIds: readonly (DescendantId | undefined)[],
   index: number,
 ): readonly ProfileFinding[] {
   if (!firstOfRepeated(rowIds, index)) return [];
@@ -178,7 +192,7 @@ function duplicateRowFinding(
 
 /** The row at `index` has an id, is the first row with it, and a later row repeats it. */
 function firstOfRepeated(
-  rowIds: readonly (string | undefined)[],
+  rowIds: readonly (DescendantId | undefined)[],
   index: number,
 ): boolean {
   const rowId = rowIds[index];

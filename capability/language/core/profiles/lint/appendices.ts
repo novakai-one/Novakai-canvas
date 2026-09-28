@@ -7,8 +7,8 @@ import type { ProfileFinding } from '../../../contract/records/profiles.js';
 import { collectAppendices, type Appendix } from './appendix-ids.js';
 import {
   connected,
-  id,
   isConnectedWire,
+  nodeById,
   shown,
   text,
   type Declaration,
@@ -98,8 +98,9 @@ function shownNodesOf(
   nodes: readonly Declaration[],
 ): readonly Declaration[] {
   return shown(section).flatMap((objectId) => {
-    const node = nodes.find((candidate) => id(candidate) === objectId);
-    return node === undefined ? [] : [node];
+    const node = nodeById(nodes, objectId);
+    if (node === undefined) return [];
+    return [node];
   });
 }
 

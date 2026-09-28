@@ -15,6 +15,13 @@ export type {
   ResourceRequest,
   Span,
 } from '@novakai/canvas-language';
+/** Language's collection profile records: descriptor, starter names, lint finding and result. */
+export type {
+  ProfileDescriptor,
+  ProfileFinding,
+  ProfileLintResult,
+  ProfileStarter,
+} from '@novakai/canvas-language';
 export type { InspectionReport, RenderDocument } from '@novakai/canvas-service';
 export type { Assets, StageInput, StoredBlob, SupportedMedia } from '@novakai/canvas-assets';
 export type { Admission, Catalog, ExpansionRequest, ThemePreset } from '@novakai/canvas-templates';

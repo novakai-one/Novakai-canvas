@@ -3,11 +3,13 @@
  * connected and have shown endpoints. Reachability from the root is checked in reachability.ts.
  * Pure; each rule returns its findings.
  */
-import type { ProfileFinding } from '../../../../contract/records/profiles.js';
+import type { ObjectId } from '../../../../contract/brands.js';
+import type { ProfileFinding, ProfilePath } from '../../../../contract/records/profiles.js';
+import { buildSpecSlots } from '../../build-spec/descriptor.js';
 import {
   connected,
-  id,
   isConnectedWire,
+  objectIdOf,
   sectionById,
   shown,
   text,
@@ -21,7 +23,7 @@ import { reachabilityFindings } from './reachability.js';
 
 /** Root, wire and reachability findings for the repo tree section. */
 export function lintRepo(indexed: DeclarationIndex): readonly ProfileFinding[] {
-  const section = sectionById(indexed.sections, 'repo');
+  const section = sectionById(indexed.sections, buildSpecSlots.repo.id);
   if (section === undefined) return [];
   const roots = section.children.filter((child) => child.kind === 'root');
   const rootIds = rootIdsOf(roots);
@@ -36,11 +38,12 @@ export function lintRepo(indexed: DeclarationIndex): readonly ProfileFinding[] {
   ];
 }
 
-/** The ids of the declared roots, skipping id-less roots. */
-function rootIdsOf(roots: readonly Declaration[]): readonly string[] {
+/** The object IDs of the declared roots, skipping ID-less roots. */
+function rootIdsOf(roots: readonly Declaration[]): readonly ObjectId[] {
   return roots.flatMap((root) => {
-    const rootId = id(root);
-    return rootId === undefined ? [] : [rootId];
+    const rootId = objectIdOf(root);
+    if (rootId === undefined) return [];
+    return [rootId];
   });
 }
 
@@ -48,13 +51,13 @@ function rootIdsOf(roots: readonly Declaration[]): readonly string[] {
 function rootCountFinding(
   section: Declaration,
   roots: readonly Declaration[],
-  rootIds: readonly string[],
+  rootIds: readonly ObjectId[],
 ): readonly ProfileFinding[] {
   if (roots.length === 1 && rootIds.length === 1) return [];
   return [
     fieldFinding(section, 'id', {
       code: 'repo-root',
-      path: 'section @repo',
+      path: `section @${buildSpecSlots.repo.id}`,
       message: 'Tree section must declare one root.',
     }),
   ];
@@ -63,15 +66,15 @@ function rootCountFinding(
 /** The declared root must be shown in the repo projection. */
 function rootShownFinding(
   section: Declaration,
-  rootIds: readonly string[],
-  shownIds: ReadonlySet<string>,
+  rootIds: readonly ObjectId[],
+  shownIds: ReadonlySet<ObjectId>,
 ): readonly ProfileFinding[] {
   const rootId = rootIds[0];
   if (rootId === undefined || shownIds.has(rootId)) return [];
   return [
     findingAt(section, {
       code: 'repo-root-hidden',
-      path: `section @repo root @${rootId}`,
+      path: `section @${buildSpecSlots.repo.id} root @${rootId}`,
       message: 'Tree root must be shown in the repo projection.',
     }),
   ];
@@ -86,7 +89,7 @@ function wirePresenceFinding(
   return [
     findingAt(section, {
       code: 'repo-wires',
-      path: 'section @repo',
+      path: `section @${buildSpecSlots.repo.id}`,
       message: 'Tree section must show and connect parent wires.',
     }),
   ];
@@ -106,7 +109,7 @@ function repoParentWires(
 /** One wire's field and endpoint findings. */
 function repoWireFindings(
   wire: Declaration,
-  shownIds: ReadonlySet<string>,
+  shownIds: ReadonlySet<ObjectId>,
 ): readonly ProfileFinding[] {
   const ends = wireEnds(wire);
   return [...wireFieldsFinding(wire, ends), ...wireEndpointsFinding(wire, ends, shownIds)];
@@ -131,7 +134,7 @@ function wireFieldsFinding(
 function wireEndpointsFinding(
   wire: Declaration,
   ends: WireEnds,
-  shownIds: ReadonlySet<string>,
+  shownIds: ReadonlySet<ObjectId>,
 ): readonly ProfileFinding[] {
   if (!endpointHidden(ends, shownIds)) return [];
   return [
@@ -143,15 +146,15 @@ function wireEndpointsFinding(
   ];
 }
 
-/** The display path of a wire whose id may be missing. */
-function wireLabel(ends: WireEnds): string {
+/** The display path of a wire whose ID may be missing. */
+function wireLabel(ends: WireEnds): ProfilePath {
   return `wire @${ends.id ?? '?'}`;
 }
 
 /** The wire has an id, a source and a target, and at least one endpoint is not shown. */
 function endpointHidden(
   ends: WireEnds,
-  shownIds: ReadonlySet<string>,
+  shownIds: ReadonlySet<ObjectId>,
 ): boolean {
   return ends.kind === 'complete' && (!shownIds.has(ends.source) || !shownIds.has(ends.target));
 }

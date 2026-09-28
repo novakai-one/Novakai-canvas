@@ -10,12 +10,17 @@ import {
   filePath,
   loopbackOrigin,
   objectId,
+  profileId,
   requestId,
   sectionId,
 } from '../../contract/brands.js';
-import type { CollectionId, FilePath, LoopbackOrigin, RequestId } from '../../contract/brands.js';
-import { profileId } from '../../contract/records/profiles.js';
-import type { ProfileId } from '../../contract/records/profiles.js';
+import type {
+  CollectionId,
+  FilePath,
+  LoopbackOrigin,
+  ProfileId,
+  RequestId,
+} from '../../contract/brands.js';
 import type {
   ChangeMode,
   CommandName,

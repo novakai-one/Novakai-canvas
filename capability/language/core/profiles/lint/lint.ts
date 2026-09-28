@@ -1,12 +1,13 @@
 /*
- * The build-spec structural lint entry point: index the source, then run the five rule groups —
+ * The build-spec structural lint entry point: index the document, then run the five rule groups —
  * sections, repo tree, modules, entities/CRUD, appendix content. The rules live in this folder;
  * each returns its findings. This file orders them, runs the entities/CRUD rules only when both of
- * their sections exist, and returns the result union. format.ts writes the summary. Pure.
+ * their sections exist, and returns the result union. The host prints it. Pure.
  */
-import type { ParsedSource } from '../../../contract/records/foreign.js';
+import type { ParsedSource } from '../../../contract/records/syntax.js';
 import type { ProfileFinding, ProfileLintResult } from '../../../contract/records/profiles.js';
-import { indexSource, sectionById, shown, type DeclarationIndex } from './declarations.js';
+import { buildSpecSlots } from '../build-spec/descriptor.js';
+import { indexDocument, sectionById, shown, type DeclarationIndex } from './declarations.js';
 import { lintSectionIdentity } from './sections/identity.js';
 import { lintRequiredOrder, lintRequiredSections } from './sections/required.js';
 import { lintAppendixShape } from './sections/appendix-sequence.js';
@@ -24,8 +25,8 @@ import { lintAppendices } from './appendices.js';
  * entities and appendix order.
  */
 export function lintBuildSpec(source: ParsedSource): ProfileLintResult {
-  const indexed = indexSource(source);
-  if (indexed === undefined) return { status: 'unsupported-source' };
+  if (source.kind !== 'canvas') return { status: 'unsupported-source' };
+  const indexed = indexDocument(source);
   const [first, ...rest] = [
     ...lintSections(indexed),
     ...lintRepo(indexed),
@@ -49,8 +50,8 @@ function lintSections(indexed: DeclarationIndex): readonly ProfileFinding[] {
 
 /** Entity findings first, then the CRUD table findings of the ownership section. */
 function lintEntitiesAndCrud(indexed: DeclarationIndex): readonly ProfileFinding[] {
-  const entities = sectionById(indexed.sections, 'entities');
-  const ownership = sectionById(indexed.sections, 'ownership');
+  const entities = sectionById(indexed.sections, buildSpecSlots.entities.id);
+  const ownership = sectionById(indexed.sections, buildSpecSlots.ownership.id);
   if (entities === undefined || ownership === undefined) return [];
   return [
     ...entityFindings(shown(entities), indexed.nodes, entities),
