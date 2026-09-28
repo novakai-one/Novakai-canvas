@@ -118,7 +118,10 @@ export type Direction = 'undo' | 'redo';
 /** The editor stores that send through the journal. */
 export type EditorKind = 'inspector' | 'wires' | 'definitions' | 'library';
 
-/** The browser storage slots. From B6a only `draft-retention.ts` builds key text from a slot. */
+/**
+ * The browser storage slots. Only `adapters/sessions/draft-retention.ts` turns a slot (and its
+ * workspace) into storage key text.
+ */
 export type RetentionSlot =
   | 'pending'
   | 'source-draft'
@@ -149,4 +152,21 @@ export const panelSectionIds = [
 /** One side-panel section ID from {@link panelSectionIds}. */
 export type PanelSectionId = (typeof panelSectionIds)[number];
 
-/* ObjectDraftKey, WireDraftKey, DefinitionDraftKey: string brands added in B6a. */
+/**
+ * Draft keys. Each names one retained form by the identities it edits. Only the three key
+ * functions in core make them: `objectDraftKey`, `wireDraftKey` and `definitionDraftKey`. A reader
+ * never parses stored key text: it rebuilds the key from the identities it admitted and refuses a
+ * draft whose stored key differs. Any string passes these schemas, so `parse` cannot throw.
+ */
+export const objectDraftKeySchema = z.string().brand<'ObjectDraftKey'>();
+export const wireDraftKeySchema = z.string().brand<'WireDraftKey'>();
+export const definitionDraftKeySchema = z.string().brand<'DefinitionDraftKey'>();
+
+/** Names one object form: its collection and object. */
+export type ObjectDraftKey = z.infer<typeof objectDraftKeySchema>;
+
+/** Names one wire form: its collection, section and relationship. */
+export type WireDraftKey = z.infer<typeof wireDraftKeySchema>;
+
+/** Names one definition draft: its collection and definition. */
+export type DefinitionDraftKey = z.infer<typeof definitionDraftKeySchema>;

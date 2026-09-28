@@ -17,6 +17,7 @@ import type {
 import type { Collection } from '../../contract/records/owners.js';
 import type { WorkspaceView } from '../../contract/records/workspace.js';
 import type { ActiveDiagram } from '../../contract/records/active-diagram.js';
+import type { DefinitionDraftKey } from '../../contract/brands.js';
 import { canonicalText, usageView } from './usages.js';
 
 /** Model's answers about one definition, injected by the contract binding. */
@@ -96,10 +97,10 @@ function draftedRow(
   return { definition: draft.definition, draft: firstDraft(drafts, draft.definition.id) };
 }
 
-/** One card. A row with no draft tests the key '' against pending, so a pending '' locks it. */
+/** One card. It is pending while its draft's key is locked. */
 function entry(
   row: Row,
-  pending: readonly string[],
+  pending: readonly DefinitionDraftKey[],
   active: ActiveDiagram,
   model: DefinitionModel,
 ): DefinitionEntry {
@@ -108,10 +109,19 @@ function entry(
     definition: row.definition,
     draft: row.draft,
     literalDrafts: row.draft?.literalDrafts ?? [],
-    pending: pending.includes(row.draft?.key ?? ''),
+    pending: isPending(row.draft, pending),
     canonical: canonicalText(model.display(collection, row.definition.id)),
     usages: usageView(model.usages(collection, row.definition.id), active.document.scene),
   };
+}
+
+/** Whether the draft's key is locked; a row with no draft is never pending. */
+function isPending(
+  draft: DefinitionDraft | null,
+  pending: readonly DefinitionDraftKey[],
+): boolean {
+  if (draft === null) return false;
+  return pending.includes(draft.key);
 }
 
 /** The first draft for a definition ID: the one lookup each row makes. */

@@ -1,13 +1,23 @@
 import type { Change, Relationship, WireAppearance } from '../../contract/records/owners.js';
 import type { WireDraft, WireEdit, EditedWire } from '../../contract/records/wire-editor.js';
-import type { CollectionId, RelationshipId, SectionId } from '../../contract/brands.js';
-/** Shared relationship plus local section identify a wire form without parsing generated scene IDs. */
+import type {
+  CollectionId,
+  RelationshipId,
+  SectionId,
+  WireDraftKey,
+} from '../../contract/brands.js';
+import { wireDraftKeySchema } from '../../contract/brands.js';
+/**
+ * The key of a wire's form: its collection, section and relationship, as JSON text. The shared
+ * relationship plus the local section name the form without parsing generated scene IDs. The only
+ * maker of `WireDraftKey`; never fails.
+ */
 export function wireDraftKey(
   collection: CollectionId,
   section: SectionId,
   relationship: RelationshipId,
-): string {
-  return JSON.stringify([collection, section, relationship]);
+): WireDraftKey {
+  return wireDraftKeySchema.parse(JSON.stringify([collection, section, relationship]));
 }
 /** Replay against the captured version, even after an agent changes the displayed collection. */
 export function editedWire(draft: WireDraft): EditedWire {

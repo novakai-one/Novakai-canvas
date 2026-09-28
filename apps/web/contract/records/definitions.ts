@@ -13,6 +13,7 @@ import type {
 import type { Snapshot, Receipt, Request, CanvasEvent, NodeTarget } from './owners.js';
 import type { EditingBase } from './editor-recovery.js';
 import type {
+  DefinitionDraftKey,
   DefinitionId,
   DescendantId,
   ObjectId,
@@ -32,7 +33,7 @@ export interface DefinitionSelection {
 }
 
 export interface DefinitionDraft {
-  readonly key: string;
+  readonly key: DefinitionDraftKey;
   readonly base: EditingBase;
   readonly generation: TransportGeneration;
   readonly collection: Collection;
@@ -113,7 +114,7 @@ export type LiteralCommit =
 /** Draft keys currently being transmitted; controls remain frozen until their receipt settles. */
 export interface DefinitionState {
   readonly drafts: readonly DefinitionDraft[];
-  readonly pending: readonly string[];
+  readonly pending: readonly DefinitionDraftKey[];
   readonly problem: Diagnostic | null;
 }
 
@@ -135,17 +136,17 @@ export interface DefinitionSession {
     selection: DefinitionSelection,
     definition: Definition,
   ): Result<void>;
-  discard(key: string): Result<void>;
-  apply(key: string): Promise<Result<void>>;
+  discard(key: DefinitionDraftKey): Result<void>;
+  apply(key: DefinitionDraftKey): Promise<Result<void>>;
   /** A matching Authoring receipt may settle a retained request after reload/reconciliation. */
   bindRequest(
-    key: string,
+    key: DefinitionDraftKey,
     request: Request,
   ): Result<void>;
   confirmed(requestId: RequestId): void;
   released(requestId: RequestId): void;
   /** Clears only a temporary Apply lock when no request was retained. */
-  unlockWithoutRequest(key: string): void;
+  unlockWithoutRequest(key: DefinitionDraftKey): void;
 }
 
 export type DefinitionFactory = (

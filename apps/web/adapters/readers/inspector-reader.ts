@@ -202,8 +202,9 @@ function isVersionOf(
   return collection.revision === version;
 }
 /**
- * The draft with its original object. Identity is rebuilt from admitted data, so a stored key
- * cannot alias another object's draft. Fails with `invalid-inspector-draft`.
+ * The draft with its original object. The key is rebuilt from the admitted collection and object,
+ * and a stored key that differs is refused, so a stored key cannot alias another object's draft.
+ * Fails with `invalid-inspector-draft`.
  */
 function readOriginal(
   record: CapturedRecord,
@@ -216,7 +217,7 @@ function readOriginal(
   return {
     ok: true,
     value: {
-      key: record.key,
+      key,
       base: record.base,
       generation: record.generation,
       collection,

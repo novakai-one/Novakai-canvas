@@ -1,6 +1,7 @@
 import type { DiagramObject, ContentBlock } from '../../contract/records/owners.js';
 import type { ObjectDraft, ObjectEdit } from '../../contract/records/inspector.js';
-import type { CollectionId, ObjectId } from '../../contract/brands.js';
+import type { CollectionId, ObjectDraftKey, ObjectId } from '../../contract/brands.js';
+import { objectDraftKeySchema } from '../../contract/brands.js';
 /** Readable form data is derived from retained intentions. Only Model/Authoring may admit its final validity. */
 export function editedObject(draft: ObjectDraft): DiagramObject {
   return draft.edits.reduce(applyEdit, draft.object);
@@ -146,12 +147,15 @@ const contentDefaults: Readonly<
   member: (id) => ({ id, kind: 'member', label: 'member', type: 'string', visibility: 'public' }),
   signature: (id) => ({ id, kind: 'signature', label: 'execute', parameters: [], returns: 'void' }),
 };
-/** A collection and object pair names one form regardless of which diagram appearance selected it. */
+/**
+ * The key of an object's form: its collection and object, as JSON text. It names one form whichever
+ * diagram appearance selected the object. The only maker of `ObjectDraftKey`; never fails.
+ */
 export function objectDraftKey(
   collection: CollectionId,
   object: ObjectId,
-): string {
-  return JSON.stringify([collection, object]);
+): ObjectDraftKey {
+  return objectDraftKeySchema.parse(JSON.stringify([collection, object]));
 }
 
 /** ER key edits retain identity and clear reference metadata when the field no longer represents a foreign key. */

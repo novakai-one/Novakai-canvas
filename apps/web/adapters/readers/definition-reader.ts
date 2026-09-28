@@ -1,6 +1,7 @@
 /*
  * Reads stored definition drafts (schema version 1). Pure: checks untrusted storage and never
- * changes it. One invalid draft fails the whole list with `invalid-definition-draft`; the
+ * changes it. A draft's key is rebuilt from its admitted collection and definition, never taken
+ * from storage. One invalid draft fails the whole list with `invalid-definition-draft`; the
  * definitions session reports it and the stored data is kept.
  */
 import { z } from 'zod';
@@ -11,7 +12,7 @@ import { capturedCollectionBaseSchema } from '../../contract/schemas/editor-reco
 import type { DefinitionDraft } from '../../contract/records/definitions.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
-import { mapResults } from '../../contract/api.js';
+import { definitionDraftKey, mapResults } from '../../contract/api.js';
 
 /** The stored shape of one definition draft. */
 const draftSchema = z.strictObject({
@@ -48,8 +49,8 @@ const IDENTITY_FITS: Result<void> = Object.freeze({ ok: true, value: undefined }
 
 /**
  * Reads a stored list of definition drafts, all or none. Fails with `invalid-definition-draft` when
- * the list is unbounded, or when any draft is malformed, has an invalid definition or base, or
- * names an identity its operation cannot have.
+ * the list is unbounded, or when any draft is malformed, has an invalid definition or base, names
+ * an identity its operation cannot have, or has a stored key that its identities do not rebuild.
  */
 export function readDefinitionDrafts(input: unknown): Result<readonly DefinitionDraft[]> {
   const parsed = z.array(z.unknown()).max(1000).safeParse(input);
@@ -64,20 +65,39 @@ function readDraft(input: unknown): Result<DefinitionDraft> {
   return checkedDraft(record.data);
 }
 
-/** The draft once its definition, then its base, are valid. Fails with `invalid-definition-draft`. */
+/**
+ * The draft once its definition, then its base, then its key are valid. Fails with
+ * `invalid-definition-draft`.
+ */
 function checkedDraft(record: StoredDraft): Result<DefinitionDraft> {
   const definition = readDefinition(record.definition);
   if (!definition.ok) return definition;
   const collection = admitCollection(record, definition.value);
   if (!collection.ok) return collection;
+  return keyedDraft(record, collection.value, definition.value);
+}
+
+/**
+ * The draft under the key rebuilt from its admitted collection and definition. A stored key that
+ * differs is refused, so it cannot alias another definition's draft. Fails with
+ * `invalid-definition-draft`.
+ */
+function keyedDraft(
+  record: StoredDraft,
+  collection: Collection,
+  definition: Definition,
+): Result<DefinitionDraft> {
+  const key = definitionDraftKey(collection.id, definition.id);
+  if (key !== record.key)
+    return invalid('The retained definition identity does not match its draft');
   return {
     ok: true,
     value: {
-      key: record.key,
+      key,
       base: record.base,
       generation: record.generation,
-      collection: collection.value,
-      definition: definition.value,
+      collection,
+      definition,
       operation: record.operation,
       request: record.request,
       literalDrafts: record.literalDrafts,

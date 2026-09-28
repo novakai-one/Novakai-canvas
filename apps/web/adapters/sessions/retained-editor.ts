@@ -45,12 +45,12 @@ export function createRetainedEditor<Selection, Command, Draft extends RetainedD
   ): Result<void> {
     const encoded = bindings.encode(drafts);
     if (!encoded.ok) return encoded;
-    return bindings.retention.write(`${bindings.namespace}.${workspace}`, encoded.value);
+    return bindings.retention.write({ slot: bindings.slot, workspace }, encoded.value);
   }
   /** Read failure blocks all writes while preserving previous forms and both workspaces' stored data. */
   function restore(id: WorkspaceId): Result<void> {
     scope = unrestoredWorkspace;
-    const stored = bindings.retention.read(`${bindings.namespace}.${id}`);
+    const stored = bindings.retention.read({ slot: bindings.slot, workspace: id });
     if (!stored.ok) return reject(stored.error);
     return restoreValue(stored.value, id);
   }
@@ -93,11 +93,11 @@ export function createRetainedEditor<Selection, Command, Draft extends RetainedD
     return save([...state.drafts.filter((draft) => draft.key !== next.key), next]);
   }
   /** Explicit discard or exact-generation acknowledgement removes one form. */
-  function discard(key: string): Result<void> {
+  function discard(key: Draft['key']): Result<void> {
     return save(state.drafts.filter((draft) => draft.key !== key));
   }
   /** Missing or already discarded forms make no request; cross-workspace forms fail explicitly. */
-  async function apply(key: string): Promise<Result<void>> {
+  async function apply(key: Draft['key']): Promise<Result<void>> {
     const draft = state.drafts.find((item) => item.key === key);
     if (draft === undefined) return { ok: true, value: undefined };
     return submitDraft(draft);

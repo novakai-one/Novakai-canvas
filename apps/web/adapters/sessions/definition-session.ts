@@ -22,7 +22,8 @@
  * - #17 The subscribe cleanup returns Set.delete's boolean.
  */
 import type { Result, Diagnostic } from '../../contract/errors.js';
-import type { RequestId, WorkspaceId } from '../../contract/brands.js';
+import type { DefinitionDraftKey, RequestId, WorkspaceId } from '../../contract/brands.js';
+import type { RetentionPlace } from '../../contract/ports/draft-retention.js';
 import type { Request } from '../../contract/records/owners.js';
 import type { WorkspaceScope } from '../../contract/records/workspace-scope.js';
 import type {
@@ -71,7 +72,7 @@ export function createDefinitionSession(bindings: DefinitionBindings): Definitio
   function write(drafts: readonly DefinitionDraft[]): Result<void> {
     if (scope.phase === 'unrestored') return published(drafts);
     const result = bindings.retention.write(
-      retentionKey(scope.workspace),
+      draftsPlace(scope.workspace),
       encodeDefinitionDrafts(drafts),
     );
     if (!result.ok) return reject(result.error);
@@ -85,7 +86,7 @@ export function createDefinitionSession(bindings: DefinitionBindings): Definitio
   /** Reads a workspace's stored drafts. The workspace is forgotten first (see the file header). */
   function restore(id: WorkspaceId): Result<void> {
     scope = unrestoredWorkspace;
-    const stored = bindings.retention.read(retentionKey(id));
+    const stored = bindings.retention.read(draftsPlace(id));
     if (!stored.ok) return reject(stored.error);
     if (stored.value === null) return install(id, []);
     return restoreStored(id, stored.value);
@@ -117,13 +118,13 @@ export function createDefinitionSession(bindings: DefinitionBindings): Definitio
     return write(drafts.value);
   }
   /** Removes the key's draft; a draft being submitted cannot be discarded. */
-  function discard(key: string): Result<void> {
+  function discard(key: DefinitionDraftKey): Result<void> {
     const drafts = discardedDrafts(state, key);
     if (!drafts.ok) return reject(drafts.error);
     return write(drafts.value);
   }
   /** Locks the key and submits its draft. A missing draft makes no request. */
-  async function apply(key: string): Promise<Result<void>> {
+  async function apply(key: DefinitionDraftKey): Promise<Result<void>> {
     const draft = state.drafts.find((item) => item.key === key);
     if (draft === undefined) return { ok: true, value: undefined };
     const applying = applyingState(state, key, draft);
@@ -133,7 +134,7 @@ export function createDefinitionSession(bindings: DefinitionBindings): Definitio
   }
   /** Success removes the draft; failure unlocks the key unless its draft holds a request. */
   async function settle(
-    key: string,
+    key: DefinitionDraftKey,
     draft: DefinitionDraft,
   ): Promise<Result<void>> {
     const result = await bindings.apply(draft);
@@ -145,7 +146,7 @@ export function createDefinitionSession(bindings: DefinitionBindings): Definitio
   }
   /** Saves the request on the key's draft so a reload can settle it; no draft saves nothing. */
   function bindRequest(
-    key: string,
+    key: DefinitionDraftKey,
     request: Request,
   ): Result<void> {
     const drafts = boundDrafts(state.drafts, key, request);
@@ -163,7 +164,7 @@ export function createDefinitionSession(bindings: DefinitionBindings): Definitio
     publish(unlocked(state, settled.key));
   }
   /** Ends the key's Apply lock unless its draft holds a request. */
-  function unlockWithoutRequest(key: string): void {
+  function unlockWithoutRequest(key: DefinitionDraftKey): void {
     const next = unlockedWithoutRequest(state, key);
     if (next !== null) publish(next);
   }
@@ -187,7 +188,7 @@ export function createDefinitionSession(bindings: DefinitionBindings): Definitio
   };
 }
 
-/** The storage key of a workspace's definition drafts. */
-function retentionKey(workspace: WorkspaceId): string {
-  return `definitions.${workspace}`;
+/** Where a workspace's definition drafts are stored. */
+function draftsPlace(workspace: WorkspaceId): RetentionPlace {
+  return { slot: 'definitions', workspace };
 }

@@ -8,7 +8,7 @@ import type { DefinitionDraft } from '../../contract/records/definitions.js';
 export interface DefinitionDraftRecord {
   readonly kind: 'definition-draft';
   readonly schemaVersion: 1;
-  readonly key: string;
+  readonly key: DefinitionDraft['key'];
   readonly base: DefinitionDraft['base'];
   readonly generation: DefinitionDraft['generation'];
   readonly collection: DefinitionDraft['collection']['id'];

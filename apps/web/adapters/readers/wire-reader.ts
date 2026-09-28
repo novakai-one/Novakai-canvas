@@ -194,7 +194,7 @@ function checkedWire(
   return {
     ok: true,
     value: {
-      key: value.key,
+      key,
       base: value.base,
       generation: value.generation,
       collection,

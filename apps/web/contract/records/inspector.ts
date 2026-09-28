@@ -1,7 +1,7 @@
 import type { Collection, DiagramObject, ObjectKind, TypeUse } from '@novakai/canvas-model';
 import type { Snapshot, Receipt } from './owners.js';
 import type { EditingBase } from './editor-recovery.js';
-import type { DescendantId, TransportGeneration, WorkspaceId } from '../brands.js';
+import type { DescendantId, ObjectDraftKey, TransportGeneration, WorkspaceId } from '../brands.js';
 import type { Result, Diagnostic } from '../errors.js';
 import type { DraftRetention } from '../ports/draft-retention.js';
 /** UI edit commands retain incomplete text without pretending it is an admitted Model record. */
@@ -44,7 +44,7 @@ export type ObjectEdit =
     };
 /** Captured scope never advances across another author's commit. Commands replay against this exact object. */
 export interface ObjectDraft {
-  readonly key: string;
+  readonly key: ObjectDraftKey;
   readonly base: EditingBase;
   readonly generation: TransportGeneration;
   readonly collection: Collection;
@@ -70,8 +70,8 @@ export interface InspectorSession {
     selection: ObjectSelection,
     command: ObjectEdit,
   ): Result<void>;
-  discard(key: string): Result<void>;
-  apply(key: string): Promise<Result<void>>;
+  discard(key: ObjectDraftKey): Result<void>;
+  apply(key: ObjectDraftKey): Promise<Result<void>>;
 }
 export interface InspectorBindings {
   readonly retention: DraftRetention;

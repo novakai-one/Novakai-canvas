@@ -78,12 +78,12 @@ function session(
   /** Save only admitted preferences. A storage failure leaves the selected theme usable for this session. */
   function change(preferences: UiPreferences): void {
     if (!install(preferences)) return;
-    const saved = bindings.retention.write('ui-preferences', preferences);
+    const saved = bindings.retention.write({ slot: 'ui-preferences' }, preferences);
     if (!saved.ok) report(storageFailure(saved.error));
   }
   /** Restore retains malformed or unknown records; recognized shipped-theme pins advance to the current release. */
   function restore(): void {
-    const stored = bindings.retention.read('ui-preferences');
+    const stored = bindings.retention.read({ slot: 'ui-preferences' });
     if (!stored.ok) {
       report(storageFailure(stored.error));
       return;
@@ -112,7 +112,7 @@ function session(
     current: UiPreferences,
   ): void {
     if (current === stored) return;
-    const saved = bindings.retention.write('ui-preferences', current);
+    const saved = bindings.retention.write({ slot: 'ui-preferences' }, current);
     if (!saved.ok) report(storageFailure(saved.error));
   }
   restore();

@@ -3,7 +3,7 @@
  * draft holds a submitted request. A receipt removes the draft; a refusal keeps it and clears the
  * request. Each function returns the next state or drafts; the session writes and publishes them.
  */
-import type { RequestId, WorkspaceId } from '../../contract/brands.js';
+import type { DefinitionDraftKey, RequestId, WorkspaceId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
 import type { DefinitionDraft, DefinitionState } from '../../contract/records/definitions.js';
@@ -14,7 +14,7 @@ export type RequestOutcome = 'confirmed' | 'released';
 
 /** The key whose request settled, and the drafts that are left. */
 export interface SettledRequest {
-  readonly key: string;
+  readonly key: DefinitionDraftKey;
   readonly drafts: readonly DefinitionDraft[];
 }
 
@@ -31,7 +31,7 @@ export function restoredState(
 /** The state once Apply starts: the key is locked and the problem cleared. */
 export function applyingState(
   state: DefinitionState,
-  key: string,
+  key: DefinitionDraftKey,
   draft: DefinitionDraft,
 ): Result<DefinitionState> {
   const guard = applyGuard(state.pending, key, draft);
@@ -42,7 +42,7 @@ export function applyingState(
 /** Drafts after a discard. A pending Apply, or any draft of the key with a request, blocks it. */
 export function discardedDrafts(
   state: DefinitionState,
-  key: string,
+  key: DefinitionDraftKey,
 ): Result<readonly DefinitionDraft[]> {
   const bound = state.drafts.find((draft) => draft.key === key && draft.request !== undefined);
   const lock = submissionLock(state.pending, key, bound);
@@ -53,7 +53,7 @@ export function discardedDrafts(
 /** The drafts with the request saved on the key's draft; null when no draft has the key. */
 export function boundDrafts(
   drafts: readonly DefinitionDraft[],
-  key: string,
+  key: DefinitionDraftKey,
   request: Request,
 ): readonly DefinitionDraft[] | null {
   if (!drafts.some((draft) => draft.key === key)) return null;
@@ -74,7 +74,7 @@ export function settledRequest(
 /** The state with the key's Apply lock removed. */
 export function unlocked(
   state: DefinitionState,
-  key: string,
+  key: DefinitionDraftKey,
 ): DefinitionState {
   return { ...state, pending: state.pending.filter((item) => item !== key) };
 }
@@ -82,7 +82,7 @@ export function unlocked(
 /** The key unlocked when its draft holds no request; null keeps the lock on a submitted request. */
 export function unlockedWithoutRequest(
   state: DefinitionState,
-  key: string,
+  key: DefinitionDraftKey,
 ): DefinitionState | null {
   const draft = state.drafts.find((item) => item.key === key);
   if (draft?.request !== undefined) return null;
@@ -91,8 +91,8 @@ export function unlockedWithoutRequest(
 
 /** A pending Apply or a saved request locks the draft. Edit and discard share this one message. */
 export function submissionLock(
-  pending: readonly string[],
-  key: string,
+  pending: readonly DefinitionDraftKey[],
+  key: DefinitionDraftKey,
   draft: DefinitionDraft | undefined,
 ): Result<void> {
   if (pending.includes(key) || draft?.request !== undefined)
@@ -103,15 +103,15 @@ export function submissionLock(
 /** The drafts without the key's draft. */
 export function withoutDraft(
   drafts: readonly DefinitionDraft[],
-  key: string,
+  key: DefinitionDraftKey,
 ): readonly DefinitionDraft[] {
   return drafts.filter((draft) => draft.key !== key);
 }
 
 /** Apply needs the key unlocked and every literal finished; the pending check comes first. */
 function applyGuard(
-  pending: readonly string[],
-  key: string,
+  pending: readonly DefinitionDraftKey[],
+  key: DefinitionDraftKey,
   draft: DefinitionDraft,
 ): Result<void> {
   if (pending.includes(key))
@@ -130,14 +130,14 @@ function hasLiteralDrafts(draft: DefinitionDraft): boolean {
 }
 
 /** The keys of drafts that hold a request. */
-function requestKeys(drafts: readonly DefinitionDraft[]): readonly string[] {
+function requestKeys(drafts: readonly DefinitionDraft[]): readonly DefinitionDraftKey[] {
   return drafts.filter((draft) => draft.request !== undefined).map((draft) => draft.key);
 }
 
 /** The drafts after a settled request. A new outcome is a compile error until it has a case. */
 function settledDrafts(
   drafts: readonly DefinitionDraft[],
-  key: string,
+  key: DefinitionDraftKey,
   outcome: RequestOutcome,
 ): readonly DefinitionDraft[] {
   switch (outcome) {
@@ -151,7 +151,7 @@ function settledDrafts(
 /** The drafts with the key's request set; undefined keeps `request` as a present key. */
 function withRequest(
   drafts: readonly DefinitionDraft[],
-  key: string,
+  key: DefinitionDraftKey,
   request: Request | undefined,
 ): readonly DefinitionDraft[] {
   return drafts.map((draft) => requestOn(draft, key, request));
@@ -160,7 +160,7 @@ function withRequest(
 /** One draft with its request set when it has the key; other drafts are returned as they are. */
 function requestOn(
   draft: DefinitionDraft,
-  key: string,
+  key: DefinitionDraftKey,
   request: Request | undefined,
 ): DefinitionDraft {
   if (draft.key !== key) return draft;

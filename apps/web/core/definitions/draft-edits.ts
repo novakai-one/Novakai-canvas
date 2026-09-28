@@ -1,11 +1,13 @@
 /*
- * Create, edit and remove on definition drafts. Each definition keeps one draft, keyed by its
- * collection and definition IDs. The first edit captures the collection base, generation and
- * collection; later edits keep them. Number text that is not yet a number stays a literal draft
- * while its path is still a literal that the edit did not touch.
+ * Create, edit and remove on definition drafts. Each definition keeps one draft, keyed by
+ * `definitionDraftKey` (its collection and definition IDs). The first edit captures the collection
+ * base, generation and collection; later edits keep them. Number text that is not yet a number
+ * stays a literal draft while its path is still a literal that the edit did not touch.
  */
 import type { Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
+import type { CollectionId, DefinitionDraftKey, DefinitionId } from '../../contract/brands.js';
+import { definitionDraftKeySchema } from '../../contract/brands.js';
 import type { WorkspaceScope } from '../../contract/records/workspace-scope.js';
 import type {
   Definition,
@@ -50,6 +52,17 @@ export function editedDrafts(
   return unlockedEdit(state, edit);
 }
 
+/**
+ * The key of a definition's draft: its collection ID, a colon, then its definition ID. The only
+ * maker of `DefinitionDraftKey`; never fails.
+ */
+export function definitionDraftKey(
+  collection: CollectionId,
+  definition: DefinitionId,
+): DefinitionDraftKey {
+  return definitionDraftKeySchema.parse(`${collection}:${definition}`);
+}
+
 /** What a replacement typed; create and remove type nothing. */
 type LiteralTyping = Pick<
   Extract<DefinitionEdit, { readonly operation: 'replace' }>,
@@ -64,7 +77,7 @@ function unlockedEdit(
   state: DefinitionState,
   edit: DefinitionEdit,
 ): Result<readonly DefinitionDraft[]> {
-  const key = draftKey(edit);
+  const key = definitionDraftKey(edit.selection.collection.id, edit.definition.id);
   const current = state.drafts.find((draft) => draft.key === key);
   const lock = submissionLock(state.pending, key, current);
   if (!lock.ok) return lock;
@@ -74,7 +87,7 @@ function unlockedEdit(
 /** Removing an unsaved create drops its draft before any base capture; other edits replace it. */
 function mergedDrafts(
   drafts: readonly DefinitionDraft[],
-  key: string,
+  key: DefinitionDraftKey,
   current: DefinitionDraft | undefined,
   edit: DefinitionEdit,
 ): Result<readonly DefinitionDraft[]> {
@@ -86,7 +99,7 @@ function mergedDrafts(
 
 /** The key's draft after the edit. The current draft's base, generation and collection win. */
 function editedDraft(
-  key: string,
+  key: DefinitionDraftKey,
   current: DefinitionDraft | undefined,
   edit: DefinitionEdit,
 ): Result<DefinitionDraft> {
@@ -108,11 +121,6 @@ function editedDraft(
       literalDrafts: nextLiteralDrafts(current?.literalDrafts, edit),
     },
   };
-}
-
-/** The draft key: collection ID, then definition ID. */
-function draftKey(edit: DefinitionEdit): string {
-  return `${edit.selection.collection.id}:${edit.definition.id}`;
 }
 
 /** Whether the edit removes a definition that was created but never applied. */

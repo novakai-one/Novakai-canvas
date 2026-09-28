@@ -53,7 +53,7 @@ export function createLibraryController(bindings: LibraryBindings): LibraryContr
   function restoreLocal(workspace: WorkspaceId): void {
     publish({ folderDraft: null });
     restoreVisits(workspace);
-    const stored = bindings.retention.read(`folder-draft.${workspace}`);
+    const stored = bindings.retention.read({ slot: 'folder-draft', workspace });
     if (!stored.ok) {
       bindings.report(stored.error);
       return;
@@ -73,7 +73,10 @@ export function createLibraryController(bindings: LibraryBindings): LibraryContr
   /** Keeps the form, blank titles included, in storage. Fails: `draft-retention-unavailable`. */
   function saveFolder(folderDraft: FolderDraft | null): void {
     if (base === null) return;
-    const result = bindings.retention.write(`folder-draft.${base.workspace}`, folderDraft);
+    const result = bindings.retention.write(
+      { slot: 'folder-draft', workspace: base.workspace },
+      folderDraft,
+    );
     publish({ folderDraft });
     if (!result.ok) publish({ problem: result.error });
   }
@@ -120,7 +123,7 @@ export function createLibraryController(bindings: LibraryBindings): LibraryContr
   /** Restores stored visits, apart from the catalog. Reports `draft-retention-unavailable`. */
   function restoreVisits(workspace: WorkspaceId): void {
     recent = [];
-    const stored = bindings.retention.read(`visits.${workspace}`);
+    const stored = bindings.retention.read({ slot: 'visits', workspace });
     if (!stored.ok) {
       bindings.report(stored.error);
       return;
@@ -175,7 +178,7 @@ export function createLibraryController(bindings: LibraryBindings): LibraryContr
     workspace: WorkspaceId,
     visits: readonly RecentVisit[],
   ): void {
-    const stored = bindings.retention.write(`visits.${workspace}`, visits);
+    const stored = bindings.retention.write({ slot: 'visits', workspace }, visits);
     if (!stored.ok) {
       bindings.report(stored.error);
       return;

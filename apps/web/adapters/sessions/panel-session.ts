@@ -54,14 +54,14 @@ export function createPanelController(bindings: PanelBindings): PanelController 
     publish({ ...state, preferences });
     if (scope.phase === 'unrestored') return;
     const stored = storedPanels(preferences, scope.workspace);
-    const saved = bindings.retention.write(`panels.${scope.workspace}`, stored);
+    const saved = bindings.retention.write({ slot: 'panels', workspace: scope.workspace }, stored);
     if (!saved.ok) bindings.report(panelProblem(saved.error.message));
   }
   /** Workspace identity scopes personal panel preferences independently from diagram theme records. */
   function restore(workspace: WorkspaceId): void {
     scope = restoredWorkspace(workspace);
     publish({ ...state, preferences: defaultPanels(bindings.definitions, bindings.sizing) });
-    const stored = bindings.retention.read(`panels.${workspace}`);
+    const stored = bindings.retention.read({ slot: 'panels', workspace });
     if (!stored.ok) {
       bindings.report(panelProblem(stored.error.message));
       return;

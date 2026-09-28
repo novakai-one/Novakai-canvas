@@ -12,6 +12,7 @@ import type {
   StoredRecord,
 } from '../../contract/records/owners.js';
 import type { Submission } from '../../contract/records/submission.js';
+import type { RetentionPlace } from '../../contract/ports/draft-retention.js';
 import type { WorkspaceScope } from '../../contract/records/workspace-scope.js';
 import type { TransportGeneration, WorkspaceId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
@@ -149,13 +150,13 @@ export function createSourceController(bindings: SourceBindings): SourceControll
         'recovery-unavailable',
         'Source recovery has not admitted this workspace; stored data was retained',
       );
-    return persistAdmittedSource(`source-draft.${workspace}`, captured);
+    return persistAdmittedSource({ slot: 'source-draft', workspace }, captured);
   }
   function persistAdmittedSource(
-    key: string,
+    place: RetentionPlace,
     captured: CapturedSourceBase,
   ): Result<void> {
-    if (!state.sourceDirty) return bindings.retention.remove(key);
+    if (!state.sourceDirty) return bindings.retention.remove(place);
     const encoded = encodeSourceRecovery({
       source: state.source,
       base: captured.base,
@@ -164,7 +165,7 @@ export function createSourceController(bindings: SourceBindings): SourceControll
       edit: state.sourceEdit,
     });
     if (!encoded.ok) return encoded;
-    return bindings.retention.write(key, encoded.value);
+    return bindings.retention.write(place, encoded.value);
   }
   /** Closing a dirty editor is an explicit human choice; keeping it never discards its source/base. */
   function closeSource(decision: 'keep' | 'discard' | 'stay'): void {
@@ -181,7 +182,7 @@ export function createSourceController(bindings: SourceBindings): SourceControll
   /** Browser recovery never rewrites a draft's captured revision to the latest remote version. */
   function restoreSource(workspace: WorkspaceId): void {
     admitted = unrestoredWorkspace;
-    const stored = bindings.retention.read(`source-draft.${workspace}`);
+    const stored = bindings.retention.read({ slot: 'source-draft', workspace });
     if (!stored.ok) {
       report(stored.error);
       return;

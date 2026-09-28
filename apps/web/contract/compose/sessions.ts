@@ -18,7 +18,7 @@ import {
 export function createInspectorSession(bindings: InspectorBindings): InspectorSession {
   return createRetainedEditor({
     ...bindings,
-    namespace: 'inspector',
+    slot: 'inspector',
     encode: encodeObjectRecovery,
     edit: retainObjectCommand,
     apply: (draft) => bindings.apply(draft, editedObject(draft)),
@@ -29,7 +29,7 @@ export function createInspectorSession(bindings: InspectorBindings): InspectorSe
 export function createWireSession(bindings: WireEditorBindings): WireEditorSession {
   return createRetainedEditor({
     ...bindings,
-    namespace: 'wire-inspector',
+    slot: 'wire-inspector',
     encode: encodeWireRecovery,
     edit: retainWireCommand,
     apply: (draft) => bindings.apply(draft, wireChanges(draft)),

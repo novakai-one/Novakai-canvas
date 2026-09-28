@@ -8,7 +8,7 @@ import type {
 } from './owners.js';
 import type { Snapshot, Receipt } from './owners.js';
 import type { EditingBase } from './editor-recovery.js';
-import type { TransportGeneration, WorkspaceId } from '../brands.js';
+import type { TransportGeneration, WireDraftKey, WorkspaceId } from '../brands.js';
 import type { Diagnostic, Result } from '../errors.js';
 import type { DraftRetention } from '../ports/draft-retention.js';
 /** The semantic relationship is shared; only the selected section owns the route controls. */
@@ -41,7 +41,7 @@ export type WireEdit =
   | { readonly kind: 'automatic-route' };
 export interface WireDraft extends Omit<WireSelection, 'base'> {
   readonly base: EditingBase;
-  readonly key: string;
+  readonly key: WireDraftKey;
   readonly edits: readonly WireEdit[];
 }
 export interface EditedWire {
@@ -67,8 +67,8 @@ export interface WireEditorSession {
     selection: WireSelection,
     command: WireEdit,
   ): Result<void>;
-  discard(key: string): Result<void>;
-  apply(key: string): Promise<Result<void>>;
+  discard(key: WireDraftKey): Result<void>;
+  apply(key: WireDraftKey): Promise<Result<void>>;
 }
 export interface WireEditorBindings {
   readonly retention: DraftRetention;

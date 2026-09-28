@@ -36,7 +36,7 @@ export function createSubmissionSession(bindings: SubmissionBindings): Submissio
     if (scope.phase === 'unrestored')
       return failure('recovery-unavailable', 'No workspace is restored; the request was not kept');
     const stored = bindings.retention.write(
-      `pending.${scope.workspace}`,
+      { slot: 'pending', workspace: scope.workspace },
       next.filter((item) => item.state !== 'rejected'),
     );
     if (!stored.ok) return stored;
@@ -51,7 +51,7 @@ export function createSubmissionSession(bindings: SubmissionBindings): Submissio
   /** Restore is read-only with respect to the service; interrupted sending is uncertain, never automatically replayed. */
   function restore(id: WorkspaceId): void {
     scope = restoredWorkspace(id);
-    const stored = bindings.retention.read(`pending.${id}`);
+    const stored = bindings.retention.read({ slot: 'pending', workspace: id });
     if (!stored.ok) {
       bindings.report(stored.error);
       return;

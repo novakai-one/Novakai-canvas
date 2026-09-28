@@ -90,7 +90,11 @@ export {
   literalDraftAt,
 } from '../core/definitions/literal-edits.js';
 export { samePath, isPathWithin } from '../core/definitions/paths.js';
-export { editedDrafts, type DefinitionEdit } from '../core/definitions/draft-edits.js';
+export {
+  definitionDraftKey,
+  editedDrafts,
+  type DefinitionEdit,
+} from '../core/definitions/draft-edits.js';
 export {
   restoredState,
   applyingState,
