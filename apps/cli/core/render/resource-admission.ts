@@ -22,9 +22,9 @@ export interface AdmissionDependencies {
 
 /**
  * The digest of one declaration's bytes, read relative to `file`: its pin, or the digest Assets
- * stored the file's bytes under. Fails as the resource read does (`absolute-path`, `path-escape`,
- * `source-unavailable`, `unsupported-media`, `resource-mismatch`, `resource-too-large`, each with
- * its `location`), or with Assets' failure.
+ * stored the file's bytes under. Fails with `invalid-response` (the declaration has no alias), as
+ * the resource read does (`absolute-path`, `path-escape`, `source-unavailable`, `unsupported-media`,
+ * `resource-mismatch`, `resource-too-large`, each with its `location`), or with Assets' failure.
  */
 export async function admitResource(
   file: FilePath,

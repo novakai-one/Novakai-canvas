@@ -13,6 +13,7 @@ import {
   readoutAnswer,
   receiptAnswer,
 } from '../../contract/records/service-answers.js';
+import type { Parser } from '../../contract/schemas.js';
 import { snapshotSchema } from '../../contract/schemas.js';
 import type { CollectionId } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
@@ -20,13 +21,6 @@ import { failure, success } from '../../contract/errors.js';
 
 /** The transport's GET; a read never posts. */
 type TransportGet = Pick<HttpTransport, 'get'>;
-
-/** The part of an answer schema a read uses: its check, and the branded value it gives. */
-interface AnswerSchema<T> {
-  safeParse(
-    input: unknown,
-  ): { readonly success: true; readonly data: T } | { readonly success: false };
-}
 
 /**
  * Binds the read routes to `transport`. Every method fails as the transport does, or with
@@ -98,7 +92,7 @@ async function value<T>(pending: Promise<Result<Observed<T>>>): Promise<Result<T
  */
 async function observed<T>(
   pending: Promise<Result<Observed<unknown>>>,
-  schema: AnswerSchema<T>,
+  schema: Parser<T>,
   invalid: string,
 ): Promise<Result<Observed<T>>> {
   const answer = await pending;

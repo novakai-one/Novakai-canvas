@@ -43,8 +43,9 @@ const unnamedResource: FailureInput = Object.freeze({
 
 /**
  * Stage each of the source's declarations, read relative to its `file`, before freezing aliases
- * into `retained`'s request. Fails as the resource read or a service call does, or with
- * `invalid-input` when the frozen request fails Authoring's schema.
+ * into `retained`'s request. Fails with `invalid-response` (a declaration has no alias), as the
+ * resource read or a service call does, or with `invalid-input` when the frozen request fails
+ * Authoring's schema.
  */
 export async function prepareResources(
   file: FilePath,
@@ -59,7 +60,8 @@ export async function prepareResources(
 
 /**
  * Stage a declaration list; a failed member prevents any canonical request submission. Fails as
- * the first failed resource read, then the first failed stage or blob call, does.
+ * the first failed declaration does (`invalid-response` when it has no alias, or the resource
+ * read's failure), then as the first failed stage or blob call does.
  */
 export async function stageResources(
   file: FilePath,
@@ -85,7 +87,7 @@ export async function declaredResource(
   file: FilePath,
   request: ResourceRequest,
   reader: ResourceReader,
-): Promise<Result<StagedResource>> {
+): Promise<Result<StagedResource, LocalFailure>> {
   const alias = checked(resourceAlias, request.alias, unnamedResource);
   if (!alias.ok) return alias;
   const pinned = assetOfPin(request.source);
@@ -108,7 +110,7 @@ async function localResource(
   request: ResourceRequest,
   alias: ResourceAlias,
   reader: ResourceReader,
-): Promise<Result<StagedResource>> {
+): Promise<Result<StagedResource, LocalFailure>> {
   const bytes = await reader.read(file, request);
   if (!bytes.ok) return located(bytes.error, declarationPlace(file, request, alias));
   return success({ kind: 'local', alias, input: stageInput(request, bytes.value) });

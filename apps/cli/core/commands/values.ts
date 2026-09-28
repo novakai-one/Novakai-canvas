@@ -28,7 +28,7 @@ import type {
 import type { Result } from '../../contract/errors.js';
 import { failure, success, unreadableSource, unwritableOutput } from '../../contract/errors.js';
 import { checked } from '../shared/checks.js';
-import type { Parser } from '../shared/checks.js';
+import type { Parser } from '../../contract/schemas.js';
 import { joined, mapped } from '../shared/results.js';
 import type { CommandDefaults, CommandFlags } from './flags.js';
 

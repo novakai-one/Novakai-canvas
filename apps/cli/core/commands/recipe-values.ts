@@ -13,7 +13,7 @@ import type { ExpansionRequest } from '../../contract/records/foreign.js';
 import type { Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 import { checked } from '../shared/checks.js';
-import type { Parser } from '../shared/checks.js';
+import type { Parser } from '../../contract/schemas.js';
 import { joined } from '../shared/results.js';
 import { presetOfPin } from '../resources/digests.js';
 import type { CommandFlags } from './flags.js';

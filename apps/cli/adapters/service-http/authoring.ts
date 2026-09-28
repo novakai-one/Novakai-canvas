@@ -44,7 +44,8 @@ export function createServiceAuthoring(transport: TransportPost): ServiceAuthori
 
 /**
  * Authoring's preview answer, checked only to be JSON: printed as it came. Fails as {@link send}
- * does, or with `invalid-response` when the answer is not JSON.
+ * does, or with `invalid-response` when the answer is not JSON; its recovery names the request's
+ * receipt, as {@link unconfirmed} does.
  */
 async function preview(
   transport: TransportPost,
@@ -54,7 +55,11 @@ async function preview(
   if (!answer.ok) return answer;
   const checked = changePreview.safeParse(answer.value.value);
   if (!checked.success)
-    return failure({ code: 'invalid-response', message: 'Service returned an invalid preview' });
+    return failure({
+      code: 'invalid-response',
+      message: 'Service returned an invalid preview',
+      recovery: receiptFirst(retained.request.request),
+    });
   return success(checked.data);
 }
 
@@ -99,14 +104,13 @@ function unconfirmed(
   id: RequestId,
 ): Result<never> {
   if (error.code === 'connection-uncertain' || error.code === 'invalid-response')
-    return {
-      ok: false,
-      error: {
-        ...error,
-        recovery: `Run canvas receipt ${id}, then canvas retry ${id} only if no receipt exists.`,
-      },
-    };
+    return { ok: false, error: { ...error, recovery: receiptFirst(id) } };
   return { ok: false, error };
+}
+
+/** The recovery of an unconfirmed answer: check `id`'s receipt; retry only when there is none. */
+function receiptFirst(id: RequestId): string {
+  return `Run canvas receipt ${id}, then canvas retry ${id} only if no receipt exists.`;
 }
 
 /**

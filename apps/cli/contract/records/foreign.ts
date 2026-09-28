@@ -6,7 +6,6 @@ import type { TransportResponse, createHeadlessBindings } from '@novakai/canvas-
 import type { Admission } from '@novakai/canvas-templates';
 import type { Collection } from '@novakai/canvas-model';
 import type { Span } from '@novakai/canvas-language';
-import type { StoredRecord } from '@novakai/canvas-authoring';
 export type { Collection, Mode, Result as ModelResult } from '@novakai/canvas-model';
 export type {
   Declaration,
@@ -52,12 +51,6 @@ export type FailureSource = NonNullable<OperationSource['source']>;
 
 /** One asset record a collection declares, as Model types it. Model exports no name for it. */
 export type CollectionAsset = Collection['assets'][number];
-
-/** A collection's revision, as Model counts it. Model exports no name for it. */
-export type ModelRevision = Collection['revision'];
-
-/** A stored record's storage version, as Authoring counts it. Authoring exports no name for it. */
-export type StorageVersion = StoredRecord['version'];
 
 /** A point in a source: offset, 1-based line and column. Language exports no name for it. */
 export type SourcePosition = Span['start'];

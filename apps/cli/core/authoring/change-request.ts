@@ -1,23 +1,28 @@
 /*
  * The Authoring request of one DSL change, with preconditions read from the snapshot the change
  * was prepared from. Pure apart from the injected Model check. The source's collection ID becomes
- * an Authoring record ID once, here. `create` needs the collection absent (a deleted one still
+ * an Authoring record ID once, here; the stored record's storage version and its collection's
+ * Model revision are branded once, here. `create` needs the collection absent (a deleted one still
  * counts as present) and also expects the catalog; `replace` and `patch` need the revision the
  * agent read. Nothing is sent; the caller fixes the named input and runs the command again.
  */
 import type { CollectionReader } from '../../contract/ports/collection-reader.js';
 import type { ChangeIntent } from '../../contract/records/command.js';
 import type {
-  ModelRevision,
+  Collection,
   ReadVersion,
   Request,
   Snapshot,
-  StorageVersion,
   StoredRecord,
 } from '../../contract/records/foreign.js';
-import type { CollectionRevision, RecordId, RequestId } from '../../contract/brands.js';
+import type {
+  CollectionRevision,
+  RecordId,
+  RequestId,
+  StorageVersion,
+} from '../../contract/brands.js';
 import type { FailureInput, Result } from '../../contract/errors.js';
-import { recordId } from '../../contract/brands.js';
+import { collectionRevision, recordId, storageVersion } from '../../contract/brands.js';
 import { failure, malformedRequest, success } from '../../contract/errors.js';
 import { checked } from '../shared/checks.js';
 import { envelope } from './envelope.js';
@@ -38,6 +43,26 @@ const missingCollection: FailureInput = Object.freeze({
   message: 'The collection does not exist',
 });
 
+/** A stored collection record whose storage version is not Authoring's whole number. */
+const invalidStoredVersion: FailureInput = Object.freeze({
+  code: 'invalid-response',
+  message: 'The stored collection has an invalid storage version',
+});
+
+/** A stored collection whose Model revision is not a whole number, 0 or more. */
+const invalidStoredRevision: FailureInput = Object.freeze({
+  code: 'invalid-response',
+  message: 'The stored collection has an invalid revision',
+});
+
+/** A stored collection's two counters, each checked once. */
+interface CollectionCounters {
+  /** Authoring's storage version: the precondition the change sends. */
+  readonly version: StorageVersion;
+  /** Model's revision: what the agent's `--revision` must match. */
+  readonly revision: CollectionRevision;
+}
+
 /**
  * The collection ID Language parsed, as an Authoring record ID. An ID Authoring cannot store (over
  * 128 characters) names no stored collection: fails with `not-found` for `replace` and `patch`,
@@ -53,8 +78,9 @@ export function collectionRecordId(
 
 /**
  * The change's Authoring request. Fails with `not-found`, `already-exists`, `revision-required`,
- * `revision-conflict`, `invalid-response` (the stored collection fails Model's check, or the
- * snapshot has no catalog) or `invalid-input` (the request fails Authoring's schema).
+ * `revision-conflict`, `invalid-response` (the stored collection fails Model's check, a stored
+ * counter is not a whole number, or the snapshot has no catalog) or `invalid-input` (the request
+ * fails Authoring's schema).
  */
 export function changeRequest(
   draft: ChangeDraft,
@@ -90,8 +116,7 @@ function expectedVersion(
 
 /**
  * The record's storage version, once its Model revision matches the one the agent read. Fails
- * with `not-found`, `invalid-response` (Model rejects the stored collection; its diagnostics are
- * kept) or as {@link matchedRevision} does.
+ * with `not-found`, as {@link countersOf} does, or as {@link matchedRevision} does.
  */
 function storedVersion(
   record: StoredRecord | undefined,
@@ -99,6 +124,20 @@ function storedVersion(
   reader: CollectionReader,
 ): Result<StorageVersion> {
   if (record === undefined) return failure(missingCollection);
+  const counters = countersOf(record, reader);
+  if (!counters.ok) return counters;
+  return matchedRevision(counters.value.version, counters.value.revision, requested);
+}
+
+/**
+ * The record's storage version and its collection's Model revision, each minted here. Fails with
+ * `invalid-response`: Model rejects the stored collection (its diagnostics are kept), or a counter
+ * is not a whole number.
+ */
+function countersOf(
+  record: StoredRecord,
+  reader: CollectionReader,
+): Result<CollectionCounters> {
   const collection = reader.validate(record.value);
   if (!collection.ok)
     return failure({
@@ -107,7 +146,22 @@ function storedVersion(
       recovery: 'Correct the named Model diagnostics.',
       source: collection.error,
     });
-  return matchedRevision(record.version, collection.value.revision, requested);
+  return mintedCounters(record, collection.value);
+}
+
+/**
+ * The record's storage version and the collection's revision, as their brands. Fails with
+ * `invalid-response` when either is not a whole number.
+ */
+function mintedCounters(
+  record: StoredRecord,
+  collection: Collection,
+): Result<CollectionCounters> {
+  const version = checked(storageVersion, record.version, invalidStoredVersion);
+  if (!version.ok) return version;
+  const revision = checked(collectionRevision, collection.revision, invalidStoredRevision);
+  if (!revision.ok) return revision;
+  return success({ version: version.value, revision: revision.value });
 }
 
 /**
@@ -116,7 +170,7 @@ function storedVersion(
  */
 function matchedRevision(
   version: StorageVersion,
-  current: ModelRevision,
+  current: CollectionRevision,
   requested: CollectionRevision | undefined,
 ): Result<StorageVersion> {
   if (requested === undefined)

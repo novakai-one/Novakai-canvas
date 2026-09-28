@@ -51,8 +51,10 @@ export const agentToken = z.string().min(1).brand<'AgentToken'>();
 export const generation = z.string().min(1).max(128).brand<'ServiceGeneration'>();
 
 /**
- * A collection revision the agent read: a whole number from 0 to `Number.MAX_SAFE_INTEGER`.
- * Minted from `--revision` by core's argument checks (`invalid-revision`).
+ * A collection's revision as Model counts it: a whole number from 0 to `Number.MAX_SAFE_INTEGER`.
+ * Minted from `--revision`, the revision the agent read, by core's argument checks
+ * (`invalid-revision`), and from the stored collection Model checked by core's change request
+ * (`invalid-response`). One brand, so the two compare directly.
  */
 export const collectionRevision = z
   .number()
@@ -60,6 +62,18 @@ export const collectionRevision = z
   .nonnegative()
   .max(Number.MAX_SAFE_INTEGER)
   .brand<'CollectionRevision'>();
+
+/**
+ * A stored record's storage version, as Authoring counts it: a whole number from 0 to
+ * `Number.MAX_SAFE_INTEGER`. Authoring exports no schema for it. Minted by core's change request
+ * from the snapshot's collection record (`invalid-response`).
+ */
+export const storageVersion = z
+  .number()
+  .int()
+  .nonnegative()
+  .max(Number.MAX_SAFE_INTEGER)
+  .brand<'StorageVersion'>();
 
 /**
  * render:png's `--collection` text: a recipe ID, a `.canvas` path or a shipped collection ID.
@@ -121,6 +135,9 @@ export type Generation = z.infer<typeof generation>;
 
 /** A revision that passed {@link collectionRevision}. */
 export type CollectionRevision = z.infer<typeof collectionRevision>;
+
+/** A storage version that passed {@link storageVersion}. */
+export type StorageVersion = z.infer<typeof storageVersion>;
 
 /** A collection selector that passed {@link collectionName}. */
 export type CollectionName = z.infer<typeof collectionName>;
