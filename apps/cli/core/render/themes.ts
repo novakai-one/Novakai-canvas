@@ -16,7 +16,7 @@ import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
 import { combined, mapped } from '../shared/results.js';
 import { readThemeSource } from '../themes/grammar.js';
-import { admitResource, type AdmissionDependencies } from './source-assets.js';
+import { admitResource, type AdmissionDependencies } from './resource-admission.js';
 
 /** The admitted catalog and, when one is asked for, the theme drawn in place of the collection's. */
 export interface AdmittedThemes {

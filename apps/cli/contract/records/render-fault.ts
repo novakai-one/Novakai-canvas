@@ -18,6 +18,8 @@ import type { CollectionName, FilePath } from '../brands.js';
  * - `collection-title-required`: a theme override was asked for a collection without a title.
  * - `invalid-asset-pin`: a collection asset's digest is not Model's `sha256:` pin. Model
  *   validation refuses such a collection first, so no unchecked digest reaches Assets.
+ * - `duplicate-asset`: the source declares one asset ID twice; the pins it is lowered against hold
+ *   one record per ID.
  * - `provider-failed`: a filesystem, temp-directory or wasm step threw, or an owner threw
  *   unexpectedly; the native evidence is kept.
  */
@@ -38,6 +40,10 @@ export type RenderFault =
       readonly asset: Collection['assets'][number]['id'];
       /** The digest text as the collection gives it. */
       readonly digest: string;
+    }
+  | {
+      readonly code: 'duplicate-asset';
+      readonly asset: Collection['assets'][number]['id'];
     }
   | ProviderFault;
 

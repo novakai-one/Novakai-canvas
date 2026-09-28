@@ -1,6 +1,7 @@
 /*
  * One read-only render, start to finish: open the render's environment, admit the themes, draw the
- * chosen collection, produce its document, snapshot it, export every section to its file, report.
+ * chosen collection, produce its document, snapshot it, export every section to its file, report
+ * with the service's inspection.
  * The environment is closed once, last, whatever happened. The first failure wins: a close failure
  * is reported only when the render itself succeeded. An owner that throws instead of returning its
  * failure ends the render as `provider-failed`. Pure apart from the injected ports; no stored
@@ -21,13 +22,12 @@ import type {
 } from '../../contract/records/foreign.js';
 import type { RenderReport, RenderRequest } from '../../contract/records/render.js';
 import type { RenderEvidence, RenderFailure } from '../../contract/records/render-failure.js';
-import { faulted, nativeFault, type Result } from '../../contract/errors.js';
-import { mapped } from '../shared/results.js';
+import { faulted, nativeFault, success, type Result } from '../../contract/errors.js';
 import { chosenCollection } from './collection.js';
 import { pinResources } from './pins.js';
 import { renderReport } from './report.js';
 import { exportSections } from './sections.js';
-import { renderSnapshot, resourceInspector } from './snapshot.js';
+import { renderSnapshot } from './snapshot.js';
 import { admitThemes } from './themes.js';
 
 /** What every render failure tells the caller to do: nothing stored changed. */
@@ -157,8 +157,9 @@ async function drawn(
 }
 
 /**
- * Export opened over the snapshot, every section written to its file, then the report. Fails with
- * Presentation's font failure, or as the section export does.
+ * Export opened over the snapshot, every section written to its file, then the report with the
+ * service's inspection of the document. Fails with Presentation's font failure, or as the section
+ * export does.
  */
 async function exported(
   request: RenderRequest,
@@ -169,11 +170,10 @@ async function exported(
     document: produced.document,
     snapshot: produced.snapshot,
     pins: pinResources(produced.catalog, produced.snapshot.collection.assets),
-    resources: resourceInspector(produced.snapshot.resources),
   });
   if (!exporter.ok) return exporter;
   const files = await exportSections(request.format, ports, exporter.value, produced.document);
-  return mapped(files, (written) =>
-    renderReport(written, produced.collection, produced.document, produced.catalog),
-  );
+  if (!files.ok) return files;
+  const inspection = ports.output.inspect(produced.document);
+  return success(renderReport(files.value, produced.collection, inspection, produced.catalog));
 }

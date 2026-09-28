@@ -1,9 +1,9 @@
 /*
  * The immutable export snapshot of one render: identity, collection, scene, paint, and every byte
- * it retains (collection assets, document fonts, catalog presets), plus the resource inspector that
- * lets Export check only what the snapshot retained. Pure; asset bytes resolve through the render's
- * asset store and base64 is decoded by the injected decoder. The caller fixes the named asset and
- * runs render:png again.
+ * it retains (collection assets, document fonts, catalog presets). Pure; asset bytes resolve
+ * through the render's asset store and base64 is decoded by the injected decoder. Export's check
+ * that it reads only these bytes is bound in the exporter adapter. The caller fixes the named asset
+ * and runs render:png again.
  */
 import type { RenderAssets } from '../../contract/ports/render-assets.js';
 import type {
@@ -12,10 +12,9 @@ import type {
   ExportSnapshot,
   RenderDocument,
   Resource,
-  Resources,
 } from '../../contract/records/foreign.js';
 import type { RenderEvidence } from '../../contract/records/render-failure.js';
-import { faulted, type Result } from '../../contract/errors.js';
+import { faulted, success, type Result } from '../../contract/errors.js';
 import { assetOfPin } from '../resources/digests.js';
 import { combined, mapped } from '../shared/results.js';
 
@@ -41,41 +40,15 @@ export function renderSnapshot(
   catalog: Catalog,
   assets: SnapshotAssets,
 ): Result<ExportSnapshot, RenderEvidence> {
-  return mapped(retainedResources(document, catalog, collection, assets), (resources) => ({
-    identity: {
-      collectionId: collection.id,
-      revision: collection.revision,
-      inputKey: document.scene.inputKey,
-      title: collection.title,
-    },
+  const resources = retainedResources(document, catalog, collection, assets);
+  if (!resources.ok) return resources;
+  return success({
+    identity: snapshotIdentity(collection, document),
     collection,
     scene: document.scene,
-    resources,
-    paint: {
-      fill: document.style.surface,
-      stroke: document.style.border,
-      text: document.style.text,
-    },
-  }));
-}
-
-/** Export may inspect only resources equal, byte for byte and in metadata, to retained ones. */
-export function resourceInspector(retained: readonly Resource[]): Resources {
-  return {
-    async inspect(items) {
-      if (!items.every((item) => isRetained(item, retained)))
-        return {
-          ok: false,
-          error: {
-            code: 'resource-rejected',
-            path: 'snapshot.resources',
-            message: 'Resource differs from its owner-admitted snapshot',
-            recovery: 'Rebuild the snapshot through its resource owners and retry.',
-          },
-        };
-      return { ok: true, value: items };
-    },
-  };
+    resources: resources.value,
+    paint: documentPaint(document),
+  });
 }
 
 /**
@@ -141,53 +114,24 @@ function presetResource(preset: Catalog[number]): Resource {
   };
 }
 
-/** Whether `item` equals one retained resource. */
-function isRetained(
-  item: Resource,
-  retained: readonly Resource[],
-): boolean {
-  return retained.some((candidate) => sameResource(item, candidate));
+/** The collection's ID, revision and title with the scene's input key. */
+function snapshotIdentity(
+  collection: Collection,
+  document: RenderDocument,
+): ExportSnapshot['identity'] {
+  return {
+    collectionId: collection.id,
+    revision: collection.revision,
+    inputKey: document.scene.inputKey,
+    title: collection.title,
+  };
 }
 
-/** Same kind, digest, media type, bytes and metadata: no retained identity can be borrowed. */
-function sameResource(
-  left: Resource,
-  right: Resource,
-): boolean {
-  return (
-    left.kind === right.kind &&
-    left.digest === right.digest &&
-    left.mediaType === right.mediaType &&
-    sameBytes(left.bytes, right.bytes) &&
-    sameMetadata(left.metadata, right.metadata)
-  );
-}
-
-/** Byte-for-byte equality. */
-function sameBytes(
-  left: Uint8Array,
-  right: Uint8Array,
-): boolean {
-  return left.length === right.length && left.every((byte, index) => byte === right[index]);
-}
-
-/** The same keys, each with the same value. */
-function sameMetadata(
-  left: Resource['metadata'],
-  right: Resource['metadata'],
-): boolean {
-  const entries = Object.entries(left);
-  return (
-    entries.length === Object.keys(right).length &&
-    entries.every(([key, value]) => hasEntry(right, key, value))
-  );
-}
-
-/** Whether `record` holds `key` with exactly `value`. */
-function hasEntry(
-  record: Resource['metadata'],
-  key: string,
-  value: unknown,
-): boolean {
-  return Object.hasOwn(record, key) && Object.is(record[key], value);
+/** The document's surface, border and text colours as Export's paint. */
+function documentPaint(document: RenderDocument): ExportSnapshot['paint'] {
+  return {
+    fill: document.style.surface,
+    stroke: document.style.border,
+    text: document.style.text,
+  };
 }

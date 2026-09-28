@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import {
   createHeadlessBindings,
   prepareInstallation,
+  validReport,
   type BuiltinResources,
 } from '@novakai/canvas-service';
 import { composeDesignSystem, type DesignSystem } from '@novakai/canvas-design-system';
@@ -166,7 +167,8 @@ function renderOutput(
 }
 
 /**
- * The service's render jobs over `environment`, with the layout engine's wasm below the repo root.
+ * The service's render jobs over `environment`, with the layout engine's wasm below the repo root,
+ * and the service's inspection report of a rendered document.
  */
 function serviceProduction(
   environment: Environment,
@@ -177,7 +179,7 @@ function serviceProduction(
     sources: environment.installation.tokens,
     wasmResource: join(owners.request.root, 'resources/vendor/layout/libavoid.wasm'),
   });
-  return { jobs, produceDiagram: owners.service.produceDiagram };
+  return { jobs, produceDiagram: owners.service.produceDiagram, inspectDocument: validReport };
 }
 
 /** The request's format and label mode, and Export's documents port over Language. */

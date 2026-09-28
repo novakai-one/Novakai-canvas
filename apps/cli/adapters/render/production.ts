@@ -1,8 +1,9 @@
 /*
- * The output port's `produce`: the service's drawing of one collection for the headless render. A
- * render job over the collection, the admitted catalog and an empty headless library, run by the
- * service's diagram producer. Reads only the layout engine's wasm file; nothing stored is changed.
- * Failures are values; core/render/render.ts owns recovery.
+ * The output port's `produce` and `inspect`: the service's drawing of one collection for the
+ * headless render, and the service's inspection report of that drawing. A render job over the
+ * collection, the admitted catalog and an empty headless library, run by the service's diagram
+ * producer. Reads only the layout engine's wasm file; nothing stored is changed. Failures are
+ * values; core/render/render.ts owns recovery.
  */
 import {
   validateLibrarySnapshot,
@@ -20,18 +21,27 @@ import type {
 } from '../../contract/records/foreign.js';
 import type { Result } from '../../contract/errors.js';
 
-/** The service's render job factory, bound to one render's capability values, and its producer. */
+/**
+ * The service's render job factory, bound to one render's capability values, its producer and its
+ * inspection of a produced document.
+ */
 export interface Production {
   readonly jobs: ReturnType<HeadlessBindings['createRenderJobs']>;
   readonly produceDiagram: HeadlessBindings['produceDiagram'];
+  readonly inspectDocument: RenderOutput['inspect'];
 }
 
 /**
- * The output port's drawing over `production`. Builds nothing and cannot fail; `produce` fails as
- * {@link producedDiagram}.
+ * The output port's drawing and inspection over `production`. Builds nothing and cannot fail;
+ * `produce` fails as {@link producedDiagram}, `inspect` cannot fail.
  */
-export function createProduction(production: Production): Pick<RenderOutput, 'produce'> {
-  return { produce: (collection, catalog) => producedDiagram(production, collection, catalog) };
+export function createProduction(
+  production: Production,
+): Pick<RenderOutput, 'produce' | 'inspect'> {
+  return {
+    produce: (collection, catalog) => producedDiagram(production, collection, catalog),
+    inspect: production.inspectDocument,
+  };
 }
 
 /**

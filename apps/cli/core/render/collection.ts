@@ -51,15 +51,16 @@ function themedSource(
 }
 
 /**
- * The source's images admitted, then the source lowered against the catalog's theme pins and those
- * assets, then checked with the chosen pin. Fails as each step does.
+ * The source's asset records, then the source lowered against the catalog's theme pins and those
+ * records (Language has Model check the collection, records included), then checked with the
+ * chosen pin. Fails as each step does.
  */
 async function lowered(
   source: SourceFile,
   themes: AdmittedThemes,
   dependencies: CollectionDependencies,
 ): Promise<Result<Collection, RenderEvidence>> {
-  const assets = await sourceAssets(source, themes.catalog, dependencies);
+  const assets = await sourceAssets(source, dependencies);
   if (!assets.ok) return assets;
   const pins = pinResources(themes.catalog, assets.value);
   const collection = dependencies.sources.lower(source.source, pins);

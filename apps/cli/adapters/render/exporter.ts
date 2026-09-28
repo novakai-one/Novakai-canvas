@@ -1,9 +1,9 @@
 /*
  * Export for one headless render: Presentation's React drawing over the document's fonts, and
- * Export composed over a lease that always hands back the one snapshot, the injected documents
- * port and the snapshot's resource inspector. Each section exports in the request's format and
- * label mode. Pure apart from Presentation's font loading. Failures are values;
- * core/render/render.ts owns recovery.
+ * Export composed over the one snapshot (a lease that always hands it back, and a resource
+ * inspector that admits only the bytes it retained) and the injected documents port. Each section
+ * exports in the request's format and label mode. Pure apart from Presentation's font loading.
+ * Failures are values; core/render/render.ts owns recovery.
  */
 import { createReactBindings } from '@novakai/canvas-presentation';
 import { composeExport, type ExportBindings, type SnapshotReader } from '@novakai/canvas-export';
@@ -16,8 +16,11 @@ import type { RenderEvidence } from '../../contract/records/render-failure.js';
 import type { LabelMode, RenderFormat } from '../../contract/records/render.js';
 import type {
   Documents,
+  ExportDiagnostic,
   ExportSnapshot,
   ResolvedResources,
+  Resource,
+  Resources,
 } from '../../contract/records/foreign.js';
 import type { SectionId } from '../../contract/brands.js';
 import { success, type Result } from '../../contract/errors.js';
@@ -51,7 +54,7 @@ async function openExporter(
     allLabels: choices.labels === 'all',
     snapshots: lease(input.snapshot),
     documents: choices.documentsFor(input.pins),
-    resources: input.resources,
+    resources: resourceInspector(input.snapshot.resources),
   });
   return success({
     export: (section) => sectionBytes(exporter, input.snapshot, choices.format, section),
@@ -62,6 +65,28 @@ async function openExporter(
 function lease(snapshot: ExportSnapshot): SnapshotReader {
   return {
     acquire: async () => success({ snapshot, release: async () => success(undefined) }),
+  };
+}
+
+/** Export's `resource-rejected` refusal for a resource the snapshot did not retain. */
+const unretained: ExportDiagnostic = Object.freeze({
+  code: 'resource-rejected',
+  path: 'snapshot.resources',
+  message: 'Resource differs from its owner-admitted snapshot',
+  recovery: 'Rebuild the snapshot through its resource owners and retry.',
+});
+
+/**
+ * Export's resource port over the snapshot's `retained` resources: it admits a batch only when each
+ * resource equals a retained one, byte for byte and in metadata. Refuses with `resource-rejected`.
+ */
+function resourceInspector(retained: readonly Resource[]): Resources {
+  return {
+    async inspect(items) {
+      if (!items.every((item) => isRetained(item, retained)))
+        return { ok: false, error: unretained };
+      return success(items);
+    },
   };
 }
 
@@ -79,4 +104,55 @@ async function sectionBytes(
   });
   if (!artifact.ok) return artifact;
   return success(artifact.value.bytes);
+}
+
+/** Whether `item` equals one retained resource. */
+function isRetained(
+  item: Resource,
+  retained: readonly Resource[],
+): boolean {
+  return retained.some((candidate) => sameResource(item, candidate));
+}
+
+/** Same kind, digest, media type, bytes and metadata: no retained identity can be borrowed. */
+function sameResource(
+  left: Resource,
+  right: Resource,
+): boolean {
+  return (
+    left.kind === right.kind &&
+    left.digest === right.digest &&
+    left.mediaType === right.mediaType &&
+    sameBytes(left.bytes, right.bytes) &&
+    sameMetadata(left.metadata, right.metadata)
+  );
+}
+
+/** Byte-for-byte equality. */
+function sameBytes(
+  left: Uint8Array,
+  right: Uint8Array,
+): boolean {
+  return left.length === right.length && left.every((byte, index) => byte === right[index]);
+}
+
+/** The same keys, each with the same value. */
+function sameMetadata(
+  left: Resource['metadata'],
+  right: Resource['metadata'],
+): boolean {
+  const entries = Object.entries(left);
+  return (
+    entries.length === Object.keys(right).length &&
+    entries.every(([key, value]) => hasEntry(right, key, value))
+  );
+}
+
+/** Whether `record` holds `key` with exactly `value`. */
+function hasEntry(
+  record: Resource['metadata'],
+  key: string,
+  value: unknown,
+): boolean {
+  return Object.hasOwn(record, key) && Object.is(record[key], value);
 }

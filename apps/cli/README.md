@@ -41,12 +41,12 @@ Add a command: its member in `contract/records/command.ts` → its row in `table
 | `core/resources/`                               | Stage, back up and restore font/image bytes; `sha256:` digests.                                                                                                   |
 | `core/presets/`, `core/themes/`                 | Theme/recipe admission; the `.theme` grammar.                                                                                                                     |
 | `core/profiles/`                                | build-spec@1: descriptor, starter, lint rules. Local only.                                                                                                        |
-| `core/render/`                                  | `render:png` workflow: themes, collection, snapshot, sections, report.                                                                                            |
+| `core/render/`                                  | `render:png` workflow: themes, font/image admission, asset records, collection, snapshot, sections, report.                                                       |
 | `core/diagnostics/`, `core/shared/`             | Failure → terminal lines; Result and parse helpers.                                                                                                               |
 | `adapters/argv/`                                | Node `parseArgs` → raw arguments.                                                                                                                                 |
 | `adapters/service-http/`                        | Loopback HTTP transport and the three service-call adapters over it.                                                                                              |
 | `adapters/files/`                               | Source and `--out` files, request journal, confined resource reads.                                                                                               |
-| `adapters/render/`                              | Temp asset store, input and section files, PNG raster start-up; environment ports: sources (+ Export's documents), assets, themes, output (drawing, Export).      |
+| `adapters/render/`                              | Temp asset store, input and section files, PNG raster start-up; ports: sources (+ Export's documents), assets, themes, output (drawing, inspection, Export).      |
 
 ## Import rules
 

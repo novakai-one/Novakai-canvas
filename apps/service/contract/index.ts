@@ -6,6 +6,7 @@ export type { RenderingJob, RenderDocument } from './records/rendering.js';
 export { renderEnvelope } from './records/worker.js';
 export { inspectionReport } from './records/inspection.js';
 export type { InspectionReport } from './records/inspection.js';
+export { validReport } from './api.js';
 
 export { prepareInstallation } from './compose.js';
 export type { BuiltinResources } from './records/builtins.js';

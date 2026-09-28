@@ -5,11 +5,11 @@
  * the named input and runs the command again.
  */
 import { z } from 'zod';
-import type { collectionId } from '@novakai/canvas-model';
+import type { assetId, collectionId } from '@novakai/canvas-model';
 
 export { recordId, requestId, workspaceId } from '@novakai/canvas-authoring';
 export type { RecordId, RequestId, WorkspaceId } from '@novakai/canvas-authoring';
-export { collectionId, sectionId, objectId } from '@novakai/canvas-model';
+export { assetId, collectionId, sectionId, objectId } from '@novakai/canvas-model';
 export type { SectionId, ObjectId } from '@novakai/canvas-model';
 /** Model's pinned content identity, `sha256:` then 64 lowercase hex digits (syntax only, unbranded). */
 export { digest as pinnedDigest } from '@novakai/canvas-model';
@@ -75,6 +75,12 @@ export const themeName = z.string().min(1).brand<'ThemeName'>();
 
 /** A collection ID that passed Model's `collectionId`. Model exports the schema, not the type. */
 export type CollectionId = z.infer<typeof collectionId>;
+
+/**
+ * An asset ID that passed Model's `assetId`. Model exports the schema, not the type. Minted by
+ * render:png's asset records (`invalid-response`).
+ */
+export type AssetId = z.infer<typeof assetId>;
 
 /** A path that passed {@link filePath}. */
 export type FilePath = z.infer<typeof filePath>;
