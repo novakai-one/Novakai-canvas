@@ -27,7 +27,7 @@ import { andThen, success } from '../../../contract/errors.js';
 import { listLiveRecords } from '../../workspace/records.js';
 import { bindAssets } from './asset-bindings.js';
 import { checkCollectionFiles } from './collection-check.js';
-import { listFileDigests, listPresetReads } from './coverage.js';
+import { listDigestsToHold, listPresetReads } from './coverage.js';
 import { readDeclaredResources, decodeIntent, type Intent } from './intent.js';
 import { toResourcesJson } from './pins.js';
 import { fromCapability } from './refusal.js';
@@ -139,7 +139,7 @@ function selection(
 ): AuthoringResult<ResourceSelection> {
   const pins = toResourcesJson(resources);
   if (!pins.ok) return pins;
-  const covered = listFileDigests(request, snapshot, catalog, resources.assets);
+  const covered = listDigestsToHold(request, snapshot, catalog, resources.assets);
   if (!covered.ok) return covered;
   const reads = listPresetReads(snapshot);
   return success({ resources, resourcesJson: pins.value, fileDigests: covered.value, reads });

@@ -1,12 +1,12 @@
 /*
  * Why this file exists
  *
- * While a change is planned and saved, its files must not be cleaned away, and the stored presets
- * it used must not change unnoticed. For example, a DSL change that shows a logo needs the logo's
- * file kept until Authoring has saved the change.
+ * While a change is planned and saved, no file the workspace uses may be cleaned away, and the
+ * stored presets must not change unnoticed. For example, a DSL change that shows a logo needs the
+ * logo's file kept until Authoring has saved the change.
  *
- * This file lists both for one change: the digests of the files Authoring should hold, and the
- * stored preset records read, with their versions. It only reads the snapshot.
+ * This file lists both: the digests of the files Authoring should hold, and every stored preset
+ * record with its version. It only reads the snapshot.
  */
 import type {
   AuthoringResult,
@@ -22,12 +22,11 @@ import { checkDigest, checkDigests } from './digests.js';
 import { listThemePresets } from './themes.js';
 
 /**
- * Lists the digests of the files to hold until the change is saved. First, sorted and each once:
- * the files stored records use, the uploaded files, and the themes' font files. Then each newly
- * bound file not already listed. Fails with `invalid-input` at `resources` when a digest is
- * malformed.
+ * Lists the digests of the files to hold until the change is saved: every file the workspace's
+ * records and themes use, plus this change's uploads and newly bound files. Each is listed once.
+ * Fails with `invalid-input` at `resources` when a digest is malformed.
  */
-export function listFileDigests(
+export function listDigestsToHold(
   request: Request,
   snapshot: Snapshot,
   catalog: Catalog,

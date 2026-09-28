@@ -60,20 +60,22 @@ interface BindingInputs {
 /**
  * Answers the collection's file bindings with this change's files added. A new file replaces the
  * earlier binding with the same name. A theme being saved binds none.
- * Fails with `missing-asset` when no theme was picked, when a file has neither an `asset` line nor
- * an earlier binding, or when a capability refuses; `invalid-input` for a bad `sha256:` digest.
+ * Model only checks a binding inside a collection, and a collection needs a theme, so the check
+ * borrows one of `availableThemes`. Fails with `missing-asset` when there is no theme to borrow,
+ * a file has neither an `asset` line nor an earlier binding, or a capability refuses;
+ * `invalid-input` for a bad `sha256:` digest.
  */
 export function bindAssets(
   request: Request,
   declared: DeclaredResources,
   snapshot: Snapshot,
-  resolvedThemes: Themes,
+  availableThemes: Themes,
   dependencies: AssetBindingDependencies,
 ): AuthoringResult<AssetBindings> {
   if (declared.kind === 'theme-admission') return success({});
   const inputs = bindingInputs(request, declared, snapshot, dependencies);
   if (!inputs.ok) return inputs;
-  return bindSupplied(inputs.value, resolvedThemes, dependencies);
+  return bindSupplied(inputs.value, availableThemes, dependencies);
 }
 
 /**
@@ -101,11 +103,11 @@ function bindingInputs(
  */
 function bindSupplied(
   inputs: BindingInputs,
-  resolvedThemes: Themes,
+  availableThemes: Themes,
   dependencies: AssetBindingDependencies,
 ): AuthoringResult<AssetBindings> {
   if (inputs.supplied.length === 0) return success(byId(inputs.previous));
-  const theme = firstTheme(resolvedThemes);
+  const theme = firstTheme(availableThemes);
   if (!theme.ok) return theme;
   const bound = collect(inputs.supplied, (upload) =>
     suppliedAsset(upload, inputs, theme.value, dependencies),
