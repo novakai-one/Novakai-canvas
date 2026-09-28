@@ -10,7 +10,10 @@ export function union(boxes: readonly Box[]): Box {
   return { x: left, y: top, width: Math.max(1, right - left), height: Math.max(1, bottom - top) };
 }
 /** Clearance expansion is explicit geometry; callers choose token-derived padding. */
-export function expand(box: Box, padding: number): Box {
+export function expand(
+  box: Box,
+  padding: number,
+): Box {
   return {
     x: box.x - padding,
     y: box.y - padding,

@@ -4,7 +4,10 @@ import type { Scene } from '../contract/index.js';
 import { flow, harness, request, value } from './fixtures.js';
 
 /** Change only the collection-space origin, preserving all authoritative local content and bounds. */
-function shiftedOrigin(scene: Scene, offset: number): Scene {
+function shiftedOrigin(
+  scene: Scene,
+  offset: number,
+): Scene {
   const first = scene.sections[0];
   assert(first);
   return {

@@ -15,7 +15,10 @@ function arrow(key: string): key is keyof typeof arrows {
   return Object.hasOwn(arrows, key);
 }
 /** Reading-order arrows select a target without Locate; Alt arrows use world-unit nudge instead. */
-function navigate(state: SessionState, event: EventOf<'keyboard'>): Transition {
+function navigate(
+  state: SessionState,
+  event: EventOf<'keyboard'>,
+): Transition {
   if (!arrow(event.key)) return changed(state, state);
   if (event.alt)
     return nudgeSelection(state, {
@@ -27,7 +30,10 @@ function navigate(state: SessionState, event: EventOf<'keyboard'>): Transition {
   return selectAdjacent(state, event.key);
 }
 /** Stable ordered appearance addresses permit predictable keyboard navigation across sections. */
-function selectAdjacent(state: SessionState, key: keyof typeof arrows): Transition {
+function selectAdjacent(
+  state: SessionState,
+  key: keyof typeof arrows,
+): Transition {
   const order = state.index.order.filter((id) => state.index.targets[id]?.target.kind === 'node');
   const selected = state.selection[0];
   const current = selected === undefined ? -1 : order.indexOf(targetKey(selected));

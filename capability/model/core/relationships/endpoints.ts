@@ -13,28 +13,85 @@ import { descendants, type ObjectDescendant } from '../objects/content.js';
 import { resolveCallableEndpoint } from './callable.js';
 import { diagnoseWhen, referenceIssue } from '../invariants/issues.js';
 
-/** A missing member differs from an existing descendant of the wrong semantic kind. */
-function isAllowedMember(member: ObjectDescendant | undefined, ownerKind: ObjectKind): boolean {
-  if (member === undefined) return false;
-  const allowed = memberEndpoints[ownerKind] ?? genericMemberEndpoints;
-  return (allowed as readonly string[]).includes(member.kind);
+/**
+ * Checks every relationship's endpoints and cardinalities, in relationship order. Every failure
+ * is collected. For each relationship, in this order:
+ * 1. its source, then its target (path `relationships.<id>.source` or `.target`):
+ *    - the object must exist: `reference`;
+ *    - a named `member` must be a descendant whose kind the owner allows (`memberEndpoints`,
+ *      else `genericMemberEndpoints`): `endpoint` at `<path>.member`, "Endpoint must address a
+ *      legal field/member/signature/port/row";
+ *    - the object's kind must be allowed for that end of the relationship kind
+ *      (`sourceEndpoints` / `targetEndpoints`; no entry allows any): `endpoint`, "Object kind is
+ *      incompatible with relationship kind";
+ * 2. for `calls`, the target must resolve with `resolveCallableEndpoint`, else `endpoint`: at
+ *    `<target>`, "Calls target must address a signature or whole function" when it has no
+ *    member; at `<target>.member`, "Calls target must resolve to a signature" when it has one;
+ * 3. an `association` needs both `from` and `to` ("Association requires both cardinalities");
+ *    any other kind must have neither ("Cardinalities are only valid for associations"), both
+ *    `endpoint` at `relationships.<id>`.
+ *
+ * Wire routes and foreign-key inference are not checked here. Pure: Authoring owns correction,
+ * admission, commit and crash recovery.
+ *
+ * @param collection - A parsed collection.
+ * @returns Every diagnostic, in the order above, or an empty list.
+ * @throws Never for a parsed collection.
+ */
+export function validateRelationships(collection: Collection): readonly Diagnostic[] {
+  return collection.relationships.flatMap(
+    /** Checks one relationship. */
+    (relationship) => validateRelationship(relationship, collection),
+  );
 }
 
-/** Missing canonical objects are unresolved addresses; membership is checked separately. */
-function resolveEndpoint(endpoint: Endpoint, collection: Collection): DiagramObject | undefined {
-  return collection.objects.find((object) => object.id === endpoint.object);
+/**
+ * Tells whether a member exists and its kind is one the owner kind allows. A missing member is
+ * never allowed.
+ */
+function isAllowedMember(
+  member: ObjectDescendant | undefined,
+  ownerKind: ObjectKind,
+): boolean {
+  if (member === undefined) {
+    return false;
+  }
+  const allowed: readonly ObjectDescendant['kind'][] =
+    memberEndpoints[ownerKind] ?? genericMemberEndpoints;
+  return allowed.includes(member.kind);
 }
 
-/** An omitted member addresses the whole object; a missing object is diagnosed by the endpoint check. */
+/** Finds the endpoint's object; a missing one is reported by the endpoint check. */
+function resolveEndpoint(
+  endpoint: Endpoint,
+  collection: Collection,
+): DiagramObject | undefined {
+  return collection.objects.find(
+    /** Tells whether this is the endpoint's object. */
+    (object) => object.id === endpoint.object,
+  );
+}
+
+/**
+ * Checks an endpoint's named member. No member (the whole object) and a missing object give no
+ * diagnostic here.
+ */
 function validateMember(
   endpoint: Endpoint,
   collection: Collection,
   path: string,
 ): readonly Diagnostic[] {
-  if (endpoint.member === undefined) return [];
+  if (endpoint.member === undefined) {
+    return [];
+  }
   const object = resolveEndpoint(endpoint, collection);
-  if (object === undefined) return [];
-  const member = descendants(object).find((item) => item.id === endpoint.member);
+  if (object === undefined) {
+    return [];
+  }
+  const member = descendants(object).find(
+    /** Tells whether this is the named member. */
+    (item) => item.id === endpoint.member,
+  );
   return diagnoseWhen(
     !isAllowedMember(member, object.kind),
     'endpoint',
@@ -43,14 +100,21 @@ function validateMember(
   );
 }
 
-/** No allowed-kind policy means unrestricted; unresolved objects have their own diagnostic. */
+/**
+ * Checks the object's kind against the allowed kinds. No policy entry, or a missing object, gives
+ * no diagnostic here.
+ */
 function validateObjectKind(
   object: DiagramObject | undefined,
   allowed: readonly ObjectKind[] | undefined,
   path: string,
 ): readonly Diagnostic[] {
-  if (allowed === undefined) return [];
-  if (object === undefined) return [];
+  if (allowed === undefined) {
+    return [];
+  }
+  if (object === undefined) {
+    return [];
+  }
   return diagnoseWhen(
     !allowed.includes(object.kind),
     'endpoint',
@@ -59,7 +123,7 @@ function validateObjectKind(
   );
 }
 
-/** Independently check object existence, descendant addressability and relationship role compatibility. */
+/** Checks one endpoint: the object exists, its member is addressable, then its kind is allowed. */
 function validateEndpoint(
   endpoint: Endpoint,
   collection: Collection,
@@ -73,8 +137,11 @@ function validateEndpoint(
   return [...referenceIssues, ...memberIssues, ...kindIssues];
 }
 
-/** ER associations require both cardinalities; other relationship kinds forbid them. */
-function validateCardinalities(relationship: Relationship, path: string): readonly Diagnostic[] {
+/** Checks cardinalities: an association needs both; every other kind must have none. */
+function validateCardinalities(
+  relationship: Relationship,
+  path: string,
+): readonly Diagnostic[] {
   if (relationship.kind === 'association') {
     const missingCardinality = relationship.from === undefined || relationship.to === undefined;
     return diagnoseWhen(
@@ -93,7 +160,10 @@ function validateCardinalities(relationship: Relationship, path: string): readon
   );
 }
 
-/** Source and target policies may differ, for example module imports versus function calls. */
+/**
+ * Checks one relationship: source, target, the callable target of a `calls` relationship, then
+ * cardinalities. Source and target have separate kind policies.
+ */
 function validateRelationship(
   relationship: Relationship,
   collection: Collection,
@@ -111,44 +181,49 @@ function validateRelationship(
     `${path}.target`,
     targetEndpoints[relationship.kind],
   );
-  const callableIssues =
-    relationship.kind === 'calls'
-      ? validateCallableTarget(relationship.target, collection, `${path}.target`)
-      : [];
+  const callableIssues = validateCallsTarget(relationship, collection, `${path}.target`);
   const cardinalityIssues = validateCardinalities(relationship, path);
   return [...sourceIssues, ...targetIssues, ...callableIssues, ...cardinalityIssues];
 }
 
+/** Checks the target of a `calls` relationship; other kinds give nothing. */
+function validateCallsTarget(
+  relationship: Relationship,
+  collection: Collection,
+  path: string,
+): readonly Diagnostic[] {
+  if (relationship.kind !== 'calls') {
+    return [];
+  }
+  return validateCallableTarget(relationship.target, collection, path);
+}
+
+/**
+ * Reports a `calls` target that is not callable: at the target path when it has no member, at
+ * its `member` path when it names one.
+ */
 function validateCallableTarget(
   endpoint: Endpoint,
   collection: Collection,
   path: string,
 ): readonly Diagnostic[] {
-  if (resolveCallableEndpoint(collection, endpoint) !== undefined) return [];
-  return endpoint.member === undefined
-    ? [
-        {
-          code: 'endpoint',
-          path,
-          message: 'Calls target must address a signature or whole function',
-        },
-      ]
-    : [
-        {
-          code: 'endpoint',
-          path: `${path}.member`,
-          message: 'Calls target must resolve to a signature',
-        },
-      ];
-}
-
-/**
- * Validates canonical relationship endpoints and ER cardinalities, accumulating failures.
- * Wire routes and FK inference are outside this responsibility. Pure replay; Authoring
- * owns correction, admission and commit/recovery.
- */
-export function validateRelationships(collection: Collection): readonly Diagnostic[] {
-  return collection.relationships.flatMap((relationship) =>
-    validateRelationship(relationship, collection),
-  );
+  if (resolveCallableEndpoint(collection, endpoint) !== undefined) {
+    return [];
+  }
+  if (endpoint.member === undefined) {
+    return [
+      {
+        code: 'endpoint',
+        path,
+        message: 'Calls target must address a signature or whole function',
+      },
+    ];
+  }
+  return [
+    {
+      code: 'endpoint',
+      path: `${path}.member`,
+      message: 'Calls target must resolve to a signature',
+    },
+  ];
 }

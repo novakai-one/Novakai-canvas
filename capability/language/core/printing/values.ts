@@ -15,12 +15,18 @@ export function string(value: unknown): string {
   return value;
 }
 /** Format canonical properties using the same declared scalar/list type used by the parser. */
-export function printValue(value: unknown, type: ValueType): string {
+export function printValue(
+  value: unknown,
+  type: ValueType,
+): string {
   if (type === 'signature-parameters') return printSignatureParameters(value);
   return printSimpleValue(value, type);
 }
 
-function printSimpleValue(value: unknown, type: ValueType): string {
+function printSimpleValue(
+  value: unknown,
+  type: ValueType,
+): string {
   if (Array.isArray(value)) return printList(value, type);
   if (type === 'endpoint') return printEndpoint(value);
   return printScalar(value, type);
@@ -38,7 +44,10 @@ function printSignatureParameters(value: unknown): string {
     .join(', ')}]`;
 }
 /** Scalars have explicit delimiters; theme pins are quoted when they are not bare vocabulary words. */
-function printScalar(value: unknown, type: ValueType): string {
+function printScalar(
+  value: unknown,
+  type: ValueType,
+): string {
   const printers: Readonly<Record<string, () => string>> = {
     string: () => quote(string(value)),
     word: () => word(value),
@@ -78,7 +87,10 @@ function word(value: unknown): string {
   return /^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(text) ? text : quote(text);
 }
 /** Bracketed list order is semantic, including fields and foreign composite references. */
-function printList(values: readonly unknown[], type: ValueType): string {
+function printList(
+  values: readonly unknown[],
+  type: ValueType,
+): string {
   const scalar: Readonly<Record<string, ValueType>> = {
     strings: 'string',
     ids: 'id',

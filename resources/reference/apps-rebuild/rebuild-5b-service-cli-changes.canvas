@@ -1,0 +1,87 @@
+canvas 1
+collection @rebuild-5b-service-cli-changes "Apps rebuild · 5b / What changes for you — service and CLI, and what stays the same" {
+
+  node @export concept "Service: export" size=large {
+    table @export-t columns=["What", "Before", "Target", "Why"] {
+      row @ex-leak cells=["A DSL or Markdown export fails", "Generic 'Request did not complete; reconcile its receipt before retrying'. The diagram's asset files stay protected from clean-up until the server stops.", "The protection is released. Export's own error is shown: encoding-failed at export.dsl or export.markdown", "Bug: the files stayed protected, and the message was misleading"]
+      row @ex-status cells=["An export fails for a server-side reason (storage, fonts, clean-up)", "invalid-input, HTTP 422 ('fix your input')", "unavailable, HTTP 503 ('restore and retry'). Input mistakes keep 422. Cancel keeps 409.", "You cannot fix a server fault by changing your input"]
+    }
+    text @export-ref "Row 1 changes the message you see. Row 2 changes only the code and status: the web does not act on export status, and the CLI does not call export." role=caption
+  }
+
+  node @cli-render concept "CLI: render:png (5)" size=large {
+    table @cli-render-t columns=["What", "Before", "Target", "Why"] {
+      row @cl-close cells=["Closing the temp files fails after a failed render", "The close failure replaces the real failure", "The first failure is shown. A close failure shows only if the render worked.", "The real failure was hidden"]
+      row @cl-tempdir cells=["The temp folder cannot be made", "render-unavailable, no details", "render-failed, naming the path, the OS error code and the system call", "No clue what failed"]
+      row @cl-path cells=["Run from a checkout path with a space or %", "'resources not found'", "Works", "Bug with some folder names"]
+      row @cl-flag cells=["A missing or bad flag", "Raw 'TypeError: --out is required'", "'invalid-arguments: --out is required', a line saying how to fix it, exit code 1", "A raw program error, not a message"]
+      row @cl-print cells=["Printing or checking the diagram fails", "provider-failed with a JavaScript message", "The failing part's own error, inside render-failed", "The real error was hidden"]
+    }
+  }
+
+  node @cli-other concept "CLI: other commands (9)" size=large {
+    table @cli-other-t columns=["What", "Before", "Target", "Why"] {
+      row @cl-lint cells=["profile lint: duplicate appendix number", "Reported twice", "Reported once", "One problem, one report"]
+      row @cl-lint-mode cells=["profile lint: required section with the wrong mode", "Reported twice", "Reported once", "One problem, one report"]
+      row @cl-scaffold cells=["profile scaffold --id 1abc (or -x, or _x)", "Accepted. Makes a starter that create later refuses.", "Refused at scaffold: invalid-arguments", "Fail at the first step, not later"]
+      row @cl-out cells=["profile describe / lint --out FILE", "--out silently ignored", "Writes FILE and prints 'Written: FILE'", "The flag did nothing"]
+      row @cl-unused cells=["A flag the command does not use (for example create --revision 3)", "Silently ignored", "'invalid-arguments: --revision is not valid with create'", "The same rule some flags already followed"]
+      row @cl-corrupt cells=["retry / apply / create with a broken saved-request file", "Same error as a disk failure", "journal-corrupt", "A broken file is not a disk error"]
+      row @cl-other-request cells=["retry when the saved file holds a different request", "Sends that other request", "journal-corrupt. Nothing is sent", "It must never send the wrong request"]
+      row @cl-early cells=["A malformed ID, --server, or theme header id or version", "Fails later, after reading files or calling the service", "Fails before any file read or network call. Nothing is written either way", "Nothing is read or sent for a bad input"]
+      row @cl-receipt cells=["apply gets an answer with a malformed receipt", "Fix line: 'Correct the named input and retry.'", "Fix line: 'Check canvas receipt ID before retrying.'", "Matches the other cases where apply is not confirmed"]
+    }
+    text @cli-ref "Also: --theme-file is now read once instead of 3 times. You will not see a difference." role=caption
+  }
+
+  node @same-web concept "Web: 59 behaviours kept, grouped into 14 areas" size=large {
+    list @same-web-l [
+      "Start-up: unsent saves are recovered before anything is sent. ?collection= opens that collection.",
+      "Chooser: open or switch a collection. A failure keeps the current diagram. 'Choose another collection' still works.",
+      "Moving: a drag in a modules diagram shows 'Saved'. Dropping in place saves nothing. When the browser refuses, Expand / Rearrange appear at once, Expand first.",
+      "Undo/redo: works with the keys. The keys are ignored while typing.",
+      "Add panel: add a diagram, object or group. Same validation texts.",
+      "New connection: draw, Inspect, Retry. Closes when saved.",
+      "Source editor: show, edit, Apply, close (keep / discard / stay). The draft survives a reload.",
+      "Inspector, wire editor and definitions: Apply works as before.",
+      "Recovery panel: Check, Retry and Dismiss work as before, including 'No receipt found...'.",
+      "Offline: going offline or reconnecting never resends saves. The app reads the latest state again instead.",
+      "Library: refreshes after every save.",
+      "Panels, preferences and theme: survive a reload.",
+      "Export: every format downloads the same file.",
+      "Status texts: all unchanged."
+    ]
+  }
+
+  node @same-svc concept "Service: stays the same" size=medium {
+    list @same-svc-l [
+      "Every error code, message, path, recovery text and HTTP status (apart from the export fix in section 1)",
+      "JSON shapes",
+      "Job IDs: read:..., admission:..., headless",
+      "Query and header rules"
+    ]
+  }
+
+  node @same-cli concept "CLI: stays the same" size=medium {
+    list @same-cli-l [
+      "Help text",
+      "Every success output",
+      "Service error text",
+      "render:png report JSON and the files it writes",
+      "--help anywhere on the line still prints usage",
+      "An empty --workspace still means the current folder"
+    ]
+  }
+
+  section @s-export "1 · Service: export" mode=grid layout=grid columns=1 order=0 {
+    show @export
+  }
+
+  section @s-cli "2 · CLI: 14 changes" mode=grid layout=grid columns=2 order=1 {
+    show @cli-render @cli-other
+  }
+
+  section @s-same "3 · What stays the same" mode=grid layout=grid columns=3 order=2 {
+    show @same-web @same-svc @same-cli
+  }
+}

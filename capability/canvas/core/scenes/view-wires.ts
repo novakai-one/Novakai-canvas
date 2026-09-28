@@ -19,7 +19,11 @@ function nodeDelta(
   return { x: preview.x - info.box.x - sectionDelta.x, y: preview.y - info.box.y - sectionDelta.y };
 }
 /** Temporary endpoint stretch is explicitly preview-only; Layout must produce the next feasible route. */
-function endpointPoints(points: readonly Point[], source: Point, target: Point): readonly Point[] {
+function endpointPoints(
+  points: readonly Point[],
+  source: Point,
+  target: Point,
+): readonly Point[] {
   const translated = points.map((point) => ({ ...point }));
   const first = points[0];
   const last = points.at(-1);
@@ -28,7 +32,11 @@ function endpointPoints(points: readonly Point[], source: Point, target: Point):
   return translated;
 }
 /** When both endpoints move together, translate the complete route and label, preserving their shape. */
-function movedWire(wire: RoutedWire, source: Point, target: Point): RoutedWire {
+function movedWire(
+  wire: RoutedWire,
+  source: Point,
+  target: Point,
+): RoutedWire {
   const same = source.x === target.x && source.y === target.y;
   if (!same) return { ...wire, points: endpointPoints(wire.points, source, target) };
   return {
@@ -52,7 +60,11 @@ function projectedWire(
   return movingWire(wire, source, target);
 }
 /** Pointer-only stretching remains distinct from a fully inspected released route. */
-function movingWire(wire: RoutedWire, source: Point, target: Point): RoutedWire {
+function movingWire(
+  wire: RoutedWire,
+  source: Point,
+  target: Point,
+): RoutedWire {
   const unchanged = [source.x, source.y, target.x, target.y].every((delta) => delta === 0);
   return unchanged ? wire : movedWire(wire, source, target);
 }
@@ -129,22 +141,35 @@ export function viewWire(
 }
 
 /** Narrow active route identity before choosing its section-local preview. */
-function isRouteTarget(state: SessionState, key: string): boolean {
+function isRouteTarget(
+  state: SessionState,
+  key: string,
+): boolean {
   if (state.draft?.kind !== 'route') return false;
   return targetKey(state.draft.target) === key;
 }
 /** Safe fallback is the admitted path; narrowing never casts another gesture into a route. */
-function routePoints(state: SessionState, fallback: readonly Point[]): readonly Point[] {
+function routePoints(
+  state: SessionState,
+  fallback: readonly Point[],
+): readonly Point[] {
   if (state.draft?.kind !== 'route') return fallback;
   return state.draft.current.points;
 }
 
 /** Only an admitted route is redrawn to the outline; a moving preview keeps its stretched ends. */
-function admitted(projected: RoutedWire, wire: RoutedWire, section: PlacedSection): RoutedWire {
+function admitted(
+  projected: RoutedWire,
+  wire: RoutedWire,
+  section: PlacedSection,
+): RoutedWire {
   return projected === wire ? outlined(wire, section) : projected;
 }
 /** Wires meet a diamond's box edge; the drawn line continues in to its slanted outline. */
-function outlined(wire: RoutedWire, section: PlacedSection): RoutedWire {
+function outlined(
+  wire: RoutedWire,
+  section: PlacedSection,
+): RoutedWire {
   const start = outlinePoint(wire.source, section);
   const end = outlinePoint(wire.target, section);
   return start === undefined && end === undefined
@@ -158,13 +183,19 @@ function outlined(wire: RoutedWire, section: PlacedSection): RoutedWire {
 function present(point: Point | undefined): readonly Point[] {
   return point === undefined ? [] : [point];
 }
-function pathStart(start: Point | undefined, path: string): string {
+function pathStart(
+  start: Point | undefined,
+  path: string,
+): string {
   return start === undefined ? path : `M${start.x} ${start.y} L${path.slice(1)}`;
 }
 function pathEnd(end: Point | undefined): string {
   return end === undefined ? '' : ` L${end.x} ${end.y}`;
 }
-function outlinePoint(end: RoutedWire['source'], section: PlacedSection): Point | undefined {
+function outlinePoint(
+  end: RoutedWire['source'],
+  section: PlacedSection,
+): Point | undefined {
   const node = section.nodes.find((item) => item.id === end.node);
   return node !== undefined && slanted(node) ? onOutline(node.box, end) : undefined;
 }
@@ -187,10 +218,16 @@ const inward: Readonly<Record<RoutedWire['source']['side'], Inward>> = {
   bottom: (box, point) => ({ x: point.x, y: point.y - topInset(box, point) }),
 };
 /** Left/right: how far in the outline sits at this height. */
-function sideInset(box: PlacedSection['nodes'][number]['box'], point: Point): number {
+function sideInset(
+  box: PlacedSection['nodes'][number]['box'],
+  point: Point,
+): number {
   return (box.width / 2) * (Math.abs(point.y - (box.y + box.height / 2)) / (box.height / 2));
 }
 /** Top/bottom: how far in the outline sits at this x. */
-function topInset(box: PlacedSection['nodes'][number]['box'], point: Point): number {
+function topInset(
+  box: PlacedSection['nodes'][number]['box'],
+  point: Point,
+): number {
   return (box.height / 2) * (Math.abs(point.x - (box.x + box.width / 2)) / (box.width / 2));
 }

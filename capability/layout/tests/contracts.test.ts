@@ -287,7 +287,10 @@ function scaleSection(
   };
 }
 /** A dishonest reader can supply section-count overflow without a Presentation producer. */
-function forgedSections(source: Projection, count: number): Projection {
+function forgedSections(
+  source: Projection,
+  count: number,
+): Projection {
   const sample = source.sections[0];
   assert(sample);
   return {
@@ -340,7 +343,10 @@ it('rejects invalid grid columns at each consumed scope and preserves authored p
   await checkColumnLocks();
 });
 /** Deliberately dishonest typed data exercises each consumer scope without calling Model validation first. */
-function invalidColumnScopes(source: Projection, columns: number): readonly Projection[] {
+function invalidColumnScopes(
+  source: Projection,
+  columns: number,
+): readonly Projection[] {
   return [
     { ...source, arrangement: { ...source.arrangement, columns } },
     {
@@ -554,7 +560,10 @@ function routeRank(
   return [length, bends, index];
 }
 /** Lexicographic ordering makes both bend and original-proposal index tie breakers observable. */
-function numericRank(a: readonly number[], b: readonly number[]): number {
+function numericRank(
+  a: readonly number[],
+  b: readonly number[],
+): number {
   return (
     a
       .map((value, index): number => value - (b[index] ?? NaN))

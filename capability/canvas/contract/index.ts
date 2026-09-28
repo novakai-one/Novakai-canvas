@@ -1,6 +1,8 @@
 /** Sole Canvas public surface; pure imports do not load browser, React Flow or CSS bindings. */
 export { createCanvas } from './api.js';
 export { defaultProfile, profile } from './records/profile.js';
+export { gestureId } from './brands.js';
+export type { GestureId } from './brands.js';
 export type { Canvas, Dependencies } from './types.js';
 export type { Result, Diagnostic, ErrorCode } from './errors.js';
 export type { SessionState, Transition, ReadingState } from './records/state.js';

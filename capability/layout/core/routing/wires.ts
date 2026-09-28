@@ -29,7 +29,10 @@ interface RankedRoute {
   readonly index: number;
 }
 /** Marker and accepted label regions are reserved for subsequent labels. */
-function reserved(plans: readonly RoutePlan[], context: WireContext): readonly Box[] {
+function reserved(
+  plans: readonly RoutePlan[],
+  context: WireContext,
+): readonly Box[] {
   return plans.flatMap((item): readonly Box[] => [
     markerBox(item.attachments.source, context.metrics.markers[item.wire.sourceMarker]),
     markerBox(item.attachments.target, context.metrics.markers[item.wire.targetMarker]),
@@ -210,7 +213,10 @@ async function labelAll(
   );
 }
 /** Accepted labels become real routing obstacles for subsequent connections. */
-function withPriorLabels(context: WireContext, wires: readonly RoutedWire[]): WireContext {
+function withPriorLabels(
+  context: WireContext,
+  wires: readonly RoutedWire[],
+): WireContext {
   const labels = wires
     .filter((wire) => wire.labelVisible !== false)
     .map((wire): Obstacle => ({ id: `label:${wire.id}`, box: wire.labelBox }));
@@ -251,7 +257,10 @@ function finalPath(
   return { ...wire, path: curvePath(wire.points, radius, occupied) };
 }
 /** Reciprocal and parallel edges share one endpoint-local ordinal, stable in source order. */
-function parallel(section: VisualSection, index: number): number {
+function parallel(
+  section: VisualSection,
+  index: number,
+): number {
   const current = section.wires[index];
   if (current === undefined) return 0;
   return section.wires.slice(0, index).filter((item): boolean => sameEndpoints(current, item))
@@ -297,7 +306,10 @@ export async function routeWires(
 }
 
 /** Every completed wire keeps an attributable interior lane; only shared endpoint stubs may coincide. */
-function laneAvailable(points: readonly Point[], context: WireContext): boolean {
+function laneAvailable(
+  points: readonly Point[],
+  context: WireContext,
+): boolean {
   return context.prior.every((item): boolean => distinctLane(points, item.points));
 }
 
@@ -313,7 +325,10 @@ function labelledCandidate(
 }
 
 /** Inflate each obstacle separately: a tight endpoint approach must not remove clearance around unrelated content. */
-function nativeObstacles(plan: RoutePlan, context: WireContext): readonly Obstacle[] {
+function nativeObstacles(
+  plan: RoutePlan,
+  context: WireContext,
+): readonly Obstacle[] {
   const approaches = [
     plan.connection.sourceApproach ?? plan.connection.source,
     plan.connection.targetApproach ?? plan.connection.target,
@@ -326,7 +341,10 @@ function nativeObstacles(plan: RoutePlan, context: WireContext): readonly Obstac
 }
 
 /** Distance to a rectangle bounds optional native inflation without changing required marker dimensions. */
-function boxDistance(point: Point, box: Box): number {
+function boxDistance(
+  point: Point,
+  box: Box,
+): number {
   return Math.max(
     0,
     box.x - point.x,

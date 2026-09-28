@@ -6,11 +6,18 @@ import { sectionSchema } from './section.js';
 import { relationshipSchema } from './relationship.js';
 import { definitionSchema } from './definition.js';
 
-/** Create requires an absent ID; replace requires an existing ID. */
+/**
+ * `create` (the ID must not exist yet) or `replace` (the ID must exist). One schema object,
+ * shared by every record change below.
+ */
 const recordOperationSchema = z.enum(['create', 'replace']);
+
+/** Creates or replaces a whole object. */
 const objectChangeSchema = z
   .strictObject({ op: recordOperationSchema, target: z.literal('objects'), value: objectSchema })
   .readonly();
+
+/** Creates or replaces a whole relationship. */
 const relationshipChangeSchema = z
   .strictObject({
     op: recordOperationSchema,
@@ -18,15 +25,27 @@ const relationshipChangeSchema = z
     value: relationshipSchema,
   })
   .readonly();
+
+/**
+ * Creates or replaces a whole section. Replacing an existing section keeps the old geometry the
+ * new value omits: section, appearance and group placements, and manual wire routes with their
+ * locks.
+ */
 const sectionChangeSchema = z
   .strictObject({ op: recordOperationSchema, target: z.literal('sections'), value: sectionSchema })
   .readonly();
+
+/** Creates or replaces a whole asset manifest entry. */
 const assetChangeSchema = z
   .strictObject({ op: recordOperationSchema, target: z.literal('assets'), value: assetSchema })
   .readonly();
+
+/** Creates or replaces a whole provenance entry. */
 const sourceChangeSchema = z
   .strictObject({ op: recordOperationSchema, target: z.literal('sources'), value: sourceSchema })
   .readonly();
+
+/** Creates or replaces a whole shared definition. */
 const definitionChangeSchema = z
   .strictObject({
     op: recordOperationSchema,
@@ -35,7 +54,12 @@ const definitionChangeSchema = z
   })
   .readonly();
 
-/** Complete-record create or replace. Target selects the exact payload schema. */
+/**
+ * Creates or replaces one complete record: `{ op, target, value }`. The target (`objects`,
+ * `relationships`, `sections`, `assets`, `sources`, `definitions`) selects the value's schema;
+ * omitted fields get their defaults. Exception: replacing an existing section keeps the old
+ * geometry the new value omits (see the section change). Exported, shared and unfrozen.
+ */
 export const recordChangeSchema = z.union([
   objectChangeSchema,
   relationshipChangeSchema,
@@ -45,7 +69,10 @@ export const recordChangeSchema = z.union([
   definitionChangeSchema,
 ]);
 
-/** Removal alone does not cascade; final-batch validation rejects unresolved references. */
+/**
+ * Removes one record by ID: `{ op: 'remove', target, id }`. It does not cascade; a plan rejects
+ * any reference left unresolved at the end of the batch.
+ */
 const removeChangeSchema = z.union([
   z
     .strictObject({ op: z.literal('remove'), target: z.literal('objects'), id: objectId })
@@ -69,12 +96,19 @@ const removeChangeSchema = z.union([
     .readonly(),
 ]);
 
-/** Whole-document replacement preserves identity, revision and omitted geometry. */
+/**
+ * Replaces the whole collection: `{ op: 'replace-document', value }`. The ID and revision must
+ * stay the same (`identity` otherwise). For each section whose ID matches an old section, the
+ * old geometry the new value omits is kept: placements, and manual wire routes with their locks.
+ */
 const replaceDocumentSchema = z
   .strictObject({ op: z.literal('replace-document'), value: collectionSchema })
   .readonly();
 
-/** Cascade must be explicit when deletion requires dependency cleanup. */
+/**
+ * Deletes an object: `{ op: 'delete-object', id, cascade }`. `cascade` defaults to `false`; when
+ * the object is still used, deleting it needs `cascade: true` (`delete-referenced` otherwise).
+ */
 const deleteObjectSchema = z
   .strictObject({
     op: z.literal('delete-object'),
@@ -83,22 +117,38 @@ const deleteObjectSchema = z
   })
   .readonly();
 
-/** Hides an ordinary appearance and its local incident wires; canonical records survive. */
+/**
+ * Hides an object in one section: `{ op: 'hide', section, object }`. The object needs an
+ * ordinary appearance in that section (a group representing it is not enough; otherwise
+ * `not-found`). Removes the appearance and the section's wires touching it; the object and
+ * relationships themselves remain.
+ */
 const hideAppearanceSchema = z
   .strictObject({ op: z.literal('hide'), section: sectionId, object: objectId })
   .readonly();
 
-/** Clears section, appearance and group placements plus manual wire points and locks. */
+/**
+ * Resets one section's layout: `{ op: 'reset-layout', section }`. Clears section, appearance and
+ * group placements, and manual wire points and locks.
+ */
 const resetLayoutSchema = z
   .strictObject({ op: z.literal('reset-layout'), section: sectionId })
   .readonly();
 
-/** Clears one visible wire override while retaining its routing style and attachment preferences. */
+/**
+ * Resets one wire's route: `{ op: 'reset-route', section, relationship }`. Clears that wire's
+ * manual override but keeps its routing style and attachment preferences.
+ */
 const resetRouteSchema = z
   .strictObject({ op: z.literal('reset-route'), section: sectionId, relationship: relationshipId })
   .readonly();
 
-/** Supported semantic mutations; no arbitrary JSON paths or direct persistence writes. */
+/**
+ * One supported change: a record create/replace, a remove, `replace-document`, `delete-object`,
+ * `hide`, `reset-layout` or `reset-route`. There are no arbitrary JSON-path edits. Every variant
+ * is strict (unknown fields rejected) and parses to a read-only value. Exported, shared and
+ * unfrozen; `parse` throws a `ZodError`.
+ */
 export const changeSchema = z.union([
   recordChangeSchema,
   removeChangeSchema,
@@ -109,11 +159,15 @@ export const changeSchema = z.union([
   resetRouteSchema,
 ]);
 
-/** Ordered, bounded batch of at most 1,000 operations; final validity is checked after application. */
+/**
+ * An ordered batch of at most 1,000 changes. Validity of the result is checked after all of them
+ * are applied (by `plan`). Exported, shared and unfrozen; used by Model's staging (Library has
+ * its own change schema).
+ */
 export const changesSchema = z.array(changeSchema).max(1000).readonly();
 
-/** One checked operation. Model plans it; Authoring decides whether to commit it. */
+/** One parsed change. Model plans it; Authoring decides whether to commit it. */
 export type Change = z.infer<typeof changeSchema>;
 
-/** Complete-record create or replace; omitted fields receive schema defaults. */
+/** One parsed record create or replace, with defaults filled in. */
 export type RecordChange = z.infer<typeof recordChangeSchema>;

@@ -19,7 +19,10 @@ export interface Scope {
   readonly minimumLayerSpacing: number;
 }
 /** Measured track sizes keep heterogeneous diagrams compact without allowing overlap. */
-function grid(scope: Scope, options: LayoutOptions): readonly PlacementValue[] {
+function grid(
+  scope: Scope,
+  options: LayoutOptions,
+): readonly PlacementValue[] {
   const gap = options.gap[scope.layout.gap];
   const spacing = Math.max(gap, scope.minimumCrossSpacing);
   const layerSpacing = Math.max(gap, scope.minimumLayerSpacing);
@@ -39,7 +42,10 @@ function gridDirection(layout: LayoutIntent): LayoutIntent['direction'] {
   return layout.direction === 'left' ? 'left' : 'right';
 }
 /** Placement engines provide seeds only; required constraints are applied afterward. */
-async function native(scope: Scope, context: SeedContext): Promise<readonly PlacementValue[]> {
+async function native(
+  scope: Scope,
+  context: SeedContext,
+): Promise<readonly PlacementValue[]> {
   const algorithm = scope.layout.algorithm === 'tree' ? 'tree' : 'layered';
   const gap = context.options.gap[scope.layout.gap];
   const spacing = Math.max(gap, scope.minimumCrossSpacing);
@@ -54,7 +60,10 @@ async function native(scope: Scope, context: SeedContext): Promise<readonly Plac
   return requireValue(result);
 }
 /** Native identity and geometry are checked before a seed can influence the solver. */
-function checked(values: readonly PlacementValue[], scope: Scope): readonly PlacementValue[] {
+function checked(
+  values: readonly PlacementValue[],
+  scope: Scope,
+): readonly PlacementValue[] {
   const expected = scope.nodes.map((node) => node.id).toSorted();
   const actual = values.map((node) => node.id).toSorted();
   if (JSON.stringify(expected) !== JSON.stringify(actual))
@@ -80,14 +89,20 @@ export async function placeScope(
   });
 }
 /** Closed layout policy selection keeps native dependencies out of geometry rules. */
-async function choose(scope: Scope, context: SeedContext): Promise<readonly PlacementValue[]> {
+async function choose(
+  scope: Scope,
+  context: SeedContext,
+): Promise<readonly PlacementValue[]> {
   if (scope.layout.algorithm === 'grid' || scope.layout.algorithm === 'sequence')
     return grid(scope, context.options);
   return native(scope, context);
 }
 
 /** Omitted tracks retain legacy policy; validated explicit grid intent takes priority on every replay. */
-function gridColumns(scope: Scope, options: LayoutOptions): number {
+function gridColumns(
+  scope: Scope,
+  options: LayoutOptions,
+): number {
   if (scope.layout.algorithm === 'sequence') return Math.max(1, scope.nodes.length);
   return scope.layout.columns ?? options.gridColumns;
 }

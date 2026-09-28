@@ -3,10 +3,10 @@ import type {
   PrototypeBounds,
   PrototypeBlock,
   PrototypeRoad,
-  RoadPrototypeScene,
   PrototypeLayoutOptions,
   PrototypeLayoutMeasure,
 } from '../contract/records/road-prototype.js';
+import type { RoadPrototypeScene } from '../contract/records/road-scene.js';
 import { roadNetwork } from './prototype-road-network.js';
 import {
   placePrototypeNode,
@@ -22,7 +22,10 @@ const drivewayWidth = 24,
   inset = 24,
   streetTop = 80;
 /** Capacity is chosen once. Wider roads reserve more space before any node is placed. */
-function capacity(roadWidth: number, node: { readonly width: number; readonly height: number }) {
+function capacity(
+  roadWidth: number,
+  node: { readonly width: number; readonly height: number },
+) {
   if (!Number.isFinite(roadWidth) || roadWidth < 48)
     throw new RangeError('Road width must be finite and at least 48');
   return {
@@ -35,7 +38,11 @@ function capacity(roadWidth: number, node: { readonly width: number; readonly he
   };
 }
 type Capacity = ReturnType<typeof capacity>;
-function section(label: string, index: number, plan: Capacity): PrototypeBlock {
+function section(
+  label: string,
+  index: number,
+  plan: Capacity,
+): PrototypeBlock {
   return {
     id: `section-${index + 1}`,
     label,
@@ -56,7 +63,10 @@ function placed(
 ): PrototypeBounds {
   return { x: section.bounds.x + x, y: section.bounds.y + y, width, height };
 }
-function streets(section: PrototypeBlock, plan: Capacity): readonly PrototypeRoad[] {
+function streets(
+  section: PrototypeBlock,
+  plan: Capacity,
+): readonly PrototypeRoad[] {
   return [
     ...[streetTop, plan.streetBottom].map((y, index): PrototypeRoad => ({
       id: `${section.id}-street-horizontal-${index}`,
@@ -84,7 +94,10 @@ function streets(section: PrototypeBlock, plan: Capacity): readonly PrototypeRoa
     })),
   ];
 }
-function mainRoads(sections: readonly PrototypeBlock[], plan: Capacity): readonly PrototypeRoad[] {
+function mainRoads(
+  sections: readonly PrototypeBlock[],
+  plan: Capacity,
+): readonly PrototypeRoad[] {
   const connector: PrototypeRoad = {
     id: 'road-between-sections',
     sectionId: null,

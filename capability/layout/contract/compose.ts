@@ -168,7 +168,10 @@ export function previewModuleCollection(
 }
 
 /** Required section identity is checked before retaining any unchanged local geometry. */
-function previewSection(scene: import('./records/geometry.js').Scene, id: string) {
+function previewSection(
+  scene: import('./records/geometry.js').Scene,
+  id: string,
+) {
   const section = scene.sections.find((section) => section.id === id);
   if (section === undefined) return reject('invalid-input', id, 'Preview section is missing');
   return section;

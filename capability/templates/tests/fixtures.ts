@@ -4,31 +4,67 @@ import { composeTemplates, digest, presetId, version } from '../contract/index.j
 import type {
   Result,
   Dependencies,
+  Digest,
+  ErrorCode,
   RecipePort,
   ThemePayload,
+  ThemePort,
   Pin,
   Admission,
   Templates,
 } from '../contract/index.js';
 import { createIdentity } from '../adapters/identity.js';
+
+/** The diagram intent the test recipe codec expands into: nodes with an id and a label. */
 export interface Intent {
   readonly nodes: readonly { readonly id: string; readonly label: string }[];
 }
+
+/** A font digest (`a` × 64). */
 export const font = digest.parse('a'.repeat(64));
+
+/** A media digest (`b` × 64). */
 export const media = digest.parse('b'.repeat(64));
-export const theme: ThemePayload = {
-  tokens: {
-    'font.body': { type: 'font', family: 'Inter', digest: font },
-    'color.text': { type: 'color', value: '#111111' },
-  },
-  roles: ['neutral', 'primary'],
-  fonts: [font],
-  base: null,
-};
-/** Pure test codec; not a production DSL parser. Fixtures isolate Templates' exact-pin/remapping orchestration. */
+
+/**
+ * A complete resolved theme: one font token, one color, two roles, no base. Each call returns a
+ * new object, so no test can change another test's theme.
+ *
+ * @returns The theme payload.
+ */
+export function themePayload(): ThemePayload {
+  return {
+    tokens: {
+      'font.body': { type: 'font', family: 'Inter', digest: font },
+      'color.text': { type: 'color', value: '#111111' },
+    },
+    roles: ['neutral', 'primary'],
+    fonts: [font],
+    base: null,
+  };
+}
+
+/**
+ * A test theme codec whose `resolve` always succeeds with `payload`, whatever it is given.
+ *
+ * @param payload - The resolved theme to return. Defaults to a new {@link themePayload}.
+ * @returns The codec.
+ */
+export function themeCodec(payload: ThemePayload = themePayload()): ThemePort {
+  return { resolve: () => ({ ok: true, value: payload }) };
+}
+
+/**
+ * A test recipe codec, not a real DSL parser. `inspect` trims the source and reports the given
+ * theme pins and assets; `expand` returns one node `<namespace>_start` labelled with the source.
+ *
+ * @param themes - The theme pins `inspect` reports.
+ * @param assets - The asset digests `inspect` reports.
+ * @returns The codec.
+ */
 export function recipe(
   themes: readonly Pin[] = [],
-  assets: readonly (typeof font)[] = [],
+  assets: readonly Digest[] = [],
 ): RecipePort<Intent> {
   return {
     inspect: (source, family) => ({
@@ -41,22 +77,46 @@ export function recipe(
     }),
   };
 }
-/** Required semantic providers are explicit; no fake production defaults are introduced. */
+
+/**
+ * Test providers: the test recipe codec, a theme codec that always returns {@link themePayload},
+ * and the real SHA-256 identity adapter. Templates has no default providers; this helper supplies
+ * test ones, each replaceable through `overrides`.
+ *
+ * @param overrides - Providers to replace.
+ * @returns The providers.
+ */
 export function dependencies(overrides: Partial<Dependencies<Intent>> = {}): Dependencies<Intent> {
   return {
     recipe: recipe(),
-    theme: { resolve: () => ({ ok: true, value: theme }) },
+    theme: themeCodec(),
     identity: createIdentity(),
     ...overrides,
   };
 }
-/** Native-hash composition is the same public constructor used by the eventual service and CLI hosts. */
+
+/**
+ * Templates built with the public `composeTemplates` (native hashing), the same constructor the
+ * hosts use.
+ *
+ * @returns The facade.
+ */
 export function service(): Templates<Intent> {
   const defaults = dependencies();
   return composeTemplates({ recipe: defaults.recipe, theme: defaults.theme });
 }
-/** Independently authored source submission has no storage metadata, coordinates or executable content. */
-export function input(release = '1.0.0', source = 'fixture:hello'): Admission {
+
+/**
+ * A recipe admission for `demo` (family `er`). It has no storage fields, coordinates or code.
+ *
+ * @param release - The version. Defaults to `1.0.0`.
+ * @param source - The recipe source. Defaults to `fixture:hello`.
+ * @returns The admission.
+ */
+export function input(
+  release = '1.0.0',
+  source = 'fixture:hello',
+): Admission {
   return {
     schemaVersion: 1,
     id: presetId.parse('demo'),
@@ -68,8 +128,19 @@ export function input(release = '1.0.0', source = 'fixture:hello'): Admission {
     family: 'er',
   };
 }
-/** Theme delta content is opaque to Templates; this test resolver returns the explicitly injected resolved fixture. */
-export function themeInput(id = 'paper', release = '1.0.0'): Admission {
+
+/**
+ * A theme admission. Its `raw` input is opaque to Templates; the test theme codec returns
+ * {@link themePayload} whatever it is given.
+ *
+ * @param id - The theme ID. Defaults to `paper`.
+ * @param release - The version. Defaults to `1.0.0`.
+ * @returns The admission.
+ */
+export function themeInput(
+  id = 'paper',
+  release = '1.0.0',
+): Admission {
   return {
     schemaVersion: 1,
     id: presetId.parse(id),
@@ -80,17 +151,42 @@ export function themeInput(id = 'paper', release = '1.0.0'): Admission {
     raw: {},
   };
 }
-/** Vitest owns assertion exceptions; failed results never unwrap as fabricated fixture successes. */
+
+/**
+ * Asserts a result succeeded and returns its value, so a failure never passes as a success.
+ *
+ * @param result - The result to check.
+ * @returns The success value.
+ * @throws Vitest's assertion error when the result failed (and an `Error` with the failure
+ * message, which is not reached after a failed assertion).
+ */
 export function value<T>(result: Result<T>): T {
   expect(result.ok).toBe(true);
-  if (!result.ok) throw new Error(result.error.message);
+  if (!result.ok) {
+    throw new Error(result.error.message);
+  }
   return result.value;
 }
-/** Assert documented error vocabulary; localized prose is intentionally not part of these assertions. */
-export function rejects(result: Result<unknown>, code: string): void {
+
+/**
+ * Asserts a result failed with `code`. The message wording is not checked.
+ *
+ * @param result - The result to check.
+ * @param code - The expected failure code.
+ * @throws Vitest's assertion error otherwise.
+ */
+export function rejects(
+  result: Result<unknown>,
+  code: ErrorCode,
+): void {
   expect(result).toMatchObject({ ok: false, error: { code } });
 }
-/** Typed provider fault for deterministic failure-boundary scenarios. */
+
+/**
+ * A provider failure (`provider-failed` at `fixture`), for failure-path tests.
+ *
+ * @returns A new failed result.
+ */
 export function failed<T>(): Result<T> {
   return {
     ok: false,
@@ -103,8 +199,32 @@ export function failed<T>(): Result<T> {
   };
 }
 
-/** Independently serialize the known fixture shape in canonical key order; this is not the production canonicalizer. */
-function appendTheme(records: Catalog, identity: Pick<IdentityPort, 'hash'>): Catalog {
+/**
+ * A valid chain of `size` themes where each theme's base is the previous one (`theme0` has none).
+ * Used to check that a long supported chain validates, without a timing assertion.
+ *
+ * @param size - The number of themes.
+ * @param identity - The hasher used for each theme's digest.
+ * @returns The catalog.
+ */
+export function chainedThemes(
+  size: number,
+  identity: Pick<IdentityPort, 'hash'>,
+): Catalog {
+  return Array.from({ length: size }).reduce<Catalog>(
+    (records) => appendTheme(records, identity),
+    [],
+  );
+}
+
+/**
+ * Appends theme `theme<n>` based on the last record. Its digest hashes a JSON text written here in
+ * canonical key order, independently of the production canonicalizer.
+ */
+function appendTheme(
+  records: Catalog,
+  identity: Pick<IdentityPort, 'hash'>,
+): Catalog {
   const previous = records.at(-1);
   const base = fixtureBase(previous);
   const content = {
@@ -119,20 +239,16 @@ function appendTheme(records: Catalog, identity: Pick<IdentityPort, 'hash'>): Ca
   const result: Preset = { ...content, digest: value(identity.hash(JSON.stringify(content))) };
   return [...records, result];
 }
-/** Explicit null root and ordered pin fields keep this independent hash fixture reproducible. */
+
+/** The pin of the previous theme, fields in canonical order; `null` for the first theme. */
 function fixtureBase(previous: Preset | undefined): Pin | null {
-  if (!previous) return null;
+  if (!previous) {
+    return null;
+  }
   return {
     digest: previous.digest,
     id: previous.id,
     kind: previous.kind,
     version: previous.version,
   };
-}
-/** Maximum supported ancestry fixture exercises the observed slow path without a fragile wall-clock assertion. */
-export function chainedThemes(size: number, identity: Pick<IdentityPort, 'hash'>): Catalog {
-  return Array.from({ length: size }).reduce<Catalog>(
-    (records) => appendTheme(records, identity),
-    [],
-  );
 }

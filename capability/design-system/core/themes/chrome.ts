@@ -13,12 +13,18 @@ function browserExtension(id: TokenId): boolean {
   return /^(canvasDepth\.|canvasEmphasis\.|canvasTone\.|canvas\.)/.test(id);
 }
 /** Serialization omits browser values always and chrome values only for legacy payloads. */
-function omitted(id: TokenId, chrome: unknown): boolean {
+function omitted(
+  id: TokenId,
+  chrome: unknown,
+): boolean {
   if (browserExtension(id)) return true;
   return chrome === undefined && chromeExtension(id);
 }
 /** Legacy serialization retains exactly its original token vocabulary and digest. */
-export function chromeTokens(values: TokenValues, chrome: unknown): TokenValues {
+export function chromeTokens(
+  values: TokenValues,
+  chrome: unknown,
+): TokenValues {
   return Object.fromEntries(
     Object.entries(values).filter(([id]) => !omitted(tokenId.parse(id), chrome)),
   );
@@ -29,7 +35,10 @@ export function chromeField(chrome: unknown): { readonly chrome?: ChromeName } {
   return { chrome: parsed(chromeName, chrome, 'chrome') };
 }
 /** Fill every token the saved theme lacks from defaults derived from its own roots. */
-export function completeChromeTokens(supplied: TokenValues, source: SourceSet): TokenValues {
+export function completeChromeTokens(
+  supplied: TokenValues,
+  source: SourceSet,
+): TokenValues {
   const roots = Object.fromEntries(
     source.definitions
       .filter((item) => item.expression.op === 'literal')

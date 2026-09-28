@@ -14,7 +14,10 @@ function channels(hex: string): Rgb {
   ];
 }
 /** Composite alpha against the actual adjacent surface before computing luminance. */
-function composite(hex: string, background: Rgb): Rgb {
+function composite(
+  hex: string,
+  background: Rgb,
+): Rgb {
   const rgb = channels(hex);
   const alpha = hex.length === 9 ? parseInt(hex.slice(7, 9), 16) / 255 : 1;
   return [
@@ -33,7 +36,11 @@ function luminance(rgb: Rgb): number {
   return 0.2126 * linear(rgb[0]) + 0.7152 * linear(rgb[1]) + 0.0722 * linear(rgb[2]);
 }
 /** Compare two composited colors; callers provide the opaque containing surface. */
-export function contrastRatio(foreground: string, background: string, surface: string): number {
+export function contrastRatio(
+  foreground: string,
+  background: string,
+  surface: string,
+): number {
   const back = composite(background, channels(surface));
   const front = composite(foreground, back);
   const a = luminance(front);
@@ -53,7 +60,10 @@ export function validateContrast(
   return pairs.map((pair) => inspectPair(pair, values, surface));
 }
 /** Base scopes cannot depend on an unknown ambient page behind translucent surfaces. */
-function requireOpaque(color: string, path: string): void {
+function requireOpaque(
+  color: string,
+  path: string,
+): void {
   if (color.length !== 7)
     reject('contrast', path, 'opaque surface', 'Base surfaces must be opaque');
 }

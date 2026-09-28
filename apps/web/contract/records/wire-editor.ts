@@ -8,12 +8,13 @@ import type {
 } from './owners.js';
 import type { Snapshot, Receipt } from './owners.js';
 import type { EditingBase } from './editor-recovery.js';
+import type { TransportGeneration, WireDraftKey, WorkspaceId } from '../brands.js';
 import type { Diagnostic, Result } from '../errors.js';
-import type { DraftRetention } from '../ports/workspace.js';
+import type { DraftRetention } from '../ports/draft-retention.js';
 /** The semantic relationship is shared; only the selected section owns the route controls. */
 export interface WireSelection {
   readonly base: Snapshot;
-  readonly generation: string;
+  readonly generation: TransportGeneration;
   readonly collection: Collection;
   readonly section: Section;
   readonly relationship: Relationship;
@@ -40,12 +41,18 @@ export type WireEdit =
   | { readonly kind: 'automatic-route' };
 export interface WireDraft extends Omit<WireSelection, 'base'> {
   readonly base: EditingBase;
-  readonly key: string;
+  readonly key: WireDraftKey;
   readonly edits: readonly WireEdit[];
 }
 export interface EditedWire {
   readonly relationship: Relationship;
   readonly wire: WireAppearance;
+}
+/** One endpoint a person can pick in the wire editor; `value` is the endpoint's stable select key. */
+export interface EndpointChoice {
+  readonly value: string;
+  readonly label: string;
+  readonly endpoint: Endpoint;
 }
 export interface WireEditorState {
   readonly drafts: readonly WireDraft[];
@@ -55,15 +62,21 @@ export interface WireEditorState {
 export interface WireEditorSession {
   getSnapshot(): WireEditorState;
   subscribe(listener: () => void): () => void;
-  restore(workspace: string): Result<void>;
-  edit(selection: WireSelection, command: WireEdit): Result<void>;
-  discard(key: string): Result<void>;
-  apply(key: string): Promise<Result<void>>;
+  restore(workspace: WorkspaceId): Result<void>;
+  edit(
+    selection: WireSelection,
+    command: WireEdit,
+  ): Result<void>;
+  discard(key: WireDraftKey): Result<void>;
+  apply(key: WireDraftKey): Promise<Result<void>>;
 }
 export interface WireEditorBindings {
   readonly retention: DraftRetention;
   read(input: unknown): Result<readonly WireDraft[]>;
-  apply(draft: WireDraft, changes: readonly Change[]): Promise<Result<Receipt>>;
+  apply(
+    draft: WireDraft,
+    changes: readonly Change[],
+  ): Promise<Result<Receipt>>;
   report(error: Diagnostic): void;
 }
 export type WireEditorFactory = (

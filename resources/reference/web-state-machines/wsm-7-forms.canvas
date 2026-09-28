@@ -1,0 +1,262 @@
+canvas 1
+collection @wsm-forms "Web state machines · 7 · The Add panel and new connections" theme=paper {
+
+  node @root concept "apps/web/" size=small {}
+  node @d-forms concept "core/workspace/forms/" size=small {}
+  node @d-connection concept "core/workspace/connection/" size=small {}
+  node @d-editing concept "core/editing/" size=small {}
+  node @d-econn concept "core/editing/connection/" size=small {}
+  node @d-creation concept "core/creation/" size=small {}
+  node @d-records concept "contract/records/" size=small {}
+  node @d-recwf concept "contract/records/workflow/" size=small {}
+  node @d-react concept "adapters/react/" size=small {}
+
+  node @f-state module "state.ts [NEW]" {}
+  node @f-forms module "forms.ts [NEW]" { signature @sig "updateForms" parameters=["state: Forms", "event: FormsEvent", "context: SceneContext", "deps: WorkflowDeps"] returns="Step<Forms, FormsOut, never>" }
+  node @f-submit module "submit.ts [NEW]" {
+    signature @sig "submitForm" parameters=["state: Forms", "event: Submitted", "context: SceneContext", "deps: WorkflowDeps"] returns="Step<Forms, FormsOut, never>"
+    signature @palette "paletteDropped" parameters=["state: Forms", "event: PaletteDropped", "context: SceneContext", "deps: WorkflowDeps"] returns="Step<Forms, FormsOut, never>"
+  }
+  node @c-state module "state.ts [NEW]" {}
+  node @c-connection module "connection.ts [NEW]" { signature @sig "updateConnection" parameters=["state: Connection", "event: ConnectionEvent", "context: SceneContext", "deps: WorkflowDeps"] returns="Step<Connection, ConnectionOut, never>" }
+  node @w-forms interface "forms.ts [NEW]" {}
+  node @w-connection interface "connection.ts [NEW]" {}
+  node @e-request module "request.ts [CHANGE]" { signature @sig "connectionRequest" parameters=["policy: ConnectionPolicy", "builders: RequestBuilders", "draft: ConnectionDraft", "ids: ConnectionIds"] returns="Result<Request>" }
+  node @e-draft module "draft.ts [CHANGE]" {
+    signature @sig "buildConnectionDraft" parameters=["policy: ConnectionPolicy", "open: SceneContext", "intent: ConnectionIntent"] returns="Result<ConnectionDraft>"
+    signature @edited "editedConnection" parameters=["draft: ConnectionDraft", "edit: ConnectionEdit"] returns="ConnectionDraft"
+  }
+  node @e-capture module "capture.ts [DELETE]" {}
+  node @e-definition module "definition-request.ts [CHANGE]" { signature @sig "definitionRequest" parameters=["draft: DefinitionDraft", "builders: RequestBuilders", "request: RequestId"] returns="Result<Request>" }
+  node @k-captures module "captures.ts [DELETE · M24]" {}
+  node @k-problem module "problem.ts [DELETE · M24]" {}
+  node @k-drafts module "drafts.ts [CHANGE]" { signature @sig "emptyDraft" parameters=["form: K extends FormKind"] returns="DraftOf[K]" }
+  node @k-panel module "panel.ts [CHANGE]" { signature @sig "buildCreationPanel" parameters=["view: CreationView"] returns="CreationPanel" }
+  node @k-records module "records.ts [DELETE · M24]" {}
+  node @k-validation module "validation.ts [NEW · M21]" { signature @sig "validateForm" parameters=["document: RenderDocument", "form: FormKind", "draft: DraftOf[K]"] returns="Result<DraftOf[K]>" }
+  node @k-changes module "changes.ts [NEW · M21]" {
+    signature @sig "diagramChanges" parameters=["base: Snapshot", "draft: AddDiagramDraft", "id: SectionId"] returns="readonly Change[]"
+    signature @object "objectChanges" parameters=["document: RenderDocument", "draft: AddObjectDraft", "id: ObjectId"] returns="Result<readonly Change[]>"
+    signature @group "groupChanges" parameters=["section: Section", "draft: AddGroupDraft", "id: GroupId"] returns="Result<readonly Change[]>"
+  }
+  node @e-palette module "palette-drop.ts [CHANGE · M21: type moves to records]" {}
+  node @r-connection interface "connection.ts [CHANGE]" {}
+  node @r-creation interface "creation.ts [CHANGE]" {}
+  node @x-tools module "AddTools.tsx [CHANGE]" {}
+  node @x-forms module "AddForms.tsx [NEW · moved]" {}
+  node @x-fields module "AddFields.tsx [NEW · moved]" {}
+  node @x-css module "AddTools.module.css [CHANGE]" {}
+
+  wire @t1 @root -> @d-forms "contains" kind=parent
+  wire @t2 @root -> @d-connection "contains" kind=parent
+  wire @t3 @root -> @d-editing "contains" kind=parent
+  wire @t4 @d-editing -> @d-econn "contains" kind=parent
+  wire @t5 @root -> @d-creation "contains" kind=parent
+  wire @t6 @root -> @d-records "contains" kind=parent
+  wire @t7 @d-records -> @d-recwf "contains" kind=parent
+  wire @t8 @root -> @d-react "contains" kind=parent
+  wire @t9 @d-forms -> @f-state "contains" kind=parent
+  wire @t10 @d-forms -> @f-forms "contains" kind=parent
+  wire @t11 @d-forms -> @f-submit "contains" kind=parent
+  wire @t12 @d-connection -> @c-state "contains" kind=parent
+  wire @t13 @d-connection -> @c-connection "contains" kind=parent
+  wire @t14 @d-recwf -> @w-forms "contains" kind=parent
+  wire @t15 @d-recwf -> @w-connection "contains" kind=parent
+  wire @t16 @d-econn -> @e-request "contains" kind=parent
+  wire @t17 @d-econn -> @e-draft "contains" kind=parent
+  wire @t18 @d-econn -> @e-capture "contains" kind=parent
+  wire @t19 @d-editing -> @e-definition "contains" kind=parent
+  wire @t20 @d-creation -> @k-captures "contains" kind=parent
+  wire @t21 @d-creation -> @k-problem "contains" kind=parent
+  wire @t22 @d-creation -> @k-drafts "contains" kind=parent
+  wire @t23 @d-creation -> @k-panel "contains" kind=parent
+  wire @t24 @d-creation -> @k-records "contains" kind=parent
+  wire @t24b @d-creation -> @k-validation "contains" kind=parent
+  wire @t24c @d-creation -> @k-changes "contains" kind=parent
+  wire @t19b @d-editing -> @e-palette "contains" kind=parent
+  wire @t25 @d-records -> @r-connection "contains" kind=parent
+  wire @t26 @d-records -> @r-creation "contains" kind=parent
+  wire @t27 @d-react -> @x-tools "contains" kind=parent
+  wire @t28 @d-react -> @x-forms "contains" kind=parent
+  wire @t29 @d-react -> @x-fields "contains" kind=parent
+  wire @t30 @d-react -> @x-css "contains" kind=parent
+
+  section @repo "1 · Target repo tree — Add panel and new connections" mode=tree direction=down gap=compact order=1 {
+    show @root @d-forms @d-connection @d-editing @d-econn @d-creation @d-records @d-recwf @d-react detail=label size=small
+    show @f-state @f-forms @f-submit @c-state @c-connection @w-forms @w-connection @e-request @e-draft @e-capture @e-definition detail=label size=small
+    show @k-captures @k-problem @k-drafts @k-panel @k-records @k-validation @k-changes @e-palette @r-connection @r-creation @x-tools @x-forms @x-fields @x-css detail=label size=small
+    connect @t1 @t2 @t3 @t4 @t5 @t6 @t7 @t8 @t9 @t10 @t11 @t12 @t13 @t14 @t15 @t16 @t17 @t18 @t19 @t19b @t20 @t21 @t22 @t23 @t24 @t24b @t24c @t25 @t26 @t27 @t28 @t29 @t30 source-side=bottom target-side=left
+    root @root
+  }
+
+  node @n-forms entity "Forms" {
+    field @forms "forms" type="{ diagram: Form<'diagram'>, object: Form<'object'>, group: Form<'group'> }"
+    field @note "note" type="FormNote: none | invalid{FormKind, Diagnostic} | elsewhere{title, Diagnostic}"
+    text @i1 "invariant: locked(forms) <=> exists k: forms[k].phase = 'sent'; derived in the view, never stored (I13)"
+    text @i2 "invariant FM2: forms live inside OpenDiagram, so they belong to one collection and vanish when another installs (I14)"
+  }
+  node @n-form entity "Form<K extends FormKind>" {
+    field @phase "phase" type="'empty' | 'editing' | 'sent'"
+    field @draft "draft" type="DraftOf[K] (editing, sent)"
+    field @capture "capture" type="Capture (editing, sent)"
+    field @request "request" type="RequestId (sent)"
+    text @i1 "invariant FM1: validation (core/creation/validation.ts) runs before any phase change"
+    text @i2 "invariant FM3: an uncertain add stays 'sent'; Retry in the journal resends the same body"
+    text @i3 "invariant: locked => edited, submitted and cancelled change nothing (view reason 'form-locked')"
+  }
+  node @n-capture entity "Capture" {
+    field @base "base" type="Snapshot"
+    field @generation "generation" type="TransportGeneration"
+    text @i1 "invariant: taken at the form's first edit; kept until the form is empty again"
+  }
+  node @n-object entity "AddObjectDraft" {
+    field @section "section" type="SectionId"
+    field @label "label" type="string (content)"
+    field @kind "kind" type="ObjectKind"
+    field @reuse "reuse" type="{ kind: 'new' } | { kind: 'reuse', object: ObjectId }"
+    field @group "group" type="{ kind: 'none' } | { kind: 'group', id: GroupId }"
+    text @i1 "invariant: reuse.kind = 'reuse' => object exists in the collection and is not already shown in section"
+  }
+  node @n-connection entity "Connection" {
+    field @phase "phase" type="'none' | 'editing' | 'sent'"
+    field @draft "draft" type="ConnectionDraft (editing, sent)"
+    field @problem "problem" type="{ kind: 'none' } | { kind: 'problem', problem: Diagnostic } (editing)"
+    field @request "request" type="RequestId (sent)"
+    text @i1 "invariant: a refused connection stays 'sent' (view shows 'rejected') until the refusal is dismissed"
+    text @i2 "invariant: begun while phase != 'none' or while a move is held => refused ('connection-open')"
+  }
+  node @n-draft entity "ConnectionDraft" {
+    field @collection "collection" type="Collection (collection.id: CollectionId)"
+    field @generation "generation" type="TransportGeneration"
+    field @base "base" type="Snapshot"
+    field @ends "source, target" type="ConnectionEndpointView"
+    field @kind "kind, from, to" type="RelationshipKind, Cardinality, Cardinality"
+    field @label "label" type="string (content)"
+    text @i1 "invariant: no id, problem or requestState fields; requestState is read from the journal by the view"
+  }
+
+  wire @er1 @n-forms.@forms -> @n-form "holds 3" kind=association from=1 to=1..many
+  wire @er2 @n-form.@capture -> @n-capture "captured" kind=association from=1 to=0..1
+  wire @er3 @n-form.@draft -> @n-object "object form draft" kind=association from=1 to=0..1
+  wire @er4 @n-connection.@draft -> @n-draft "edits" kind=association from=1 to=0..1
+
+  section @entities "2 · Entities and invariants — Add forms and connection drafts" mode=er direction=right order=2 {
+    show @n-forms @n-form @n-capture @n-object @n-connection @n-draft
+    connect @er1 @er2 @er3 @er4
+  }
+
+  wire @m1 @f-forms -> @f-submit "submitForm · paletteDropped" kind=imports
+  wire @m2 @f-forms -> @k-drafts.@sig "emptyDraft(): DraftOf[K]" kind=imports
+  wire @m3 @f-submit -> @k-changes "diagramChanges · objectChanges · groupChanges" kind=imports
+  wire @m6 @f-submit -> @k-validation.@sig "validateForm(): Result<DraftOf[K]>" kind=imports
+  wire @m4 @c-connection -> @e-draft "buildConnectionDraft · editedConnection" kind=imports
+  wire @m5 @c-connection -> @e-request.@sig "connectionRequest(): Result<Request>" kind=imports
+
+  section @modules "3 · Module imports — forms and connection machines use the existing pure builders" mode=modules layout=layered direction=right order=3 {
+    group @g-core "core/" {
+      group @g-ws "workspace/" {
+        group @g-forms "forms/" {
+          show @f-forms @f-submit
+        }
+        group @g-connection "connection/" {
+          show @c-connection
+        }
+      }
+      group @g-creation "creation/" layout=grid columns=1 {
+        show @k-drafts @k-validation @k-changes
+      }
+      group @g-editing "editing/" {
+        group @g-econn "connection/" layout=grid columns=1 {
+          show @e-draft @e-request
+        }
+      }
+    }
+    connect @m1 @m2 @m3 @m6 @m4 @m5
+  }
+
+  node @summary concept "4 · Modules summary — collection 7" size=large {
+    table @summary-t columns=["Module", "Current Line Count", "Lines Added", "Lines Removed", "Net", "Expected final line count (estimate)", "What the module does"] {
+      row @sm-1 cells=["core/workspace/forms/state.ts", "0", "+70", "0", "+70", "70", "NEW · Forms, Form, Capture and FormNote."]
+      row @sm-2 cells=["core/workspace/forms/forms.ts", "0", "+120", "0", "+120", "120", "NEW · updateForms: edit, cancel, settle. The lock is derived."]
+      row @sm-3 cells=["core/workspace/forms/submit.ts", "0", "+130", "0", "+130", "130", "NEW · Validate first, then build and send; palette drop is one-shot."]
+      row @sm-4 cells=["core/workspace/connection/state.ts", "0", "+30", "0", "+30", "30", "NEW · Connection phases."]
+      row @sm-5 cells=["core/workspace/connection/connection.ts", "0", "+130", "0", "+130", "130", "NEW · Begin, edit, apply, cancel, settle, dismiss."]
+      row @sm-6 cells=["contract/records/workflow/forms.ts", "0", "+70", "0", "+70", "70", "NEW · FormsEvent (mapped per form kind), DraftOf and IdOf."]
+      row @sm-7 cells=["contract/records/workflow/connection.ts", "0", "+40", "0", "+40", "40", "NEW · ConnectionEvent."]
+      row @sm-8 cells=["core/editing/connection/request.ts", "139", "+15", "-29", "-14", "125", "CHANGE · Takes RequestId and RelationshipId; no bindings."]
+      row @sm-9 cells=["core/editing/connection/draft.ts", "211", "+10", "-35", "-25", "186", "CHANGE · Builds and edits the draft from the open diagram facts; reviewConnection goes with capture.ts."]
+      row @sm-10 cells=["core/editing/connection/capture.ts", "50", "0", "-50", "-50", "0", "DELETE · Copied journal state into the draft; now derived in the view."]
+      row @sm-11 cells=["core/editing/definition-request.ts", "33", "+6", "-9", "-3", "30", "CHANGE · Takes a RequestId; no nextId()."]
+      row @sm-12 cells=["core/creation/captures.ts", "170", "0", "-170", "-170", "0", "DELETE (M24) · Nullable-request captures; replaced by form phases."]
+      row @sm-13 cells=["core/creation/problem.ts", "18", "0", "-18", "-18", "0", "DELETE (M24) · Message-text dedupe; replaced by an identity rule (change I32: the Add panel no longer repeats a refusal)."]
+      row @sm-14 cells=["core/creation/drafts.ts", "89", "+10", "-19", "-9", "80", "CHANGE · Draft unions: reuse, group, placement."]
+      row @sm-15 cells=["core/creation/panel.ts", "138", "+10", "-18", "-8", "130", "CHANGE · Reads the projection."]
+      row @sm-16 cells=["core/creation/records.ts", "296", "0", "-296", "-296", "0", "DELETE (M24) · 296 lines; takes ActiveDiagram (live Canvas handles) and imports captures.ts. Split into validation.ts and changes.ts (M21)."]
+      row @sm-23 cells=["core/creation/validation.ts", "0", "+120", "0", "+120", "120", "NEW (M21) · Name, reused object (exists, not shown here) and group checks, from the document and the draft."]
+      row @sm-24 cells=["core/creation/changes.ts", "0", "+150", "0", "+150", "150", "NEW (M21) · Change builders for diagram, object and group, from the capture base, document and draft."]
+      row @sm-25 cells=["core/editing/palette-drop.ts", "46", "+2", "-10", "-8", "38", "CHANGE (M21) · The PaletteDrop type moves to contract/records/creation.ts; the pure helpers stay."]
+      row @sm-17 cells=["contract/records/connection.ts", "36", "+4", "-10", "-6", "30", "CHANGE · ConnectionDraft loses id, problem and requestState."]
+      row @sm-18 cells=["contract/records/creation.ts", "92", "+25", "-22", "+3", "95", "CHANGE · View types (no busy; adding derived); PaletteDrop."]
+      row @sm-19 cells=["adapters/react/AddTools.tsx", "360", "+10", "-280", "-270", "90", "CHANGE · P6 split leaves the panel only; M23 deletes useLocalCreation."]
+      row @sm-20 cells=["adapters/react/AddForms.tsx", "0", "+140", "0", "+140", "140", "NEW, moved · Diagram, Object and Group forms (P6)."]
+      row @sm-21 cells=["adapters/react/AddFields.tsx", "0", "+110", "0", "+110", "110", "NEW, moved · Field builders (P6)."]
+      row @sm-22 cells=["adapters/react/AddTools.module.css", "24", "+25", "-23", "+2", "26", "CHANGE · P1 token fixes."]
+      row @sm-total cells=["TOTAL · 25 files", "1702", "+1227", "-989", "+238", "1940", "Estimates, not gates. Paths are under apps/web/ unless they start with capability/, apps/service/ or name the repo root."]
+    }
+  }
+  section @s-summary "4 · Modules summary — Add panel and new connections" mode=grid columns=1 order=4 {
+    show @summary
+  }
+
+  node @crud note "5 · Capability ownership — Add forms and connection drafts" size=large {
+    table @crud-t columns=["Object", "Create", "Read", "Update", "Delete"] {
+      row @n-forms-row cells=["Forms", "diagram/render.ts — on install of a new collection (all empty)", "view/editing-view.ts (creation); rules/permissions.ts (addForms)", "forms/forms.ts, forms/submit.ts", "diagram/render.ts — another collection installs"]
+      row @n-form-row cells=["Form<K>", "forms/forms.ts — first 'edited'", "forms/submit.ts; view/editing-view.ts", "forms/submit.ts (to sent); forms/forms.ts (back to editing on refusal)", "forms/forms.ts — 'cancelled' or confirmed (to empty)"]
+      row @n-capture-row cells=["Capture", "forms/forms.ts — first 'edited' (open diagram base and generation)", "forms/submit.ts — request builder base", "never", "forms/forms.ts — with its form"]
+      row @n-object-row cells=["AddObjectDraft", "forms/forms.ts — 'edited' from facade setObjectDraft", "core/creation/records.ts — objectChanges()", "forms/forms.ts — each 'edited'", "forms/forms.ts — form emptied"]
+      row @n-connection-row cells=["Connection", "connection/connection.ts — 'begun' from the Canvas intake", "view/editing-view.ts; rules/permissions.ts", "connection/connection.ts", "connection.ts — confirmed or cancelled; diagram/render.ts on a new collection"]
+      row @n-draft-row cells=["ConnectionDraft", "core/editing/connection/draft.ts — buildConnectionDraft()", "connection/connection.ts; core/editing/connection/request.ts", "draft.ts — editedConnection()", "with its Connection"]
+    }
+  }
+  section @ownership "5 · Capability ownership — Add forms and connection drafts" mode=grid columns=1 order=5 {
+    show @crud
+  }
+
+  node @a-open start "Diagram opened" {}
+  node @a-empty state "empty" {}
+  node @a-editing state "editing" { text @d "capture taken at the first edit" }
+  node @a-sent state "sent" { text @d "every form locked, with reason 'form-locked'" }
+  node @a-note state "note shown" { text @d "invalid input; nothing sent" }
+
+  wire @a0 @a-open -> @a-empty "ready" kind=transition
+  wire @a1 @a-empty -> @a-editing "edited" kind=transition guard="not locked"
+  wire @a2 @a-editing -> @a-sent "submitted" kind=transition guard="valid and request built" effect="send (origin add-form, captured generation)"
+  wire @a3 @a-editing -> @a-note "submitted" kind=transition guard="invalid"
+  wire @a4 @a-note -> @a-editing "edited" kind=transition
+  wire @a5 @a-sent -> @a-empty "confirmed" kind=transition
+  wire @a6 @a-sent -> @a-editing "refused or blocked" kind=transition effect="same draft and capture; the bar shows the refusal"
+  wire @a7 @a-editing -> @a-empty "cancelled" kind=transition
+
+  section @state-51 "7.1 · One Add form (the palette drop sends on its own and touches no form)" mode=state layout=layered direction=right order=6 {
+    show @a-open @a-empty @a-editing @a-sent @a-note
+    connect @a0 @a1 @a2 @a3 @a4 @a5 @a6 @a7
+  }
+
+  node @b-open start "Diagram opened" {}
+  node @b-none state "none" {}
+  node @b-editing state "editing" { text @d "the Inspect tab opens; 'Review new connection'" }
+  node @b-sent state "sent" { text @d "shows the journal phase of its request" }
+
+  wire @b0 @b-open -> @b-none "ready" kind=transition
+  wire @b1 @b-none -> @b-editing "begun" kind=transition guard="no move held and the draft builds" effect="open-inspect"
+  wire @b2 @b-editing -> @b-editing "edited" kind=transition effect="problem cleared"
+  wire @b3 @b-editing -> @b-sent "applied" kind=transition guard="same generation, label not blank, request built" effect="send (fresh RequestId and RelationshipId)"
+  wire @b4 @b-sent -> @b-none "confirmed" kind=transition
+  wire @b5 @b-sent -> @b-editing "blocked, or refusal dismissed" kind=transition
+  wire @b6 @b-editing -> @b-none "cancelled" kind=transition
+
+  section @state-52 "7.2 · A new connection" mode=state layout=layered direction=right order=7 {
+    show @b-open @b-none @b-editing @b-sent
+    connect @b0 @b1 @b2 @b3 @b4 @b5 @b6
+  }
+}

@@ -10,18 +10,27 @@ export function segments(points: readonly Point[]): readonly Segment[] {
   return points.slice(1).flatMap((b, index) => pair(points[index], b));
 }
 /** The checked predecessor exists for valid arrays; empty input simply contributes no segment. */
-function pair(a: Point | undefined, b: Point): readonly Segment[] {
+function pair(
+  a: Point | undefined,
+  b: Point,
+): readonly Segment[] {
   if (a === undefined) return [];
   return [{ a, b }];
 }
 /** A valid corridor is orthogonal, nonzero and clear of every supplied obstacle interior. */
-export function clear(points: readonly Point[], obstacles: readonly Box[]): boolean {
+export function clear(
+  points: readonly Point[],
+  obstacles: readonly Box[],
+): boolean {
   return (
     points.length >= 2 && segments(points).every((segment) => clearSegment(segment, obstacles))
   );
 }
 /** Endpoint/tangent contact is allowed; all actual obstacle interiors remain excluded. */
-function clearSegment(segment: Segment, obstacles: readonly Box[]): boolean {
+function clearSegment(
+  segment: Segment,
+  obstacles: readonly Box[],
+): boolean {
   return (
     orthogonal(segment.a, segment.b) &&
     !samePoint(segment.a, segment.b) &&
@@ -33,7 +42,11 @@ export function linePath(points: readonly Point[]): string {
   return points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
 }
 /** Move a fixed distance from one point toward another on an already checked orthogonal segment. */
-function towards(from: Point, to: Point, distance: number): Point {
+function towards(
+  from: Point,
+  to: Point,
+  distance: number,
+): Point {
   const length = Math.abs(to.x - from.x) + Math.abs(to.y - from.y);
   return {
     x: from.x + ((to.x - from.x) * distance) / length,

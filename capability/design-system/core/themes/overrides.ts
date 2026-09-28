@@ -16,7 +16,10 @@ export function changedDefinitions(
   return source.definitions.map((definition) => replaceLiteral(definition, overrides));
 }
 /** No mutation or inferred undefined patch spread; the unchanged branch retains its source record. */
-function replaceLiteral(definition: TokenDefinition, overrides: TokenValues): TokenDefinition {
+function replaceLiteral(
+  definition: TokenDefinition,
+  overrides: TokenValues,
+): TokenDefinition {
   const value = overrides[definition.id];
   if (!value) return definition;
   return { ...definition, expression: { op: 'literal', value } };

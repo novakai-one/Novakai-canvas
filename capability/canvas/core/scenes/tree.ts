@@ -4,7 +4,10 @@ import type { Target } from '../../contract/records/selection.js';
 import { targetKey } from './address.js';
 
 /** A folder is semantic parentage, independent of section/group containment. */
-export function treeFolder(state: SessionState, target: Target): boolean {
+export function treeFolder(
+  state: SessionState,
+  target: Target,
+): boolean {
   if (target.kind !== 'node') return false;
   const section = state.scene.sections.find((item) => item.id === target.section);
   return section?.tree?.edges.some((edge) => edge.source === target.id) ?? false;
@@ -34,7 +37,10 @@ function hiddenParent(
 }
 
 /** Tree rows are positioned together; moving the containing section remains available. */
-export function treeNode(state: SessionState, target: Target): boolean {
+export function treeNode(
+  state: SessionState,
+  target: Target,
+): boolean {
   if (target.kind !== 'node') return false;
   const section = state.scene.sections.find((item) => item.id === target.section);
   return section?.tree?.rows.some((row) => row.node === target.id) ?? false;

@@ -1,6 +1,24 @@
-/** Language's only consumer entry. Authoring owns all writes; these operations are pure and retry-safe. */
-export { createLanguage } from './api.js';
+/*
+ * Language's public entry: `createLanguage`, the collection profiles and the types their callers
+ * use. Nothing else in the capability is imported from outside. Language only reads and compiles,
+ * and owns correcting the source; Authoring owns every write, retry and recovery.
+ */
+export { createLanguage, describeProfile, lintProfile, scaffoldProfile } from './api.js';
 export type { Language, Dependencies } from './types.js';
+export { profileIds } from './records/profiles.js';
+export type {
+  DocumentNumber,
+  ProfileAppendix,
+  ProfileDescriptor,
+  ProfileFinding,
+  ProfileId,
+  ProfileLintResult,
+  ProfileModes,
+  ProfilePath,
+  ProfileRuleCode,
+  ProfileSlot,
+  ProfileStarter,
+} from './records/profiles.js';
 export type { Result, ValidationError, Diagnostic, DiagnosticCode } from './errors.js';
 export type {
   Document,

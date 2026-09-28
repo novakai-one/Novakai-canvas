@@ -1,0 +1,291 @@
+canvas 1
+collection @wsm-startup "Web state machines · 4 · Start-up, change stream, catalogue, source editor" theme=paper {
+
+  node @root concept "apps/web/" size=small {}
+  node @d-lifecycle concept "core/workspace/lifecycle/" size=small {}
+  node @d-link concept "core/workspace/link/" size=small {}
+  node @d-catalogue concept "core/workspace/catalogue/" size=small {}
+  node @d-source concept "core/workspace/source/" size=small {}
+  node @d-ws concept "core/workspace/" size=small {}
+  node @d-records concept "contract/records/" size=small {}
+  node @d-recwf concept "contract/records/workflow/" size=small {}
+  node @d-compose concept "contract/compose/" size=small {}
+  node @d-effects concept "adapters/effects/" size=small {}
+  node @d-edge concept "adapters/edge/" size=small {}
+  node @d-sessions concept "adapters/sessions/" size=small {}
+  node @d-react concept "adapters/react/" size=small {}
+
+  node @l-state module "state.ts [NEW]" {}
+  node @l-lifecycle module "lifecycle.ts [NEW]" { signature @sig "updateLifecycle" parameters=["state: Lifecycle", "event: LifecycleEvent"] returns="Step<Lifecycle, LifecycleOut, LifecycleEffect>" }
+  node @k-state module "state.ts [NEW]" {}
+  node @k-link module "link.ts [NEW]" { signature @sig "updateLink" parameters=["state: Link", "event: LinkEvent", "context: LinkContext"] returns="Step<Link, LinkOut, LinkEffect>" }
+  node @c-state module "state.ts [NEW]" {}
+  node @c-catalogue module "catalogue.ts [NEW]" { signature @sig "updateCatalogue" parameters=["state: Catalogue", "event: CatalogueEvent"] returns="Step<Catalogue, CatalogueOut, CatalogueEffect>" }
+  node @s-state module "state.ts [NEW]" {}
+  node @s-source module "source.ts [NEW]" { signature @sig "updateSource" parameters=["state: SourceEditor", "event: SourceEvent", "context: SourceContext { shown: library | open{collection, base, generation} }", "deps: WorkflowDeps"] returns="Step<SourceEditor, SourceOut, SourceEffect>" }
+  node @s-editing module "editing.ts [NEW]" { signature @sig "editSource" parameters=["state: SourceEditor", "event: EditingEvent", "context: SourceContext", "deps: WorkflowDeps"] returns="Step<SourceEditor, SourceOut, SourceEffect>" }
+  node @s-rebase module "rebase.ts [NEW]" { signature @sig "rebaseSource" parameters=["state: SourceEditor", "latest: Latest"] returns="Step<SourceEditor, SourceOut, SourceEffect>" }
+  node @w-keys module "history-keys.ts [DELETE]" {}
+  node @r-source module "source.ts [DELETE]" {}
+  node @r-lifecycle interface "lifecycle.ts [NEW]" {}
+  node @r-link interface "link.ts [NEW]" {}
+  node @r-catalogue interface "catalogue.ts [NEW]" {}
+  node @r-wsource interface "source.ts [NEW]" {}
+  node @x-workspace module "workspace.ts [collection 1]" { signature @sig "composeWorkspace" parameters=["parts: WorkspaceParts"] returns="WorkspaceController" }
+  node @x-executors module "executors.ts [collection 1]" { signature @sig "composeExecutors" parameters=["handles: ExecutorHandles"] returns="Execute" }
+  node @x-service module "service.ts [NEW]" { signature @sig "createServiceExecutor" parameters=["client: ServiceClient", "decoders: WorkspaceDecoders"] returns="Executor<ServiceEffect, ServiceAnswer>" }
+  node @x-browser module "browser.ts [NEW]" { signature @sig "createBrowserExecutor" parameters=["browser: BrowserHandles", "navigation: WorkspaceNavigation", "ids: IdSource"] returns="Executor<BrowserEffect, BrowserAnswer>" }
+  node @x-stores module "stores.ts [NEW]" { signature @sig "createStoresExecutor" parameters=["stores: StoreHandles"] returns="Executor<StoreEffect, never>" }
+  node @x-client module "service-client.ts [CHANGE]" { signature @sig "createServiceClient" parameters=[] returns="ServiceClient" }
+  node @x-navigation module "browser-navigation.ts [CHANGE]" { signature @sig "createWorkspaceNavigation" parameters=["location: Pick<Location, 'href'>", "history: Pick<History, 'replaceState'>"] returns="WorkspaceNavigation" }
+  node @x-decoders module "workspace-decoders.ts [NEW · moved]" { signature @sig "createWorkspaceDecoders" parameters=["readDiagram: DiagramReader", "language: Language"] returns="WorkspaceDecoders" }
+  node @x-session module "source-session.ts [DELETE]" {}
+  node @x-editor module "SourceEditor.tsx [CHANGE]" {}
+  node @x-css module "SourceEditor.module.css [CHANGE]" {}
+
+  wire @t1 @root -> @d-ws "contains" kind=parent
+  wire @t2 @d-ws -> @d-lifecycle "contains" kind=parent
+  wire @t3 @d-ws -> @d-link "contains" kind=parent
+  wire @t4 @d-ws -> @d-catalogue "contains" kind=parent
+  wire @t5 @d-ws -> @d-source "contains" kind=parent
+  wire @t6 @root -> @d-records "contains" kind=parent
+  wire @t7 @d-records -> @d-recwf "contains" kind=parent
+  wire @t8 @root -> @d-compose "contains" kind=parent
+  wire @t9 @root -> @d-effects "contains" kind=parent
+  wire @t10 @root -> @d-edge "contains" kind=parent
+  wire @t11 @root -> @d-sessions "contains" kind=parent
+  wire @t12 @root -> @d-react "contains" kind=parent
+  wire @t13 @d-lifecycle -> @l-state "contains" kind=parent
+  wire @t14 @d-lifecycle -> @l-lifecycle "contains" kind=parent
+  wire @t15 @d-link -> @k-state "contains" kind=parent
+  wire @t16 @d-link -> @k-link "contains" kind=parent
+  wire @t17 @d-catalogue -> @c-state "contains" kind=parent
+  wire @t18 @d-catalogue -> @c-catalogue "contains" kind=parent
+  wire @t19 @d-source -> @s-state "contains" kind=parent
+  wire @t20 @d-source -> @s-source "contains" kind=parent
+  wire @t21 @d-source -> @s-editing "contains" kind=parent
+  wire @t22 @d-source -> @s-rebase "contains" kind=parent
+  wire @t23 @d-ws -> @w-keys "contains" kind=parent
+  wire @t24 @d-records -> @r-source "contains" kind=parent
+  wire @t25 @d-recwf -> @r-lifecycle "contains" kind=parent
+  wire @t26 @d-recwf -> @r-link "contains" kind=parent
+  wire @t27 @d-recwf -> @r-catalogue "contains" kind=parent
+  wire @t28 @d-recwf -> @r-wsource "contains" kind=parent
+  wire @t29 @d-compose -> @x-workspace "contains" kind=parent
+  wire @t30 @d-compose -> @x-executors "contains" kind=parent
+  wire @t31 @d-effects -> @x-service "contains" kind=parent
+  wire @t32 @d-effects -> @x-browser "contains" kind=parent
+  wire @t33 @d-effects -> @x-stores "contains" kind=parent
+  wire @t34 @d-edge -> @x-client "contains" kind=parent
+  wire @t35 @d-edge -> @x-navigation "contains" kind=parent
+  wire @t36 @d-edge -> @x-decoders "contains" kind=parent
+  wire @t37 @d-sessions -> @x-session "contains" kind=parent
+  wire @t38 @d-react -> @x-editor "contains" kind=parent
+  wire @t39 @d-react -> @x-css "contains" kind=parent
+
+  section @repo "1 · Target repo tree — start-up, stream, catalogue, source ([collection N] = specified there)" mode=tree direction=down gap=compact order=1 {
+    show @root @d-ws @d-lifecycle @d-link @d-catalogue @d-source @d-records @d-recwf @d-compose @d-effects @d-edge @d-sessions @d-react detail=label size=small
+    show @l-state @l-lifecycle @k-state @k-link @c-state @c-catalogue @s-state @s-source @s-editing @s-rebase @w-keys @r-source @r-lifecycle @r-link @r-catalogue @r-wsource detail=label size=small
+    show @x-workspace @x-executors @x-service @x-browser @x-stores @x-client @x-navigation @x-decoders @x-session @x-editor @x-css detail=label size=small
+    connect @t1 @t2 @t3 @t4 @t5 @t6 @t7 @t8 @t9 @t10 @t11 @t12 @t13 @t14 @t15 @t16 @t17 @t18 @t19 @t20 @t21 @t22 @t23 @t24 @t25 @t26 @t27 @t28 @t29 @t30 @t31 @t32 @t33 @t34 @t35 @t36 @t37 @t38 @t39 source-side=bottom target-side=left
+    root @root
+  }
+
+  node @e-lifecycle entity "Lifecycle" {
+    field @phase "phase" type="'booting' | 'reading' | 'locating' | 'live' | 'disposed'"
+    text @i1 "invariant L1: the change stream is watched only after the URL collection has opened, failed or been replaced (phase 'live')"
+    text @i2 "invariant L2: phase = 'disposed' is terminal; the root ignores every later event"
+    text @i3 "invariant L3: locating always ends: open-requested is accepted in every navigation phase, and every exit from opening sends navigation-settled"
+  }
+  node @e-link entity "Link" {
+    field @stream "stream" type="'unwatched' | 'connecting' | 'open' | 'closed'"
+    field @reach "reach" type="'unknown' | 'reachable' | 'unreachable' (not stored when stream = 'open')"
+    text @i1 "invariant K1: commit c with c.request in sending(journal) => no reread; an own 'uncertain' request is not skipped"
+    text @i2 "invariant K2: a read changes only reach, never the stream phase; so watch-wanted after the first read still opens the stream, and every stream-opened asks for a reread"
+    text @i3 "invariant: connected (view, Canvas flag) <=> stream = 'open' or reach = 'reachable'"
+  }
+  node @e-catalogue entity "Catalogue" {
+    field @phase "phase" type="'unread' | 'read'"
+    field @issued "issued" type="ReadTicket" key=primary
+    field @latest "latest" type="Latest (phase 'read' only)"
+    text @i1 "invariant CT1: same generation => latest.snapshot.sequence never goes down"
+    text @i2 "invariant CT2: read-answered is applied only when ticket = issued; reads are never aborted"
+  }
+  node @e-latest entity "Latest" {
+    field @generation "generation" type="TransportGeneration"
+    field @workspace "snapshot.workspace" type="WorkspaceId" key=primary
+    field @sequence "snapshot.sequence" type="WorkspaceSequence"
+    field @collections "collections" type="readonly Collection[]"
+    text @i1 "invariant: stale(L) <=> L.generation = latest.generation and L.snapshot.sequence < latest.snapshot.sequence"
+    text @i2 "invariant: a carried snapshot takes latest.generation (the current one)"
+  }
+  node @e-source entity "SourceEditor" {
+    field @phase "phase" type="'unbound' | 'loading' | 'readout' | 'draft' | 'blocked'"
+    field @workspace "workspace" type="WorkspaceId (all phases but 'unbound')"
+    field @panel "panel" type="'open' | 'closed' | 'confirm-close' (confirm-close only in 'draft')"
+    field @problem "problem" type="Diagnostic ('blocked' only: the kept foreign or corrupt draft)"
+    field @readout "readout" type="Readout: none | printed{CollectionId, text, EditingBase, TransportGeneration}"
+    field @draft "draft" type="SourceDraft ('draft' only)"
+    field @own "own" type="OwnSend ('draft' only)"
+    text @i1 "invariant S1: panel = 'confirm-close' => phase = 'draft' (by type)"
+    text @i2 "invariant S3: phase in { unbound, loading } => apply-requested is refused 'source-unavailable'; nothing is sent"
+    text @i3 "invariant S4: phase = 'blocked' => no storage write; the kept draft is never overwritten (read-only, reason stored-draft-kept)"
+  }
+  node @e-draft entity "SourceDraft" {
+    field @collection "collection" type="CollectionId"
+    field @text "text" type="string (DSL content, not identity)"
+    field @base "base" type="EditingBase"
+    field @generation "generation" type="TransportGeneration"
+    field @edit "edit" type="SourceEdit" key=primary
+    text @i1 "invariant S2: base changes only when own = confirmed{receipt} and receipt version = snapshot record version"
+  }
+  node @e-own entity "OwnSend" {
+    field @kind "kind" type="'none' | 'sent' | 'confirmed'"
+    field @request "request" type="RequestId (sent)"
+    field @edit "edit" type="SourceEdit (sent)"
+    field @receipt "receipt" type="Receipt (confirmed)"
+    text @i1 "invariant: kind = 'sent' => no second apply until settled or blocked"
+  }
+
+  wire @er1 @e-catalogue.@latest -> @e-latest.@workspace "holds" kind=association from=1 to=0..1
+  wire @er2 @e-source.@draft -> @e-draft.@edit "edits" kind=association from=1 to=0..1
+  wire @er3 @e-source.@own -> @e-own.@edit "tracks" kind=association from=1 to=0..1
+
+  section @entities "2 · Entities and invariants — start-up, stream, catalogue, source" mode=er direction=right order=2 {
+    show @e-lifecycle @e-link @e-catalogue @e-latest @e-source @e-draft @e-own
+    connect @er1 @er2 @er3
+  }
+
+  wire @m1 @s-source -> @s-editing.@sig "editSource(): Step<SourceEditor, SourceOut, SourceEffect>" kind=imports
+  wire @m2 @s-source -> @s-rebase.@sig "rebaseSource(): Step<SourceEditor, SourceOut, SourceEffect>" kind=imports
+  wire @m3 @x-executors -> @x-service.@sig "createServiceExecutor(): Executor<ServiceEffect, ServiceAnswer>" kind=imports
+  wire @m4 @x-executors -> @x-browser.@sig "createBrowserExecutor(): Executor<BrowserEffect, BrowserAnswer>" kind=imports
+  wire @m5 @x-executors -> @x-stores.@sig "createStoresExecutor(): Executor<StoreEffect, never>" kind=imports
+  wire @m6 @x-workspace -> @x-client.@sig "createServiceClient(): ServiceClient" kind=imports
+  wire @m7 @x-workspace -> @x-navigation.@sig "createWorkspaceNavigation(): WorkspaceNavigation" kind=imports
+  wire @m8 @x-workspace -> @x-decoders.@sig "createWorkspaceDecoders(): WorkspaceDecoders" kind=imports
+
+  section @modules "3 · Module imports — source machine; executors and edges wired by compose; lifecycle, link and catalogue import nothing from each other" mode=modules layout=layered direction=right order=3 {
+    group @g-contract "contract/" {
+      group @g-compose "compose/" layout=grid columns=1 {
+        show @x-workspace @x-executors
+      }
+    }
+    group @g-adapters "adapters/" {
+      group @g-effects "effects/" layout=grid columns=1 {
+        show @x-service @x-browser @x-stores
+      }
+      group @g-edge "edge/" layout=grid columns=1 {
+        show @x-client @x-navigation @x-decoders
+      }
+    }
+    group @g-machines "core/workspace/" {
+      group @g-mlifecycle "lifecycle/" {
+        show @l-lifecycle
+      }
+      group @g-mlink "link/" {
+        show @k-link
+      }
+      group @g-mcatalogue "catalogue/" {
+        show @c-catalogue
+      }
+      group @g-source "source/" {
+        show @s-source @s-editing @s-rebase
+      }
+    }
+    connect @m1 @m2 @m3 @m4 @m5 @m6 @m7 @m8
+  }
+
+  node @summary concept "4 · Modules summary — collection 4" size=large {
+    table @summary-t columns=["Module", "Current Line Count", "Lines Added", "Lines Removed", "Net", "Expected final line count (estimate)", "What the module does"] {
+      row @sm-1 cells=["core/workspace/lifecycle/state.ts", "0", "+30", "0", "+30", "30", "NEW · Lifecycle phases and LocationRead."]
+      row @sm-2 cells=["core/workspace/lifecycle/lifecycle.ts", "0", "+110", "0", "+110", "110", "NEW · Start order: keys, read, location, open, watch. Dispose tears down."]
+      row @sm-3 cells=["core/workspace/link/state.ts", "0", "+25", "0", "+25", "25", "NEW · Link: stream phase plus reach."]
+      row @sm-4 cells=["core/workspace/link/link.ts", "0", "+100", "0", "+100", "100", "NEW · Stream opened or failed; a read changes only reach (K2); rereads on every open and on unseen foreign commits (K1)."]
+      row @sm-5 cells=["core/workspace/catalogue/state.ts", "0", "+30", "0", "+30", "30", "NEW · Catalogue and Latest."]
+      row @sm-6 cells=["core/workspace/catalogue/catalogue.ts", "0", "+110", "0", "+110", "110", "NEW · Latest read wins; stale sequences dropped (CT1, CT2)."]
+      row @sm-7 cells=["core/workspace/source/state.ts", "0", "+80", "0", "+80", "80", "NEW · SourceEditor (with blocked), OwnSend, Readout and SourceEffect."]
+      row @sm-8 cells=["core/workspace/source/source.ts", "0", "+130", "0", "+130", "130", "NEW · updateSource: bind, load, show (reprint when clean), close (discard reprints)."]
+      row @sm-9 cells=["core/workspace/source/editing.ts", "0", "+110", "0", "+110", "110", "NEW · Edit, apply, settle."]
+      row @sm-10 cells=["core/workspace/source/rebase.ts", "0", "+80", "0", "+80", "80", "NEW · The base moves only across this editor's own receipt (S2)."]
+      row @sm-11 cells=["contract/records/workflow/lifecycle.ts", "0", "+40", "0", "+40", "40", "NEW · LifecycleEvent and LifecycleOut."]
+      row @sm-12 cells=["contract/records/workflow/link.ts", "0", "+30", "0", "+30", "30", "NEW · LinkEvent, CommitSeen and LinkOut."]
+      row @sm-13 cells=["contract/records/workflow/catalogue.ts", "0", "+40", "0", "+40", "40", "NEW · CatalogueEvent and CatalogueOut."]
+      row @sm-14 cells=["contract/records/workflow/source.ts", "0", "+60", "0", "+60", "60", "NEW · SourceEvent and SourceOut."]
+      row @sm-15 cells=["contract/records/source.ts", "51", "0", "-51", "-51", "0", "DELETE · SourceView booleans; replaced by source phases."]
+      row @sm-16 cells=["core/workspace/history-keys.ts", "45", "0", "-45", "-45", "0", "DELETE · Window key listener inside core; moves to adapters/effects/browser.ts."]
+      row @sm-17 cells=["adapters/effects/service.ts", "0", "+140", "0", "+140", "140", "NEW · Workspace, render, history and receipt reads; render abort; change stream."]
+      row @sm-18 cells=["adapters/effects/browser.ts", "0", "+110", "0", "+110", "110", "NEW · Undo/redo keys; URL read and write."]
+      row @sm-19 cells=["adapters/effects/stores.ts", "0", "+110", "0", "+110", "110", "NEW · Panel and editor restore, library refresh and visits, Inspect tab, definition settle."]
+      row @sm-20 cells=["adapters/edge/service-client.ts", "138", "+20", "-28", "-8", "130", "CHANGE · HTTP and SSE; decoders injected; foreign failures keep their source."]
+      row @sm-21 cells=["adapters/edge/browser-navigation.ts", "53", "+8", "-11", "-3", "50", "CHANGE · Location read returns a CollectionId or a typed problem."]
+      row @sm-22 cells=["adapters/edge/workspace-decoders.ts", "0", "+140", "0", "+140", "140", "NEW, moved · Snapshot, diagram, history and recovery decoders; moved out of workspace-inputs.ts (P3)."]
+      row @sm-23 cells=["adapters/sessions/source-session.ts", "261", "0", "-261", "-261", "0", "DELETE · Hand-built source editor; replaced by source/*."]
+      row @sm-24 cells=["adapters/react/SourceEditor.tsx", "72", "+15", "-12", "+3", "75", "CHANGE · Reads the source phase and may.applySource."]
+      row @sm-25 cells=["adapters/react/SourceEditor.module.css", "55", "+2", "-5", "-3", "52", "CHANGE · P1 token fixes; focus ring."]
+      row @sm-total cells=["TOTAL · 25 files", "675", "+1520", "-413", "+1107", "1782", "Estimates, not gates. Paths are under apps/web/ unless they start with capability/, apps/service/ or name the repo root."]
+    }
+  }
+  section @s-summary "4 · Modules summary — start-up, stream, catalogue, source" mode=grid columns=1 order=4 {
+    show @summary
+  }
+
+  node @crud note "5 · Capability ownership — start-up, stream, catalogue, source" size=large {
+    table @crud-t columns=["Object", "Create", "Read", "Update", "Delete"] {
+      row @e-lifecycle-row cells=["Lifecycle", "core/workspace/state.ts — initialWorkspace (booting)", "core/workspace/machine.ts — the disposed check", "lifecycle/lifecycle.ts — updateLifecycle()", "never; 'disposed' is terminal"]
+      row @e-link-row cells=["Link", "core/workspace/state.ts (unwatched)", "rules/flags.ts — sceneFlags(); view/project.ts (connected)", "link/link.ts — updateLink()", "never"]
+      row @e-catalogue-row cells=["Catalogue", "core/workspace/state.ts (unread)", "contexts.ts; diagram/*; gated-send.ts (generation)", "catalogue/catalogue.ts — updateCatalogue()", "never"]
+      row @e-latest-row cells=["Latest", "adapters/effects/service.ts — decoded read answer; lift/journal.ts — carried", "lift/catalogue.ts — 7 ordered reactions", "never; replaced by a newer Latest", "catalogue.ts — replaced"]
+      row @e-source-row cells=["SourceEditor", "core/workspace/state.ts (unbound)", "view/editing-view.ts; rules/permissions.ts", "source/source.ts, editing.ts, rebase.ts", "never"]
+      row @e-draft-row cells=["SourceDraft", "source/editing.ts — first 'edited'; storage.ts on 'loaded'", "source/editing.ts; adapters/effects/storage.ts (write-source)", "source/editing.ts (text, edit); source/rebase.ts (base)", "source/editing.ts — confirmed or discard (remove-source)"]
+      row @e-own-row cells=["OwnSend", "source/editing.ts — 'apply-requested'", "source/rebase.ts", "source/editing.ts — to confirmed", "source/rebase.ts — to none after the base moves"]
+    }
+  }
+  section @ownership "5 · Capability ownership — start-up, stream, catalogue, source" mode=grid columns=1 order=5 {
+    show @crud
+  }
+
+  node @a-boot start "booting" {}
+  node @a-reading state "reading" { text @d "no snapshot accepted yet" }
+  node @a-locating state "locating" { text @d "opening the collection named in the URL" }
+  node @a-live state "live" { text @d "change stream watched" }
+  node @a-disposed end "disposed" { text @d "terminal; every later event ignored" }
+
+  wire @a1 @a-boot -> @a-reading "started" kind=transition effect="bind-keys; read-wanted"
+  wire @a2 @a-reading -> @a-reading "first read failed" kind=transition effect="watch-wanted (a reconnect rereads)"
+  wire @a3 @a-reading -> @a-locating "first snapshot" kind=transition effect="read-location"
+  wire @a4 @a-locating -> @a-locating "location names a collection" kind=transition effect="open-wanted"
+  wire @a5 @a-locating -> @a-live "no collection, invalid, or navigation settled (any exit from opening)" kind=transition effect="watch-wanted (invalid: report)"
+  wire @a6 @a-live -> @a-disposed "disposed (from any phase)" kind=transition effect="unbind-keys; stop-watching; scene close"
+
+  section @state-51 "7.1 · Start-up order (lifecycle)" mode=state layout=layered direction=right order=6 {
+    show @a-boot @a-reading @a-locating @a-live @a-disposed
+    connect @a1 @a2 @a3 @a4 @a5 @a6
+  }
+
+  node @b-unbound start "unbound" {}
+  node @b-loading state "loading" { text @d "reading this workspace's stored draft" }
+  node @b-readout state "readout" { text @d "clean; reprinted on every diagram shown, on panel open and after discard" }
+  node @b-blocked state "blocked" { text @d "foreign or corrupt draft kept; read-only (stored-draft-kept)" }
+  node @b-open state "draft · panel open" {}
+  node @b-closed state "draft · panel closed" {}
+  node @b-confirm state "draft · confirm close" { text @d "Keep / Discard / Stay" }
+
+  wire @b1 @b-unbound -> @b-loading "bind" kind=transition effect="read-source"
+  wire @b2 @b-loading -> @b-open "loaded draft" kind=transition guard="same workspace"
+  wire @b3 @b-loading -> @b-readout "loaded none" kind=transition effect="reprint"
+  wire @b12 @b-loading -> @b-blocked "loaded foreign or corrupt" kind=transition effect="report; stored draft kept, never written"
+  wire @b4 @b-readout -> @b-open "edited" kind=transition effect="write-source"
+  wire @b5 @b-open -> @b-confirm "panel closed" kind=transition
+  wire @b6 @b-confirm -> @b-closed "keep" kind=transition
+  wire @b7 @b-confirm -> @b-readout "discard" kind=transition effect="remove-source; reprint"
+  wire @b8 @b-confirm -> @b-open "stay" kind=transition
+  wire @b9 @b-closed -> @b-open "panel opened" kind=transition
+  wire @b10 @b-open -> @b-readout "own receipt, no typing since" kind=transition guard="collection and edit match" effect="remove-source; reprint"
+  wire @b11 @b-open -> @b-open "apply" kind=transition guard="own != sent" effect="send (origin source, generation captured)"
+
+  section @state-52 "7.2 · The source editor (the base moves only across its own receipt)" mode=state layout=layered direction=right order=7 {
+    show @b-unbound @b-loading @b-readout @b-blocked @b-open @b-closed @b-confirm
+    connect @b1 @b2 @b3 @b12 @b4 @b5 @b6 @b7 @b8 @b9 @b10 @b11
+  }
+}

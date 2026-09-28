@@ -5,7 +5,10 @@ import { parsed } from '../validation/input.js';
 import { accepted, reject } from '../validation/outcomes.js';
 import { canonical } from '../validation/canonical.js';
 /** Validate every byte/path/hash before publication; filesystem adapter owns atomic activation/recovery. */
-export function validateArtifacts(input: unknown, identity: Identity): ArtifactSet {
+export function validateArtifacts(
+  input: unknown,
+  identity: Identity,
+): ArtifactSet {
   const artifacts = parsed(artifactSet, input, 'artifacts');
   if (new Set(artifacts.files.map((file) => file.path)).size !== 7)
     return reject(

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { identity } from '../brands.js';
+import { identity, type GestureId } from '../brands.js';
 import type { Target, WireTarget } from './selection.js';
 import type { SceneStamp } from './scene.js';
 import type { Point } from './camera.js';
@@ -9,7 +9,7 @@ export const endpoint = z
   .readonly();
 export type Endpoint = z.infer<typeof endpoint>;
 interface IntentBase {
-  readonly id: string;
+  readonly id: GestureId;
   readonly base: SceneStamp;
   readonly scope: 'appearance';
 }
@@ -60,7 +60,7 @@ export type CanvasEffect =
   | { readonly kind: 'inspect-request'; readonly target: Target }
   | { readonly kind: 'navigation-request'; readonly target: Target }
   | { readonly kind: 'announce'; readonly message: string }
-  | { readonly kind: 'recover-draft'; readonly id: string; readonly message: string };
+  | { readonly kind: 'recover-draft'; readonly id: GestureId; readonly message: string };
 
 /** Where a new object dropped on the canvas belongs: a section, and the group inside it (null = no group). */
 export interface DropTarget {

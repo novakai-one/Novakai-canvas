@@ -9,7 +9,10 @@ import { relative } from '../constraints/relative.js';
 import { sameIds, same, equations, nonoverlap } from './facts.js';
 import { reject } from './outcomes.js';
 /** Candidate nodes become renderable only after exact measured payload and canonical metadata checks. */
-function rebind(source: VisualNode, candidates: readonly NodeCandidate[]): PlacedNode {
+function rebind(
+  source: VisualNode,
+  candidates: readonly NodeCandidate[],
+): PlacedNode {
   const candidate = candidates.find((node) => node.id === source.id);
   if (!candidate) return reject('invalid-input', source.id, 'Candidate node is missing');
   same(source, candidate.measured, source.id);
@@ -42,14 +45,22 @@ function positioned(node: PlacedNode): PositionedInput {
   };
 }
 /** Ancestor containers intentionally enclose their descendants; separate branches may not overlap. */
-function ancestor(parent: string, child: PlacedNode, nodes: readonly PlacedNode[]): boolean {
+function ancestor(
+  parent: string,
+  child: PlacedNode,
+  nodes: readonly PlacedNode[],
+): boolean {
   if (child.parent === parent) return true;
   const next = nodes.find((node) => node.id === child.parent);
   if (!next) return false;
   return ancestor(parent, next, nodes);
 }
 /** Nonoverlap skips only genuine ancestry, already checked for cycles at the input boundary. */
-function checkPair(a: PlacedNode, b: PlacedNode, nodes: readonly PlacedNode[]): void {
+function checkPair(
+  a: PlacedNode,
+  b: PlacedNode,
+  nodes: readonly PlacedNode[],
+): void {
   if (ancestor(a.id, b, nodes) || ancestor(b.id, a, nodes)) return;
   nonoverlap(a, b);
 }

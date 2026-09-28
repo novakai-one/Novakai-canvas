@@ -83,7 +83,10 @@ function boundsFor(node: PrototypeNode) {
     bottom: node.bounds.y + node.bounds.height + clearance,
   };
 }
-function localRoads(section: PrototypeBlock, nodes: readonly PrototypeNode[]): PrototypeRoad[] {
+function localRoads(
+  section: PrototypeBlock,
+  nodes: readonly PrototypeNode[],
+): PrototypeRoad[] {
   const left = section.bounds.x + 64,
     right = section.bounds.x + section.bounds.width - 64;
   const levels = [
@@ -107,7 +110,11 @@ function flanks(node: PrototypeNode): PrototypeRoad[] {
     street(`${node.sectionId}:v:${x}:${b.top}`, node.sectionId, 'vertical', x, b.top, b.bottom),
   );
 }
-function driveway(port: PrototypePortLocation, start: number, end: number): PrototypeRoad {
+function driveway(
+  port: PrototypePortLocation,
+  start: number,
+  end: number,
+): PrototypeRoad {
   const vertical = ['top', 'bottom'].includes(port.side);
   const bounds = vertical
     ? { x: port.point.x - 12, y: start, width: 24, height: end - start }

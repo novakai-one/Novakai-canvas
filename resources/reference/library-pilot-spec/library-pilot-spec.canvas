@@ -1,0 +1,314 @@
+canvas 1
+collection @library-pilot "Library pilot — code-quality completion of capability/library" description="Rewrite of capability/library to the 16-principle SOP (>144 per file, >145 folder) and the 9 senior TypeScript gates. Approved pilot contract: approved-library-pilot-instructions-verbatim.md." {
+
+  node @t-caller start "A caller asks Library" role=primary size=small { text @t-caller-d "Service plans catalog changes; web searches; CLI and service validate." }
+  node @t-shared step "Shared schema objects" size=medium { text @t-shared-d "Every schema is one object created at load time and exported. Any importer can change it, and every later call sees the change." }
+  node @t-args step "Unnamed arguments" size=medium { text @t-args-d "plan(snapshot, changes, proposedCollections?) — three unknown values in a fixed order. Easy to swap." }
+  node @t-mixed step "Files with two jobs" size=medium { text @t-mixed-d "folders.ts walks ancestry AND removes folders. project.ts compares text, reads versions AND builds hits. The cursor schema sits in the public contract." }
+  node @t-copy step "Repeated code" size=medium { text @t-copy-d "Six handlers repeat the same op check. 'Does this folder exist?' is written out in five places." }
+  node @t-score end "Audit: 123/160, TypeScript gates fail" role=warning size=medium { text @t-score-d "Behaviour is correct. The code is below the standard." }
+  wire @t-w1 @t-caller -> @t-shared "reads schemas" kind=flow
+  wire @t-w2 @t-caller -> @t-args "calls" kind=flow
+  wire @t-w3 @t-shared -> @t-score "P13 = 0" kind=flow
+  wire @t-w4 @t-args -> @t-score "TS gate 6 fails" kind=flow
+  wire @t-w5 @t-mixed -> @t-score "P1, P11 low" kind=flow
+  wire @t-w6 @t-copy -> @t-score "P6 low" kind=flow
+
+  node @p-caller start "A caller asks Library" role=primary size=small {}
+  node @p-fresh step "Schema built per call" size=medium { text @p-fresh-d "folderIdSchema() returns a new schema each time. Nothing shared, nothing to mutate." }
+  node @p-named step "One named input" size=medium { text @p-named-d "plan({ snapshot, changes, proposedCollections }) and query({ snapshot, request }). Read inside the protected boundary." }
+  node @p-one step "One job per file" size=medium { text @p-one-d "ancestry.ts, removal.ts, text.ts, versions.ts, lookups.ts split out. Cursor schema moves to contract/records/cursor.ts, which index.ts does not export (core never imports zod)." }
+  node @p-same end "Same answers for valid input" role=success size=medium { text @p-same-d "Same plans, pages, diagnostics and frozen results. Checked by a differential against 594fda1." }
+  wire @p-w1 @p-caller -> @p-named "calls" kind=flow
+  wire @p-w2 @p-named -> @p-fresh "parses with" kind=flow
+  wire @p-w3 @p-fresh -> @p-one "hands parsed records to" kind=flow
+  wire @p-w4 @p-one -> @p-same "returns" kind=flow
+
+  node @r-lib concept "capability/library/" size=small role=primary {}
+  node @r-contract concept "contract/" size=small {}
+  node @r-records concept "records/" size=small {}
+  node @r-core concept "core/" size=small {}
+  node @r-catalog concept "catalog/" size=small {}
+  node @r-discovery concept "discovery/" size=small {}
+  node @r-validation concept "validation/" size=small {}
+  node @r-tests concept "tests/" size=small {}
+  node @f-api concept "api.ts" size=small {}
+  node @f-brands concept "brands.ts" size=small {}
+  node @f-errors concept "errors.ts" size=small {}
+  node @f-index concept "index.ts" size=small {}
+  node @f-types concept "types.ts" size=small {}
+  node @f-rcatalog concept "catalog.ts" size=small {}
+  node @f-rchange concept "change.ts" size=small {}
+  node @f-rquery concept "query.ts" size=small {}
+  node @f-rcursor concept "cursor.ts (new)" size=small role=primary {}
+  node @f-rsnapshot concept "snapshot.ts" size=small {}
+  node @f-ancestry concept "ancestry.ts (new)" size=small role=primary {}
+  node @f-removal concept "removal.ts (new)" size=small role=primary {}
+  node @f-operations concept "operations.ts" size=small {}
+  node @f-plan concept "plan.ts" size=small {}
+  node @f-cursor concept "cursor.ts" size=small {}
+  node @f-filters concept "filters.ts" size=small {}
+  node @f-project concept "project.ts" size=small {}
+  node @f-dquery concept "query.ts" size=small {}
+  node @f-ranking concept "ranking.ts" size=small {}
+  node @f-text concept "text.ts (new)" size=small role=primary {}
+  node @f-versions concept "versions.ts (new)" size=small role=primary {}
+  node @f-identities concept "identities.ts" size=small {}
+  node @f-lookups concept "lookups.ts (new)" size=small role=primary {}
+  node @f-outcomes concept "outcomes.ts" size=small {}
+  node @f-rules concept "rules.ts" size=small {}
+  node @f-validate concept "validate.ts" size=small {}
+  node @f-assertions concept "assertions.ts (new)" size=small role=primary {}
+  node @f-fixtures concept "fixtures.ts" size=small {}
+  node @f-tcatalog concept "catalog.test.ts" size=small {}
+  node @f-tplanning concept "planning.test.ts" size=small {}
+  node @f-tquery concept "query.test.ts" size=small {}
+  node @r-note note "Removed: core/catalog/folders.ts (split into ancestry.ts + removal.ts). Callers outside the folder: apps/service/adapters/{collection-plans,library-planner}.ts, apps/web/adapters/library-reader.ts (call shape); compose.ts, recovery-fixtures.ts, library-loading.test.ts (one-line ID schema rename)." size=medium {}
+  wire @r-e1 @r-lib -> @r-contract "contains" kind=parent
+  wire @r-e2 @r-lib -> @r-core "contains" kind=parent
+  wire @r-e3 @r-lib -> @r-tests "contains" kind=parent
+  wire @r-e4 @r-contract -> @r-records "contains" kind=parent
+  wire @r-e5 @r-core -> @r-catalog "contains" kind=parent
+  wire @r-e6 @r-core -> @r-discovery "contains" kind=parent
+  wire @r-e7 @r-core -> @r-validation "contains" kind=parent
+  wire @r-e8 @r-contract -> @f-api "contains" kind=parent
+  wire @r-e9 @r-contract -> @f-brands "contains" kind=parent
+  wire @r-e10 @r-contract -> @f-errors "contains" kind=parent
+  wire @r-e11 @r-contract -> @f-index "contains" kind=parent
+  wire @r-e12 @r-contract -> @f-types "contains" kind=parent
+  wire @r-e13 @r-records -> @f-rcatalog "contains" kind=parent
+  wire @r-e14 @r-records -> @f-rchange "contains" kind=parent
+  wire @r-e15 @r-records -> @f-rquery "contains" kind=parent
+  wire @r-e15b @r-records -> @f-rcursor "contains" kind=parent
+  wire @r-e16 @r-records -> @f-rsnapshot "contains" kind=parent
+  wire @r-e17 @r-catalog -> @f-ancestry "contains" kind=parent
+  wire @r-e18 @r-catalog -> @f-removal "contains" kind=parent
+  wire @r-e19 @r-catalog -> @f-operations "contains" kind=parent
+  wire @r-e20 @r-catalog -> @f-plan "contains" kind=parent
+  wire @r-e21 @r-discovery -> @f-cursor "contains" kind=parent
+  wire @r-e22 @r-discovery -> @f-filters "contains" kind=parent
+  wire @r-e23 @r-discovery -> @f-project "contains" kind=parent
+  wire @r-e24 @r-discovery -> @f-dquery "contains" kind=parent
+  wire @r-e25 @r-discovery -> @f-ranking "contains" kind=parent
+  wire @r-e26 @r-discovery -> @f-text "contains" kind=parent
+  wire @r-e27 @r-discovery -> @f-versions "contains" kind=parent
+  wire @r-e28 @r-validation -> @f-identities "contains" kind=parent
+  wire @r-e29 @r-validation -> @f-lookups "contains" kind=parent
+  wire @r-e30 @r-validation -> @f-outcomes "contains" kind=parent
+  wire @r-e31 @r-validation -> @f-rules "contains" kind=parent
+  wire @r-e32 @r-validation -> @f-validate "contains" kind=parent
+  wire @r-e33 @r-tests -> @f-assertions "contains" kind=parent
+  wire @r-e34 @r-tests -> @f-fixtures "contains" kind=parent
+  wire @r-e35 @r-tests -> @f-tcatalog "contains" kind=parent
+  wire @r-e36 @r-tests -> @f-tplanning "contains" kind=parent
+  wire @r-e37 @r-tests -> @f-tquery "contains" kind=parent
+
+  node @e-catalog entity "Catalog" {
+    field @e-catalog-id "id" type="CatalogId" key=primary
+    field @e-catalog-v "schemaVersion" type="1"
+    field @e-catalog-rev "revision" type="Revision (0..2^53-1)"
+  }
+  node @e-folder entity "Folder" {
+    field @e-folder-id "id" type="FolderId" key=primary
+    field @e-folder-parent "parent?" type="FolderId" key=foreign references=@e-folder.@e-folder-id
+    field @e-folder-title "title" type="Label (nonblank, <= 10,000)"
+    field @e-folder-order "order" type="SafeInteger"
+  }
+  node @e-entry entity "CatalogEntry" {
+    field @e-entry-col "collection" type="CollectionId" key=primary
+    field @e-entry-folder "folder?" type="FolderId" key=foreign references=@e-folder.@e-folder-id
+    field @e-entry-order "order" type="SafeInteger"
+    field @e-entry-arch "archived" type="boolean"
+  }
+  node @e-collection entity "CollectionProjection" {
+    field @e-col-id "id" type="CollectionId" key=primary
+    field @e-col-rev "revision" type="Revision"
+    field @e-col-title "title" type="Label"
+    field @e-col-sections "sections" type="SectionProjection[] (id: SectionId, title: Label)"
+    field @e-col-objects "objects" type="ObjectProjection[] (id: ObjectId, label, visibleIn: SectionId[])"
+  }
+  node @e-recent entity "RecentVisit" {
+    field @e-recent-col "collection" type="CollectionId" key=foreign references=@e-collection.@e-col-id
+    field @e-recent-at "openedAt" type="Revision"
+  }
+  node @e-inv note "Unchanged invariants (checked by validate, plan and query):\n(1) folder.id unique; entry.collection unique; collection.id unique; section.id and object.id unique per collection; one visit per collection\n(2) folder.parent in folders.id; entry.folder in folders.id; entry.collection in collections.id; visibleIn subset of sections.id; visit.collection in collections.id\n(3) for every collection, exactly one entry with entry.collection = collection.id\n(4) no folder f with f in ancestors(f)\n(5) |every list| <= 10,000; |changes| <= 1,000; |cursor| <= 1,000,000\nNo stored record changes shape. Only the catalog is persisted (by Authoring)." size=large {}
+  wire @e-w1 @e-catalog -> @e-folder "holds (catalog.folders)" kind=association from=1 to=0..many
+  wire @e-w6 @e-catalog -> @e-entry "holds (catalog.entries)" kind=association from=1 to=0..many
+  wire @e-w2 @e-folder.@e-folder-id -> @e-folder.@e-folder-parent "parent of" kind=association from=0..1 to=0..many
+  wire @e-w3 @e-folder.@e-folder-id -> @e-entry.@e-entry-folder "contains" kind=association from=0..1 to=0..many
+  wire @e-w4 @e-collection.@e-col-id -> @e-entry.@e-entry-col "listed by" kind=association from=1 to=1
+  wire @e-w5 @e-collection.@e-col-id -> @e-recent.@e-recent-col "visited" kind=association from=1 to=0..1
+
+  node @m-api module "api.ts" role=primary {
+    signature @m-api-validate "validate" parameters=["input: unknown"] returns="Result<LibrarySnapshot>"
+    signature @m-api-plan "plan" parameters=["input: unknown (PlanInput)"] returns="Result<CatalogPlan>"
+    signature @m-api-query "query" parameters=["input: unknown (QueryInput)"] returns="Result<QueryPage>"
+  }
+  node @m-validate module "validate.ts" { signature @m-validate-s "validateSnapshot" parameters=["input: unknown"] returns="Result<LibrarySnapshot>" }
+  node @m-plan module "plan.ts" { signature @m-plan-s "planCatalog" parameters=["input: unknown"] returns="Result<CatalogPlan>" }
+  node @m-dquery module "query.ts" { signature @m-dquery-s "queryLibrary" parameters=["input: unknown"] returns="Result<QueryPage>" }
+  node @m-operations module "operations.ts" { signature @m-operations-s "applyOperation" parameters=["catalog: Catalog", "change: CatalogChange"] returns="Result<Catalog>" }
+  node @m-removal module "removal.ts" { signature @m-removal-s "removeFolder" parameters=["catalog: Catalog", "removal: ChangeOf<'remove-folder'>"] returns="Result<Catalog>" }
+  node @m-ancestry module "ancestry.ts" {
+    signature @m-ancestry-a "ancestry" parameters=["start: FolderId", "folders: readonly Folder[]"] returns="Ancestry"
+    signature @m-ancestry-w "isWithin" parameters=["folder: FolderId | undefined", "owner: FolderId", "folders: readonly Folder[]"] returns="boolean"
+  }
+  node @m-rules module "rules.ts" { signature @m-rules-s "validateRecords" parameters=["snapshot: LibrarySnapshot"] returns="readonly Diagnostic[]" }
+  node @m-lookups module "lookups.ts" { signature @m-lookups-s "hasFolder / hasEntry / hasCollection" parameters=["records", "id"] returns="boolean" }
+  node @m-identities module "identities.ts" { signature @m-identities-s "duplicateIssues" parameters=["items: readonly T[]", "keyOf", "path: string"] returns="readonly Diagnostic[]" }
+  node @m-outcomes module "outcomes.ts" { signature @m-outcomes-s "parse / protect / failure / success" parameters=["..."] returns="Result<T>" }
+  node @m-filters module "filters.ts" { signature @m-filters-s "filterHits" parameters=["hits", "snapshot", "request"] returns="readonly SearchHit[]" }
+  node @m-ranking module "ranking.ts" { signature @m-ranking-s "sortHits" parameters=["hits", "snapshot", "request"] returns="readonly SearchHit[]" }
+  node @m-cursor module "cursor.ts" {
+    signature @m-cursor-o "cursorOffset" parameters=["snapshot", "request", "total: number"] returns="Result<number>"
+    signature @m-cursor-n "nextCursor" parameters=["snapshot", "request", "offset: number"] returns="Result<string>"
+  }
+  node @m-project module "project.ts" { signature @m-project-s "projectHits" parameters=["snapshot: LibrarySnapshot"] returns="readonly SearchHit[]" }
+  node @m-text module "text.ts" {
+    signature @m-text-c "compareText" parameters=["left: string", "right: string"] returns="-1 | 0 | 1"
+    signature @m-text-w "searchWords" parameters=["text: string"] returns="readonly string[]"
+  }
+  node @m-versions module "versions.ts" { signature @m-versions-s "readVersions" parameters=["snapshot: LibrarySnapshot"] returns="ReadVersions" }
+  node @m-note note "Wires show the function called; the target card carries its signature. Contract schema factories (snapshotSchema, changesSchema, inventorySchema, querySchema, planInputSchema) are imported by validate.ts, plan.ts and query.ts — not drawn." size=medium {}
+  wire @m-w1 @m-api -> @m-validate.@m-validate-s "validateSnapshot()" kind=imports
+  wire @m-w2 @m-api -> @m-plan.@m-plan-s "planCatalog()" kind=imports
+  wire @m-w3 @m-api -> @m-dquery.@m-dquery-s "queryLibrary()" kind=imports
+  wire @m-w4 @m-plan -> @m-validate.@m-validate-s "validateSnapshot()" kind=calls
+  wire @m-w5 @m-plan -> @m-operations.@m-operations-s "applyOperation()" kind=calls
+  wire @m-w6 @m-plan -> @m-versions.@m-versions-s "readVersions()" kind=calls
+  wire @m-w7 @m-operations -> @m-removal.@m-removal-s "removeFolder()" kind=calls
+  wire @m-w8 @m-operations -> @m-lookups.@m-lookups-s "hasFolder(), hasEntry()" kind=calls
+  wire @m-w9 @m-validate -> @m-rules.@m-rules-s "validateRecords()" kind=calls
+  wire @m-w10 @m-rules -> @m-ancestry.@m-ancestry-a "ancestry()" kind=calls
+  wire @m-w11 @m-rules -> @m-identities.@m-identities-s "duplicateIssues()" kind=calls
+  wire @m-w12 @m-rules -> @m-lookups.@m-lookups-s "hasFolder(), hasCollection(), hasEntry()" kind=calls
+  wire @m-w13 @m-dquery -> @m-project.@m-project-s "projectHits()" kind=calls
+  wire @m-w14 @m-dquery -> @m-filters.@m-filters-s "filterHits()" kind=calls
+  wire @m-w15 @m-dquery -> @m-ranking.@m-ranking-s "sortHits()" kind=calls
+  wire @m-w16 @m-dquery -> @m-cursor.@m-cursor-o "cursorOffset(), nextCursor()" kind=calls
+  wire @m-w17 @m-filters -> @m-ancestry.@m-ancestry-w "isWithin()" kind=calls
+  wire @m-w18 @m-filters -> @m-text.@m-text-w "searchWords()" kind=calls
+  wire @m-w19 @m-ranking -> @m-text.@m-text-c "compareText()" kind=calls
+  wire @m-w20 @m-cursor -> @m-versions.@m-versions-s "readVersions()" kind=calls
+  wire @m-w21 @m-validate -> @m-outcomes.@m-outcomes-s "parse(), protect()" kind=calls
+  wire @m-w22 @m-dquery -> @m-validate.@m-validate-s "validateSnapshot()" kind=calls
+
+  node @sum-node concept "4 · Modules summary — estimates, not gates" role=primary size=large {
+    table @sum-t columns=["Module", "Current lines", "Churn (est)", "Final lines (est)"] {
+      row @sum-1 cells=["contract/api.ts", "30", "+50 / -10", "70"]
+      row @sum-2 cells=["contract/brands.ts", "73", "+100 / -22", "151"]
+      row @sum-3 cells=["contract/errors.ts", "55", "+5 / -7", "53"]
+      row @sum-4 cells=["contract/index.ts", "16", "+10 / -1", "25"]
+      row @sum-5 cells=["contract/types.ts", "28", "+30 / -5", "53"]
+      row @sum-6 cells=["contract/records/catalog.ts", "62", "+70 / -21", "111"]
+      row @sum-7 cells=["contract/records/change.ts", "38", "+50 / -14", "74"]
+      row @sum-8 cells=["contract/records/query.ts", "92", "+50 / -30", "112"]
+      row @sum-8b cells=["contract/records/cursor.ts (new)", "0", "+35", "35"]
+      row @sum-9 cells=["contract/records/snapshot.ts", "86", "+90 / -38", "138"]
+      row @sum-10 cells=["core/catalog/folders.ts (removed)", "149", "-149", "0"]
+      row @sum-11 cells=["core/catalog/ancestry.ts (new)", "0", "+55", "55"]
+      row @sum-12 cells=["core/catalog/removal.ts (new)", "0", "+110", "110"]
+      row @sum-13 cells=["core/catalog/operations.ts", "159", "+40 / -50", "149"]
+      row @sum-14 cells=["core/catalog/plan.ts", "121", "+30 / -20", "131"]
+      row @sum-15 cells=["core/discovery/cursor.ts", "128", "+20 / -30", "118"]
+      row @sum-16 cells=["core/discovery/filters.ts", "72", "+25 / -12", "85"]
+      row @sum-17 cells=["core/discovery/project.ts", "79", "+10 / -30", "59"]
+      row @sum-18 cells=["core/discovery/query.ts", "114", "+20 / -14", "120"]
+      row @sum-19 cells=["core/discovery/ranking.ts", "84", "+20 / -9", "95"]
+      row @sum-20 cells=["core/discovery/text.ts (new)", "0", "+45", "45"]
+      row @sum-21 cells=["core/discovery/versions.ts (new)", "0", "+30", "30"]
+      row @sum-22 cells=["core/validation/identities.ts", "27", "+18 / -5", "40"]
+      row @sum-23 cells=["core/validation/lookups.ts (new)", "0", "+50", "50"]
+      row @sum-24 cells=["core/validation/outcomes.ts", "141", "+10 / -6", "145"]
+      row @sum-25 cells=["core/validation/rules.ts", "160", "+25 / -20", "165"]
+      row @sum-26 cells=["core/validation/validate.ts", "36", "+6 / -2", "40"]
+      row @sum-27 cells=["tests/assertions.ts (new)", "0", "+45", "45"]
+      row @sum-28 cells=["tests/fixtures.ts", "137", "+10 / -17", "130"]
+      row @sum-29 cells=["tests/catalog.test.ts", "95", "+30 / -15", "110"]
+      row @sum-30 cells=["tests/planning.test.ts", "150", "+40 / -20", "170"]
+      row @sum-31 cells=["tests/query.test.ts", "133", "+40 / -13", "160"]
+      row @sum-32 cells=["apps/service/adapters/collection-plans.ts + library-planner.ts", "89 + 64", "+6 / -4", "91 + 66"]
+      row @sum-33 cells=["apps/web/adapters/library-reader.ts", "87", "+5 / -5", "87"]
+    }
+  }
+
+  node @own-node concept "5 · Capability ownership" role=primary size=large {
+    table @own-t columns=["Capability", "Owns", "Does not own"] {
+      row @own-1 cells=["Library", "Catalog rules, change planning, search, cursor, diagnostics", "Storage, commits, clock, collection content"]
+      row @own-2 cells=["Authoring (service)", "Admission, conditional commit, revisions, crash recovery", "Catalog rules"]
+      row @own-3 cells=["Web", "Showing folders and search results; sending changes", "Deciding validity"]
+    }
+  }
+
+  node @rm-node concept "6 · Removed or changed — what you will notice" role=warning size=large {
+    table @rm-t columns=["Removed", "Affects", "What it does today", "Plain words — what changes for you", "Risk to weigh"] {
+      row @rm-1 cells=["C1 · Shared ID schema objects (folderId, collectionId …)", "Code only (web compose, tests)", "One schema object per ID kind, shared by every importer", "Nothing in the app. Code calls folderIdSchema() instead.", "A missed caller fails typecheck, not at runtime."]
+      row @rm-2 cells=["C2 · Shared record schemas", "Code only", "validate / plan / query reuse one schema object", "Nothing. Same answers; each call builds its own schema (+0.2 ms per 200 collections).", "Slower parse on huge inventories; measured small."]
+      row @rm-3 cells=["C3 · Positional arguments to plan and query", "Service planner, web search", "plan(snapshot, changes, proposed?)", "Nothing in the app. Callers pass one named record.", "A throwing getter on the record is a shape failure at $ (same as today for each argument)."]
+      row @rm-4 cells=["C4 · Unused diagnostic code 'identity'", "Type only", "Listed, never produced", "Nothing.", "None; no producer or consumer."]
+      row @rm-5 cells=["C6 · Fallback for impossible archive/sort modes", "None reachable", "An unknown mode silently behaved like 'exclude' / 'order'", "Nothing: parsing rejects unknown modes first.", "None at runtime; the type system now proves every mode is handled."]
+    }
+  }
+
+  node @done-node concept "E1 · Definition of done" role=primary size=large {
+    table @done-t columns=["#", "The exact check", "Execute", "Pass condition"] {
+      row @done-1 cells=["D1", "Every Library file scores >144/160; folder >145/160; 9 TS gates pass", "Independent full-folder audit (Claude Opus 5.5 xhigh or Codex Astra 6 >= high)", "(min file score > 144) and (folder score > 145) and (TS checks failed = 0)"]
+      row @done-2 cells=["D2", "Same answers as baseline for valid and invalid input", "Differential: validate / plan / query corpus at 594fda1 vs pilot HEAD through a call-shape adapter", "(records differing) = only C1–C6 rows, each with its expected-outcome check passing"]
+      row @done-3 cells=["D3", "Checks pass", "pnpm typecheck; eslint (complexity <= 2); prettier; architecture; TSDoc scan; vitest library, authoring, service, web, cli", "(exit codes = 0) or (failure also present at 594fda1, recorded)"]
+      row @done-4 cells=["D4", "The Library works in the running app", "Headless Playwright, isolated data: open library, search, create / rename / move / archive / remove folder, reload, undo", "(every step shows the expected result after reload; console errors = 0 new)"]
+      row @done-5 cells=["D5", "Records updated", "Obsidian hub row + tracker", "(score, coverage, exclusions, completion time present)"]
+    }
+  }
+
+  node @task-node concept "E2 · Task list — build order" role=primary size=large {
+    table @task-t columns=["Stage", "Task", "Task done when…", "Achieves"] {
+      row @task-1 cells=["1 of 6", "Contract: schema factories, explicit record types, named input types, remove 'identity'", "contract/ typechecks; C1, C4 checks pass", "D1"]
+      row @task-2 cells=["2 of 6", "Core catalog: ancestry.ts, removal.ts, operations.ts guarded handlers, plan.ts named input", "catalog tests pass; no casts", "D1, D2"]
+      row @task-3 cells=["3 of 6", "Core discovery + validation: text.ts, versions.ts, cursor schema private, archive table, lookups.ts", "query + validation tests pass", "D1, D2"]
+      row @task-4 cells=["4 of 6", "Callers + tests: 6 app files, assertions.ts, frozen ids, 2 budgeted tests", "D3 passes", "D3"]
+      row @task-5 cells=["5 of 6", "Differential + running-app check", "D2 and D4 pass", "D2, D4"]
+      row @task-6 cells=["6 of 6", "Full-folder audit, corrections, <= 1 correction-diff review, records", "D1 and D5 pass", "D1, D5"]
+    }
+  }
+
+  section @s-today "0 · Situation today — correct behaviour, code below the standard" mode=flow layout=layered direction=right order=0 {
+    show @t-caller
+    group @g-today "INSIDE capability/library" { show @t-shared @t-args @t-mixed @t-copy }
+    show @t-score
+    connect @t-w1 @t-w2 @t-w3 @t-w4 @t-w5 @t-w6
+  }
+  section @s-proposal "0.1 · Proposal — same answers, code at the standard" mode=flow layout=layered direction=right order=1 {
+    show @p-caller @p-named @p-fresh @p-one @p-same
+    connect @p-w1 @p-w2 @p-w3 @p-w4
+  }
+  section @s-tree "1 · Target repo tree (capability/library)" mode=tree direction=down gap=compact order=2 {
+    show @r-lib @r-contract @r-records @r-core @r-catalog @r-discovery @r-validation @r-tests
+    show @f-api @f-brands @f-errors @f-index @f-types @f-rcatalog @f-rchange @f-rquery @f-rcursor @f-rsnapshot
+    show @f-ancestry @f-removal @f-operations @f-plan @f-cursor @f-filters @f-project @f-dquery @f-ranking @f-text @f-versions
+    show @f-identities @f-lookups @f-outcomes @f-rules @f-validate @f-assertions @f-fixtures @f-tcatalog @f-tplanning @f-tquery
+    show @r-note
+    connect @r-e1 @r-e2 @r-e3 @r-e4 @r-e5 @r-e6 @r-e7 @r-e8 @r-e9 @r-e10 @r-e11 @r-e12 @r-e13 @r-e14 @r-e15 @r-e15b @r-e16 @r-e17 @r-e18 @r-e19
+    connect @r-e20 @r-e21 @r-e22 @r-e23 @r-e24 @r-e25 @r-e26 @r-e27 @r-e28 @r-e29 @r-e30 @r-e31 @r-e32 @r-e33 @r-e34 @r-e35 @r-e36 @r-e37
+    root @r-lib
+  }
+  section @s-er "2 · Entities and invariants — unchanged" mode=er layout=layered order=3 {
+    show @e-catalog @e-folder @e-entry @e-collection @e-recent @e-inv
+    connect @e-w1 @e-w2 @e-w3 @e-w4 @e-w5 @e-w6
+  }
+  section @s-modules "3 · Module imports (groups are folders)" mode=modules layout=layered order=4 {
+    show @m-note
+    group @g-contract "contract/" frame=auto role=neutral layout=layered { show @m-api }
+    group @g-core "core/" frame=auto role=neutral layout=layered {
+      group @g-catalog "catalog/" frame=auto role=neutral layout=layered { show @m-plan @m-operations @m-removal @m-ancestry }
+      group @g-discovery "discovery/" frame=auto role=neutral layout=layered { show @m-dquery @m-project @m-filters @m-ranking @m-cursor @m-text @m-versions }
+      group @g-validation "validation/" frame=auto role=neutral layout=layered { show @m-validate @m-rules @m-lookups @m-identities @m-outcomes }
+    }
+    connect @m-w1 @m-w2 @m-w3 @m-w4 @m-w5 @m-w6 @m-w7 @m-w8 @m-w9 @m-w10 @m-w11
+    connect @m-w12 @m-w13 @m-w14 @m-w15 @m-w16 @m-w17 @m-w18 @m-w19 @m-w20 @m-w21 @m-w22
+  }
+  section @s-summary "4 · Modules summary" mode=flow order=5 { show @sum-node }
+  section @s-own "5 · Capability ownership" mode=flow order=6 { show @own-node }
+  section @s-removed "6 · Removed or changed" mode=flow order=7 { show @rm-node }
+  section @s-done "E1 · Definition of done" mode=flow order=8 { show @done-node }
+  section @s-tasks "E2 · Task list" mode=flow order=9 { show @task-node }
+}

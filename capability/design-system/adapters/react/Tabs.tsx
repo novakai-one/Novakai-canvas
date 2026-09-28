@@ -30,7 +30,11 @@ export function Tabs({
 }
 
 /** Forced mounting is explicit; inactive panels retain state without becoming visible or focusable. */
-function renderPanel(item: TabItem, value: string, keepMounted: boolean): ReactElement {
+function renderPanel(
+  item: TabItem,
+  value: string,
+  keepMounted: boolean,
+): ReactElement {
   const props = {
     key: item.id,
     value: item.id,

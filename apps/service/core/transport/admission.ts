@@ -1,110 +1,283 @@
-import type {
-  Caller,
-  HttpAdmission,
-  HttpMetadata,
-  HttpSecurity,
-  MutationOwner,
-} from '../../contract/records/http.js';
-import { sessionCookieName } from './session-cookie.js';
-import type { Result } from '../../contract/errors.js';
-import { failure } from '../../contract/errors.js';
-import type { Request } from '../../contract/records/owners.js';
+/*
+ * Why this file exists
+ *
+ * Any program on this computer can send requests to `127.0.0.1`, even a web page open in another
+ * tab. For example, a page from another site could try to post a change to
+ * `/api/v1/authoring/apply`. Only the web app and the CLI may get in.
+ *
+ * This file decides who gets in: the browser with its session cookie, the CLI with its token, and
+ * only at this server's own address (the `Host` header). It also checks a change request: its
+ * author must be the caller, and it must be a kind of change the caller may send. It never keeps or
+ * compares the secrets itself, and never runs a change.
+ */
+import type { Caller, HeaderValue, HttpMetadata } from '../../contract/records/transport/http.js';
+import type { HttpAdmission, HttpSecurity } from '../../contract/ports/transport.js';
+import {
+  BROWSER_CALLER,
+  CLI_CALLER,
+  browserCookiePrefix,
+} from '../../contract/records/transport/http.js';
+import { failure, success, type Result } from '../../contract/errors.js';
+import { admitChange } from './change-admission.js';
+import { headerMatches, headerText } from './http-metadata.js';
 
-/** Reject DNS rebinding before credentials, paths or body content can reach an owner. */
-function admitHost(metadata: HttpMetadata, security: HttpSecurity): Result<void> {
-  if (metadata.host !== security.host)
-    return failure('unauthorized', 'host', 'Open the configured loopback address');
-  return { ok: true, value: undefined };
-}
-/** Only a direct, top-level navigation can establish the browser credential; fetch cannot bootstrap itself. */
-function bootstrap(metadata: HttpMetadata, security: HttpSecurity): Result<void> {
-  const host = admitHost(metadata, security);
-  if (!host.ok) return host;
-  return admitNavigation(metadata, security);
-}
-/** Navigation metadata is evaluated only after the host has been admitted. */
-function admitNavigation(metadata: HttpMetadata, security: HttpSecurity): Result<void> {
-  const allowed =
-    metadata.method === 'GET' &&
-    metadata.mode === 'navigate' &&
-    metadata.destination === 'document' &&
-    ['none', 'same-origin'].includes(metadata.site) &&
-    ['', security.origin].includes(metadata.origin);
-  if (!allowed) return failure('unauthorized', 'navigation', 'Navigate directly to this workspace');
-  return { ok: true, value: undefined };
-}
-/** Duplicate cookies are ambiguous and rejected instead of accepting a prefix or a later injected value. */
-function sessionCookie(header: string, host: string): string {
-  const prefix = `${sessionCookieName(host)}=`;
-  const values = header
-    .split(';')
-    .map((item) => item.trim())
-    .filter((item) => item.startsWith(prefix));
-  if (values.length !== 1) return '';
-  return values[0]?.slice(prefix.length) ?? '';
-}
-/** Browser requests need both same-origin metadata and the current HttpOnly session. Missing Fetch Metadata is rejected. */
-function browserCaller(metadata: HttpMetadata, security: HttpSecurity): Result<Caller> {
-  const trustedOrigin = ['', security.origin].includes(metadata.origin);
-  const allowed =
-    metadata.site === 'same-origin' &&
-    trustedOrigin &&
-    security.equal(sessionCookie(metadata.cookie, security.host), security.browserSession);
-  if (!allowed)
-    return failure('unauthorized', 'session', 'Reload this workspace from its loopback address');
-  return { ok: true, value: { id: 'human:browser', kind: 'human' } };
-}
-/** CLI credentials never grant the human Model planner, even if a payload claims to be human. */
-function authenticate(metadata: HttpMetadata, security: HttpSecurity): Result<Caller> {
-  const host = admitHost(metadata, security);
-  if (!host.ok) return host;
-  if (metadata.authorization.length === 0) return browserCaller(metadata, security);
-  return agentCaller(metadata, security);
-}
-/** A browser-originated bearer request is refused; the local credential is intended for the filesystem CLI. */
-function agentCaller(metadata: HttpMetadata, security: HttpSecurity): Result<Caller> {
-  const allowed =
-    metadata.origin === '' &&
-    metadata.site === '' &&
-    security.equal(metadata.authorization, `Bearer ${security.agentToken}`);
-  if (!allowed) return failure('unauthorized', 'credential', 'Use the local agent credential');
-  return { ok: true, value: { id: 'agent:cli', kind: 'agent' } };
-}
-/** Public semantic planners are transport-addressable; installation and raw Model authoring remain restricted. */
-function permittedPlanner(request: Request, caller: Caller): boolean {
-  if (request.intent.kind !== 'change') return true;
-  const allowed = { human: ['dsl', 'model', 'library'], agent: ['dsl', 'library', 'preset'] };
-  return allowed[caller.kind].includes(request.intent.planner);
-}
-/** Parse with Authoring's schema, then require exact authenticated authorship and the caller's planner policy. */
-function mutation(input: unknown, caller: Caller, owner: MutationOwner): Result<Request> {
-  const request = owner.read(input);
-  if (!request.ok) return request;
-  return admitActor(request.value, caller);
-}
-/** Authorship mismatch is reported separately from malformed input and planner privileges. */
-function admitActor(request: Request, caller: Caller): Result<Request> {
-  const matches = request.actor.id === caller.id && request.actor.kind === caller.kind;
-  if (!matches)
-    return failure('unauthorized', 'actor', 'Submitted actor must match the authenticated caller');
-  return plannerRequest(request, caller);
-}
-/** Credential-derived identity is copied into the admitted envelope; planner rejection performs no owner mutation. */
-function plannerRequest(request: Request, caller: Caller): Result<Request> {
-  if (!permittedPlanner(request, caller))
-    return failure(
-      'unauthorized',
-      'intent.planner',
-      'This planner is not available to the authenticated caller',
-    );
-  return { ok: true, value: request };
-}
-/** Bind a pure ingress policy. Hosts own token storage and constant-time equality; failed admission is safe to correct and retry. */
-export function createAdmission(security: HttpSecurity, owner: MutationOwner): HttpAdmission {
+/** The `Sec-Fetch-Site` values a bootstrap navigation may carry. */
+const NAVIGATION_SITES: readonly string[] = Object.freeze(['none', 'same-origin']);
+
+/** What a missing or ambiguous session cookie reads as: empty text, which never equals the secret. */
+const NO_SESSION_COOKIE = '';
+
+/**
+ * Builds the checks that decide who may use this server, from its address and secrets.
+ * `checkNavigation(metadata)` passes a direct page open; `authenticate(metadata)` answers the
+ * `Caller`; `admitChange(input, caller)` answers the checked change `Request`; `cookieName` names
+ * the session cookie. Refusals are `unauthorized`, or `invalid-input` for a malformed change.
+ */
+export function createAdmission(security: HttpSecurity): HttpAdmission {
   return {
-    cookieName: sessionCookieName(security.host),
-    bootstrap: (metadata) => bootstrap(metadata, security),
+    cookieName: sessionCookieName(security.address.host),
+    checkNavigation: (metadata) => checkNavigation(metadata, security),
     authenticate: (metadata) => authenticate(metadata, security),
-    mutation: (input, caller) => mutation(input, caller, owner),
+    admitChange,
   };
+}
+
+/**
+ * Names the browser cookie for one loopback host. Cookies ignore ports, so each server's name
+ * carries its host and opening another app cannot replace this one's credential.
+ */
+function sessionCookieName(host: string): string {
+  const encodedHost = encodeURIComponent(host);
+  return `${browserCookiePrefix}_${encodedHost}`;
+}
+
+/**
+ * Checks the request is the browser opening the page directly at this server's own address, the
+ * only request that may receive the session cookie; a fetch cannot give itself one.
+ */
+function checkNavigation(
+  metadata: HttpMetadata,
+  security: HttpSecurity,
+): Result<void> {
+  if (!isOwnHost(metadata, security)) {
+    return wrongHostFailure();
+  }
+  if (!isDirectPageOpen(metadata, security)) {
+    return notDirectPageOpenFailure();
+  }
+  return success(undefined);
+}
+
+/**
+ * Works out who is calling: the browser when there is no Authorization header (or it is empty),
+ * the CLI otherwise. A repeated Authorization header goes to the CLI check, which refuses it.
+ */
+function authenticate(
+  metadata: HttpMetadata,
+  security: HttpSecurity,
+): Result<Caller> {
+  if (!isOwnHost(metadata, security)) {
+    return wrongHostFailure();
+  }
+  if (isBlankHeader(metadata.authorization)) {
+    return checkBrowserCaller(metadata, security);
+  }
+  return checkAgentCaller(metadata, security);
+}
+
+/**
+ * Whether the one Host header is this server's loopback host. Checked before anything else, so a
+ * DNS rebinding page never reaches the credentials, paths or body.
+ */
+function isOwnHost(
+  metadata: HttpMetadata,
+  security: HttpSecurity,
+): boolean {
+  return headerMatches(metadata.host, security.address.host);
+}
+
+/** Whether the request opens a page and was typed by the person or started on this server. */
+function isDirectPageOpen(
+  metadata: HttpMetadata,
+  security: HttpSecurity,
+): boolean {
+  return isPageOpen(metadata) && isOpenedFromHere(metadata, security);
+}
+
+/** Whether the request is a `GET` that opens a whole page (`navigate` mode, `document` target). */
+function isPageOpen(metadata: HttpMetadata): boolean {
+  const isGet = metadata.method === 'GET';
+  const navigates = headerMatches(metadata.mode, 'navigate');
+  const opensDocument = headerMatches(metadata.destination, 'document');
+  return isGet && navigates && opensDocument;
+}
+
+/**
+ * Whether the page was opened by typing its address or from this server's own page
+ * (`Sec-Fetch-Site` `none` or `same-origin`), with no foreign Origin.
+ */
+function isOpenedFromHere(
+  metadata: HttpMetadata,
+  security: HttpSecurity,
+): boolean {
+  return isNavigationSite(metadata.site) && isTrustedOrigin(metadata, security);
+}
+
+/** Whether the `Sec-Fetch-Site` header, sent once, is one a direct page open may carry. */
+function isNavigationSite(site: HeaderValue): boolean {
+  return NAVIGATION_SITES.some((allowedSite) => headerMatches(site, allowedSite));
+}
+
+/** Checks the browser is calling from this server's page with the current session cookie. */
+function checkBrowserCaller(
+  metadata: HttpMetadata,
+  security: HttpSecurity,
+): Result<Caller> {
+  if (!isBrowserSession(metadata, security)) {
+    return noBrowserSessionFailure();
+  }
+  return success(BROWSER_CALLER);
+}
+
+/**
+ * Whether the request is a same-origin fetch that carries the current session cookie. Missing
+ * Fetch Metadata counts as not same-origin.
+ */
+function isBrowserSession(
+  metadata: HttpMetadata,
+  security: HttpSecurity,
+): boolean {
+  return isSameOriginFetch(metadata, security) && hasCurrentSessionCookie(metadata, security);
+}
+
+/** Whether the browser says the request came from this site, with no foreign Origin. */
+function isSameOriginFetch(
+  metadata: HttpMetadata,
+  security: HttpSecurity,
+): boolean {
+  const fromThisSite = headerMatches(metadata.site, 'same-origin');
+  const originAllowed = isTrustedOrigin(metadata, security);
+  return fromThisSite && originAllowed;
+}
+
+/** Whether the Origin header is missing, empty, or exactly this server's origin; never repeated. */
+function isTrustedOrigin(
+  metadata: HttpMetadata,
+  security: HttpSecurity,
+): boolean {
+  const originBlank = isBlankHeader(metadata.origin);
+  const originIsOurs = headerMatches(metadata.origin, security.address.origin);
+  return originBlank || originIsOurs;
+}
+
+/** Whether the request's session cookie equals the session secret (compared in constant time). */
+function hasCurrentSessionCookie(
+  metadata: HttpMetadata,
+  security: HttpSecurity,
+): boolean {
+  const sessionCookie = readSessionCookie(metadata.cookie, security.address.host);
+  return security.equal(sessionCookie, security.browserSession);
+}
+
+/** Reads the session cookie's value from the Cookie header; none when the header is repeated. */
+function readSessionCookie(
+  header: HeaderValue,
+  host: string,
+): string {
+  if (header.kind === 'repeated') {
+    return NO_SESSION_COOKIE;
+  }
+  return findSessionCookie(headerText(header), host);
+}
+
+/**
+ * Finds the session cookie's value in the Cookie header text; none when it is missing or sent
+ * twice. A repeated cookie is unclear, so neither a prefix nor a later injected value counts.
+ */
+function findSessionCookie(
+  cookieHeader: string,
+  host: string,
+): string {
+  const cookieStart = `${sessionCookieName(host)}=`;
+  const [onlyCookie, ...otherCookies] = cookiesStartingWith(cookieHeader, cookieStart);
+  if (onlyCookie === undefined) {
+    return NO_SESSION_COOKIE;
+  }
+  if (otherCookies.length > 0) {
+    return NO_SESSION_COOKIE;
+  }
+  return onlyCookie.slice(cookieStart.length);
+}
+
+/** Lists the cookies in the Cookie header text that start with `cookieStart`, spaces trimmed. */
+function cookiesStartingWith(
+  cookieHeader: string,
+  cookieStart: string,
+): readonly string[] {
+  const cookies = cookieHeader.split(';').map((cookie) => cookie.trim());
+  return cookies.filter((cookie) => cookie.startsWith(cookieStart));
+}
+
+/**
+ * Checks the CLI is calling with its bearer token. The token is for the CLI only, so a request
+ * that also carries browser headers is refused.
+ */
+function checkAgentCaller(
+  metadata: HttpMetadata,
+  security: HttpSecurity,
+): Result<Caller> {
+  if (carriesBrowserHeaders(metadata)) {
+    return noAgentCredentialFailure();
+  }
+  if (!isAgentBearer(metadata.authorization, security)) {
+    return noAgentCredentialFailure();
+  }
+  return success(CLI_CALLER);
+}
+
+/**
+ * Whether the request sent an Origin or `Sec-Fetch-Site` header that isn't blank, as a browser
+ * does. A header sent twice counts, even with empty text.
+ */
+function carriesBrowserHeaders(metadata: HttpMetadata): boolean {
+  const originSent = !isBlankHeader(metadata.origin);
+  const siteSent = !isBlankHeader(metadata.site);
+  return originSent || siteSent;
+}
+
+/** Whether the Authorization header, sent once, is the agent bearer token (constant time). */
+function isAgentBearer(
+  header: HeaderValue,
+  security: HttpSecurity,
+): boolean {
+  if (header.kind === 'repeated') {
+    return false;
+  }
+  const bearerToken = `Bearer ${security.agentToken}`;
+  return security.equal(headerText(header), bearerToken);
+}
+
+/** Whether the header is missing or sent once with empty text. A repeated header is not blank. */
+function isBlankHeader(header: HeaderValue): boolean {
+  return headerMatches(header, '');
+}
+
+/** Makes the mistake for a Host header that isn't this server's loopback host. */
+function wrongHostFailure(): Result<never> {
+  return failure('unauthorized', 'host', 'Open the configured loopback address');
+}
+
+/** Makes the mistake for a request that may not receive the cookie: not a direct page open. */
+function notDirectPageOpenFailure(): Result<never> {
+  return failure('unauthorized', 'navigation', 'Navigate directly to this workspace');
+}
+
+/** Makes the mistake for a browser request without this server's page and session cookie. */
+function noBrowserSessionFailure(): Result<never> {
+  return failure('unauthorized', 'session', 'Reload this workspace from its loopback address');
+}
+
+/** Makes the mistake for a CLI request without the one bearer token, or with browser headers. */
+function noAgentCredentialFailure(): Result<never> {
+  return failure('unauthorized', 'credential', 'Use the local agent credential');
 }

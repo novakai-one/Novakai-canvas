@@ -7,11 +7,18 @@ import { previewBox, previewOrigin, hiddenByReading } from './preview.js';
 import type { DetailTier, FocusProjection } from '../../contract/records/focus.js';
 import { emphasisFor } from './focus.js';
 /** Selection membership is scoped to a visible appearance, not canonical content identity. */
-function selected(state: SessionState, key: string): boolean {
+function selected(
+  state: SessionState,
+  key: string,
+): boolean {
   return state.selection.some((target) => targetKey(target) === key);
 }
 /** The React Flow parent frame has a visual top-left distinct from the semantic placement origin. */
-function parentBox(state: SessionState, node: PlacedNode, section: PlacedSection): ViewNode['box'] {
+function parentBox(
+  state: SessionState,
+  node: PlacedNode,
+  section: PlacedSection,
+): ViewNode['box'] {
   const parent =
     node.parent === null
       ? { kind: 'section' as const, id: section.id }
@@ -55,7 +62,10 @@ export function viewNode(
   };
 }
 /** Whole-section movement translates its origin once and lets child parent-relative coordinates stay fixed. */
-export function viewSection(state: SessionState, section: PlacedSection): ViewSection {
+export function viewSection(
+  state: SessionState,
+  section: PlacedSection,
+): ViewSection {
   const target = { kind: 'section' as const, id: section.id };
   const info = targetInfo(state.index, target);
   const bounds = previewBox(state, info);

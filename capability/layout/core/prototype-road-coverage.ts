@@ -1,8 +1,5 @@
-import type {
-  RoadPrototypeScene,
-  PrototypeBounds,
-  PrototypeRoadCoverage,
-} from '../contract/records/road-prototype.js';
+import type { PrototypeBounds, PrototypeRoadCoverage } from '../contract/records/road-prototype.js';
+import type { RoadPrototypeScene } from '../contract/records/road-scene.js';
 import { contains } from './prototype-road-geometry.js';
 
 interface Cell {
@@ -45,7 +42,10 @@ function cells(scene: RoadPrototypeScene): readonly Cell[] {
 function area(cells: readonly Cell[]): number {
   return cells.reduce((sum, cell) => sum + cell.bounds.width * cell.bounds.height, 0);
 }
-function report(cells: readonly Cell[], roadId: string): PrototypeRoadCoverage['perRoad'][number] {
+function report(
+  cells: readonly Cell[],
+  roadId: string,
+): PrototypeRoadCoverage['perRoad'][number] {
   const owned = cells.filter((cell) => cell.roadIds.includes(roadId));
   return {
     roadId,

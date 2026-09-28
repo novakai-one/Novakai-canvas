@@ -4,13 +4,19 @@ import { linePath, clear } from './paths.js';
 import { contentBoxes } from './obstacles.js';
 
 /** Parent branches use the measured disclosure gutter; shared trunks are native tree notation. */
-export function treeBranch(wire: VisualWire, nodes: readonly PlacedNode[]): RoutedWire | undefined {
+export function treeBranch(
+  wire: VisualWire,
+  nodes: readonly PlacedNode[],
+): RoutedWire | undefined {
   if (!automaticBranch(wire)) return undefined;
   const parent = rowNode(wire.source.node, nodes);
   if (parent === undefined) return undefined;
   return childBranch(wire, parent, nodes);
 }
-function rowNode(id: string, nodes: readonly PlacedNode[]): PlacedNode | undefined {
+function rowNode(
+  id: string,
+  nodes: readonly PlacedNode[],
+): PlacedNode | undefined {
   const node = nodes.find((item) => item.id === id);
   return node?.measured.treeRow === undefined ? undefined : node;
 }

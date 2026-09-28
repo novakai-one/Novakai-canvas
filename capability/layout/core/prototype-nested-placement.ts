@@ -8,7 +8,10 @@ import { placePrototypeNode, measuredNode } from './prototype-road-nodes.js';
 
 export const nestedLanePitch = 6;
 /** Symmetric capacity reserves both traffic sides; reconstruction is pure and retry-safe. */
-export function nestedLaneWidth(lanes: number, pitch = nestedLanePitch): number {
+export function nestedLaneWidth(
+  lanes: number,
+  pitch = nestedLanePitch,
+): number {
   return pitch * 2 + lanes * pitch * 2;
 }
 import type {
@@ -72,7 +75,10 @@ function sizeSection(spec: SectionSpec): SizedSection {
   };
 }
 /** Missing track measurements fail before any position or road is constructed. */
-function measuredSection(measured: NonNullable<SectionSpec['measured']>, count: number): void {
+function measuredSection(
+  measured: NonNullable<SectionSpec['measured']>,
+  count: number,
+): void {
   const dimensions = [
     measured.width,
     measured.height,
@@ -108,7 +114,10 @@ function measuredSection(measured: NonNullable<SectionSpec['measured']>, count: 
     throw new Error('Measured tracks must cover every node');
 }
 /** Shared child tracks belong to Presentation, just like leaf tracks and section bounds. */
-function measuredChildren(measured: NonNullable<SectionSpec['measured']>, count: number): void {
+function measuredChildren(
+  measured: NonNullable<SectionSpec['measured']>,
+  count: number,
+): void {
   const sizes = [
     ...measured.childColumnWidths,
     ...measured.childRowHeights,
@@ -125,7 +134,10 @@ function measuredChildren(measured: NonNullable<SectionSpec['measured']>, count:
     throw new Error('Measured child tracks must cover every section');
 }
 /** Grid tracks used by row-major cells: [columns, rows]. */
-function trackCounts(cells: readonly number[], columns: number): readonly [number, number] {
+function trackCounts(
+  cells: readonly number[],
+  columns: number,
+): readonly [number, number] {
   const used = Math.max(0, ...cells.map((cell) => cell + 1));
   return [Math.min(columns, used), Math.ceil(used / columns)];
 }
@@ -135,7 +147,10 @@ export function sizeNestedSections(specs: readonly SectionSpec[]): readonly Size
   return specs.map(sizeSection);
 }
 /** Top doors reserve the measured boundary lane space beyond the title; a blocked side has no door. */
-function sectionPorts(size: SizedSection, bounds: PrototypeBounds) {
+function sectionPorts(
+  size: SizedSection,
+  bounds: PrototypeBounds,
+) {
   const id = size.id;
   const clearance = size.measured.gap / 2;
   const topX = Math.max(bounds.width / 2, size.measured.headerWidth + clearance);
@@ -155,7 +170,10 @@ function sectionPorts(size: SizedSection, bounds: PrototypeBounds) {
     })),
   );
 }
-function gridNodes(size: SizedSection, interior: PrototypeBounds) {
+function gridNodes(
+  size: SizedSection,
+  interior: PrototypeBounds,
+) {
   if (size.count === 0) return [];
   const xEdges = gridEdges(size.columnWidths);
   const yEdges = gridEdges(size.rowHeights);

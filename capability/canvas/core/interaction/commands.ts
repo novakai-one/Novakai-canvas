@@ -10,13 +10,19 @@ import { beginDraft } from '../drafts/begin.js';
 import { moveDraft } from '../drafts/update.js';
 import { finishDraft } from '../drafts/finish.js';
 /** Mutation intents are requests to the host's Authoring planner, not direct canonical operations. */
-function emitIntent(state: SessionState, intent: EditIntent): Transition {
+function emitIntent(
+  state: SessionState,
+  intent: EditIntent,
+): Transition {
   if (!canMutate(state))
     return reject('mutation-unavailable', intent.id, 'Editing is currently unavailable');
   return changed(state, state, [{ kind: 'edit-intent', intent }]);
 }
 /** Selectable endpoints resolve within one scene; member names come from measured typed anchors. */
-function checkEndpoint(state: SessionState, endpoint: Endpoint): void {
+function checkEndpoint(
+  state: SessionState,
+  endpoint: Endpoint,
+): void {
   const target = { kind: 'node' as const, section: endpoint.section, id: endpoint.node };
   targetInfo(state.index, target);
   if (endpoint.member === null) return;
@@ -25,7 +31,10 @@ function checkEndpoint(state: SessionState, endpoint: Endpoint): void {
     reject('unknown-target', endpoint.member, 'Endpoint member is not visible');
 }
 /** The second endpoint emits a form intent; host supplies label/kind/cardinalities before Authoring submission. */
-function connect(state: SessionState, event: EventOf<'connect'>): Transition {
+function connect(
+  state: SessionState,
+  event: EventOf<'connect'>,
+): Transition {
   if (!canMutate(state))
     return reject('mutation-unavailable', event.id, 'Connections are unavailable');
   checkEndpoint(state, event.endpoint);
@@ -34,7 +43,10 @@ function connect(state: SessionState, event: EventOf<'connect'>): Transition {
   return completeConnection(cleared, event);
 }
 /** Connections cannot silently span sections; cross-section reuse is a canonical host/model decision. */
-function completeConnection(state: SessionState, event: EventOf<'connect'>): Transition {
+function completeConnection(
+  state: SessionState,
+  event: EventOf<'connect'>,
+): Transition {
   const source = state.connection;
   if (source === null) return changed(state, state);
   if (source.section !== event.endpoint.section)
@@ -58,7 +70,10 @@ const directions = {
   down: { x: 0, y: 1 },
 };
 /** Keyboard nudge reuses exactly the drag capture/conversion/recovery path, producing one transaction intent. */
-export function nudgeSelection(state: SessionState, event: EventOf<'nudge'>): Transition {
+export function nudgeSelection(
+  state: SessionState,
+  event: EventOf<'nudge'>,
+): Transition {
   const targets = state.selection.filter((target) => !treeNode(state, target));
   if (targets.length === 0) return changed(state, state);
   const draft = beginDraft(state, {

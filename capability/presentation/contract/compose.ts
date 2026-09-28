@@ -146,7 +146,10 @@ export async function prepareNativePresentation(): Promise<Result<void>> {
 }
 
 /** Recalculate owner envelopes after placement edits using already measured content; no fonts or routing run. */
-export function remeasureModuleEnvelopes(projection: Projection, style: ResolvedStyle): Projection {
+export function remeasureModuleEnvelopes(
+  projection: Projection,
+  style: ResolvedStyle,
+): Projection {
   return {
     ...projection,
     sections: projection.sections.map((section) => moduleEnvelopes(section, { style })),

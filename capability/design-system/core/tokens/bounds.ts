@@ -17,7 +17,12 @@ export function validateBounds(
   });
 }
 /** Inclusive bounds reject NaN/overflow earlier in decoding, then precise named range violations here. */
-function checkRange(id: string, value: number, min: number, max: number): void {
+function checkRange(
+  id: string,
+  value: number,
+  min: number,
+  max: number,
+): void {
   if (value < min || value > max)
     reject('out-of-range', id, String(min) + '..' + String(max), 'Token outside allowed range');
 }

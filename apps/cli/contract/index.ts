@@ -1,16 +1,15 @@
-/** Agent CLI public surface; source is readable DSL and every mutation crosses the service Authoring gate. */
-export { executeCommand } from './api.js';
-export { runCli } from './compose.js';
-export type { Command, CliOptions } from './records/command.js';
-export type {
-  CliDependencies,
-  Transport,
-  RequestFiles,
-  SemanticInputs,
-  RequestDraft,
-} from './ports/runtime.js';
-export type { Result, Diagnostic } from './errors.js';
-export { runHeadless } from './compose.js';
-export type { HeadlessOptions } from './records/headless.js';
-export { headlessOptions } from './records/headless.js';
-export type { ProfileDescriptor, ProfileFinding, ProfileLintResult } from './records/profiles.js';
+/*
+ * Why this file exists
+ *
+ * The two programs in `cli/` need very little from the rest of the CLI: run what was typed, and
+ * print a failure. `pnpm canvas list` calls `runCanvas`, then prints its text, or the failure as
+ * lines from `formatFailure`.
+ *
+ * This file is all they may import. `runCanvas` answers `pnpm canvas` and `runRender` answers
+ * `pnpm render:png`. Neither ever throws; every mistake comes back as a value.
+ */
+export { runCanvas, runRender } from './compose.js';
+export { formatFailure } from './api.js';
+export type { Result, CliFailure } from './errors.js';
+export type { RenderReport } from './records/render.js';
+export type { RenderFailure } from './records/render-failure.js';

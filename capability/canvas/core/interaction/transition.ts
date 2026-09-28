@@ -20,7 +20,10 @@ export function createTransition(reader: SceneAdmission): Dispatch {
   ];
   const registry = new Map(handlers.map((entry) => [entry.kind, entry]));
   /** Dispatch already-parsed immutable events; public facade catches policy/provider failures. */
-  function dispatch(state: SessionState, event: CanvasEvent): Transition {
+  function dispatch(
+    state: SessionState,
+    event: CanvasEvent,
+  ): Transition {
     const selected = registry.get(event.kind);
     if (!selected) return reject('invalid-input', 'kind', 'Unsupported Canvas event');
     return selected.run(state, event);

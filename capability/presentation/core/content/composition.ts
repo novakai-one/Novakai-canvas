@@ -45,7 +45,10 @@ function requireFigure(request: CompositionRequest): MediaBlock {
 }
 
 /** Remove only the designated figure from visible content; all ports and other blocks survive. */
-function bodyWithoutFigure(request: CompositionRequest, figure: MediaBlock): BodySelection {
+function bodyWithoutFigure(
+  request: CompositionRequest,
+  figure: MediaBlock,
+): BodySelection {
   return {
     ...request.selection,
     content: request.selection.content.filter((block) => block.id !== figure.id),
@@ -63,7 +66,10 @@ function textColumn(request: CompositionRequest): ComposedNodeContent {
 }
 
 /** Prominent media uses token-owned figure bands rather than the inline icon size. */
-function figureContent(figure: MediaBlock, context: ContentContext): MeasuredContent {
+function figureContent(
+  figure: MediaBlock,
+  context: ContentContext,
+): MeasuredContent {
   if (figure.kind === 'figure')
     return measureFigure(figure, context.width, context.style, 'figure');
   return measureMedia(
@@ -90,7 +96,10 @@ function tagged(
 }
 
 /** Narrow text columns center under the media band; the infographic idiom is figure-led, not left-hung. */
-function centered(content: MeasuredContent, width: number): MeasuredContent {
+function centered(
+  content: MeasuredContent,
+  width: number,
+): MeasuredContent {
   const slack = Math.max(0, width - content.width);
   if (slack === 0) return content;
   return { ...offset(content, slack / 2, 0), width };
@@ -107,7 +116,11 @@ function mediaAbove(request: CompositionRequest): ComposedNodeContent {
 }
 
 /** Measured columns retain their own anchors and full extents; no CSS wrapping or clipping is introduced. */
-function columns(media: MeasuredContent, text: MeasuredContent, gap: number): MeasuredContent {
+function columns(
+  media: MeasuredContent,
+  text: MeasuredContent,
+  gap: number,
+): MeasuredContent {
   const right = offset(text, media.width + gap, 0);
   return {
     width: media.width + gap + text.width,

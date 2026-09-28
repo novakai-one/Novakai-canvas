@@ -1,12 +1,12 @@
 import type { PrototypeRoadProof, PrototypeProofPath } from '../contract/records/road-proof.js';
 import type {
-  RoadPrototypeScene,
   PrototypeLaneConnection,
   PrototypeLane,
   PrototypePoint,
   PrototypeJunction,
   PrototypeRoad,
 } from '../contract/records/road-prototype.js';
+import type { RoadPrototypeScene } from '../contract/records/road-scene.js';
 import { directionVector } from './prototype-road-geometry.js';
 
 type Context = ReturnType<typeof context>;
@@ -17,7 +17,10 @@ function context(scene: RoadPrototypeScene) {
     roads: new Map(scene.roads.map((r) => [r.id, r])),
   };
 }
-function isGate(ctx: Context, lane: PrototypeLane | undefined): boolean {
+function isGate(
+  ctx: Context,
+  lane: PrototypeLane | undefined,
+): boolean {
   return ctx.roads.get(lane?.roadId ?? '')?.access?.nodeId.startsWith('section-') ?? false;
 }
 function continuation(
@@ -34,15 +37,24 @@ function safePoint(lane: PrototypeLane): PrototypePoint {
   // Midpoint of a legal straight lane: visibly clear of either adjacent junction.
   return { x: (lane.entry.x + lane.exit.x) / 2, y: (lane.entry.y + lane.exit.y) / 2 };
 }
-function start(ctx: Context, lane: PrototypeLane): PrototypePoint {
+function start(
+  ctx: Context,
+  lane: PrototypeLane,
+): PrototypePoint {
   if (ctx.roads.get(lane.roadId)?.access !== null) return lane.entry;
   return safePoint(lane);
 }
-function finish(ctx: Context, lane: PrototypeLane): PrototypePoint {
+function finish(
+  ctx: Context,
+  lane: PrototypeLane,
+): PrototypePoint {
   if (ctx.roads.get(lane.roadId)?.access !== null) return lane.exit;
   return safePoint(lane);
 }
-function expanded(ctx: Context, link: PrototypeLaneConnection): PrototypeProofPath {
+function expanded(
+  ctx: Context,
+  link: PrototypeLaneConnection,
+): PrototypeProofPath {
   const links = [
     continuation(ctx, link, 'fromLaneId'),
     link,
@@ -67,7 +79,12 @@ function segments(points: readonly PrototypePoint[]) {
     .map((b, i) => ({ a: points[i] ?? b, b }))
     .filter((s) => s.a.x !== s.b.x || s.a.y !== s.b.y);
 }
-function range(a: number, b: number, c: number, d: number): number {
+function range(
+  a: number,
+  b: number,
+  c: number,
+  d: number,
+): number {
   return Math.min(Math.max(a, b), Math.max(c, d)) - Math.max(Math.min(a, b), Math.min(c, d));
 }
 function parallelOverlap(
@@ -83,7 +100,10 @@ function parallelOverlap(
     range(a.a.y, a.b.y, b.a.y, b.b.y) > 0,
   ].every(Boolean);
 }
-function overlaps(a: PrototypeProofPath, b: PrototypeProofPath): boolean {
+function overlaps(
+  a: PrototypeProofPath,
+  b: PrototypeProofPath,
+): boolean {
   return segments(a.points).some((x) => segments(b.points).some((y) => parallelOverlap(x, y)));
 }
 function cross(
@@ -102,10 +122,16 @@ function cross(
   ];
   return interior.every(Boolean) ? [p] : [];
 }
-function crossings(a: PrototypeProofPath, b: PrototypeProofPath) {
+function crossings(
+  a: PrototypeProofPath,
+  b: PrototypeProofPath,
+) {
   return segments(a.points).flatMap((x) => segments(b.points).flatMap((y) => cross(x, y)));
 }
-function turning(ctx: Context, c: PrototypeLaneConnection): boolean {
+function turning(
+  ctx: Context,
+  c: PrototypeLaneConnection,
+): boolean {
   const a = directionVector[ctx.lanes.get(c.fromLaneId)?.direction ?? 'left'];
   const b = directionVector[ctx.lanes.get(c.toLaneId)?.direction ?? 'left'];
   return a.x * b.x + a.y * b.y === 0;
@@ -120,7 +146,11 @@ function candidates(
     [c.fromLaneId, c.toLaneId].some((id) => ctx.lanes.get(id)?.roadId === road.id),
   );
 }
-function pair(ctx: Context, a: PrototypeLaneConnection, b: PrototypeLaneConnection) {
+function pair(
+  ctx: Context,
+  a: PrototypeLaneConnection,
+  b: PrototypeLaneConnection,
+) {
   const primary = expanded(ctx, a),
     through = expanded(ctx, b);
   if (overlaps(primary, through)) return [];
@@ -150,7 +180,10 @@ function proof(
     },
   ];
 }
-function forJunction(ctx: Context, j: PrototypeJunction) {
+function forJunction(
+  ctx: Context,
+  j: PrototypeJunction,
+) {
   const access = ctx.scene.roads.filter((r) => r.access !== null && j.roadIds.includes(r.id));
   if (access.length === 0) return proof(ctx, j, undefined);
   return access.flatMap((r) => proof(ctx, j, r));
@@ -161,7 +194,10 @@ export function createRoadProofs(scene: RoadPrototypeScene): readonly PrototypeR
   return scene.junctions.flatMap((j) => forJunction(ctx, j));
 }
 
-function traffic(ctx: Context, links: readonly PrototypeLaneConnection[]) {
+function traffic(
+  ctx: Context,
+  links: readonly PrototypeLaneConnection[],
+) {
   return links
     .filter((c) =>
       [c.fromLaneId, c.toLaneId].every(

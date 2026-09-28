@@ -105,7 +105,12 @@ export function renderedScene(): Scene {
 /** Vitest's window proxy fails JSDOM30's constructor brand check. Supply the real event view after construction;
  * React Flow and d3 still receive the actual bubbling mouse event and its literal coordinates.
  */
-export function mouseGesture(target: Element | Window, type: string, x: number, y: number): void {
+export function mouseGesture(
+  target: Element | Window,
+  type: string,
+  x: number,
+  y: number,
+): void {
   const event = new MouseEvent(type, {
     bubbles: true,
     cancelable: true,

@@ -1,18 +1,25 @@
 import type { SessionState } from '../../contract/records/state.js';
 import type { GestureDraft, PlacementDraft, RouteDraft } from '../../contract/records/draft.js';
 import type { EventOf } from '../../contract/events.js';
+import type { GestureId } from '../../contract/brands.js';
 import { box } from '../../contract/records/camera.js';
 import { parse, reject } from '../validation/outcomes.js';
 import { targetInfo } from '../scenes/address.js';
 /** Every continuation names its active gesture; delayed callbacks cannot edit a replacement draft. */
-export function activeDraft(state: SessionState, id: string): GestureDraft {
+export function activeDraft(
+  state: SessionState,
+  id: GestureId,
+): GestureDraft {
   if (state.draft === null) return reject('invalid-gesture', id, 'No active gesture');
   if (state.draft.id !== id)
     return reject('invalid-gesture', id, 'Gesture identity does not match');
   return state.draft;
 }
 /** Move deltas are relative to captured originals, never accumulated pointer-frame rounding. */
-export function moveDraft(state: SessionState, event: EventOf<'move'>): PlacementDraft {
+export function moveDraft(
+  state: SessionState,
+  event: EventOf<'move'>,
+): PlacementDraft {
   const draft = activeDraft(state, event.id);
   if (draft.kind !== 'move')
     return reject('invalid-gesture', event.id, 'Active gesture is not a move');
@@ -32,7 +39,10 @@ export function moveDraft(state: SessionState, event: EventOf<'move'>): Placemen
   };
 }
 /** Measured dimensions are minimums; smaller rectangles cannot silently clip table rows or labels. */
-export function resizeDraft(state: SessionState, event: EventOf<'resize'>): PlacementDraft {
+export function resizeDraft(
+  state: SessionState,
+  event: EventOf<'resize'>,
+): PlacementDraft {
   const draft = activeDraft(state, event.id);
   if (draft.kind !== 'resize')
     return reject('invalid-gesture', event.id, 'Active gesture is not a resize');
@@ -61,7 +71,10 @@ function resizePlacement(
   };
 }
 /** Route points arrive in section space; changing a side/lock is meaningful even with identical points. */
-export function updateRoute(state: SessionState, event: EventOf<'route'>): RouteDraft {
+export function updateRoute(
+  state: SessionState,
+  event: EventOf<'route'>,
+): RouteDraft {
   const draft = activeDraft(state, event.id);
   if (draft.kind !== 'route')
     return reject('invalid-gesture', event.id, 'Active gesture is not a route');

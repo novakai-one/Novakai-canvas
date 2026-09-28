@@ -1,0 +1,268 @@
+canvas 1
+collection @wsm-rules "Web state machines · 2 · Cross-workflow rules (lifts, contexts, finalizers)" theme=paper {
+
+  node @root concept "apps/web/core/workspace/" size=small {}
+  node @d-lift concept "lift/" size=small {}
+  node @d-rules concept "rules/" size=small {}
+  node @d-journal concept "journal/" size=small {}
+
+  node @machine module "machine.ts [NEW · collection 1]" { signature @sig "createWorkspaceMachine" parameters=["deps: WorkflowDeps"] returns="WorkflowMachine<Workspace>" }
+  node @contexts module "contexts.ts [NEW]" {
+    signature @link "linkContext" parameters=["state: Workspace"] returns="LinkContext"
+    signature @journal "journalContext" parameters=["state: Workspace"] returns="GateContext"
+    signature @history "historyContext" parameters=["state: Workspace"] returns="HistoryContext"
+    signature @source "sourceContext" parameters=["state: Workspace"] returns="SourceContext"
+    signature @diagram "diagramContext" parameters=["state: Workspace"] returns="DiagramContext"
+  }
+  node @finalize module "finalize.ts [NEW]" { signature @sig "finalize" parameters=["before: Workspace", "event: WorkspaceEvent", "step: RootStep<Workspace>"] returns="RootStep<Workspace>" }
+  node @l-lifecycle module "lifecycle.ts [NEW]" { signature @sig "liftLifecycle" parameters=["state: Workspace", "step: Step<Lifecycle, LifecycleOut, LifecycleEffect>"] returns="RootStep<Workspace>" }
+  node @l-link module "link.ts [NEW]" { signature @sig "liftLink" parameters=["state: Workspace", "step: Step<Link, LinkOut, LinkEffect>"] returns="RootStep<Workspace>" }
+  node @l-catalogue module "catalogue.ts [NEW]" { signature @sig "liftCatalogue" parameters=["state: Workspace", "step: Step<Catalogue, CatalogueOut, CatalogueEffect>"] returns="RootStep<Workspace>" }
+  node @l-journal module "journal.ts [NEW]" { signature @sig "liftJournal" parameters=["state: Workspace", "step: Step<Journal, JournalOut, JournalEffect>"] returns="RootStep<Workspace>" }
+  node @l-history module "history.ts [NEW]" { signature @sig "liftHistory" parameters=["state: Workspace", "step: Step<History, HistoryOut, HistoryEffect>"] returns="RootStep<Workspace>" }
+  node @l-source module "source.ts [NEW]" { signature @sig "liftSource" parameters=["state: Workspace", "step: Step<SourceEditor, SourceOut, SourceEffect>"] returns="RootStep<Workspace>" }
+  node @l-diagram module "diagram.ts [NEW]" { signature @sig "liftDiagram" parameters=["state: Workspace", "step: Step<DiagramSession, DiagramOut, DiagramEffect>"] returns="RootStep<Workspace>" }
+  node @r-stale module "stale-uncertainty.ts [NEW]" { signature @sig "staleUncertainty" parameters=["state: Workspace"] returns="Workspace" }
+  node @r-refusals module "refusals.ts [NEW]" { signature @sig "dismissedRefusals" parameters=["before: Workspace", "after: Workspace"] returns="readonly RequestId[]" }
+  node @r-release module "history-release.ts [NEW]" { signature @sig "releaseHistory" parameters=["state: Workspace"] returns="Workspace" }
+  node @r-flags module "flags.ts [NEW]" {
+    signature @sig "flagEffects" parameters=["before: Workspace", "after: Workspace"] returns="readonly SceneEffect[]"
+    signature @flags "sceneFlags" parameters=["state: Workspace"] returns="SceneFlags"
+  }
+  node @r-expiry module "note-expiry.ts [NEW]" { signature @sig "expireNote" parameters=["state: Workspace", "event: WorkspaceEvent"] returns="Workspace" }
+  node @j-recovery module "recovery.ts [NEW · collection 3]" { signature @sig "dismissEntries" parameters=["state: BoundJournal", "requests: readonly RequestId[]"] returns="Step<Journal, JournalOut, JournalEffect>" }
+
+  wire @t1 @root -> @machine "contains" kind=parent
+  wire @t2 @root -> @contexts "contains" kind=parent
+  wire @t3 @root -> @finalize "contains" kind=parent
+  wire @t4 @root -> @d-lift "contains" kind=parent
+  wire @t5 @root -> @d-rules "contains" kind=parent
+  wire @t6 @root -> @d-journal "contains" kind=parent
+  wire @t7 @d-lift -> @l-lifecycle "contains" kind=parent
+  wire @t8 @d-lift -> @l-link "contains" kind=parent
+  wire @t9 @d-lift -> @l-catalogue "contains" kind=parent
+  wire @t10 @d-lift -> @l-journal "contains" kind=parent
+  wire @t11 @d-lift -> @l-history "contains" kind=parent
+  wire @t12 @d-lift -> @l-source "contains" kind=parent
+  wire @t13 @d-lift -> @l-diagram "contains" kind=parent
+  wire @t14 @d-rules -> @r-stale "contains" kind=parent
+  wire @t15 @d-rules -> @r-refusals "contains" kind=parent
+  wire @t16 @d-rules -> @r-release "contains" kind=parent
+  wire @t17 @d-rules -> @r-flags "contains" kind=parent
+  wire @t18 @d-rules -> @r-expiry "contains" kind=parent
+  wire @t19 @d-journal -> @j-recovery "contains" kind=parent
+
+  section @repo "1 · Target repo tree — cross-workflow rules ([collection N] = specified there)" mode=tree direction=down gap=compact order=1 {
+    show @root @d-lift @d-rules @d-journal @machine @contexts @finalize detail=label size=small
+    show @l-lifecycle @l-link @l-catalogue @l-journal @l-history @l-source @l-diagram @r-stale @r-refusals @r-release @r-flags @r-expiry @j-recovery detail=label size=small
+    connect @t1 @t2 @t3 @t4 @t5 @t6 @t7 @t8 @t9 @t10 @t11 @t12 @t13 @t14 @t15 @t16 @t17 @t18 @t19 source-side=bottom target-side=left
+    root @root
+  }
+
+  node @e-entry entity "JournalEntry (collection 3)" {
+    field @request "request.request" type="RequestId" key=primary
+    field @origin "origin.kind" type="Origin['kind'] (10 kinds)"
+    field @phase "phase" type="EntryPhase['phase'] (7 phases)"
+    field @started "started" type="JournalTick"
+    text @i1 "invariant O-route: settled(e) reaches exactly one owner, chosen by an exhaustive switch on e.origin.kind"
+    text @i2 "invariant F2: |{ e : e.phase = 'rejected' }| <= 1 after every event"
+  }
+  node @e-refusal entity "ProblemSlot · refusal" {
+    field @request "request" type="RequestId" key=foreign references=@e-entry.@request
+    text @i0 "the refusal Diagnostic is read from the rejected entry; it is stored once"
+    text @i1 "invariant N1: problem.kind = 'refusal' => exists e: e.request.request = problem.request and e.phase = 'rejected'; F2 clears the slot in the step that removes e"
+    text @i2 "invariant F3: problem shown before an event and 'none' after it => { e : e.phase = 'rejected' } = {}"
+  }
+  node @e-failure entity "ProblemSlot · failure" {
+    field @shown "shown" type="'action' | 'open' | 'panel-preferences'"
+    field @problem "problem" type="Diagnostic"
+    text @i1 "invariant F1: problem.code = 'connection-uncertain' => exists e: e.phase = 'uncertain'"
+  }
+  node @e-gate entity "Gate · sending (history)" {
+    field @request "request" type="RequestId" key=foreign references=@e-entry.@request
+    text @i1 "invariant: gate.phase = 'sending' => entry(request).origin.kind = 'history'"
+    text @i2 "invariant F4: gate returns to 'idle' only in history-release.ts"
+  }
+  node @e-gesture entity "Gesture · sending | applying" {
+    field @request "request" type="RequestId" key=foreign references=@e-entry.@request
+    field @gesture "capture.gesture" type="GestureId"
+    text @i1 "invariant G1/G5: request != gesture (different brands); journal settles by request, Canvas by gesture"
+  }
+  node @e-connection entity "Connection · sent" {
+    field @request "request" type="RequestId" key=foreign references=@e-entry.@request
+    text @i1 "invariant: entry(request).origin.kind = 'connection'"
+  }
+  node @e-form entity "Form · sent" {
+    field @request "request" type="RequestId" key=foreign references=@e-entry.@request
+    field @kind "form" type="FormKind"
+    text @i1 "invariant: entry(request).origin = { kind: 'add-form', form: kind }"
+  }
+  node @e-own entity "OwnSend · sent (source)" {
+    field @request "request" type="RequestId" key=foreign references=@e-entry.@request
+    field @edit "edit" type="SourceEdit"
+    text @i1 "invariant O1: the source hears its receipt before 'carried' installs the snapshot"
+  }
+
+  wire @er1 @e-refusal.@request -> @e-entry.@request "names" kind=association from=0..1 to=1
+  wire @er2 @e-gate.@request -> @e-entry.@request "waits on" kind=association from=0..1 to=1
+  wire @er3 @e-gesture.@request -> @e-entry.@request "waits on" kind=association from=0..1 to=1
+  wire @er4 @e-connection.@request -> @e-entry.@request "waits on" kind=association from=0..1 to=1
+  wire @er5 @e-form.@request -> @e-entry.@request "waits on" kind=association from=0..1 to=1
+  wire @er6 @e-own.@request -> @e-entry.@request "waits on" kind=association from=0..1 to=1
+
+  section @entities "2 · Entities and invariants — who points at a journal entry" mode=er direction=right order=2 {
+    show @e-entry @e-refusal @e-failure @e-gate @e-gesture @e-connection @e-form @e-own
+    connect @er1 @er2 @er3 @er4 @er5 @er6
+  }
+
+  wire @m1 @machine -> @contexts "linkContext · journalContext · historyContext · sourceContext · diagramContext" kind=imports
+  wire @m2 @machine -> @finalize.@sig "finalize(): RootStep<Workspace>" kind=imports
+  wire @m3 @machine -> @l-lifecycle.@sig "liftLifecycle(): RootStep<Workspace>" kind=imports
+  wire @m4 @machine -> @l-link.@sig "liftLink(): RootStep<Workspace>" kind=imports
+  wire @m5 @machine -> @l-catalogue.@sig "liftCatalogue(): RootStep<Workspace>" kind=imports
+  wire @m6 @machine -> @l-journal.@sig "liftJournal(): RootStep<Workspace>" kind=imports
+  wire @m7 @machine -> @l-history.@sig "liftHistory(): RootStep<Workspace>" kind=imports
+  wire @m8 @machine -> @l-source.@sig "liftSource(): RootStep<Workspace>" kind=imports
+  wire @m9 @machine -> @l-diagram.@sig "liftDiagram(): RootStep<Workspace>" kind=imports
+  wire @m10 @finalize -> @r-stale.@sig "staleUncertainty(): Workspace" kind=imports
+  wire @m11 @finalize -> @r-refusals.@sig "dismissedRefusals(): readonly RequestId[]" kind=imports
+  wire @m12 @finalize -> @r-release.@sig "releaseHistory(): Workspace" kind=imports
+  wire @m13 @finalize -> @r-flags.@sig "flagEffects(): readonly SceneEffect[]" kind=imports
+  wire @m14 @finalize -> @r-expiry.@sig "expireNote(): Workspace" kind=imports
+  wire @m15 @finalize -> @j-recovery.@sig "dismissEntries(): Step<Journal, JournalOut, JournalEffect>" kind=imports
+  wire @m16 @finalize -> @l-journal.@sig "liftJournal(): RootStep<Workspace>" kind=imports
+
+  section @modules "3.1 · Module imports — the root transition: contexts, lifts, finalize" mode=modules layout=layered direction=right order=3 {
+    group @g-ws "core/workspace/" {
+      show @machine @contexts @finalize
+      group @g-lift "lift/" layout=grid columns=1 {
+        show @l-lifecycle @l-link @l-catalogue @l-journal @l-history @l-source @l-diagram
+      }
+    }
+    connect @m1 @m2 @m3 @m4 @m5 @m6 @m7 @m8 @m9
+  }
+
+  section @modules-finalize "3.2 · Module imports — finalize runs F1 to F6 in order" mode=modules layout=layered direction=right order=4 {
+    group @g-ws2 "core/workspace/" {
+      show @finalize
+      group @g-rules "rules/" layout=grid columns=1 {
+        show @r-stale @r-refusals @r-release @r-flags @r-expiry
+      }
+      group @g-journal "journal/" {
+        show @j-recovery
+      }
+      group @g-lift2 "lift/" {
+        show @l-journal
+      }
+    }
+    connect @m10 @m11 @m12 @m13 @m14 @m15 @m16
+  }
+
+  node @summary concept "4 · Modules summary — collection 2" size=large {
+    table @summary-t columns=["Module", "Current Line Count", "Lines Added", "Lines Removed", "Net", "Expected final line count (estimate)", "What the module does"] {
+      row @sm-1 cells=["core/workspace/contexts.ts", "0", "+100", "0", "+100", "100", "NEW · Builds each machine's read-only view of the others: LinkContext, GateContext, HistoryContext, SourceContext, DiagramContext (with may, once per step)."]
+      row @sm-2 cells=["core/workspace/finalize.ts", "0", "+80", "0", "+80", "80", "NEW · Runs rules F1 to F6 after every routed event, in order."]
+      row @sm-3 cells=["core/workspace/lift/lifecycle.ts", "0", "+50", "0", "+50", "50", "NEW · Lifecycle outs to catalogue, link, diagram and notices events."]
+      row @sm-4 cells=["core/workspace/lift/link.ts", "0", "+30", "0", "+30", "30", "NEW · Link reread-wanted to catalogue read-wanted."]
+      row @sm-5 cells=["core/workspace/lift/catalogue.ts", "0", "+100", "0", "+100", "100", "NEW · Accepted snapshot to 7 ordered reactions."]
+      row @sm-6 cells=["core/workspace/lift/journal.ts", "0", "+140", "0", "+140", "140", "NEW · Settlement to its one owner by origin, then definitions, then snapshot (O1 to O4). A blocked editor send answers the waiting store."]
+      row @sm-7 cells=["core/workspace/lift/history.ts", "0", "+30", "0", "+30", "30", "NEW · History send and report to journal and notices."]
+      row @sm-8 cells=["core/workspace/lift/source.ts", "0", "+30", "0", "+30", "30", "NEW · Source send and report to journal and notices."]
+      row @sm-9 cells=["core/workspace/lift/diagram.ts", "0", "+110", "0", "+110", "110", "NEW · Diagram outs to journal, notices, catalogue, source, lifecycle and history."]
+      row @sm-10 cells=["core/workspace/rules/stale-uncertainty.ts", "0", "+40", "0", "+40", "40", "NEW · F1: clears 'could not be confirmed' once no request is uncertain."]
+      row @sm-11 cells=["core/workspace/rules/refusals.ts", "0", "+100", "0", "+100", "100", "NEW · F2: one refusal shown, and a refusal slot whose entry is gone is cleared. F3: closing the problem dismisses refusals."]
+      row @sm-12 cells=["core/workspace/rules/history-release.ts", "0", "+70", "0", "+70", "70", "NEW · F4: the undo gate returns to idle once the display has caught up."]
+      row @sm-13 cells=["core/workspace/rules/flags.ts", "0", "+60", "0", "+60", "60", "NEW · F5: scene flags; a Canvas flags effect only when they change."]
+      row @sm-14 cells=["core/workspace/rules/note-expiry.ts", "0", "+40", "0", "+40", "40", "NEW · F6: a person's command (commandKeys, by not system) clears the status note."]
+      row @sm-total cells=["TOTAL · 14 files", "0", "+980", "0", "+980", "980", "Estimates, not gates. Paths are under apps/web/ unless they start with capability/, apps/service/ or name the repo root."]
+    }
+  }
+  section @s-summary "4 · Modules summary — cross-workflow rules" mode=grid columns=1 order=5 {
+    show @summary
+  }
+
+  node @crud note "5 · Capability ownership — references to a journal entry" size=large {
+    table @crud-t columns=["Object", "Create", "Read", "Update", "Delete"] {
+      row @e-entry-row cells=["JournalEntry", "journal/send.ts — on an admitted send-wanted", "lift/journal.ts — liftJournal(); rules/refusals.ts; view/journal-view.ts", "journal/answers.ts, journal/recovery.ts — phase only", "journal/answers.ts (confirmed); journal/recovery.ts — dismissEntries() (F2, F3, Dismiss)"]
+      row @e-refusal-row cells=["ProblemSlot · refusal", "notices/notices.ts — on 'refused' (queued by lift/journal.ts)", "view/diagram-view.ts; rules/refusals.ts", "never; replaced by the next report or refusal", "notices/notices.ts — dismissed or cleared"]
+      row @e-failure-row cells=["ProblemSlot · failure", "notices/notices.ts — on 'reported'", "view/status.ts; rules/stale-uncertainty.ts", "never; replaced", "notices/notices.ts; rules/stale-uncertainty.ts (F1)"]
+      row @e-gate-row cells=["Gate · sending", "history/history.ts — on 'requested' or 'restored-inverse'", "rules/gated-send.ts; rules/permissions.ts", "history/history.ts — to settling, then caught-up", "rules/history-release.ts — to idle (F4); history.ts on 'blocked'"]
+      row @e-gesture-row cells=["Gesture · sending | applying", "gesture/intake.ts, gesture/choices.ts — with a fresh RequestId", "gesture/settle.ts — matches settlements by request", "gesture/settle.ts — applying back to choosing on a refusal", "gesture/settle.ts — to idle; diagram/session.ts drops it on a new collection"]
+      row @e-connection-row cells=["Connection · sent", "connection/connection.ts — on 'applied'", "view/editing-view.ts — requestState from the journal", "connection.ts — back to editing on 'blocked' or 'dismissed'", "connection.ts — on 'settled' confirmed"]
+      row @e-form-row cells=["Form · sent", "forms/submit.ts — valid draft and built request", "view/editing-view.ts — lock derived", "forms/forms.ts — back to editing on a refusal", "forms/forms.ts — on 'settled' confirmed (form emptied)"]
+      row @e-own-row cells=["OwnSend · sent", "source/editing.ts — on 'apply-requested'", "source/rebase.ts", "source/editing.ts — to confirmed on its receipt", "source/rebase.ts — to none after the base moves; editing.ts on a refusal"]
+    }
+  }
+  section @ownership "5 · Capability ownership — cross-workflow references" mode=grid columns=1 order=6 {
+    show @crud
+  }
+
+  node @f-start start "Journal settles a request" {}
+  node @f-origin decision "Who sent it? (origin.kind)" {}
+  node @f-gesture step "Gesture settled" { text @d "origins: gesture, move-choice" }
+  node @f-connection step "Connection settled" {}
+  node @f-open decision "Add form: its collection still open?" {}
+  node @f-forms step "Forms settled" {}
+  node @f-elsewhere step "Note 'Add to … was not applied' + dismiss the refusal" { text @d "refused only" }
+  node @f-source step "Source settled" {}
+  node @f-history step "History settled" {}
+  node @f-editor step "Answer the waiting editor store" { text @d "effect answer-caller" }
+  node @f-none step "No owner" { text @d "palette, create-collection, restored" }
+  node @f-def step "Settle the definition draft" { text @d "every request; the store ignores unknown IDs" }
+  node @f-ok decision "Confirmed?" {}
+  node @f-carried step "Install the carried snapshot, else reread" { text @d "O1: every owner above already heard its receipt" }
+  node @f-refused step "Show the refusal; reread" {}
+  node @f-created end "New collection: open it" { text @d "O2: queued after the snapshot, so it is listed" }
+  node @f-end end "Done" {}
+
+  wire @w1 @f-start -> @f-origin "settled" kind=flow step=1
+  wire @w2 @f-origin -> @f-gesture "gesture" kind=flow
+  wire @w3 @f-origin -> @f-connection "connection" kind=flow
+  wire @w4 @f-origin -> @f-open "add-form" kind=flow
+  wire @w5 @f-open -> @f-forms "yes" kind=flow
+  wire @w6 @f-open -> @f-elsewhere "no" kind=flow
+  wire @w7 @f-origin -> @f-source "source" kind=flow
+  wire @w8 @f-origin -> @f-history "history" kind=flow
+  wire @w9 @f-origin -> @f-editor "editor" kind=flow
+  wire @w10 @f-origin -> @f-none "other" kind=flow
+  wire @w11 @f-gesture -> @f-def "then" kind=flow step=2
+  wire @w12 @f-connection -> @f-def "then" kind=flow
+  wire @w13 @f-forms -> @f-def "then" kind=flow
+  wire @w14 @f-elsewhere -> @f-def "then" kind=flow
+  wire @w15 @f-source -> @f-def "then" kind=flow
+  wire @w16 @f-history -> @f-def "then" kind=flow
+  wire @w17 @f-editor -> @f-def "then" kind=flow
+  wire @w18 @f-none -> @f-def "then" kind=flow
+  wire @w19 @f-def -> @f-ok "then" kind=flow step=3
+  wire @w20 @f-ok -> @f-carried "yes" kind=flow
+  wire @w21 @f-ok -> @f-refused "no" kind=flow
+  wire @w22 @f-carried -> @f-created "create-collection" kind=flow step=4
+  wire @w23 @f-carried -> @f-end "otherwise" kind=flow
+  wire @w24 @f-refused -> @f-end "done" kind=flow
+
+  section @flow-51 "7.1 · What happens when a request settles (lift/journal.ts, in queue order)" mode=flow layout=layered direction=down order=7 {
+    show @f-start @f-origin @f-gesture @f-connection @f-open @f-forms @f-elsewhere @f-source @f-history @f-editor @f-none @f-def @f-ok @f-carried @f-refused @f-created @f-end
+    connect @w1 @w2 @w3 @w4 @w5 @w6 @w7 @w8 @w9 @w10 @w11 @w12 @w13 @w14 @w15 @w16 @w17 @w18 @w19 @w20 @w21 @w22 @w23 @w24
+  }
+
+  node @z-event start "Any event was routed and lifted" {}
+  node @z-f1 step "F1 · Clear 'could not be confirmed' if nothing is uncertain" {}
+  node @z-f2 step "F2 · Keep one refusal: drop an older one after a newer start or refusal" {}
+  node @z-f3 step "F3 · The problem bar closed: drop every refusal" {}
+  node @z-f4 step "F4 · Undo gate caught up and display current: gate idle" {}
+  node @z-f5 step "F5 · Scene flags changed: one Canvas flags effect" {}
+  node @z-f6 step "F6 · A person's command: clear the status note" { text @d "command = key in commandKeys and not sent by a lift" }
+  node @z-commit end "One commit; React is told once the queue is empty" {}
+  wire @z1 @z-event -> @z-f1 "1" kind=flow
+  wire @z2 @z-f1 -> @z-f2 "2" kind=flow
+  wire @z3 @z-f2 -> @z-f3 "3" kind=flow
+  wire @z4 @z-f3 -> @z-f4 "4" kind=flow
+  wire @z5 @z-f4 -> @z-f5 "5" kind=flow
+  wire @z6 @z-f5 -> @z-f6 "6" kind=flow
+  wire @z7 @z-f6 -> @z-commit "commit" kind=flow
+
+  section @flow-52 "7.2 · The finalizers run after every event, in this order (finalize.ts)" mode=flow layout=layered direction=right order=8 {
+    show @z-event @z-f1 @z-f2 @z-f3 @z-f4 @z-f5 @z-f6 @z-commit
+    connect @z1 @z2 @z3 @z4 @z5 @z6 @z7
+  }
+}

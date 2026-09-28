@@ -28,7 +28,10 @@ function activeTarget(value: TokenValue | null): TokenValues {
   return { [tokenId.parse('target.active')]: value };
 }
 /** Full preference still respects the OS reduction request. */
-function motionOverrides(preferences: UiPreferences, environment: Environment): TokenValues {
+function motionOverrides(
+  preferences: UiPreferences,
+  environment: Environment,
+): TokenValues {
   if (preferences.motion === 'reduced' || environment.reducedMotion)
     return {
       [tokenId.parse('motion.duration')]: { type: 'duration', value: 0, unit: 'ms' },

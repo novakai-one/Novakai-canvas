@@ -24,7 +24,10 @@ function enter(state: SessionState): SessionState {
   return focusReading({ ...state, reading, selection: [], connection: null });
 }
 /** Reading camera follows explicit next/previous requests and clamps to available sections. */
-function advance(state: SessionState, delta: number): SessionState {
+function advance(
+  state: SessionState,
+  delta: number,
+): SessionState {
   if (state.reading === null) return state;
   const active = Math.max(
     0,
@@ -63,7 +66,10 @@ export function readingAction(
   return readingActions[action](state);
 }
 /** Collapse is session-only and requires reading mode; descendants/wires are hidden by the view projection. */
-export function collapseTarget(state: SessionState, target: Target): SessionState {
+export function collapseTarget(
+  state: SessionState,
+  target: Target,
+): SessionState {
   if (treeFolder(state, target)) return collapseTree(state, target);
   if (state.reading === null)
     return reject('invalid-gesture', 'reading', 'Detail collapse is available in reading mode');
@@ -86,10 +92,16 @@ export function refreshReadingOrder(state: SessionState): SessionState {
   return { ...state, reading: { ...reading, sections, active, collapsed } };
 }
 
-function toggled(current: readonly string[], key: string): readonly string[] {
+function toggled(
+  current: readonly string[],
+  key: string,
+): readonly string[] {
   return current.includes(key) ? current.filter((id) => id !== key) : [...current, key];
 }
-function collapseTree(state: SessionState, target: Target): SessionState {
+function collapseTree(
+  state: SessionState,
+  target: Target,
+): SessionState {
   return {
     ...state,
     treeCollapsed: toggled(state.treeCollapsed ?? [], targetKey(target)),

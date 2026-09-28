@@ -58,7 +58,10 @@ export function must<T>(result: Result<T>): T {
   return result.value;
 }
 /** A failed public outcome must identify its category without a thrown native exception. */
-export function rejected(result: Result<unknown>, code?: string): void {
+export function rejected(
+  result: Result<unknown>,
+  code?: string,
+): void {
   expect(result.ok).toBe(false);
   if (result.ok) return;
   if (code) expect(result.error.code).toBe(code);
@@ -99,13 +102,22 @@ export function diagram(
   });
 }
 /** Replace a fixture token through detached path copies; Vitest owns malformed-fixture recovery. */
-export function replacePath(input: unknown, path: readonly string[], value: unknown): unknown {
+export function replacePath(
+  input: unknown,
+  path: readonly string[],
+  value: unknown,
+): unknown {
   const [head, ...tail] = path;
   if (!head) return value;
   const data = input === undefined ? {} : object(input);
   return { ...data, [head]: replacePath(data[head], tail, value) };
 }
 /** DTCG component input uses fractions deliberately, checking canonical byte rounding. */
-export function color(red: number, green: number, blue: number, alpha = 1): unknown {
+export function color(
+  red: number,
+  green: number,
+  blue: number,
+  alpha = 1,
+): unknown {
   return { colorSpace: 'srgb', components: [red, green, blue], alpha };
 }

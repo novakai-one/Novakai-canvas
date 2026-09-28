@@ -30,7 +30,10 @@ function canonicalRecord(value: unknown): unknown {
 }
 /** Build a deterministic immutable proposal; createPresentation.project protects structured/provider failures.
  * Callers correct input/resources and retry; Authoring retains the prior committed state. */
-export function projectCollection(input: unknown, deps: ProjectionDependencies): Projection {
+export function projectCollection(
+  input: unknown,
+  deps: ProjectionDependencies,
+): Projection {
   const collection = requireValue(deps.domain.read(clone(input)));
   const style = parse(resolvedStyle, requireValue(deps.themes.resolve(collection.theme)));
   if (`sha256:${style.digest}` !== collection.theme.digest)

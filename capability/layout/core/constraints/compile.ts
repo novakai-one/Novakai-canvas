@@ -23,7 +23,10 @@ export interface PositionedInput {
 }
 const fields = ['x', 'y', 'width', 'height'] as const;
 /** Stable variable identities carry no parsing requirement for the native solver. */
-export function variableId(id: string, field: (typeof fields)[number]): string {
+export function variableId(
+  id: string,
+  field: (typeof fields)[number],
+): string {
   return `${id}.${field}`;
 }
 /** Named equation helper records all involved geometry targets for honest conflicts. */
@@ -38,7 +41,11 @@ export function equation(
   return { id, terms, operator, constant, strength, targets };
 }
 /** Individual terms are explicit, avoiding positional tuples in core constraint declarations. */
-export function term(id: string, field: (typeof fields)[number], coefficient = 1): Term {
+export function term(
+  id: string,
+  field: (typeof fields)[number],
+  coefficient = 1,
+): Term {
   return { variable: variableId(id, field), coefficient };
 }
 /** Locked positions are required; unlocked authored placement is a strong preference. */
@@ -132,7 +139,10 @@ function lockField(
   ];
 }
 /** Stored positions are parent-local; solver variables and candidate boxes are section-local. */
-function lockTerms(node: ConstraintBox, field: (typeof fields)[number]): Term[] {
+function lockTerms(
+  node: ConstraintBox,
+  field: (typeof fields)[number],
+): Term[] {
   const terms = [term(node.id, field)];
   if (node.parent !== null && ['x', 'y'].includes(field)) terms.push(term(node.parent, field, -1));
   return terms;
@@ -184,7 +194,10 @@ function containment(
   ];
 }
 /** Compile hard content/lock/containment facts; relative constraints are appended by their own policy. */
-export function compile(items: readonly PositionedInput[], options: LayoutOptions): SolverProblem {
+export function compile(
+  items: readonly PositionedInput[],
+  options: LayoutOptions,
+): SolverProblem {
   return {
     variables: items.flatMap(variables),
     constraints: items.flatMap((item) => [

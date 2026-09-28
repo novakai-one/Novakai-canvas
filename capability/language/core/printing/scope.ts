@@ -3,13 +3,19 @@ import type { DefinitionId, TypeExpression } from '../../contract/ports/model.js
 import type { Scope } from '../../contract/records/requests.js';
 import { reject, origin } from '../validation/outcomes.js';
 /** Scoped data is a display projection and never asserted to be a valid standalone collection. */
-export function selectScope(collection: Collection, scope: Scope): Collection {
+export function selectScope(
+  collection: Collection,
+  scope: Scope,
+): Collection {
   if (scope.kind === 'all') return collection;
   if (scope.kind === 'section') return sectionScope(collection, scope.id);
   return objectScope(collection, scope.id);
 }
 /** A section read includes visible canonical nodes, its wires and directly referenced resources. */
-function sectionScope(collection: Collection, id: string): Collection {
+function sectionScope(
+  collection: Collection,
+  id: string,
+): Collection {
   const section = collection.sections.find((item) => item.id === id);
   if (section === undefined)
     reject('unknown-target', origin, 'Existing section', 'Cannot read missing section', id);
@@ -24,7 +30,10 @@ function sectionScope(collection: Collection, id: string): Collection {
   return resourceScope({ ...collection, sections: [section], objects, relationships });
 }
 /** Object scope includes incident relationships and neighboring endpoint declarations as read context. */
-function objectScope(collection: Collection, id: string): Collection {
+function objectScope(
+  collection: Collection,
+  id: string,
+): Collection {
   if (!collection.objects.some((item) => item.id === id))
     reject('unknown-target', origin, 'Existing object', 'Cannot read missing object', id);
   const relationships = collection.relationships.filter(
@@ -116,10 +125,16 @@ function visitExpression(
   addExpressionChildren(current, stack);
 }
 
-function addExpressionReference(current: TypeExpression, refs: DefinitionId[]): void {
+function addExpressionReference(
+  current: TypeExpression,
+  refs: DefinitionId[],
+): void {
   if (current.kind === 'reference') refs.push(current.id);
 }
 
-function addExpressionChildren(current: TypeExpression, stack: TypeExpression[]): void {
+function addExpressionChildren(
+  current: TypeExpression,
+  stack: TypeExpression[],
+): void {
   if (current.kind === 'union') stack.push(...current.items);
 }

@@ -7,7 +7,10 @@ interface Ends {
   readonly target: { readonly node: string; readonly member: string | null };
 }
 /** Endpoint identity is direction independent. Pure replay is safe; Layout owns retries after failed lane selection. */
-export function sameEndpoints(a: Ends, b: Ends): boolean {
+export function sameEndpoints(
+  a: Ends,
+  b: Ends,
+): boolean {
   return key(a) === key(b);
 }
 /** Sorting the two endpoint identities makes reciprocal edges members of the same local family. */
@@ -37,7 +40,10 @@ export function prepareLane(points: readonly Point[]): PreparedLane {
     ),
   };
 }
-function axisIndex(lines: readonly Segment[], coordinate: (line: Segment) => number) {
+function axisIndex(
+  lines: readonly Segment[],
+  coordinate: (line: Segment) => number,
+) {
   const indexed = new Map<number, Segment[]>();
   lines.forEach((line) => {
     const at = coordinate(line);
@@ -46,23 +52,35 @@ function axisIndex(lines: readonly Segment[], coordinate: (line: Segment) => num
   return indexed;
 }
 /** Reject shared interior lanes, allowing only coincident endpoint stubs. */
-export function distinctLane(a: readonly Point[], b: readonly Point[]): boolean {
+export function distinctLane(
+  a: readonly Point[],
+  b: readonly Point[],
+): boolean {
   return distinctPreparedLane(prepareLane(a), prepareLane(b));
 }
 /** Only segments on the same exact axis can share an interior run. */
-export function distinctPreparedLane(a: PreparedLane, b: PreparedLane): boolean {
+export function distinctPreparedLane(
+  a: PreparedLane,
+  b: PreparedLane,
+): boolean {
   const stubs = sharedStubs(a.ends, b.ends);
   return a.segments.every((left) =>
     parallel(left, b).every((right) => clearPair(left, right, stubs)),
   );
 }
-function parallel(line: Segment, prepared: PreparedLane): readonly Segment[] {
+function parallel(
+  line: Segment,
+  prepared: PreparedLane,
+): readonly Segment[] {
   if (horizontal(line)) return prepared.horizontal.get(line.a.y) ?? [];
   if (line.a.x === line.b.x) return prepared.vertical.get(line.a.x) ?? [];
   return [];
 }
 /** Shared endpoint rays permit only the longer of the two explicit endpoint stubs. */
-function sharedStubs(a: readonly Segment[], b: readonly Segment[]): readonly Segment[] {
+function sharedStubs(
+  a: readonly Segment[],
+  b: readonly Segment[],
+): readonly Segment[] {
   return a.flatMap((left): readonly Segment[] =>
     b
       .filter((right): boolean => left.a.x === right.a.x && left.a.y === right.a.y)
@@ -82,7 +100,11 @@ function firstSegment(points: readonly Point[]): readonly Segment[] {
   return [{ a, b }];
 }
 /** Positive shared travel is legal only when completely contained in a shared endpoint stub. */
-function clearPair(a: Segment, b: Segment, stubs: readonly Segment[]): boolean {
+function clearPair(
+  a: Segment,
+  b: Segment,
+  stubs: readonly Segment[],
+): boolean {
   if (!collinearOverlap(a, b)) return true;
   const shared = {
     a: {
@@ -97,7 +119,10 @@ function clearPair(a: Segment, b: Segment, stubs: readonly Segment[]): boolean {
   return stubs.some((stub): boolean => contains(stub, shared.a) && contains(stub, shared.b));
 }
 /** Inclusive bounds preserve shared stub borders without permitting an interior lane. */
-function contains(segment: Segment, point: Point): boolean {
+function contains(
+  segment: Segment,
+  point: Point,
+): boolean {
   return (
     point.x >= Math.min(segment.a.x, segment.b.x) &&
     point.x <= Math.max(segment.a.x, segment.b.x) &&
@@ -106,18 +131,29 @@ function contains(segment: Segment, point: Point): boolean {
   );
 }
 /** Orthogonal interval intersection counts travel shared in either direction, excluding point crossings. */
-function collinearOverlap(a: Segment, b: Segment): boolean {
+function collinearOverlap(
+  a: Segment,
+  b: Segment,
+): boolean {
   if (horizontal(a) && horizontal(b)) return horizontalOverlap(a, b);
   return verticalOverlap(a, b);
 }
 /** Vertical segments need the same x coordinate and positive shared y extent. */
-function verticalOverlap(a: Segment, b: Segment): boolean {
+function verticalOverlap(
+  a: Segment,
+  b: Segment,
+): boolean {
   return (
     a.a.x === a.b.x && b.a.x === b.b.x && a.a.x === b.a.x && overlap(a.a.y, a.b.y, b.a.y, b.b.y)
   );
 }
 /** Boundary tangencies and crossings have zero shared travel. */
-function overlap(a: number, b: number, c: number, d: number): boolean {
+function overlap(
+  a: number,
+  b: number,
+  c: number,
+  d: number,
+): boolean {
   return Math.min(Math.max(a, b), Math.max(c, d)) > Math.max(Math.min(a, b), Math.min(c, d));
 }
 
@@ -127,6 +163,9 @@ function horizontal(segment: Segment): boolean {
 }
 
 /** Parallel horizontal intervals share travel only on the same row. */
-function horizontalOverlap(a: Segment, b: Segment): boolean {
+function horizontalOverlap(
+  a: Segment,
+  b: Segment,
+): boolean {
   return a.a.y === b.a.y && overlap(a.a.x, a.b.x, b.a.x, b.b.x);
 }

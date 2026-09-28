@@ -34,7 +34,10 @@ export function body(
   );
 }
 /** Combine immutable geometry while retaining source order and nested frame identities. */
-function append(previous: Body, next: Body): Body {
+function append(
+  previous: Body,
+  next: Body,
+): Body {
   return {
     bottom: next.bottom,
     events: [...previous.events, ...next.events],
@@ -42,12 +45,20 @@ function append(previous: Body, next: Body): Body {
   };
 }
 /** Only the canonical discriminant selects sequence policy; no label or ID string parsing is involved. */
-function itemBody(input: VisualSequenceItem, top: number, context: SequenceContext): Body {
+function itemBody(
+  input: VisualSequenceItem,
+  top: number,
+  context: SequenceContext,
+): Body {
   if (input.item.kind === 'event') return eventBody({ ...input, item: input.item }, top, context);
   return fragmentBody({ ...input, item: input.item }, top, context);
 }
 /** A measured heading reserves full width and height before any contained event/branch. */
-function heading(content: MeasuredContent, top: number, context: SequenceContext): Box {
+function heading(
+  content: MeasuredContent,
+  top: number,
+  context: SequenceContext,
+): Box {
   return {
     x: context.extent.x - context.options.padding,
     y: top,
@@ -123,7 +134,11 @@ function nextBranch(
   };
 }
 /** Unbranched opt/loop bodies and ordered alt branches share the same vertical cursor contract. */
-function fragmentContents(input: FragmentInput, top: number, context: SequenceContext): BranchBody {
+function fragmentContents(
+  input: FragmentInput,
+  top: number,
+  context: SequenceContext,
+): BranchBody {
   if (input.item.branches.length === 0)
     return { body: body(context, input.item.id, null, top), branches: [] };
   const initial: BranchBody = { body: { bottom: top, events: [], fragments: [] }, branches: [] };
@@ -133,7 +148,11 @@ function fragmentContents(input: FragmentInput, top: number, context: SequenceCo
   );
 }
 /** Nested frames reserve their own heading and border rather than obscuring child control flow. */
-function fragmentBody(input: FragmentInput, top: number, context: SequenceContext): Body {
+function fragmentBody(
+  input: FragmentInput,
+  top: number,
+  context: SequenceContext,
+): Body {
   const labelBox = heading(input.label, top + context.options.padding, context);
   const nested = fragmentContents(
     input,

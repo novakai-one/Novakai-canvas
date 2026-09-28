@@ -1,6 +1,6 @@
 import type { NestedWire } from '../contract/records/nested-wires.js';
 import type { PrototypePoint } from '../contract/records/road-prototype.js';
-import type { Travel } from './nested-wire-lanes.js';
+import type { Travel } from './nested-travel.js';
 import { reject } from './validation/outcomes.js';
 
 interface Step {
@@ -19,10 +19,16 @@ interface Fork {
   readonly point: PrototypePoint;
   readonly order: number;
 }
-function step(from: PrototypePoint, to: PrototypePoint): Step {
+function step(
+  from: PrototypePoint,
+  to: PrototypePoint,
+): Step {
   return { from, to, dx: Math.sign(to.x - from.x), dy: Math.sign(to.y - from.y) };
 }
-function append(steps: Step[], next: Step): void {
+function append(
+  steps: Step[],
+  next: Step,
+): void {
   const previous = steps.at(-1);
   if (previous?.dx === next.dx && previous.dy === next.dy) {
     steps[steps.length - 1] = { ...previous, to: next.to };
@@ -43,14 +49,24 @@ const increments = { forward: 1, backward: -1 };
 function reverseStep(current: Step): Step {
   return { from: current.to, to: current.from, dx: -current.dx, dy: -current.dy };
 }
-function at(path: Path, index: number, direction: Direction): Step | undefined {
+function at(
+  path: Path,
+  index: number,
+  direction: Direction,
+): Step | undefined {
   return path[direction][index];
 }
-function turn(current: Step, next: Step | undefined): number {
+function turn(
+  current: Step,
+  next: Step | undefined,
+): number {
   if (!next) return 0;
   return current.dx * next.dy - current.dy * next.dx;
 }
-function separation(a: Step, b: Step): number {
+function separation(
+  a: Step,
+  b: Step,
+): number {
   const axis = a.dx ? 'x' : 'y';
   return (a.to[axis] - b.to[axis]) * (a.dx || a.dy);
 }
@@ -124,16 +140,25 @@ function advance(
   if (fork) return { ...fork, order: fork.order * increments[direction] };
   return split(cache, a, b, i, j, direction);
 }
-function earlier(a: Fork, b: Fork): Fork {
+function earlier(
+  a: Fork,
+  b: Fork,
+): Fork {
   const axis = a.point.y === b.point.y ? 'x' : 'y';
   return a.point[axis] < b.point[axis] ? a : b;
 }
-function choose(a: Fork | undefined, b: Fork | undefined): number {
+function choose(
+  a: Fork | undefined,
+  b: Fork | undefined,
+): number {
   if (!a) return b?.order ?? 0;
   if (!b) return a.order;
   return earlier(a, b).order;
 }
-function identity(a: Travel, b: Travel): number {
+function identity(
+  a: Travel,
+  b: Travel,
+): number {
   if (a.wireId === b.wireId) return 0;
   return a.wireId < b.wireId ? -1 : 1;
 }

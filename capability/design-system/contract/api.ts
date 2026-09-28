@@ -31,7 +31,10 @@ export function createDesignSystem(dependencies: DesignSystemDependencies): Desi
   };
 }
 /** Scope-specific closed shapes reject preferences smuggled into a diagram request. */
-function resolveRequest(input: unknown, dependencies: DesignSystemDependencies): ResolvedTokenSet {
+function resolveRequest(
+  input: unknown,
+  dependencies: DesignSystemDependencies,
+): ResolvedTokenSet {
   const data = record(input, 'request');
   const scope = text(data.scope, 'scope');
   if (scope === 'ui') return uiRequest(data, dependencies);

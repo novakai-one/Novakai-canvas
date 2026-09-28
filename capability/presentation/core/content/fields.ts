@@ -19,7 +19,10 @@ export function fieldKey(key: Field['key']): string {
   return keys[key];
 }
 /** Canonical composite membership survives a view that hides the key-group summary. */
-function compositeKeys(field: Field, context: ContentContext): readonly Key[] {
+function compositeKeys(
+  field: Field,
+  context: ContentContext,
+): readonly Key[] {
   const owner = context.owner;
   if (owner === undefined) return [];
   return owner.content
@@ -28,25 +31,37 @@ function compositeKeys(field: Field, context: ContentContext): readonly Key[] {
     .map((group) => group.key);
 }
 /** A field may be PK and FK together; fixed role order keeps the visible badges unambiguous. */
-function fieldKeys(field: Field, context: ContentContext): readonly Key[] {
+function fieldKeys(
+  field: Field,
+  context: ContentContext,
+): readonly Key[] {
   const membership = [field.key, ...compositeKeys(field, context)];
   return keyOrder.filter((key) => membership.includes(key));
 }
 /** The accessible row description joins composite membership into one spoken key group. */
-function fieldBadge(field: Field, context: ContentContext): string {
+function fieldBadge(
+  field: Field,
+  context: ContentContext,
+): string {
   return fieldKeys(field, context)
     .map((key) => keys[key])
     .join('/');
 }
 /** Optionality is visible without repeating the word required in every row; the full meaning remains in its accessible outline. */
-function typeLabel(field: Field, context: ContentContext): string {
+function typeLabel(
+  field: Field,
+  context: ContentContext,
+): string {
   const type =
     context.resolveFieldType?.(field) ??
     (typeof field.type === 'string' ? field.type : `@${field.type.id}`);
   return field.nullable ? `${type}?` : type;
 }
 /** Pinned glyph metrics are the only width source; chips and plain cells share one measurement path. */
-function monoWidth(text: string, context: ContentContext): number {
+function monoWidth(
+  text: string,
+  context: ContentContext,
+): number {
   return requireValue(
     context.metrics.measure(
       text,
@@ -66,14 +81,20 @@ function chipPadding(context: ContentContext): ChipPadding {
   return { x: context.style.gap, y: context.style.stroke * 2, gap: context.style.gap / 2 };
 }
 /** The key column reserves each chip's full footprint: monogram text, horizontal insets and inter-chip gaps. */
-function chipsWidth(labels: readonly string[], context: ContentContext): number {
+function chipsWidth(
+  labels: readonly string[],
+  context: ContentContext,
+): number {
   if (labels.length === 0) return 0;
   const padding = chipPadding(context);
   const text = labels.reduce((total, label) => total + monoWidth(label, context), 0);
   return text + labels.length * padding.x * 2 + (labels.length - 1) * padding.gap;
 }
 /** Actual content widths determine column minimums; atomic identifiers retain their full width. */
-function columnWidth(widths: readonly number[], context: ContentContext): number {
+function columnWidth(
+  widths: readonly number[],
+  context: ContentContext,
+): number {
   return (
     Math.ceil(Math.max(context.style.typography.mono.size, ...widths)) +
     context.style.stroke +
@@ -81,7 +102,10 @@ function columnWidth(widths: readonly number[], context: ContentContext): number
   );
 }
 /** Plain text columns measure their widest string directly. */
-function column(values: readonly string[], context: ContentContext): number {
+function column(
+  values: readonly string[],
+  context: ContentContext,
+): number {
   return columnWidth(
     values.map((text) => monoWidth(text, context)),
     context,
@@ -138,7 +162,11 @@ interface KeyChip {
   readonly primitives: readonly Primitive[];
 }
 /** One key chip centers its monogram inside a role-painted pill on the row's shared baseline. */
-function keyChip(key: Key, x: number, context: ContentContext): KeyChip {
+function keyChip(
+  key: Key,
+  x: number,
+  context: ContentContext,
+): KeyChip {
   const padding = chipPadding(context);
   const paint = context.style.roles[keyRoles[key]];
   const text = measureText(
@@ -171,7 +199,10 @@ function keyChip(key: Key, x: number, context: ContentContext): KeyChip {
   };
 }
 /** Key chips advance left to right inside the key column; empty membership reserves the column silently. */
-function keyChips(field: Field, context: ContentContext): Omit<KeyChip, 'width'> {
+function keyChips(
+  field: Field,
+  context: ContentContext,
+): Omit<KeyChip, 'width'> {
   const padding = chipPadding(context);
   const placed = fieldKeys(field, context).reduce<{
     readonly x: number;
@@ -191,7 +222,10 @@ function keyChips(field: Field, context: ContentContext): Omit<KeyChip, 'width'>
   return { height: placed.height, primitives: placed.primitives };
 }
 /** Row anchors remain at the measured row midpoint; FK wires attach to fields while canonical data remains unchanged. */
-export function measureField(field: Field, context: ContentContext): MeasuredContent {
+export function measureField(
+  field: Field,
+  context: ContentContext,
+): MeasuredContent {
   const columns = context.fields ?? fieldColumns([field], context);
   const chips = keyChips(field, context);
   const values = [

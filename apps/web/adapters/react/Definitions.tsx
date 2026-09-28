@@ -1,78 +1,96 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
-import type { ComponentType, ReactElement } from 'react';
+/*
+ * The Definitions panel: the open collection's shared definitions, one card each, with the name,
+ * the expression editor, Model's canonical text, the usages and the draft buttons. Core builds
+ * the panel view; this adapter draws it and forwards edits to the retained definition session.
+ * A new definition's ID comes from the ID source; when none can be made the failure is reported
+ * and nothing is drafted. Session calls return a Result; a failure is also published as the
+ * session's `problem`, which the panel shows in its alert, so the returned Results are not read
+ * here. A usage click dispatches a canvas select event; if the canvas refuses it, nothing happens.
+ */
+import { useSyncExternalStore } from 'react';
+import type { FunctionComponent, ReactElement, ReactNode } from 'react';
+import type { DefinitionsSlots } from '../../contract/definitions-react.js';
+import type { ActiveDiagram } from '../../contract/records/active-diagram.js';
+import type { NodeTarget } from '../../contract/records/owners.js';
+import type { WorkspaceController, WorkspaceView } from '../../contract/records/workspace.js';
+import type {
+  DefinitionDraft,
+  DefinitionEntry,
+  DefinitionSession,
+  DefinitionsPanel,
+  UsageItem,
+  UsageView,
+} from '../../contract/records/definitions.js';
+import type { DefinitionId } from '../../contract/brands.js';
+import type { Result } from '../../contract/errors.js';
 import {
-  definitionDisplay,
-  definitionUsages,
-  type TypeExpression,
-  type Collection,
-} from '@novakai/canvas-model';
-import type { DesignSlots, FeatureProps } from '../../contract/react-types.js';
-import type { DefinitionSelection, LiteralDraft } from '../../contract/records/definitions.js';
-import { definitionDraftId, failureSummary, formatFailure } from '../../contract/api.js';
+  applyLabel,
+  failureSummary,
+  formatFailure,
+  newDefinition,
+  rootPath,
+  usageSelection,
+} from '../../contract/api.js';
+import { definitionsPanel } from '../../contract/definitions-model.js';
 import styles from './ObjectEditor.module.css';
+
+/** What the panel is drawn with: the design slots, the expression editor and new definition IDs. */
+interface DefinitionsParts extends DefinitionsSlots {
+  /** A new definition ID; `id-unavailable` is reported and nothing is drafted. */
+  nextDefinitionId(): Result<DefinitionId>;
+}
+
+/** The session calls the panel makes: follow the drafts, then edit, apply or discard them. */
+type DefinitionDrafts = Pick<
+  DefinitionSession,
+  'subscribe' | 'getSnapshot' | 'create' | 'edit' | 'remove' | 'apply' | 'discard'
+>;
+
+/** What the panel reads: the definition drafts, the problem report, the open diagram and link. */
+interface DefinitionsProps {
+  readonly controller: Pick<WorkspaceController, 'report'> & {
+    readonly definitions: DefinitionDrafts;
+  };
+  readonly view: Pick<WorkspaceView, 'active' | 'busy' | 'connected'>;
+}
 
 /** Collection owned definitions are edited through the same retained session as object forms. */
 export function createDefinitionsEditor({
   Button,
   Field,
-}: Pick<DesignSlots, 'Button' | 'Field'>): ComponentType<FeatureProps> {
-  function Definitions({ controller, view }: FeatureProps): ReactElement {
+  Expression,
+  nextDefinitionId,
+}: DefinitionsParts): FunctionComponent<DefinitionsProps> {
+  /** The panel for the open collection, or a prompt to open one. */
+  function Definitions({ controller, view }: DefinitionsProps): ReactElement {
     const session = controller.definitions;
     const state = useSyncExternalStore(session.subscribe, session.getSnapshot);
-    const collection = view.active?.document.collection ?? null;
-    if (collection === null || view.active === null)
-      return <p>Open a collection to edit shared definitions.</p>;
-    const selection: DefinitionSelection = {
-      base: view.active.base,
-      generation: view.active.generation,
-      collection,
-    };
-    const drafts = state.drafts.filter((draft) => draft.collection.id === collection.id);
-    const values = collection.definitions.map(
-      (definition) =>
-        drafts.find((draft) => draft.definition.id === definition.id)?.definition ?? definition,
-    );
-    const created = drafts
-      .filter(
-        (draft) =>
-          !collection.definitions.some((definition) => definition.id === draft.definition.id),
-      )
-      .map((draft) => draft.definition);
-    const create = (): void => {
-      const id = definitionDraftId(`definition-${crypto.randomUUID()}`);
-      session.create(selection, {
-        id,
-        label: 'New definition',
-        expression: {
-          kind: 'union',
-          items: [
-            { kind: 'literal', value: 'Human' },
-            { kind: 'literal', value: 'Agent' },
-          ],
-        },
-      });
+    const active = view.active;
+    if (active === null) return <p>Open a collection to edit shared definitions.</p>;
+    const panel = definitionsPanel(state, active, view);
+    /** Drafts a definition with a new ID; `id-unavailable` is reported and nothing is drafted. */
+    const createDefinition = (): void => {
+      const id = nextDefinitionId();
+      if (!id.ok) {
+        controller.report(id.error);
+        return;
+      }
+      session.create(panel.selection, newDefinition(id.value));
     };
     return (
       <div className={styles.editor}>
         <header>
           <strong>Shared definitions</strong>
-          <p>Collection owned · {collection.definitions.length} saved</p>
+          <p>Collection owned · {panel.savedCount} saved</p>
         </header>
-        <Button label="New definition" onClick={create} disabled={view.busy || !view.connected} />
-        {[...values, ...created].map((definition) => (
+        <Button label="New definition" onClick={createDefinition} disabled={panel.blocked} />
+        {panel.entries.map((entry) => (
           <DefinitionCard
-            key={definition.id}
-            definition={definition}
-            draft={drafts.find((item) => item.definition.id === definition.id)}
-            collection={collection}
-            selection={selection}
+            key={entry.definition.id}
+            entry={entry}
+            panel={panel}
             session={session}
-            view={view}
-            pending={state.pending.includes(
-              drafts.find((item) => item.definition.id === definition.id)?.key ?? '',
-            )}
-            Field={Field}
-            Button={Button}
+            active={active}
           />
         ))}
         {state.problem && (
@@ -87,441 +105,127 @@ export function createDefinitionsEditor({
       </div>
     );
   }
+
+  /** One definition: its name, expression, canonical text, usages and draft buttons. */
+  function DefinitionCard({ entry, panel, session, active }: CardProps): ReactElement {
+    const { definition, draft, pending } = entry;
+    const selection = panel.selection;
+    return (
+      <fieldset className={styles.block}>
+        <legend>{definition.label || 'Untitled definition'}</legend>
+        <Field
+          label="Name"
+          control={(props) => (
+            <input
+              {...props}
+              value={definition.label}
+              disabled={pending}
+              onChange={(event) =>
+                session.edit(selection, { ...definition, label: event.target.value }, null, null)
+              }
+            />
+          )}
+        />
+        <Expression
+          expression={definition.expression}
+          path={rootPath}
+          literalDrafts={entry.literalDrafts}
+          definitions={selection.collection.definitions}
+          disabled={pending}
+          onChange={(expression, editedPath) =>
+            session.edit(selection, { ...definition, expression }, null, editedPath)
+          }
+          onLiteralDraft={(literalDraft) => session.edit(selection, definition, literalDraft, null)}
+        />
+        <p>Canonical: {entry.canonical}</p>
+        <p>Used by {entry.usages.count} field or definition reference(s)</p>
+        {usageList(entry.usages, active)}
+        <div className={styles.choices}>
+          <Button
+            label="Delete definition"
+            disabled={panel.blocked}
+            onClick={() => session.remove(selection, definition)}
+          />
+          {draftActions(draft, session, panel, pending)}
+        </div>
+      </fieldset>
+    );
+  }
+
+  /** Apply and Discard for a card with a draft; nothing for a card without one. */
+  function draftActions(
+    draft: DefinitionDraft | null,
+    session: DefinitionDrafts,
+    panel: DefinitionsPanel,
+    pending: boolean,
+  ): ReactElement | null {
+    if (draft === null) return null;
+    return (
+      <>
+        <Button
+          label={applyLabel(draft)}
+          variant="primary"
+          disabled={pending || panel.blocked}
+          pending={panel.busy}
+          onClick={() => void session.apply(draft.key)}
+        />
+        <Button
+          label="Discard draft"
+          disabled={pending}
+          onClick={() => session.discard(draft.key)}
+        />
+      </>
+    );
+  }
+
   return Definitions;
 }
 
-function DefinitionCard({
-  definition,
-  draft,
-  collection,
-  selection,
-  session,
-  view,
-  pending,
-  Field,
-  Button,
-}: {
-  readonly definition: import('@novakai/canvas-model').Definition;
-  readonly draft: import('../../contract/records/definitions.js').DefinitionDraft | undefined;
-  readonly collection: import('@novakai/canvas-model').Collection;
-  readonly selection: DefinitionSelection;
-  readonly session: import('../../contract/records/definitions.js').DefinitionSession;
-  readonly view: FeatureProps['view'];
-  readonly pending: boolean;
-  readonly Field: DesignSlots['Field'];
-  readonly Button: DesignSlots['Button'];
-}): ReactElement {
-  const usages = definitionUsages(collection, definition.id);
-  const display = definitionDisplay(collection, definition.id);
-  return (
-    <fieldset className={styles.block}>
-      <legend>{definition.label || 'Untitled definition'}</legend>
-      <Field
-        label="Name"
-        control={(props) => (
-          <input
-            {...props}
-            value={definition.label}
-            disabled={pending}
-            onChange={(event) =>
-              session.edit(selection, { ...definition, label: event.target.value })
-            }
-          />
-        )}
-      />
-      <ExpressionEditor
-        expression={definition.expression}
-        literalDrafts={draft?.literalDrafts ?? []}
-        collection={collection}
-        disabled={pending}
-        onChange={(expression, editedPath) =>
-          session.edit(selection, { ...definition, expression }, undefined, editedPath)
-        }
-        onLiteralDraft={(literalDraft) => session.edit(selection, definition, literalDraft)}
-        Field={Field}
-        Button={Button}
-      />
-      <p>Canonical: {display.ok ? display.value : 'Unavailable'}</p>
-      <p>Used by {usageCount(usages)} field or definition reference(s)</p>
-      {usageList(usages, view)}
-      <div className={styles.choices}>
-        <Button
-          label="Delete definition"
-          disabled={view.busy || !view.connected}
-          onClick={() => session.remove(selection, definition)}
-        />
-        {draftActions(draft, session, view, Button, pending)}
-      </div>
-    </fieldset>
-  );
+/** A card's inputs: its entry, the panel it sits in, the session it edits, and the open diagram. */
+interface CardProps {
+  readonly entry: DefinitionEntry;
+  readonly panel: DefinitionsPanel;
+  readonly session: DefinitionDrafts;
+  readonly active: ActiveDiagram;
 }
 
-function usageCount(result: ReturnType<typeof definitionUsages>): number {
-  return result.ok ? result.value.length : 0;
-}
-
+/** The uses, one list item each; nothing when there are none. */
 function usageList(
-  result: ReturnType<typeof definitionUsages>,
-  view: FeatureProps['view'],
+  usages: UsageView,
+  active: ActiveDiagram,
 ): ReactElement | null {
-  if (!result.ok || result.value.length === 0) return null;
+  if (usages.items.length === 0) return null;
   return (
     <ul>
-      {result.value.map((usage) => (
-        <li key={`${usage.kind}:${usage.path}`}>
-          {usage.kind === 'field' ? (
-            <button
-              type="button"
-              disabled={findUsageNode(view, usage.object) === undefined}
-              onClick={() => navigateUsage(view, usage.object)}
-            >
-              {usage.object}.{usage.field}
-              {findUsageNode(view, usage.object) === undefined && ' · Not shown on canvas'}
-            </button>
-          ) : (
-            usage.path
-          )}
-        </li>
+      {usages.items.map((item) => (
+        <li key={item.key}>{usageEntry(item, active)}</li>
       ))}
     </ul>
   );
 }
 
-function navigateUsage(view: FeatureProps['view'], objectId: string | undefined): void {
-  if (view.active === null || objectId === undefined) return;
-  const node = findUsageNode(view, objectId);
-  if (node === undefined) return;
-  view.active.session.dispatch({
-    kind: 'select',
-    targets: [{ kind: 'node', section: node.section, id: node.node.id }],
-    mode: 'replace',
-  });
-}
-
-function findUsageNode(view: FeatureProps['view'], objectId: string | undefined) {
-  if (view.active === null || objectId === undefined) return undefined;
-  return view.active.document.scene.sections
-    .flatMap((section) => section.nodes.map((item) => ({ section: section.id, node: item })))
-    .find((item) => item.node.measured.objectId === objectId);
-}
-
-function draftActions(
-  draft: import('../../contract/records/definitions.js').DefinitionDraft | undefined,
-  session: import('../../contract/records/definitions.js').DefinitionSession,
-  view: FeatureProps['view'],
-  Button: DesignSlots['Button'],
-  pending: boolean,
-): ReactElement | null {
-  if (draft === undefined) return null;
+/** A path use is its text; a field use is a button that selects its node, disabled with no node. */
+function usageEntry(
+  item: UsageItem,
+  active: ActiveDiagram,
+): ReactNode {
+  if (item.kind === 'path') return item.path;
   return (
-    <>
-      <Button
-        label={draft.operation === 'remove' ? 'Apply deletion' : 'Apply definition'}
-        variant="primary"
-        disabled={pending || view.busy || !view.connected}
-        pending={view.busy}
-        onClick={() => void session.apply(draft.key)}
-      />
-      <Button label="Discard draft" disabled={pending} onClick={() => session.discard(draft.key)} />
-    </>
+    <button
+      type="button"
+      disabled={item.target === null}
+      onClick={() => selectUsage(item.target, active)}
+    >
+      {item.object}.{item.field}
+      {item.target === null && ' · Not shown on canvas'}
+    </button>
   );
 }
 
-function ExpressionEditor({
-  expression,
-  literalDrafts,
-  path = [],
-  onLiteralDraft,
-  onChange,
-  Field,
-  collection,
-  Button,
-  disabled = false,
-}: {
-  readonly expression: TypeExpression;
-  readonly literalDrafts: readonly LiteralDraft[];
-  readonly path?: readonly number[];
-  readonly onChange: (expression: TypeExpression, editedPath?: readonly number[]) => void;
-  readonly onLiteralDraft: (literalDraft: LiteralDraft) => void;
-  readonly Field: DesignSlots['Field'];
-  readonly collection: Collection;
-  readonly Button: DesignSlots['Button'];
-  readonly disabled?: boolean;
-}): ReactElement {
-  switch (expression.kind) {
-    case 'union':
-      return (
-        <>
-          {expression.items.map((item, index) => (
-            <ExpressionEditor
-              key={index}
-              expression={item}
-              literalDrafts={literalDrafts}
-              path={[...path, index]}
-              Field={Field}
-              collection={collection}
-              Button={Button}
-              disabled={disabled}
-              onChange={(next, editedPath) =>
-                onChange(
-                  {
-                    kind: 'union',
-                    items: expression.items.map((value, position) =>
-                      position === index ? next : value,
-                    ),
-                  },
-                  editedPath,
-                )
-              }
-              onLiteralDraft={onLiteralDraft}
-            />
-          ))}
-          <Button
-            label="Add union alternative"
-            disabled={disabled}
-            onClick={() =>
-              onChange({
-                kind: 'union',
-                items: [...expression.items, { kind: 'literal', value: '' }],
-              })
-            }
-          />
-          <Button
-            label="Remove last alternative"
-            disabled={disabled || expression.items.length <= 2}
-            onClick={() => onChange({ kind: 'union', items: expression.items.slice(0, -1) })}
-          />
-        </>
-      );
-    case 'primitive':
-      return (
-        <Field
-          label="Primitive"
-          control={(props) => (
-            <select
-              {...props}
-              disabled={disabled}
-              value={expression.name}
-              onChange={(event) =>
-                onChange(
-                  {
-                    kind: 'primitive',
-                    name: event.target.value as Extract<
-                      TypeExpression,
-                      { kind: 'primitive' }
-                    >['name'],
-                  },
-                  path,
-                )
-              }
-            >
-              {['string', 'number', 'boolean', 'unknown', 'void'].map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          )}
-        />
-      );
-    case 'reference':
-      return (
-        <Field
-          label="Reference"
-          control={(props) => (
-            <select
-              {...props}
-              disabled={disabled}
-              value={expression.id}
-              onChange={(event) =>
-                onChange(
-                  {
-                    kind: 'reference',
-                    id: event.target.value as TypeExpression extends {
-                      kind: 'reference';
-                      id: infer I;
-                    }
-                      ? I
-                      : never,
-                  },
-                  path,
-                )
-              }
-            >
-              {collection.definitions.map((definition) => (
-                <option key={definition.id} value={definition.id}>
-                  {definition.label} · @{definition.id}
-                </option>
-              ))}
-            </select>
-          )}
-        />
-      );
-    case 'literal':
-      return (
-        <LiteralEditor
-          value={expression.value}
-          raw={literalDrafts.find((item) => samePath(item.path, path))}
-          path={path}
-          onChange={onChange}
-          onRawChange={onLiteralDraft}
-          Field={Field}
-          disabled={disabled}
-        />
-      );
-    default:
-      return <p>Expression unavailable</p>;
-  }
-}
-
-function LiteralEditor({
-  value,
-  raw,
-  path,
-  onChange,
-  onRawChange,
-  Field,
-  disabled,
-}: {
-  readonly value: string | number | boolean;
-  readonly raw: LiteralDraft | undefined;
-  readonly path: readonly number[];
-  readonly onChange: (
-    expression: Extract<TypeExpression, { kind: 'literal' }>,
-    editedPath?: readonly number[],
-  ) => void;
-  readonly onRawChange: (literalDraft: LiteralDraft) => void;
-  readonly Field: DesignSlots['Field'];
-  readonly disabled: boolean;
-}): ReactElement {
-  const kind = literalKind(value);
-  const [kindDraft, setKindDraft] = useState(raw?.kind ?? kind);
-  const [draft, setDraft] = useState(raw?.text ?? String(value));
-  useEffect(() => {
-    setDraft(raw?.text ?? String(value));
-    setKindDraft(raw?.kind ?? kind);
-  }, [value, kind, raw]);
-  return (
-    <Field
-      label="Literal kind and value"
-      control={(props) => (
-        <div>
-          <select
-            id={props.id + '-kind'}
-            aria-label="Literal kind"
-            aria-invalid={props['aria-invalid']}
-            aria-describedby={props['aria-describedby']}
-            required={props.required}
-            disabled={disabled}
-            value={kindDraft}
-            onChange={(event) => {
-              setKindDraft(event.target.value as typeof kindDraft);
-              setLiteralKind(event.target.value, draft, path, onChange, onRawChange);
-            }}
-          >
-            <option value="string">string</option>
-            <option value="number">number</option>
-            <option value="boolean">boolean</option>
-          </select>
-          {kindDraft === 'boolean' ? (
-            <select
-              id={props.id + '-value'}
-              aria-label="Literal value"
-              disabled={disabled}
-              value={draft}
-              onChange={(event) =>
-                onChange({ kind: 'literal', value: event.target.value === 'true' }, path)
-              }
-            >
-              <option value="true">true</option>
-              <option value="false">false</option>
-            </select>
-          ) : (
-            <input
-              id={props.id + '-value'}
-              aria-label="Literal value"
-              disabled={disabled}
-              value={draft}
-              onChange={(event) =>
-                updateLiteralText(
-                  kindDraft,
-                  event.target.value,
-                  path,
-                  setDraft,
-                  onChange,
-                  onRawChange,
-                )
-              }
-            />
-          )}
-        </div>
-      )}
-    />
-  );
-}
-
-function literalKind(value: string | number | boolean): 'string' | 'number' | 'boolean' {
-  const kinds: Record<string, 'string' | 'number' | 'boolean'> = {
-    string: 'string',
-    number: 'number',
-    boolean: 'boolean',
-  };
-  return kinds[typeof value] ?? 'string';
-}
-
-function setLiteralKind(
-  kind: string,
-  value: string,
-  path: readonly number[],
-  onChange: (
-    expression: Extract<TypeExpression, { kind: 'literal' }>,
-    editedPath?: readonly number[],
-  ) => void,
-  onRawChange: (literalDraft: LiteralDraft) => void,
+/** Selects a usage's node on the canvas; a usage with no node does nothing. */
+function selectUsage(
+  target: NodeTarget | null,
+  active: ActiveDiagram,
 ): void {
-  const number = finiteNumber(value);
-  const handlers: Record<string, () => void> = {
-    boolean: () => onChange({ kind: 'literal', value: value === 'true' }, path),
-    string: () => onChange({ kind: 'literal', value }, path),
-    number: () =>
-      number === null
-        ? onRawChange({ path, kind: 'number', text: value })
-        : onChange({ kind: 'literal', value: number }, path),
-  };
-  handlers[kind]?.();
-}
-
-function updateLiteralText(
-  kind: 'string' | 'number',
-  value: string,
-  path: readonly number[],
-  setDraft: (value: string) => void,
-  onChange: (
-    expression: Extract<TypeExpression, { kind: 'literal' }>,
-    editedPath?: readonly number[],
-  ) => void,
-  onRawChange: (literalDraft: LiteralDraft) => void,
-): void {
-  setDraft(value);
-  const handlers: Record<'string' | 'number', () => void> = {
-    string: () => onChange({ kind: 'literal', value }, path),
-    number: () => {
-      const number = finiteNumber(value);
-      if (number === null) onRawChange({ path, kind, text: value });
-      else onChange({ kind: 'literal', value: number }, path);
-    },
-  };
-  handlers[kind]();
-}
-
-function completeNumber(value: string): boolean {
-  return /^[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?$/.test(value);
-}
-
-function finiteNumber(value: string): number | null {
-  return completeNumber(value) && Number.isFinite(Number(value)) ? Number(value) : null;
-}
-
-function samePath(left: readonly number[], right: readonly number[]): boolean {
-  return left.length === right.length && left.every((value, index) => value === right[index]);
+  if (target !== null) active.session.dispatch(usageSelection(target));
 }

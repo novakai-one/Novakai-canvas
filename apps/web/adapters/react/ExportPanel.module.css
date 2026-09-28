@@ -16,7 +16,7 @@
     color: var(--nv-color-subtle);
   }
   .error {
-    color: var(--nv-color-danger, var(--nv-color-content));
+    color: var(--nv-status-error);
   }
   .form {
     display: grid;

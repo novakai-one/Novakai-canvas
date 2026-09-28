@@ -1,6 +1,6 @@
 import type { readNestedProjectionSupports } from './nested-lane-projection.js';
 import type { NestedWire } from '../contract/records/nested-wires.js';
-import type { RoadPrototypeScene } from '../contract/records/road-prototype.js';
+import type { RoadPrototypeScene } from '../contract/records/road-scene.js';
 import type { SectionPlacement } from './prototype-nested-placement.js';
 import type { RoadContact } from './prototype-road-registry.js';
 import type { NestedSupportRequest } from '../contract/records/nested-support.js';
@@ -22,7 +22,7 @@ import { wireRegistry } from './nested-wire-registry.js';
 import { routeNestedWires } from './nested-wire-routing.js';
 import { allocateNestedLanes } from './nested-wire-lanes.js';
 import { capacityRoads } from './nested-road-capacity.js';
-import { reject } from './nested-support-graph.js';
+import { reject, required } from './nested-support-graph.js';
 
 const measure: PrototypeLayoutMeasure = (_stage, run) => run();
 
@@ -119,12 +119,6 @@ export function retainedSupportRecords(
   };
 }
 
-/** Absence is a typed contact failure; no substitute identity is invented. */
-export function required<T>(index: ReadonlyMap<string, T>, key: string): T {
-  const value = index.get(key);
-  if (value === undefined) return reject('missing-contact', [key]);
-  return value;
-}
 /** Semantic driveway provenance is shared by query replay and the once-only builder. */
 export function driveOrigin(road: PrototypeRoad): string {
   const access = road.access;
@@ -161,7 +155,10 @@ function population(
   };
 }
 
-function checkRoad(expected: PrototypeRoad, actual: PrototypeRoad): void {
+function checkRoad(
+  expected: PrototypeRoad,
+  actual: PrototypeRoad,
+): void {
   if (JSON.stringify(expected) !== JSON.stringify(actual))
     reject(
       'mismatched-contact',
@@ -171,7 +168,11 @@ function checkRoad(expected: PrototypeRoad, actual: PrototypeRoad): void {
     );
 }
 
-function addNeighbor(index: Map<string, PrototypeRoad[]>, id: string, road: PrototypeRoad): void {
+function addNeighbor(
+  index: Map<string, PrototypeRoad[]>,
+  id: string,
+  road: PrototypeRoad,
+): void {
   const group = index.get(id) ?? [];
   group.push(road);
   index.set(id, group);

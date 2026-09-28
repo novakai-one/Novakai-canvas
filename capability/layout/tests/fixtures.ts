@@ -275,7 +275,10 @@ export function flow(extra: Readonly<Record<string, unknown>> = {}): Projection 
   );
 }
 /** Public scene access selects by canonical object identity rather than generated ID syntax. */
-export function node(scene: Scene, id: string): Scene['sections'][number]['nodes'][number] {
+export function node(
+  scene: Scene,
+  id: string,
+): Scene['sections'][number]['nodes'][number] {
   const found = scene.sections
     .flatMap((section) => section.nodes)
     .find((node) => node.measured.objectId === id);

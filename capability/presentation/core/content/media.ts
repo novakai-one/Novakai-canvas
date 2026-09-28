@@ -83,7 +83,11 @@ export function printMat(
 }
 
 /** The hairline catches the artwork edge like the inner bevel of a cut mat; transparent fill keeps the art visible. */
-function innerEdge(media: MediaPrimitive, style: ResolvedStyle, tones: StageTones): BadgePrimitive {
+function innerEdge(
+  media: MediaPrimitive,
+  style: ResolvedStyle,
+  tones: StageTones,
+): BadgePrimitive {
   return {
     kind: 'badge',
     x: media.x,
@@ -107,12 +111,18 @@ function luminance(hex: string): number {
 }
 
 /** Lighter of two palette hexes by relative luminance. */
-function lighter(a: string, b: string): string {
+function lighter(
+  a: string,
+  b: string,
+): string {
   return luminance(a) >= luminance(b) ? a : b;
 }
 
 /** Darker of two palette hexes by relative luminance. */
-function darker(a: string, b: string): string {
+function darker(
+  a: string,
+  b: string,
+): string {
   return luminance(a) <= luminance(b) ? a : b;
 }
 

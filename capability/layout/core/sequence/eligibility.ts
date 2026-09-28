@@ -1,7 +1,10 @@
 import type { VisualSection, VisualNode } from '../../contract/records/input.js';
 
 /** Sequence lifelines retain legacy participants and add only directly shown modules used by events. */
-export function isSequenceParticipant(node: VisualNode, section: VisualSection): boolean {
+export function isSequenceParticipant(
+  node: VisualNode,
+  section: VisualSection,
+): boolean {
   if (node.kind === 'participant') return true;
   return (
     node.kind === 'module' &&

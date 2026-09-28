@@ -1,15 +1,20 @@
-import { definitionId } from '@novakai/canvas-model';
-
+/*
+ * Web core's public surface: adapters reach core only through these re-exports, so core files can
+ * move without adapter edits. Re-exports only: nothing is declared here, nothing throws, and there
+ * is no state to recover.
+ */
 export { planCanvasEdit } from '../core/editing/plan.js';
+export { mapResults } from '../core/editing/results.js';
 
 export {
   blocksSubmission,
   submissionStatus,
-  refused,
   emptyRefusalOrder,
   observeRefusals,
   supersededRefusal,
 } from '../core/editing/submissions.js';
+export { requestForGesture } from '../core/editing/gesture-request.js';
+export { refused } from '../core/workspace/rules/refusal-classes.js';
 
 export {
   defaultPanels,
@@ -25,10 +30,25 @@ export {
   panelMembership,
   panelWidth,
   reconcilePanelPreferences,
+  storedPanels,
 } from '../core/panels/preferences.js';
+export {
+  unrestoredWorkspace,
+  restoredWorkspace,
+  snapshotScope,
+  inWorkspace,
+} from '../core/workspace/workspace-scope.js';
+export { isCollectionKey } from '../core/workspace/collection-key.js';
+export {
+  unreadGeneration,
+  readGeneration,
+  currentGeneration,
+} from '../core/workspace/read-generation.js';
 export { editedObject, objectDraftKey } from '../core/inspector/object-edits.js';
 export { selectedObject } from '../core/inspector/selection.js';
 export { defaultPreferences } from '../core/preferences/defaults.js';
+export { defaultLibraryFilters } from '../core/library/defaults.js';
+export { preferenceFailure, storageFailure } from '../core/preferences/failures.js';
 export { editedWire, wireChanges, wireDraftKey } from '../core/inspector/wire-edits.js';
 export { selectedWire } from '../core/inspector/wire-selection.js';
 export { retainObjectCommand, retainWireCommand } from '../core/inspector/draft-commands.js';
@@ -46,8 +66,185 @@ export { formatFailure, failureSummary, plainMessage } from '../core/output/diag
 export { buildMoveReview, chooseMoveOption } from '../core/editing/movement.js';
 export { palette, planPaletteDrop, type PaletteDrop } from '../core/editing/palette-drop.js';
 
-export function definitionDraftId(value: string): import('@novakai/canvas-model').Definition['id'] {
-  return definitionId.parse(value);
-}
+export { buildDefinitionsPanel, newDefinition, applyLabel } from '../core/definitions/panel.js';
+export type { DefinitionModel } from '../core/definitions/panel.js';
+export { usageSelection } from '../core/definitions/usages.js';
+export {
+  rootPath,
+  replaceAlternative,
+  addAlternative,
+  removeLastAlternative,
+  canRemoveAlternative,
+} from '../core/definitions/expression-edits.js';
+export {
+  literalKinds,
+  chosenPrimitive,
+  chosenReference,
+  chosenLiteralKind,
+} from '../core/definitions/choices.js';
+export {
+  literalKindOf,
+  literalKindChange,
+  literalTextChange,
+  literalBooleanChange,
+  literalDraftAt,
+} from '../core/definitions/literal-edits.js';
+export { samePath, isPathWithin } from '../core/definitions/paths.js';
+export {
+  definitionDraftKey,
+  editedDrafts,
+  type DefinitionEdit,
+} from '../core/definitions/draft-edits.js';
+export {
+  restoredState,
+  applyingState,
+  discardedDrafts,
+  boundDrafts,
+  settledRequest,
+  unlocked,
+  unlockedWithoutRequest,
+  withoutDraft,
+  type RequestOutcome,
+  type SettledRequest,
+} from '../core/definitions/draft-lifecycle.js';
+export { encodeDefinitionDrafts } from '../core/definitions/draft-record.js';
 
+export { buildCreationPanel } from '../core/creation/panel.js';
+export { listedId } from '../core/creation/targets.js';
 export { groupDraftProblem, groupCreationChanges } from '../core/editing/group-creation.js';
+export {
+  buildConnectionDraft,
+  editedConnection,
+  resolveConnectionSection,
+  reviewConnection,
+  type ConnectionCapture,
+  type ConnectionReview,
+} from '../core/editing/connection/draft.js';
+export { connectionRequest, type ConnectionIds } from '../core/editing/connection/request.js';
+export type { ConnectionPolicy, IdGrammar } from '../core/editing/connection/types.js';
+export {
+  connectionProblem,
+  releasedConnection,
+  withRequestState,
+} from '../core/editing/connection/capture.js';
+export { definitionRequest } from '../core/editing/definition-request.js';
+export { reusableSession, retainCamera, renderChanged } from '../core/workspace/session-reuse.js';
+export { bindHistoryKeys } from '../core/workspace/history-keys.js';
+export { shellLayout, type ShellLayout } from '../core/workspace/shell-layout.js';
+export {
+  renderTicket,
+  type RenderMode,
+  type RenderTicket,
+} from '../core/workspace/diagram/ticket.js';
+export {
+  documentFor,
+  generationChanged,
+  generationFailure,
+  renderAdmission,
+  renderInvalidation,
+  snapshotBase,
+  type AdmittedRender,
+  type LatestSnapshot,
+} from '../core/workspace/diagram/admission.js';
+export {
+  installedPatch,
+  openFailurePatch,
+  openingPatch,
+  openSuccessPatch,
+  reusedPatch,
+} from '../core/workspace/render/patches.js';
+export {
+  activeRefresh,
+  choosePlan,
+  choosingPatch,
+  closedSwitchPatch,
+  diagramCurrent,
+  gonePatch,
+  staleSnapshot,
+} from '../core/workspace/render/navigation.js';
+export {
+  editingStatus,
+  mutationAvailable,
+  openDraftCount,
+  restingStatus,
+  staleUncertainty,
+  type CollectionDraft,
+} from '../core/workspace/status.js';
+export {
+  heldHistory,
+  historyIdle,
+  historyReady,
+  historyView,
+  inverseSettling,
+  observeSnapshot,
+  settlingHistory,
+  type HistorySlot,
+} from '../core/workspace/history/gate.js';
+export {
+  editsHeld,
+  finishedInverse,
+  navigableStatus,
+  submissionAllowed,
+  unresolvedInverses,
+} from '../core/workspace/history/journal.js';
+export {
+  reviewableMovement,
+  reviewOutcome,
+  type ReviewOutcome,
+} from '../core/workspace/movement-review/outcome.js';
+export {
+  applicable,
+  awaitingChoice,
+  currentChoice,
+  failedPhase,
+  heldFor,
+  heldMovement,
+  inPhase,
+  moveSubmissionBlocked,
+  offeredOption,
+  recoveryPhase,
+  savingRequest,
+  sendingMove,
+  withOption,
+} from '../core/workspace/movement-review/phases.js';
+export {
+  alreadySaving,
+  movementActive,
+  operationBusy,
+  optionPreviewRefused,
+  previewGone,
+  previewRefused,
+} from '../core/workspace/movement-review/failures.js';
+export type { MovementHeld, MovementSlot } from '../core/workspace/movement-review/types.js';
+export {
+  captureFor,
+  creationLocked,
+  dismissedCaptures,
+  holding,
+  landedElsewhere,
+  noCaptures,
+  refusedCaptures,
+  released,
+  settledCaptures,
+  withRequest,
+  type CaptureIdMap,
+  type CaptureIds,
+  type CreationCapture,
+  type CreationCaptures,
+} from '../core/creation/captures.js';
+export {
+  addedCreation,
+  cancelledCreation,
+  emptyCreation,
+  refusedElsewhereNote,
+  settledCreation,
+} from '../core/creation/drafts.js';
+export {
+  capturedIn,
+  creationContext,
+  diagramChanges,
+  diagramTarget,
+  groupChanges,
+  objectChanges,
+  type CreationContext,
+} from '../core/creation/records.js';

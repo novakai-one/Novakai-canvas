@@ -6,7 +6,10 @@ import type { Anchor } from '@novakai/canvas-presentation';
 import styles from './SceneNode.module.css';
 import boundary from './GroupBoundary.module.css';
 /** Measured member handles use exact row positions, with separate source/target handles for bidirectional members. */
-function anchorHandles(anchor: Anchor, isConnectable: boolean): ReactElement {
+function anchorHandles(
+  anchor: Anchor,
+  isConnectable: boolean,
+): ReactElement {
   return (
     <span key={anchor.member}>
       {anchor.direction !== 'out' && (

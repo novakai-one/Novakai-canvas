@@ -7,7 +7,10 @@ import {
   type TokenFileBindings,
 } from '../contract/index.js';
 /** Explicit build command; public compiler/bindings own validation and recovery, CLI reports failures. */
-async function build(root: string, mode: string): Promise<Result<ArtifactManifest>> {
+async function build(
+  root: string,
+  mode: string,
+): Promise<Result<ArtifactManifest>> {
   const bound = await createTokenFileBindings(root);
   if (!bound.ok) return bound;
   const source = await bound.value.source.read();
@@ -38,7 +41,10 @@ async function handleSnapshots(
   return verified(checked.value, artifacts.manifest);
 }
 /** Successful verification retains the same published generation identity. */
-function verified(paths: readonly string[], manifest: ArtifactManifest): Result<ArtifactManifest> {
+function verified(
+  paths: readonly string[],
+  manifest: ArtifactManifest,
+): Result<ArtifactManifest> {
   if (paths.length) return drift(paths);
   return { ok: true, value: manifest };
 }

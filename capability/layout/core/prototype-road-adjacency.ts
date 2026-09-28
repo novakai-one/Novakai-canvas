@@ -11,7 +11,11 @@ export function roadJunctionIndex(junctions: readonly PrototypeJunction[]) {
   junctions.forEach((j) => j.roadIds.forEach((id) => index.set(id, [...(index.get(id) ?? []), j])));
   return index;
 }
-function attach(index: Map<string, PrototypeLane[]>, id: string | undefined, lane: PrototypeLane) {
+function attach(
+  index: Map<string, PrototypeLane[]>,
+  id: string | undefined,
+  lane: PrototypeLane,
+) {
   if (id === undefined) return;
   index.set(id, [...(index.get(id) ?? []), lane]);
 }

@@ -4,7 +4,10 @@ import type { Result } from '../../contract/errors.js';
 import type { BuildChecks, TokenFileBindings } from '../../contract/ports/build-files.js';
 import type { ArtifactSet, ArtifactManifest, Artifact } from '../../contract/records/artifacts.js';
 /** Explicit absolute root, closed paths, checked bytes. Build host owns retry and inactive-generation cleanup. */
-export function createTokenFiles(root: string, checks: BuildChecks): TokenFileBindings {
+export function createTokenFiles(
+  root: string,
+  checks: BuildChecks,
+): TokenFileBindings {
   const sourceRoot = resolve(root);
   const output = join(sourceRoot, '.generated');
   return {
@@ -35,7 +38,10 @@ async function readJson(path: string): Promise<unknown> {
   return value;
 }
 /** All source files are explicit and local; caller controls root, never ambient cwd. */
-async function readSources(root: string, checks: BuildChecks): Promise<Result<unknown>> {
+async function readSources(
+  root: string,
+  checks: BuildChecks,
+): Promise<Result<unknown>> {
   try {
     const [definitions, semantics, preferences, paper, ink] = await Promise.all(
       [
@@ -91,7 +97,10 @@ async function rejectSymlink(path: string): Promise<void> {
   if (stat.isSymbolicLink()) throw new TypeError('Unsafe token output root');
 }
 /** New generations are private until fully written; existing generations must match every expected byte. */
-async function writeGeneration(root: string, artifacts: ArtifactSet): Promise<void> {
+async function writeGeneration(
+  root: string,
+  artifacts: ArtifactSet,
+): Promise<void> {
   const destination = join(root, artifacts.digest);
   const stage = await mkdtemp(join(root, '.stage-'));
   try {
@@ -115,13 +124,19 @@ async function moveGeneration(
   }
 }
 /** Compiler-owned relative paths have already passed the artifact schema and content hash checks. */
-async function writeArtifact(root: string, file: Artifact): Promise<void> {
+async function writeArtifact(
+  root: string,
+  file: Artifact,
+): Promise<void> {
   const path = join(root, file.path);
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, file.content, { encoding: 'utf8', flag: 'wx' });
 }
 /** Manifest activation is one rename; abandoned temporary files never become an active generation. */
-async function activate(root: string, artifacts: ArtifactSet): Promise<void> {
+async function activate(
+  root: string,
+  artifacts: ArtifactSet,
+): Promise<void> {
   const temporary = await mkdtemp(join(root, '.manifest-'));
   try {
     const path = join(temporary, 'manifest.json');
@@ -132,7 +147,10 @@ async function activate(root: string, artifacts: ArtifactSet): Promise<void> {
   }
 }
 /** Read one manifest and pin it for the entire operation, verifying its generation and all bytes. */
-async function readActive(root: string, checks: BuildChecks): Promise<Result<ArtifactSet>> {
+async function readActive(
+  root: string,
+  checks: BuildChecks,
+): Promise<Result<ArtifactSet>> {
   try {
     const manifest = await readJson(join(root, 'manifest.json'));
     const generation = requireGeneration(manifest);
@@ -159,7 +177,10 @@ function generationValue(value: unknown): unknown {
   return Object.fromEntries(Object.entries(value)).generation;
 }
 /** Content manifest must match the single pinned activation manifest before any bytes are trusted. */
-function requireManifestMatch(artifacts: ArtifactSet, manifest: unknown): void {
+function requireManifestMatch(
+  artifacts: ArtifactSet,
+  manifest: unknown,
+): void {
   if (JSON.stringify(artifacts.manifest) !== JSON.stringify(manifest))
     throw new TypeError('Manifest differs');
 }
@@ -174,7 +195,10 @@ async function verifyExistingGeneration(
   await verifyArtifactBytes(destination, artifacts);
 }
 /** Shared byte verification keeps replay and active-reader corruption policy identical. */
-async function verifyArtifactBytes(root: string, artifacts: ArtifactSet): Promise<void> {
+async function verifyArtifactBytes(
+  root: string,
+  artifacts: ArtifactSet,
+): Promise<void> {
   await Promise.all(
     artifacts.files.map(async (file) => {
       const bytes = await readFile(join(root, file.path), 'utf8');

@@ -115,7 +115,10 @@ export function domain(input: unknown): Result<InputCollection> {
   };
 }
 /** Explicit resource owners permit focused missing/unsafe-provider scenarios. */
-export function owners(tokens: ResolvedStyle, asset: VisualAsset | null = null): Owners {
+export function owners(
+  tokens: ResolvedStyle,
+  asset: VisualAsset | null = null,
+): Owners {
   return {
     domain: { read: domain },
     themes: { resolve: () => ({ ok: true, value: tokens }) },
@@ -188,7 +191,10 @@ export function section(
   };
 }
 /** Rendering assertions select visible data through the public projection, not private helpers. */
-export function node(projection: Projection, id: string): VisualNode {
+export function node(
+  projection: Projection,
+  id: string,
+): VisualNode {
   const found = projection.sections
     .flatMap((section) => section.nodes)
     .find((node) => node.objectId === id);

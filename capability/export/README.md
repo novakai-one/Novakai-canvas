@@ -4,7 +4,7 @@ Responsibility: produce retained-revision SVG, PNG, PDF, offline HTML and editab
 
 Public entry: `@novakai/canvas-export`. `initializeRaster(module)` runs once at host startup. `composeExport(owners)` binds shared Presentation slots and real encoders. Hosts provide a consistent snapshot lease, owner resource inspection, Model/Language document operations and the supplied reader stylesheet. `createExport(dependencies)` supports equivalent in-process hosts with explicit format roles.
 
-`exportArtifact({identity:{collectionId,revision},format,scope})` returns detached bytes, content digest and source metadata. PDF tiles ordered sections at a fixed readable scale. Native adapters do not perform filesystem downloads.
+`exportArtifact({identity:{collectionId,revision},format,scope})` returns the bytes, their content digest and source metadata. The bytes come from the format handler's own `slice()`: a copy for a plain `Uint8Array`, but shared memory for a `Buffer`. PDF tiles ordered sections at a fixed readable scale. Native adapters do not perform filesystem downloads.
 
 `inspectBundle(bytes)` checks the bounded versioned manifest, hashes and required owner validation. `prepareImport({bytes,targetCollectionId})` reconstructs full DSL plus manual/storage-order sidecar under a new namespace at revision zero. Authoring must revalidate and atomically admit its resources and absent-target precondition. Neither operation commits data.
 

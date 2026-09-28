@@ -5,16 +5,25 @@ import styles from './MovementReview.module.css';
 type MovementDocument = NonNullable<FeatureProps['view']['movementReview']>['document'];
 type MovementTarget = { kind: string; id: string; section?: string };
 
-function labelFor(document: MovementDocument, target: MovementTarget): string {
+function labelFor(
+  document: MovementDocument,
+  target: MovementTarget,
+): string {
   if (target.kind === 'section') return sectionLabel(document, target);
   return nodeLabel(document, target);
 }
-function sectionLabel(document: MovementDocument, target: MovementTarget): string {
+function sectionLabel(
+  document: MovementDocument,
+  target: MovementTarget,
+): string {
   return (
     document.collection.sections.find((section) => section.id === target.id)?.title ?? target.id
   );
 }
-function nodeLabel(document: MovementDocument, target: MovementTarget): string {
+function nodeLabel(
+  document: MovementDocument,
+  target: MovementTarget,
+): string {
   const section = document.scene.sections.find((item) => item.id === target.section);
   return section?.nodes.find((node) => node.id === target.id)?.measured.label ?? target.id;
 }
@@ -34,7 +43,10 @@ function deltaText(
   ].filter(Boolean);
   return parts.join(', ') || 'unchanged';
 }
-function deltaPart(label: string, value: number): string {
+function deltaPart(
+  label: string,
+  value: number,
+): string {
   if (value === 0) return '';
   return `${label} ${signedValue(value)}`;
 }

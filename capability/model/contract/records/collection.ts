@@ -6,7 +6,10 @@ import { relationshipSchema } from './relationship.js';
 import { sectionSchema } from './section.js';
 import { layoutSchema } from './layout.js';
 
-/** Asset metadata and content identity. Byte storage and license interpretation are outside Model. */
+/**
+ * An asset manifest entry: `id`, content `digest`, `mediaType`, nonblank `alt` text, and
+ * optional `license` and `attribution`. Model stores no bytes and does not interpret licenses.
+ */
 export const assetSchema = z
   .strictObject({
     id: assetId,
@@ -18,7 +21,11 @@ export const assetSchema = z
   })
   .readonly();
 
-/** Provenance claim attached to objects or relationships; Model does not verify the URI. */
+/**
+ * A provenance claim that objects and relationships refer to by ID: a nonblank `uri`, optional
+ * `revision`, `location` and `description`, and a `status` (`asserted`, `source-backed` or
+ * `unverified`). Model does not check the URI.
+ */
 export const sourceSchema = z
   .strictObject({
     id: sourceId,
@@ -30,19 +37,24 @@ export const sourceSchema = z
   })
   .readonly();
 
-/** Pinned theme identity and available role names; referenced roles must resolve here. */
+/**
+ * The pinned theme: `id`, `version`, `digest`, and at least one role name. Group roles used in
+ * sections must be one of these roles.
+ */
 export const themeSchema = z
   .strictObject({ id: label, version: label, digest, roles: z.array(label).min(1).readonly() })
   .readonly();
 
-/** The removed canvas 2 syntax saved an empty `changes` list on every collection; drop it so those saves still open. A non-empty list stays invalid. */
-function dropEmptyChanges(value: unknown): unknown {
-  const changes = (value as { changes?: unknown } | null)?.changes;
-  if (!Array.isArray(changes) || changes.length > 0) return value;
-  return Object.fromEntries(Object.entries(value as object).filter(([key]) => key !== 'changes'));
-}
-
-/** Strict collection shape with explicit defaults. Cross-record validity is checked by Model core. */
+/**
+ * The collection: schema version 1, `id`, `revision` (a whole number, 0 or more), nonblank
+ * `title`, optional `description`, `theme`, `arrangement`, and the record lists `sections`,
+ * `objects`, `relationships`, `sources`, `definitions` and `assets` (each defaults to empty).
+ * Strict: unknown fields are rejected, except that an empty `changes` list is dropped first (see
+ * `dropEmptyChanges`). Parsing builds a new object; cross-record rules are checked by Model core.
+ *
+ * Exported, shared and unfrozen; `parse` throws a `ZodError`. Use `validate` (api.ts) instead
+ * for untrusted input.
+ */
 export const collectionSchema = z.preprocess(
   dropEmptyChanges,
   z
@@ -65,5 +77,23 @@ export const collectionSchema = z.preprocess(
     .readonly(),
 );
 
-/** Readonly canonical diagram data shared by all views in this collection. */
+/** A parsed collection: the canonical diagram data every section (view) shows. */
 export type Collection = z.infer<typeof collectionSchema>;
+
+/**
+ * Drops an empty `changes` list before parsing. The removed canvas 2 syntax saved one on every
+ * collection; dropping it lets those saves still open. A non-empty list is kept, so it stays
+ * invalid.
+ *
+ * Reads `value.changes` first (for any value except `null` and `undefined`). When the list is
+ * empty, `Object.entries` then reads every own enumerable string-keyed field, `changes`
+ * included (so a `changes` getter runs twice), and a new object with every field except `changes`
+ * is returned; symbol-keyed fields are not copied. Otherwise returns `value` itself.
+ */
+function dropEmptyChanges(value: unknown): unknown {
+  const changes = (value as { changes?: unknown } | null)?.changes;
+  if (!Array.isArray(changes) || changes.length > 0) {
+    return value;
+  }
+  return Object.fromEntries(Object.entries(value as object).filter(([key]) => key !== 'changes'));
+}

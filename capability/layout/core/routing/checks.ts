@@ -17,7 +17,11 @@ function outward(
   return inDirection(endpoint.point, expected, adjacent);
 }
 /** The adjacent point must be beyond the marker's reserved length on the exact departure ray. */
-function inDirection(origin: Point, expected: Point, actual: Point): boolean {
+function inDirection(
+  origin: Point,
+  expected: Point,
+  actual: Point,
+): boolean {
   if (origin.x === expected.x)
     return followsRay(origin.y, expected.y, actual.y, actual.x - origin.x);
   return followsRay(origin.x, expected.x, actual.x, actual.y - origin.y);
@@ -84,31 +88,55 @@ function endpointsMatch(
   return samePoint(first, source.point) && samePoint(last, target.point);
 }
 /** Labels reserve measured dimensions and avoid both content and previously accepted label/marker regions. Layout execute catches structured faults; Authoring retains the scene and owns correction. */
-export function checkLabel(box: Box, wire: VisualWire, occupied: readonly Box[]): void {
+export function checkLabel(
+  box: Box,
+  wire: VisualWire,
+  occupied: readonly Box[],
+): void {
   if (box.width !== wire.label.width || box.height !== wire.label.height)
     reject('invalid-input', wire.id, 'Wire label dimensions differ from measured content');
   if (occupied.some((other) => overlaps(box, other)))
     reject('constraint-conflict', wire.id, 'Wire label overlaps reserved content');
 }
 /** Crossings are warnings rather than silently classified as a semantic invalidity. Layout execute catches structured faults; Authoring retains the scene and owns correction. */
-export function crosses(a: RoutedWire, b: RoutedWire): boolean {
+export function crosses(
+  a: RoutedWire,
+  b: RoutedWire,
+): boolean {
   return crossesSegments(segments(a.points), segments(b.points));
 }
 /** Reuse each wire's segment list throughout an inspection without storing derived geometry. */
-export function crossesSegments(a: readonly Segment[], b: readonly Segment[]): boolean {
+export function crossesSegments(
+  a: readonly Segment[],
+  b: readonly Segment[],
+): boolean {
   return a.some((left) => b.some((right) => crossing(left.a, left.b, right.a, right.b)));
 }
 /** Strict interior intersection excludes shared endpoints and collinear overlap. */
-function crossing(a: Point, b: Point, c: Point, d: Point): boolean {
+function crossing(
+  a: Point,
+  b: Point,
+  c: Point,
+  d: Point,
+): boolean {
   if (a.y === b.y) return horizontalCrossing(a, b, c, d);
   return horizontalCrossing(c, d, a, b);
 }
 /** Check a horizontal/vertical pair using strict interior intervals; same-axis lines do not count. */
-function horizontalCrossing(a: Point, b: Point, c: Point, d: Point): boolean {
+function horizontalCrossing(
+  a: Point,
+  b: Point,
+  c: Point,
+  d: Point,
+): boolean {
   return a.y === b.y && c.x === d.x && inside(c.x, a.x, b.x) && inside(a.y, c.y, d.y);
 }
 /** Open intervals exclude shared ports and bends from crossing warnings. */
-function inside(value: number, a: number, b: number): boolean {
+function inside(
+  value: number,
+  a: number,
+  b: number,
+): boolean {
   return value > Math.min(a, b) && value < Math.max(a, b);
 }
 

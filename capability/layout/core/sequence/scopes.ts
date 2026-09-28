@@ -11,13 +11,19 @@ export interface VerticalRange {
   readonly bottom: number;
 }
 /** Every enclosing fragment contributes a scope; alt alternatives remain explicitly distinguishable. */
-export function eventScope(id: string, section: VisualSection): ScopePath {
+export function eventScope(
+  id: string,
+  section: VisualSection,
+): ScopePath {
   const input = section.sequence.find((item) => item.item.id === id);
   if (!input) return reject('invalid-input', id, 'Sequence event has no source scope');
   return parentScope(input.item, section);
 }
 /** Canonical acyclic parent references bound this walk; plain event order never implies shared execution. */
-function parentScope(item: VisualSequenceItem['item'], section: VisualSection): ScopePath {
+function parentScope(
+  item: VisualSequenceItem['item'],
+  section: VisualSection,
+): ScopePath {
   if (item.parent === undefined) return [];
   return [
     ...eventScope(item.parent, section),
@@ -25,17 +31,26 @@ function parentScope(item: VisualSequenceItem['item'], section: VisualSection): 
   ];
 }
 /** A parent execution path includes all of its descendant fragment paths. */
-export function covers(parent: ScopePath, child: ScopePath): boolean {
+export function covers(
+  parent: ScopePath,
+  child: ScopePath,
+): boolean {
   return (
     parent.length <= child.length && parent.every((step, index) => sameStep(step, child[index]))
   );
 }
 /** Scope identity compares canonical fragment and branch names, never a parsed string convention. */
-function sameStep(a: ScopeStep, b: ScopeStep | undefined): boolean {
+function sameStep(
+  a: ScopeStep,
+  b: ScopeStep | undefined,
+): boolean {
   return a.fragment === b?.fragment && a.branch === b?.branch;
 }
 /** A shared ancestor and its descendant can co-occur; different alternatives cannot. */
-export function compatible(a: ScopePath, b: ScopePath): boolean {
+export function compatible(
+  a: ScopePath,
+  b: ScopePath,
+): boolean {
   return covers(a, b) || covers(b, a);
 }
 /** Resolve the measured vertical range of the innermost scope. Root scope uses its caller's interval. */
@@ -51,7 +66,10 @@ export function scopeRange(
   return frameRange(step, frame);
 }
 /** Unbranched fragments use their frame; an alt branch uses its independently measured band. */
-function frameRange(step: ScopeStep, frame: FragmentFrame): VerticalRange {
+function frameRange(
+  step: ScopeStep,
+  frame: FragmentFrame,
+): VerticalRange {
   if (step.branch === null) return { top: frame.box.y, bottom: frame.box.y + frame.box.height };
   const branch = frame.branches.find((item) => item.id === step.branch);
   if (!branch)
@@ -73,7 +91,10 @@ export function fullyClosed(
   return [...fragments].some((fragment) => allAlternatives(fragment, path, closed, section));
 }
 /** Only a deeper scope can contribute another fragment to the closure proof. */
-function nextFragment(path: ScopePath, depth: number): readonly string[] {
+function nextFragment(
+  path: ScopePath,
+  depth: number,
+): readonly string[] {
   const step = path[depth];
   if (!step) return [];
   return [step.fragment];
@@ -103,7 +124,10 @@ export function subtractRanges(
   );
 }
 /** Disjoint ranges remain unchanged; a covered interval can leave a prefix, suffix or nothing. */
-function subtract(range: VerticalRange, excluded: VerticalRange): readonly VerticalRange[] {
+function subtract(
+  range: VerticalRange,
+  excluded: VerticalRange,
+): readonly VerticalRange[] {
   if (excluded.bottom <= range.top || excluded.top >= range.bottom) return [range];
   const parts = [
     { top: range.top, bottom: Math.min(range.bottom, excluded.top) },

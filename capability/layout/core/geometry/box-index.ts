@@ -19,7 +19,10 @@ function branch(boxes: readonly Box[]): Branch {
     children: [branch(ordered.slice(0, middle)), branch(ordered.slice(middle))],
   };
 }
-function hit(node: Branch, box: Box): boolean {
+function hit(
+  node: Branch,
+  box: Box,
+): boolean {
   if (!overlaps(node.bounds, box)) return false;
   return (
     node.boxes.some((item) => overlaps(item, box)) || node.children.some((child) => hit(child, box))

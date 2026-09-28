@@ -1,14 +1,9 @@
-import type {
-  Collection,
-  DiagramObject,
-  ObjectKind,
-  DescendantId,
-  TypeUse,
-} from '@novakai/canvas-model';
+import type { Collection, DiagramObject, ObjectKind, TypeUse } from '@novakai/canvas-model';
 import type { Snapshot, Receipt } from './owners.js';
 import type { EditingBase } from './editor-recovery.js';
+import type { DescendantId, ObjectDraftKey, TransportGeneration, WorkspaceId } from '../brands.js';
 import type { Result, Diagnostic } from '../errors.js';
-import type { DraftRetention } from '../ports/workspace.js';
+import type { DraftRetention } from '../ports/draft-retention.js';
 /** UI edit commands retain incomplete text without pretending it is an admitted Model record. */
 export type ObjectEdit =
   | { readonly kind: 'label' | 'role'; readonly value: string }
@@ -49,9 +44,9 @@ export type ObjectEdit =
     };
 /** Captured scope never advances across another author's commit. Commands replay against this exact object. */
 export interface ObjectDraft {
-  readonly key: string;
+  readonly key: ObjectDraftKey;
   readonly base: EditingBase;
-  readonly generation: string;
+  readonly generation: TransportGeneration;
   readonly collection: Collection;
   readonly object: DiagramObject;
   readonly edits: readonly ObjectEdit[];
@@ -62,23 +57,29 @@ export interface InspectorState {
 }
 export interface ObjectSelection {
   readonly base: Snapshot;
-  readonly generation: string;
+  readonly generation: TransportGeneration;
   readonly collection: Collection;
   readonly object: DiagramObject;
 }
-/** Component reorganization does not own draft lifetime. The host's inspector session does. */
+/** Component reorganisation does not own draft lifetime. The host's inspector session does. */
 export interface InspectorSession {
   getSnapshot(): InspectorState;
   subscribe(listener: () => void): () => void;
-  restore(workspace: string): Result<void>;
-  edit(selection: ObjectSelection, command: ObjectEdit): Result<void>;
-  discard(key: string): Result<void>;
-  apply(key: string): Promise<Result<void>>;
+  restore(workspace: WorkspaceId): Result<void>;
+  edit(
+    selection: ObjectSelection,
+    command: ObjectEdit,
+  ): Result<void>;
+  discard(key: ObjectDraftKey): Result<void>;
+  apply(key: ObjectDraftKey): Promise<Result<void>>;
 }
 export interface InspectorBindings {
   readonly retention: DraftRetention;
   read(input: unknown): Result<readonly ObjectDraft[]>;
-  apply(draft: ObjectDraft, object: DiagramObject): Promise<Result<Receipt>>;
+  apply(
+    draft: ObjectDraft,
+    object: DiagramObject,
+  ): Promise<Result<Receipt>>;
   report(error: Diagnostic): void;
 }
 export type InspectorFactory = (

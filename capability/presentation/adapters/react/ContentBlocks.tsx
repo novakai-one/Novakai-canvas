@@ -3,7 +3,10 @@ import type { ContentBlocksProps } from '../../contract/react-types.js';
 import type { Primitive } from '../../contract/records/visual.js';
 import { contextualAlternates } from '../../contract/records/style.js';
 /** Measured text uses digest-derived family and exact advance; JSX escapes source text. */
-function text(item: Extract<Primitive, { kind: 'text' }>, key: number): ReactElement {
+function text(
+  item: Extract<Primitive, { kind: 'text' }>,
+  key: number,
+): ReactElement {
   return (
     <text
       key={key}
@@ -26,7 +29,10 @@ function text(item: Extract<Primitive, { kind: 'text' }>, key: number): ReactEle
   );
 }
 /** Safe admitted media retains the requested fit inside its explicit measured box. */
-function media(item: Extract<Primitive, { kind: 'media' }>, key: number): ReactElement {
+function media(
+  item: Extract<Primitive, { kind: 'media' }>,
+  key: number,
+): ReactElement {
   const fit = { contain: 'xMidYMid meet', cover: 'xMidYMid slice' };
   return (
     <svg
@@ -53,7 +59,10 @@ function media(item: Extract<Primitive, { kind: 'media' }>, key: number): ReactE
   );
 }
 /** Rule geometry is already measured; the renderer never recalculates table rows. */
-function rule(item: Extract<Primitive, { kind: 'rule' }>, key: number): ReactElement {
+function rule(
+  item: Extract<Primitive, { kind: 'rule' }>,
+  key: number,
+): ReactElement {
   return (
     <line
       key={key}
@@ -68,12 +77,18 @@ function rule(item: Extract<Primitive, { kind: 'rule' }>, key: number): ReactEle
   );
 }
 /** Narrowing selects only declarative primitive rendering, not semantic diagram policy. */
-function primitive(item: Primitive, key: number): ReactElement {
+function primitive(
+  item: Primitive,
+  key: number,
+): ReactElement {
   if (item.kind === 'text') return text(item, key);
   return nonText(item, key);
 }
 /** Image and line are the remaining closed primitive variants. */
-function nonText(item: Exclude<Primitive, { kind: 'text' }>, key: number): ReactElement {
+function nonText(
+  item: Exclude<Primitive, { kind: 'text' }>,
+  key: number,
+): ReactElement {
   if (item.kind === 'media') return media(item, key);
   return decoration(item, key);
 }

@@ -3,7 +3,7 @@ import type { Target } from '../../contract/records/owners.js';
 import type { ObjectSelection } from '../../contract/records/inspector.js';
 /** Inspector follows explicit canonical identity carried by Presentation; generated scene IDs are opaque. */
 export function selectedObject(
-  view: WorkspaceView,
+  view: Pick<WorkspaceView, 'active'>,
   target: Target | undefined,
 ): ObjectSelection | null {
   if (view.active === null) return null;
@@ -18,7 +18,7 @@ export function selectedObject(
 }
 /** A deleted or nonsemantic group target presents no fabricated editable object. */
 function objectSelection(
-  view: WorkspaceView,
+  view: Pick<WorkspaceView, 'active'>,
   object: ObjectSelection['object'] | undefined,
 ): ObjectSelection | null {
   if (view.active === null) return null;

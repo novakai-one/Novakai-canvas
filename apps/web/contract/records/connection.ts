@@ -1,5 +1,8 @@
 import type { RelationshipKind } from '@novakai/canvas-model';
 import type { Collection, Section, Snapshot } from './owners.js';
+import type { GestureId, TransportGeneration } from '../brands.js';
+
+export type { RelationshipKind };
 
 export interface ConnectionEndpointView {
   readonly object: Collection['objects'][number]['id'];
@@ -10,9 +13,10 @@ export interface ConnectionEndpointView {
 }
 
 export interface ConnectionDraft {
-  readonly id: string;
+  /** The connect gesture this draft came from. */
+  readonly id: GestureId;
   readonly base: Snapshot;
-  readonly generation: string;
+  readonly generation: TransportGeneration;
   readonly collection: Collection;
   readonly section: Section;
   readonly source: ConnectionEndpointView;

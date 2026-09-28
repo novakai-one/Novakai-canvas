@@ -576,7 +576,10 @@ function nestedSpacingProjection(): Projection {
 }
 
 /** Reservation is independently specified from public measured labels and marker metrics. */
-function expectedLayerSpacing(source: Projection, direction: LayoutIntent['direction']): number {
+function expectedLayerSpacing(
+  source: Projection,
+  direction: LayoutIntent['direction'],
+): number {
   const wire = source.sections[0]?.wires.find((item) =>
     direction === 'down'
       ? ['inner-edge', 'ab', 'parent'].includes(item.relationshipId)
@@ -624,7 +627,10 @@ function crossClearance(
 }
 
 /** Parent bounds include a candidate when every physical edge stays inside. */
-function contained(parent: Scene['bounds'], child: Scene['bounds']): boolean {
+function contained(
+  parent: Scene['bounds'],
+  child: Scene['bounds'],
+): boolean {
   return (
     child.x >= parent.x &&
     child.y >= parent.y &&
@@ -732,7 +738,10 @@ function lockedProjection(width: number): Projection {
   );
 }
 /** Revision/title changes affect only one measured section; the other is a real incremental reuse oracle. */
-function twoSections(revision: number, label: string): Projection {
+function twoSections(
+  revision: number,
+  label: string,
+): Projection {
   return project(
     collection({
       revision,
@@ -831,7 +840,10 @@ function sequenceProjection(gap: LayoutIntent['gap'] = 'normal'): Projection {
 }
 
 /** The same measured content must fit every semantic gap; native engines and public inspection stay authoritative. */
-async function checkSequenceSpacing(compact: Projection, compactScene: Scene): Promise<void> {
+async function checkSequenceSpacing(
+  compact: Projection,
+  compactScene: Scene,
+): Promise<void> {
   const normal = sequenceProjection('normal');
   const roomy = sequenceProjection('roomy');
   const sources = [compact, normal, roomy];
@@ -875,7 +887,10 @@ async function checkSequenceSpacing(compact: Projection, compactScene: Scene): P
 }
 
 /** Independent box assertions catch clipping even when inspection regenerates the same sequence policy. */
-function assertSequenceMeasurements(source: Projection, scene: Scene): void {
+function assertSequenceMeasurements(
+  source: Projection,
+  scene: Scene,
+): void {
   const view = scene.sections[0];
   const section = source.sections[0];
   assert(view && section);
@@ -930,7 +945,10 @@ function assertSequenceOrder(
   );
 }
 /** Same-body event identity lookups stay inside the independent source projection. */
-function sequenceBand(source: Projection['sections'][number], id: string): string {
+function sequenceBand(
+  source: Projection['sections'][number],
+  id: string,
+): string {
   const found = source.sequence.find((entry) => entry.item.id === id);
   return `${found?.item.parent ?? ''}/${found?.item.branch ?? ''}`;
 }
@@ -1367,7 +1385,10 @@ function expectedCrossSpacing(
   return Math.max(settings.gap.compact, settings.routeClearance * 3 + Math.max(...advances));
 }
 /** Every local wire reserves its measured flow extent, including references omitted from tree ranking. */
-function expectedWireSpacing(source: Projection, direction: LayoutIntent['direction']): number {
+function expectedWireSpacing(
+  source: Projection,
+  direction: LayoutIntent['direction'],
+): number {
   return Math.max(
     ...(source.sections[0]?.wires ?? []).map((wire) => {
       const label =

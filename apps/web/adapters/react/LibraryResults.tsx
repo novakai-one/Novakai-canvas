@@ -8,8 +8,8 @@ interface LibraryResultsProps {
   readonly library: Pick<LibraryFeatureProps['library'], 'next'>;
   readonly workspace: Pick<LibraryFeatureProps['workspace'], 'open'>;
   readonly onSelect?: LibraryFeatureProps['onSelect'];
-  readonly currentId?: string | null;
-  readonly pendingId?: string | null;
+  readonly currentId?: LibraryFeatureProps['currentId'];
+  readonly pendingId?: LibraryFeatureProps['pendingId'];
 }
 /** Search results expose their scope; selection opens its collection. LibraryBrowser reports failures; reload retries discovery without changing stored diagrams. */
 export function createLibraryResults({

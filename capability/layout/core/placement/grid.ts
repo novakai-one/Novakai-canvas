@@ -30,14 +30,21 @@ export function gridPlacement(
   );
 }
 /** Down/up transpose row-major reading order; reverse directions preserve negative logical coordinates. */
-function cell(index: number, columns: number, direction: LayoutIntent['direction']): Cell {
+function cell(
+  index: number,
+  columns: number,
+  direction: LayoutIntent['direction'],
+): Cell {
   const column = index % columns;
   const row = Math.floor(index / columns);
   if (direction === 'down' || direction === 'up') return { column: row, row: column };
   return { column, row };
 }
 /** Track extents are derived only from measured members assigned to that track. */
-function measureTracks(nodes: readonly PlacementNode[], cells: readonly Cell[]): Tracks {
+function measureTracks(
+  nodes: readonly PlacementNode[],
+  cells: readonly Cell[],
+): Tracks {
   return {
     widths: trackSizes(nodes, cells, 'column', 'width'),
     heights: trackSizes(nodes, cells, 'row', 'height'),
@@ -59,7 +66,11 @@ function trackSizes(
   );
 }
 /** A track begins after the preceding measured extents and the explicit gap between them. */
-function offset(sizes: readonly number[], index: number, gap: number): number {
+function offset(
+  sizes: readonly number[],
+  index: number,
+  gap: number,
+): number {
   return sizes.slice(0, index).reduce((sum, size) => sum + size, 0) + index * gap;
 }
 /** Reverse tracks align their trailing edge at the same origin; unequal boxes remain nonoverlapping. */

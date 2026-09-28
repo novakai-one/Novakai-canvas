@@ -34,11 +34,18 @@ function ordinate(event: SequenceEvent): number {
   return event.points[0]?.y ?? event.labelBox.y + event.labelBox.height;
 }
 /** Closing or reentrant depth only considers activations compatible with the event's execution path. */
-function active(open: Open, path: ScopePath): boolean {
+function active(
+  open: Open,
+  path: ScopePath,
+): boolean {
   return compatible(open.scope, path) && !open.closed.some((closed) => covers(closed, path));
 }
 /** Canonical true starts at the receiver; false ends the sender; omitted metadata leaves activity unchanged. */
-function step(state: State, event: SequenceEvent, context: Context): State {
+function step(
+  state: State,
+  event: SequenceEvent,
+  context: Context,
+): State {
   const item = context.source.section.sequence.find((item) => item.item.id === event.id)?.item;
   if (item?.kind !== 'event') return state;
   return change(state, event, item.activate, context);
@@ -56,7 +63,11 @@ function change(
   return end(state, event, scope, context);
 }
 /** Reentrant calls offset only the simultaneously active stack, never a sibling alternative's stack. */
-function start(state: State, event: SequenceEvent, scope: ScopePath): State {
+function start(
+  state: State,
+  event: SequenceEvent,
+  scope: ScopePath,
+): State {
   const depth = state.open.filter(
     (item) => item.participant === event.target && active(item, scope),
   ).length;
@@ -76,7 +87,12 @@ function start(state: State, event: SequenceEvent, scope: ScopePath): State {
   };
 }
 /** A sibling alternative cannot close this activation; unmatched deactivation draws no invented interval. */
-function end(state: State, event: SequenceEvent, scope: ScopePath, context: Context): State {
+function end(
+  state: State,
+  event: SequenceEvent,
+  scope: ScopePath,
+  context: Context,
+): State {
   const current = state.open.findLast(
     (item) => item.participant === event.source && active(item, scope),
   );
@@ -84,7 +100,10 @@ function end(state: State, event: SequenceEvent, scope: ScopePath, context: Cont
   return close(state, current, event, scope, context);
 }
 /** A shared outer return closes the originating conditional path; a nested return closes only its own path. */
-function closingScope(open: Open, event: ScopePath): ScopePath {
+function closingScope(
+  open: Open,
+  event: ScopePath,
+): ScopePath {
   if (covers(event, open.scope)) return open.scope;
   return event;
 }
@@ -108,7 +127,12 @@ function close(
   };
 }
 /** Only the matched stack entry changes; unrelated participant/alternative entries remain immutable. */
-function replacement(item: Open, current: Open, updated: Open, complete: boolean): readonly Open[] {
+function replacement(
+  item: Open,
+  current: Open,
+  updated: Open,
+  complete: boolean,
+): readonly Open[] {
   if (item !== current) return [item];
   return complete ? [] : [updated];
 }
@@ -173,7 +197,10 @@ function interval(
   };
 }
 /** An unfinished activation ends half a gap past the participant's last event, never beyond its scope. */
-function unfinished(open: Open, context: Context): readonly Activation[] {
+function unfinished(
+  open: Open,
+  context: Context,
+): readonly Activation[] {
   const range = scopeRange(open.scope, context.frames, { top: open.top, bottom: context.bottom });
   const bottom = Math.min(
     range.bottom,
@@ -182,7 +209,10 @@ function unfinished(open: Open, context: Context): readonly Activation[] {
   return remaining(open, bottom, null, context);
 }
 /** The participant's final event ordinate bounds its bar; an eventless participant keeps the scope end. */
-function lastOrdinate(participant: string, context: Context): number {
+function lastOrdinate(
+  participant: string,
+  context: Context,
+): number {
   const involved = context.events.filter(
     (event) => event.source === participant || event.target === participant,
   );

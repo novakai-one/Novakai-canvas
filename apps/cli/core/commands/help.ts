@@ -1,27 +1,37 @@
-/** Usage is available before credentials, filesystem or service initialization. */
-export const usage = `Novakai Canvas — author collections with readable DSL
+/*
+ * Why this file exists
+ *
+ * An agent that doesn't know the commands types `pnpm canvas --help`. It should get every command
+ * and how to type it, such as `canvas read ID [--section ID | --object ID] [--out FILE]`.
+ *
+ * This file writes that text once, from the command rows in `table.ts`, so the help and the
+ * commands can't drift apart. It never reads a credential or a file, or contacts the service.
+ */
+import { commandRows } from './table.js';
+import type { CommandRow } from './table.js';
 
-canvas describe                         Read the DSL vocabulary
-canvas list                             List collection IDs and revisions
-canvas read ID [--section ID | --object ID] [--out FILE]
-                                        Read full or read-only partial context
-canvas inspect ID                        Scene quality report: validity, warnings, crossing/relaxed counts
-canvas create FILE                      Create a collection from DSL
-canvas replace FILE --revision N        Replace semantics at the revision you read
-canvas patch FILE --revision N          Apply an ordered DSL patch
-canvas preview FILE [--mode MODE]        Preview; use --revision N for existing collections
-canvas theme admit FILE                 Admit a semantic theme config
-canvas recipe admit FILE                Requires --id --version --family --title
-canvas recipe instantiate PIN           Requires --namespace ID; --out FILE emits editable DSL
-canvas apply REQUEST_ID                 Apply a retained preview
-canvas receipt REQUEST_ID               Check a committed receipt
-canvas retry REQUEST_ID                 Reconcile, then retry the identical retained request
-canvas profile describe build-spec@1    Show the build-spec conventions
-canvas profile scaffold build-spec@1 --id ID --title "Title" [--out FILE]
-canvas profile lint FILE --profile build-spec@1
+/** The first line. */
+const title = 'Novakai Canvas — author collections with readable DSL';
 
-Options: --server URL --workspace DIR --request ID --out FILE
-Modes: create, replace, patch. Agents never need JSON coordinates.
-Read scopes return a non-authorable view envelope; referenced objects/views and manual geometry may be omitted.
-Use a full read when you need editable source. Patch/preview/apply remain the revision-checked editing workflow.
-A missing or uncertain receipt is not confirmation that an edit was saved.`;
+/** The line between the title, the commands and the notes. */
+const blankLine = '';
+
+/** The lines after the commands. */
+const notes: readonly string[] = Object.freeze([
+  'Options: --server URL --workspace DIR --request ID --out FILE',
+  'Modes: create, replace, patch. Agents never need JSON coordinates.',
+  'Read scopes return a non-authorable view envelope; referenced objects/views and manual geometry may be omitted.',
+  'Use a full read when you need editable source. Patch/preview/apply remain the revision-checked editing workflow.',
+  'A missing or uncertain receipt is not confirmation that an edit was saved.',
+]);
+
+/** Every command's usage lines, in the command table's order. */
+const commandUsage: readonly string[] = commandRows().flatMap(usageLinesOf);
+
+/** The whole `--help` text: a title, every command's lines, then the notes. No final line break. */
+export const helpText = [title, blankLine, ...commandUsage, blankLine, ...notes].join('\n');
+
+/** Returns one command's lines in `canvas --help`, as its table row gives them. */
+function usageLinesOf(row: CommandRow): readonly string[] {
+  return row.usage;
+}

@@ -1,0 +1,151 @@
+/*
+ * Declarative feature registration: the side-panel sections each tab offers, and the panel
+ * definitions that give each section its default placement from the checked shipped defaults.
+ * Feature components do not import each other; adding a feature registers its renderer and default
+ * ID placement here. Pure assembly: no I/O and no page globals; composition hands in the ID source
+ * for new definition and content IDs.
+ */
+import { createElement, type ComponentType, type ReactElement } from 'react';
+import type { FeatureProps, ThemeSelectorProps } from '../react-types.js';
+import type { LibraryBrowserProps } from '../library-react.js';
+import type { PreferenceController } from '../records/preferences.js';
+import type { PanelController } from '../panel-types.js';
+import type { PanelDefaults, PanelId, PanelSectionDefinition } from '../records/panels.js';
+import type { Result } from '../errors.js';
+import type { RegisteredSection } from '../../adapters/react/WorkspaceSidePanel.js';
+import type { IdSource } from '../ports/ids.js';
+import type { ReactBindings as DesignBindings } from '@novakai/canvas-design-system';
+import shippedPanelDefaults from '../../../../resources/ui/panels.default.json' with { type: 'json' };
+import { readPanelDefaults } from '../../adapters/preferences/panel-preferences.js';
+import { createAddTools } from '../../adapters/react/AddTools.js';
+import { createAddForms } from '../../adapters/react/AddForms.js';
+import { createAddFields } from '../../adapters/react/AddFields.js';
+import { createSectionNavigator } from '../../adapters/react/SectionNavigator.js';
+import { ObjectOutline } from '../../adapters/react/ObjectOutline.js';
+import { createExportPanel } from '../../adapters/react/ExportPanel.js';
+import { createDefinitionsEditor } from '../../adapters/react/Definitions.js';
+import { createExpressionEditor } from '../../adapters/react/DefinitionExpression.js';
+import { createWireEditor } from '../../adapters/react/WireEditor.js';
+import { createWireSemantics } from '../../adapters/react/WireSemantics.js';
+import { createWireEndpoints } from '../../adapters/react/WireEndpoints.js';
+import { createWireRouting } from '../../adapters/react/WireRouting.js';
+import { createInterfacePreferences } from '../../adapters/react/InterfacePreferences.js';
+import { createObjectEditor } from '../../adapters/react/ObjectEditor.js';
+import { createContentEditor } from '../../adapters/react/ContentEditor.js';
+import { createEngineeringFields } from '../../adapters/react/EngineeringFields.js';
+
+/** What the side-panel features are built from. */
+export interface FeatureParts {
+  readonly design: DesignBindings;
+  readonly preferences: PreferenceController;
+  readonly ThemeSelector: ComponentType<ThemeSelectorProps>;
+  readonly Browser: ComponentType<LibraryBrowserProps>;
+  readonly roadVisibility: Pick<
+    PanelController,
+    'subscribe' | 'getSnapshot' | 'setInterfaceVisibility'
+  >;
+  /** New definition IDs for the Definitions panel and content block IDs for the object inspector. */
+  readonly ids: Pick<IdSource, 'definitionId' | 'descendantId'>;
+}
+
+/**
+ * Concrete side-panel registration is declarative; individual feature components do not import
+ * each other. Cannot fail: an ID the ID source cannot make is reported by the panel that asked.
+ */
+export function featureSections({
+  design,
+  preferences,
+  ThemeSelector,
+  Browser,
+  roadVisibility,
+  ids,
+}: FeatureParts): readonly RegisteredSection[] {
+  function LibrarySection(props: FeatureProps): ReactElement {
+    return createElement(Browser, { controller: props.controller, view: props.view });
+  }
+  return [
+    {
+      tab: 'add',
+      id: 'creation',
+      title: 'Create',
+      Content: createAddTools(createAddForms({ ...design, ...createAddFields(design) })),
+    },
+    { tab: 'browse', id: 'collections', title: 'Collections', Content: LibrarySection },
+    { tab: 'browse', id: 'sections', title: 'Diagrams', Content: createSectionNavigator(design) },
+    { tab: 'browse', id: 'objects', title: 'Objects', Content: ObjectOutline },
+    { tab: 'browse', id: 'export', title: 'Export', Content: createExportPanel(design) },
+    {
+      tab: 'browse',
+      id: 'definitions',
+      title: 'Definitions',
+      Content: createDefinitionsEditor({
+        ...design,
+        Expression: createExpressionEditor(design),
+        nextDefinitionId: ids.definitionId,
+      }),
+    },
+    {
+      tab: 'inspect',
+      id: 'connection',
+      title: 'Connection',
+      Content: createWireEditor({
+        ...design,
+        fields: [
+          { id: 'meaning', Content: createWireSemantics(design) },
+          { id: 'endpoints', Content: createWireEndpoints(design) },
+          { id: 'routing', Content: createWireRouting(design) },
+        ],
+      }),
+    },
+    {
+      tab: 'settings',
+      id: 'interface',
+      title: 'Interface',
+      Content: createInterfacePreferences(design, preferences, ThemeSelector, roadVisibility),
+    },
+    {
+      tab: 'inspect',
+      id: 'shared-content',
+      title: 'Selection',
+      Content: createObjectEditor({
+        ...design,
+        Content: createContentEditor({ ...design, Engineering: createEngineeringFields(design) }),
+        nextContentId: ids.descendantId,
+      }),
+    },
+  ];
+}
+
+/**
+ * Each registered section's default side and whether it starts expanded, in the order the shipped
+ * defaults (`resources/ui/panels.default.json`) list them; that order is authoritative. A
+ * registered section the defaults do not list is not offered. Fails with `initialization-failed`
+ * when the shipped defaults are not a valid layout.
+ */
+export function panelDefinitions(
+  sections: readonly RegisteredSection[],
+): Result<readonly PanelSectionDefinition[]> {
+  const defaults = readPanelDefaults(shippedPanelDefaults);
+  if (!defaults.ok) return defaults;
+  const sides = ['left', 'right'] as const;
+  const definitions = sides.flatMap((side) => definitionsOnSide(sections, defaults.value, side));
+  return { ok: true, value: definitions };
+}
+
+/** The definitions of the registered sections the defaults place on `side`, in listed order. */
+function definitionsOnSide(
+  sections: readonly RegisteredSection[],
+  defaults: PanelDefaults,
+  side: PanelId,
+): readonly PanelSectionDefinition[] {
+  return defaults.sections[side].flatMap((id) =>
+    sections
+      .filter((item) => item.id === id)
+      .map((item) => ({
+        id,
+        title: item.title,
+        defaultSide: side,
+        defaultExpanded: !defaults.collapsed.includes(id),
+      })),
+  );
+}

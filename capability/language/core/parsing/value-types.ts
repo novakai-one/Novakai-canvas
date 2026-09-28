@@ -1,66 +1,31 @@
+/*
+ * Checking a parsed value against the form its property declares (`ValueType`) and against the
+ * property's allowed words. This checks only the written form; whether the value makes sense for
+ * the diagram is Model's job. Language owns correcting the source; Authoring owns commit
+ * recovery.
+ */
 import type { SyntaxValue, Reference, LocatedValue } from '../../contract/records/syntax.js';
 import type { ValueType, Property } from '../../contract/records/vocabulary.js';
 import { reject } from '../validation/outcomes.js';
-/** Readonly lists need an explicit guard because Array.isArray narrows only mutable arrays. */
+
+/** Whether a value is a list. `Array.isArray` alone would not narrow to a readonly array. */
 export function isList(value: SyntaxValue): value is readonly SyntaxValue[] {
   return Array.isArray(value);
 }
-/** References remain records, never strings with inferred namespace semantics. */
+
+/** Whether a value is a reference (the only object that is not a list). */
 export function isReference(value: SyntaxValue): value is Reference {
   if (typeof value !== 'object') return false;
   return !isList(value);
 }
-/** Plain IDs exclude subtargets, scoped addresses and layout namespaces. */
-function isIdentity(value: SyntaxValue): boolean {
-  if (!isReference(value)) return false;
-  return Object.keys(value).length === 2;
-}
-/** Endpoints support one descendant, never slash or layout namespace selectors. */
-function isEndpoint(value: SyntaxValue): boolean {
-  if (!isReference(value)) return false;
-  return value.namespace === undefined && value.section === undefined;
-}
-/** Lists apply the same scalar predicate to every member, including empty lists. */
-function listOf(value: SyntaxValue, predicate: (value: SyntaxValue) => boolean): boolean {
-  return isList(value) && value.every(predicate);
-}
-const checks: Readonly<Record<ValueType, (value: SyntaxValue) => boolean>> = {
-  string: (value) => typeof value === 'string',
-  word: (value) => typeof value === 'string',
-  integer: (value) => typeof value === 'number',
-  boolean: (value) => typeof value === 'boolean',
-  id: isIdentity,
-  endpoint: isEndpoint,
-  address: isReference,
-  strings: (value) => listOf(value, (item) => typeof item === 'string'),
-  ids: (value) => listOf(value, isIdentity),
-  endpoints: (value) => listOf(value, isEndpoint),
-  references: (value) => listOf(value, isIdentity),
-  targets: (value) => listOf(value, isReference),
-  'reference-value': (value) => isEndpoint(value) || listOf(value, isEndpoint),
-  'type-expression': (value) => typeof value === 'string' || isIdentity(value),
-  'signature-parameters': (value) => listOf(value, signatureParameter),
-  link: (value) => typeof value === 'string' || isIdentity(value),
-};
-function signatureParameter(item: SyntaxValue): boolean {
-  if (typeof item === 'string') return true;
-  return validSignatureTuple(item);
-}
 
-function validSignatureTuple(item: SyntaxValue): boolean {
-  if (!isList(item) || item.length !== 2) return false;
-  const name = item[0];
-  const type = item[1];
-  return (
-    typeof name === 'string' && type !== undefined && (typeof type === 'string' || isIdentity(type))
-  );
-}
-/** Cardinality one is lexed as an integer but has an explicit word enum in the grammar. */
-function normalizeEnum(value: SyntaxValue, property: Property): SyntaxValue {
-  if (property.values === undefined) return value;
-  return typeof value === 'number' ? String(value) : value;
-}
-/** Check declared property shape and enum without inventing domain validity; Language owns correction. */
+/**
+ * Checks a value against its property. A number for a property with allowed words is first
+ * turned into text (the cardinality `1` is read as an integer but listed as a word).
+ *
+ * @throws A `LanguageFault` with an `invalid-value` diagnostic when the form is wrong, or when
+ * the value is not one of the allowed words.
+ */
 export function checkValue(
   located: LocatedValue,
   property: Property,
@@ -78,7 +43,38 @@ export function checkValue(
   checkEnum(value, property, located, target);
   return { ...located, value };
 }
-/** Required enum values are inspectable in diagnostics rather than inferred from exception prose. */
+
+/** For each value type, whether a value has that form. */
+const checks: Readonly<Record<ValueType, (value: SyntaxValue) => boolean>> = {
+  string: isText,
+  word: isText,
+  integer: (value) => typeof value === 'number',
+  boolean: (value) => typeof value === 'boolean',
+  id: isIdentity,
+  endpoint: isEndpoint,
+  address: isReference,
+  strings: (value) => listOf(value, isText),
+  ids: (value) => listOf(value, isIdentity),
+  endpoints: (value) => listOf(value, isEndpoint),
+  references: (value) => listOf(value, isIdentity),
+  targets: (value) => listOf(value, isReference),
+  'reference-value': (value) => isEndpoint(value) || listOf(value, isEndpoint),
+  'type-expression': isTextOrIdentity,
+  'signature-parameters': (value) => listOf(value, signatureParameter),
+  link: isTextOrIdentity,
+};
+
+/** A number becomes text when the property has allowed words; other values are unchanged. */
+function normalizeEnum(
+  value: SyntaxValue,
+  property: Property,
+): SyntaxValue {
+  if (property.values === undefined) return value;
+  if (typeof value === 'number') return String(value);
+  return value;
+}
+
+/** Rejects a value outside the property's allowed words; the diagnostic lists them all. */
 function checkEnum(
   value: SyntaxValue,
   property: Property,
@@ -94,4 +90,48 @@ function checkEnum(
       'Unknown enum value',
       target,
     );
+}
+
+/** Whether the value is text. */
+function isText(value: SyntaxValue | undefined): boolean {
+  return typeof value === 'string';
+}
+
+/** Whether the value is text or a plain `@id`. */
+function isTextOrIdentity(value: SyntaxValue): boolean {
+  return isText(value) || isIdentity(value);
+}
+
+/** Whether the value is a plain `@id`: a reference with only `kind` and `id`. */
+function isIdentity(value: SyntaxValue): boolean {
+  if (!isReference(value)) return false;
+  return Object.keys(value).length === 2;
+}
+
+/** Whether the value is an `@id` or `@id.@member`: no section and no namespace. */
+function isEndpoint(value: SyntaxValue): boolean {
+  if (!isReference(value)) return false;
+  return value.namespace === undefined && value.section === undefined;
+}
+
+/** Whether the value is a list whose every item passes `predicate` (an empty list passes). */
+function listOf(
+  value: SyntaxValue,
+  predicate: (value: SyntaxValue) => boolean,
+): boolean {
+  return isList(value) && value.every(predicate);
+}
+
+/** Whether a signature parameter is a name, or a `[name, type]` pair. */
+function signatureParameter(item: SyntaxValue): boolean {
+  if (isText(item)) return true;
+  return validSignatureTuple(item);
+}
+
+/** Whether the item is a `[name, type]` pair: text name, and a text or plain-ID type. */
+function validSignatureTuple(item: SyntaxValue): boolean {
+  if (!isList(item) || item.length !== 2) return false;
+  const name = item[0];
+  const type = item[1];
+  return isText(name) && type !== undefined && isTextOrIdentity(type);
 }

@@ -1,10 +1,13 @@
-import type { PanelController, PanelTab } from './panel-types.js';
-import type { ComponentType, ReactElement, ReactNode } from 'react';
+import type { PanelController } from './panel-types.js';
+import type { PanelTab } from './records/panels.js';
+import type { ComponentType, ReactElement, ReactNode, RefObject } from 'react';
 import type { ReactBindings as DesignBindings } from '@novakai/canvas-design-system';
 import type { SurfaceProps } from '@novakai/canvas-canvas';
 import type { FontDefinitionsProps } from '@novakai/canvas-presentation';
 import type { CollectionSwitch, WorkspaceController, WorkspaceView } from './records/workspace.js';
 import type { LibraryWorkspace, LibraryWorkspaceView } from './library-react.js';
+import type { Diagnostic } from './errors.js';
+import type { BrowserGlobals } from './ports/browser-globals.js';
 /** Feature views receive readonly presentation and intent callbacks. No component owns canonical diagram state. */
 export interface WorkspaceProps {
   readonly controller: WorkspaceController;
@@ -57,12 +60,14 @@ export interface CollectionChooserProps {
   readonly portal: HTMLElement;
 }
 export interface ChromeSlots {
-  readonly panels: PanelController;
+  readonly panels: Pick<PanelController, 'subscribe' | 'getSnapshot' | 'revealInterface'>;
   readonly Header: ComponentType<HeaderProps>;
   readonly Library: ComponentType<LibraryProps>;
   readonly Panel: ComponentType<PanelProps>;
   readonly Recovery: ComponentType<FeatureProps>;
-  readonly Button: DesignBindings['Button'];
+  readonly ProblemBar: ComponentType<ProblemBarProps>;
+  readonly StatusBar: ComponentType<StatusBarProps>;
+  readonly hooks: ShellHooks;
   readonly MovementReview: ComponentType<FeatureProps>;
   readonly Reveal: ComponentType<RevealInterfaceProps>;
   readonly Source: ComponentType<FeatureProps>;
@@ -72,6 +77,33 @@ export interface ChromeSlots {
   readonly FontDefinitions: ComponentType<FontDefinitionsProps>;
   readonly portal: HTMLElement;
   nextGestureId(): string;
+}
+/** The problem to show (null for none) and the Dismiss intent. */
+export interface ProblemBarProps {
+  readonly problem: Diagnostic | null;
+  readonly onDismiss: () => void;
+}
+/** The status line and the connection state. */
+export interface StatusBarProps {
+  readonly view: Pick<WorkspaceView, 'status' | 'connected'>;
+}
+/** The shell's hooks, bound at composition so the shell imports no other adapter. */
+export interface ShellHooks {
+  readonly useControllerLifetime: (
+    controller: Pick<WorkspaceController, 'start' | 'dispose'>,
+  ) => void;
+  readonly useRevealOnEscape: (hidden: boolean, reveal: () => void) => void;
+  readonly useAlertClearance: () => AlertClearance;
+}
+/** The page parts the shell's hooks use: the window's key events and the size observer. */
+export type ShellPage = Pick<
+  BrowserGlobals['window'],
+  'addEventListener' | 'removeEventListener' | 'ResizeObserver'
+>;
+/** The canvas host and its alerts box; the host carries the alerts' height. */
+export interface AlertClearance {
+  readonly host: RefObject<HTMLElement | null>;
+  readonly alerts: RefObject<HTMLDivElement | null>;
 }
 export type DesignSlots = Pick<
   DesignBindings,

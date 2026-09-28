@@ -7,7 +7,10 @@ import { validateScene } from './validate.js';
 import { indexScene } from './index.js';
 import { fitBounds } from '../camera/navigate.js';
 /** Stamp equality distinguishes displayed data from a separately requested asynchronous result. */
-export function sameStamp(left: SceneStamp, right: SceneStamp): boolean {
+export function sameStamp(
+  left: SceneStamp,
+  right: SceneStamp,
+): boolean {
   return [
     left.collectionId === right.collectionId,
     left.revision === right.revision,
@@ -23,7 +26,11 @@ function freezeTree(value: unknown): void {
   Object.freeze(value);
 }
 /** Required owner admission returns validated content; Canvas checks its stamp and owned geometry before detaching it. */
-export function admitScene(reader: SceneAdmission, payload: unknown, expected: SceneStamp): Scene {
+export function admitScene(
+  reader: SceneAdmission,
+  payload: unknown,
+  expected: SceneStamp,
+): Scene {
   const scene = accepted(reader.read(payload, expected));
   const actual = {
     collectionId: scene.collectionId,
@@ -39,7 +46,10 @@ export function admitScene(reader: SceneAdmission, payload: unknown, expected: S
   return detached;
 }
 /** Initial fit happens exactly here; accepted updates never reuse this opening path. */
-export function openSession(reader: SceneAdmission, input: OpenInput): SessionState {
+export function openSession(
+  reader: SceneAdmission,
+  input: OpenInput,
+): SessionState {
   const scene = admitScene(reader, input.scene, input.expected);
   validateProfile(input);
   const initial = { x: 0, y: 0, zoom: 1, viewport: input.viewport };
@@ -67,13 +77,19 @@ export function openSession(reader: SceneAdmission, input: OpenInput): SessionSt
   });
 }
 /** A job request may supersede an older request while the currently displayed scene remains untouched. */
-export function expectScene(state: SessionState, stamp: SceneStamp): SessionState {
+export function expectScene(
+  state: SessionState,
+  stamp: SceneStamp,
+): SessionState {
   if (sameStamp(state.requested, stamp)) return state;
   validateRequested(state, stamp);
   return { ...state, requested: stamp };
 }
 /** Collection switching requires open; regressive jobs cannot reopen an old revision or generation. */
-function validateRequested(state: SessionState, stamp: SceneStamp): void {
+function validateRequested(
+  state: SessionState,
+  stamp: SceneStamp,
+): void {
   validateCollection(state, stamp);
   if (stamp.revision < state.stamp.revision)
     reject('stale-scene', 'revision', 'Requested revision is older than displayed scene');
@@ -90,7 +106,10 @@ function validateProfile(input: OpenInput): void {
 }
 
 /** A Canvas session never switches collection implicitly through an asynchronous result. */
-function validateCollection(state: SessionState, stamp: SceneStamp): void {
+function validateCollection(
+  state: SessionState,
+  stamp: SceneStamp,
+): void {
   if (stamp.collectionId !== state.stamp.collectionId)
     reject('stale-scene', 'collectionId', 'Open a new session to switch collections');
 }

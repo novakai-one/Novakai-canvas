@@ -8,6 +8,7 @@ const coreForbidden = [
   '**/contract/api*',
   '**/contract/index*',
   '**/contract/compose*',
+  '**/contract/compose/**',
   '**/adapters/**',
   '**/apps/**',
   '@novakai/*',
@@ -64,7 +65,12 @@ export default tseslint.config(
     rules: { 'no-restricted-imports': restrict(['**/core/**']) },
   },
   {
-    files: ['capability/*/contract/compose.ts', 'apps/*/contract/compose.ts'],
+    files: [
+      'capability/*/contract/compose.ts',
+      'capability/*/contract/compose/**/*.{ts,tsx}',
+      'apps/*/contract/compose.ts',
+      'apps/*/contract/compose/**/*.{ts,tsx}',
+    ],
     rules: { 'no-restricted-imports': restrict([]) },
   },
   { files: ['*.cjs'], rules: { '@typescript-eslint/no-require-imports': 'off' } },

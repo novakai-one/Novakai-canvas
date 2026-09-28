@@ -20,7 +20,10 @@ function branchHeadings(
   }));
 }
 /** Measure the remaining routing/sequence vocabulary; caller restores missing pinned resources on failure. */
-export function supplement(input: unknown, deps: Dependencies): SupplementalMeasurements {
+export function supplement(
+  input: unknown,
+  deps: Dependencies,
+): SupplementalMeasurements {
   const collection = requireValue(deps.domain.read(clone(input)));
   const style = parse(resolvedStyle, requireValue(deps.themes.resolve(collection.theme)));
   if (`sha256:${style.digest}` !== collection.theme.digest)

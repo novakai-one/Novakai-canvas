@@ -25,7 +25,10 @@ function adjustment(
   return [{ target, before, after, reason }];
 }
 /** An authored placement carries optional dimensions; compare only actual supplied preferences. */
-function authoredBox(placement: NonNullable<VisualSection['placement']>, actual: Box): Box {
+function authoredBox(
+  placement: NonNullable<VisualSection['placement']>,
+  actual: Box,
+): Box {
   return {
     ...actual,
     x: placement.x,
@@ -68,7 +71,10 @@ function previousNode(
   );
 }
 /** Rerouted soft manual vertices remain visible in the derivation receipt. */
-function wireAdjustments(section: PlacedSection, source: VisualSection): readonly Adjustment[] {
+function wireAdjustments(
+  section: PlacedSection,
+  source: VisualSection,
+): readonly Adjustment[] {
   return source.wires.flatMap((wire) => {
     const manual = wire.route.manual;
     if (manual === undefined) return [];
@@ -91,7 +97,10 @@ function adjustedRoute(
   );
 }
 /** Section origin adjustments use their own collection frame rather than node-local coordinates. */
-function sectionAdjustment(section: PlacedSection, source: VisualSection): readonly Adjustment[] {
+function sectionAdjustment(
+  section: PlacedSection,
+  source: VisualSection,
+): readonly Adjustment[] {
   const placement = source.placement;
   if (placement === null) return [];
   const after = { ...section.box, ...section.origin };

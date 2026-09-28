@@ -101,7 +101,10 @@ function columnWidth(
 }
 
 /** Header rows have no address; body rows retain canonical cell text and a measured midpoint. */
-function rowAnchors(input: RowInput, height: number): readonly Anchor[] {
+function rowAnchors(
+  input: RowInput,
+  height: number,
+): readonly Anchor[] {
   if (input.id === null) return [];
   return [
     {

@@ -29,7 +29,10 @@ interface NativeConnection {
 }
 interface NativeRouter extends Handle {
   processTransaction(): void;
-  setRoutingParameter(parameter: unknown, value: number): void;
+  setRoutingParameter(
+    parameter: unknown,
+    value: number,
+  ): void;
 }
 interface NativeCheckpoints extends Handle {
   push_back(checkpoint: Handle): void;
@@ -88,18 +91,29 @@ function objectLike(value: unknown): value is object {
   return typeof value === 'function' || (value !== null && typeof value === 'object');
 }
 /** Native enum identity is opaque; only presence is needed to pass it back to its own library. */
-function hasMember(value: object, owner: string, key: string): boolean {
+function hasMember(
+  value: object,
+  owner: string,
+  key: string,
+): boolean {
   const record: unknown = Reflect.get(value, owner);
   if (!objectLike(record)) return false;
   return Reflect.has(record, key);
 }
 /** Job-local native allocations are tracked in construction order for reverse cleanup, including failures. */
-function own<T extends Handle>(handles: Handle[], handle: T): T {
+function own<T extends Handle>(
+  handles: Handle[],
+  handle: T,
+): T {
   handles.push(handle);
   return handle;
 }
 /** Convert a plain owned coordinate into a temporary native point with explicit lifetime. */
-function point(value: Point, native: NativeApi, handles: Handle[]): NativePoint {
+function point(
+  value: Point,
+  native: NativeApi,
+  handles: Handle[],
+): NativePoint {
   return own(handles, new native.Point(value.x, value.y));
 }
 /** Router owns registered shapes; only temporary polygon/point handles are explicitly tracked. */
@@ -153,7 +167,10 @@ function connection(
   return connection;
 }
 /** Copy each native point before deleting its temporary wrapper; no native memory is returned. */
-function readPoint(path: NativePath, index: number): Point {
+function readPoint(
+  path: NativePath,
+  index: number,
+): Point {
   const native = path.at(index);
   try {
     return { x: native.x, y: native.y };
@@ -162,7 +179,10 @@ function readPoint(path: NativePath, index: number): Point {
   }
 }
 /** Invalid native routes fail visibly; their coordinates never escape as partial success. */
-function readRoute(item: Connection, connection: NativeConnection): Result<RouteValue> {
+function readRoute(
+  item: Connection,
+  connection: NativeConnection,
+): Result<RouteValue> {
   if (!connection.hasValidRoute())
     return failure('candidate-infeasible', item.id, 'Native candidate has no valid route', [
       item.id,
@@ -184,13 +204,19 @@ function readRoute(item: Connection, connection: NativeConnection): Result<Route
   }
 }
 /** Explicit endpoint stubs enforce marker direction without relying on an unsupported directed ConnEnd ABI. */
-function endpointStubs(item: Connection, points: readonly Point[]): readonly Point[] {
+function endpointStubs(
+  item: Connection,
+  points: readonly Point[],
+): readonly Point[] {
   const source = item.sourceApproach === undefined ? [] : [item.source];
   const target = item.targetApproach === undefined ? [] : [item.target];
   return [...source, ...points, ...target];
 }
 /** All native state is per-call. Router deletion releases its owned shapes/connectors after temporaries. */
-function route(problem: RoutingProblem, native: NativeApi): Result<readonly RouteValue[]> {
+function route(
+  problem: RoutingProblem,
+  native: NativeApi,
+): Result<readonly RouteValue[]> {
   const handles: Handle[] = [];
   const router = own(handles, new native.Router(native.RouterFlag.OrthogonalRouting.value));
   try {
@@ -238,7 +264,10 @@ function dispose(handle: Handle): boolean {
   }
 }
 /** Native throws become typed failures; Layout retains prior geometry and owns independent route inspection. */
-function protectedRoute(problem: RoutingProblem, native: NativeApi): Result<readonly RouteValue[]> {
+function protectedRoute(
+  problem: RoutingProblem,
+  native: NativeApi,
+): Result<readonly RouteValue[]> {
   try {
     return route(problem, native);
   } catch {

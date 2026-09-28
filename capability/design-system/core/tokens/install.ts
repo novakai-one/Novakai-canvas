@@ -12,14 +12,21 @@ export function createInstaller(target: ScopeTarget): ScopeInstaller {
   return { install: (input) => protect(() => install(target, input)) };
 }
 /** Target replacement is atomic after all validation; cleanup captures the precise replaced snapshot. */
-function install(target: ScopeTarget, input: unknown): ScopeLease {
+function install(
+  target: ScopeTarget,
+  input: unknown,
+): ScopeLease {
   const scope = validateResolved(input);
   const before = accepted(target.read());
   const installed = accepted(target.replace(before.generation, scope.css));
   return lease(target, before, installed.generation);
 }
 /** Each immutable lease captures one generation. Replacement retains the initial baseline for eventual unmount. */
-function lease(target: ScopeTarget, baseline: ScopeSnapshot, generation: number): ScopeLease {
+function lease(
+  target: ScopeTarget,
+  baseline: ScopeSnapshot,
+  generation: number,
+): ScopeLease {
   return {
     replace: (input) => protect(() => replace(target, baseline, generation, input)),
     cleanup: () => cleanup(target, baseline, generation),

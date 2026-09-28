@@ -23,7 +23,11 @@ export function validateFonts(
     ['font.body', 'font.mono', 'font.strong'].forEach((id) => requirePinnedFont(id, values, fonts));
 }
 /** Every family in a stack is approved; unsafe fallback members are not ignored. */
-function validateFontValue(id: string, value: TokenValue, allowed: readonly string[]): void {
+function validateFontValue(
+  id: string,
+  value: TokenValue,
+  allowed: readonly string[],
+): void {
   if (value.type !== 'fontFamily') return;
   value.value.forEach((family) => {
     if (!allowed.includes(family))

@@ -19,7 +19,11 @@ interface StreetSpan {
   readonly end: number;
   readonly origins: readonly string[];
 }
-function frame(owner: string | null, b: PrototypeBounds, origin: string): StreetSpan[] {
+function frame(
+  owner: string | null,
+  b: PrototypeBounds,
+  origin: string,
+): StreetSpan[] {
   return [
     ...[b.y, b.y + b.height].map((at, ordinal) => ({
       owner,
@@ -134,7 +138,10 @@ function dodge(
   });
   return gaps.toSorted((x, y) => Math.abs(x - at) - Math.abs(y - at))[0] ?? at;
 }
-function mergeSpan(spans: readonly StreetSpan[], next: StreetSpan): readonly StreetSpan[] {
+function mergeSpan(
+  spans: readonly StreetSpan[],
+  next: StreetSpan,
+): readonly StreetSpan[] {
   const last = spans.at(-1);
   if (last === undefined) return [next];
   if (next.start > last.end) return [...spans, next];
@@ -147,7 +154,10 @@ function mergeSpan(spans: readonly StreetSpan[], next: StreetSpan): readonly Str
     },
   ];
 }
-function street(s: StreetSpan, pitches: RoadPitches): PrototypeRoad {
+function street(
+  s: StreetSpan,
+  pitches: RoadPitches,
+): PrototypeRoad {
   const half = pitches[s.axis];
   const bounds =
     s.axis === 'horizontal'

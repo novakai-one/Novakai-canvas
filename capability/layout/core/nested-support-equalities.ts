@@ -8,13 +8,20 @@ interface Search {
   readonly visited: Set<string>;
   readonly finish: string[];
 }
-function visit(search: Search, key: string): void {
+function visit(
+  search: Search,
+  key: string,
+): void {
   if (search.visited.has(key)) return;
   search.visited.add(key);
   (search.outgoing.get(key) ?? []).forEach((next) => visit(search, next));
   search.finish.push(key);
 }
-function append<K, V>(index: Map<K, V[]>, from: K, to: V): void {
+function append<K, V>(
+  index: Map<K, V[]>,
+  from: K,
+  to: V,
+): void {
   const group = index.get(from) ?? [];
   group.push(to);
   index.set(from, group);

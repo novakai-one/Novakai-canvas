@@ -27,7 +27,10 @@ function hoverTargets(state: SessionState): readonly Target[] {
 }
 
 /** A prior projection remains valid across camera-only state changes. */
-function reusable(state: SessionState, previous: FocusProjection | undefined): boolean {
+function reusable(
+  state: SessionState,
+  previous: FocusProjection | undefined,
+): boolean {
   if (!previous) return false;
   return [
     previous.inputs.scene === state.scene,
@@ -59,7 +62,10 @@ function includeWire(
 }
 
 /** Derive the complete one-hop focus set in one pass over admitted wires. */
-export function projectFocus(state: SessionState, previous?: FocusProjection): FocusProjection {
+export function projectFocus(
+  state: SessionState,
+  previous?: FocusProjection,
+): FocusProjection {
   if (reusable(state, previous) && previous) return previous;
   const focus = focusTargets(state);
   const primary = new Set(focus.targets.map(targetKey));
@@ -84,20 +90,29 @@ export function projectFocus(state: SessionState, previous?: FocusProjection): F
 }
 
 /** Focus presence maps every graph object to one paint role without changing true selection. */
-export function emphasisFor(focus: FocusProjection, key: string): Emphasis {
+export function emphasisFor(
+  focus: FocusProjection,
+  key: string,
+): Emphasis {
   if (focus.source === 'none') return 'normal';
   if (focus.source === 'hover') return hoveredEmphasis(focus, key);
   return focusedEmphasis(focus, key);
 }
 
 /** Hover uses supporting paint throughout its neighborhood; primary paint and vignette require selection. */
-function hoveredEmphasis(focus: FocusProjection, key: string): Emphasis {
+function hoveredEmphasis(
+  focus: FocusProjection,
+  key: string,
+): Emphasis {
   if (focus.primary.has(key) || focus.secondary.has(key)) return 'secondary';
   return 'normal';
 }
 
 /** Membership precedence ensures an explicit multi-selection never renders as its own neighbour. */
-function focusedEmphasis(focus: FocusProjection, key: string): Emphasis {
+function focusedEmphasis(
+  focus: FocusProjection,
+  key: string,
+): Emphasis {
   if (focus.primary.has(key)) return 'primary';
   if (focus.secondary.has(key)) return 'secondary';
   return 'muted';

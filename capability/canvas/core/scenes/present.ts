@@ -6,7 +6,10 @@ import { canMutate } from '../interaction/changes.js';
 import { projectFocus } from './focus.js';
 import { detailAtZoom } from './detail.js';
 /** Stable node content plus identical interaction/geometry fields retains the previous hot-render object. */
-function stableNode(next: ViewNode, previous: ViewNode | undefined): ViewNode {
+function stableNode(
+  next: ViewNode,
+  previous: ViewNode | undefined,
+): ViewNode {
   if (!previous) return next;
   const equal = [
     next.placed === previous.placed,
@@ -26,7 +29,10 @@ function stableNode(next: ViewNode, previous: ViewNode | undefined): ViewNode {
   return equal ? previous : next;
 }
 /** Unchanged wire references and origin preserve memoized edge props during unrelated selection/drag. */
-function stableWire(next: ViewWire, previous: ViewWire | undefined): ViewWire {
+function stableWire(
+  next: ViewWire,
+  previous: ViewWire | undefined,
+): ViewWire {
   if (!previous) return next;
   const equal = [
     next.wire === previous.wire,
@@ -41,7 +47,10 @@ function stableWire(next: ViewWire, previous: ViewWire | undefined): ViewWire {
   return equal ? previous : next;
 }
 /** Section frames remain stable while unrelated descendants are edited. */
-function stableSection(next: ViewSection, previous: ViewSection | undefined): ViewSection {
+function stableSection(
+  next: ViewSection,
+  previous: ViewSection | undefined,
+): ViewSection {
   if (!previous) return next;
   const equal = [
     next.section === previous.section,
@@ -52,7 +61,10 @@ function stableSection(next: ViewSection, previous: ViewSection | undefined): Vi
   return equal ? previous : next;
 }
 /** Public view projection owns only interaction overlays; presentation/layout data retains its original authority. */
-export function presentScene(state: SessionState, previous?: CanvasView): CanvasView {
+export function presentScene(
+  state: SessionState,
+  previous?: CanvasView,
+): CanvasView {
   const focus = projectFocus(state, previous?.focus);
   const detail = detailAtZoom(state.camera.zoom);
   const oldNodes = new Map(previous?.nodes.map((node) => [node.id, node]));

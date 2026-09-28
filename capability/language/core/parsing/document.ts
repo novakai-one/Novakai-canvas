@@ -1,3 +1,9 @@
+/*
+ * Parsing a whole source: `canvas 1 collection @id … { … }` or `patch 1 @id { … }`. A scoped
+ * `view` readout is refused. The result also lists the themes and assets the source asks for
+ * and where each record was written; nothing is read from files or the network. Language owns
+ * correcting the source; Authoring owns commit recovery.
+ */
 import type { ParsedSource, Document, Patch } from '../../contract/records/syntax.js';
 import { documentResources, patchResources } from '../lowering/resources.js';
 import { sourceMappings } from '../lowering/diagnostics.js';
@@ -18,7 +24,20 @@ import { readDeclaration } from './declarations.js';
 import { readIdentity } from './references.js';
 import { readOperation } from './patch.js';
 import { repeat } from './repetition.js';
-/** Parse one versioned authoring document; a scoped view is structurally forbidden input. */
+
+/** The most operations one patch may have. */
+const maxPatchOperations = 1000;
+
+/**
+ * Parses a whole source. Steps: check the text (`readSource`), split it into tokens, refuse a
+ * `view`, check the version, read the document or patch, require the end of the source, then
+ * list resources and source mappings.
+ *
+ * @throws A `LanguageFault`: `display-only` for a `view`; `unsupported-version` for a version
+ * other than 1; `syntax` for an unknown envelope, bad grammar or trailing source; `limit` for
+ * too many tokens, too much nesting or more than 1000 patch operations; `unknown-property` and
+ * `invalid-value` from reading attributes; and the diagnostics of `readSource`.
+ */
 export function parseSource(source: string): ParsedSource {
   const tokens = accepted(tokenize(readSource(source)));
   const cursor: Cursor = { tokens, index: 0, depth: 0 };
@@ -29,7 +48,8 @@ export function parseSource(source: string): ParsedSource {
     reject('syntax', peek(parsed.next).span, 'End of source', 'Unexpected trailing source');
   return describeParsedSource(parsed.value);
 }
-/** Version rejection is separate from an unknown envelope; supported grammar never guesses future versions. */
+
+/** Checks the version (the second token must be `1`), then reads the envelope. */
 function readEnvelope(cursor: Cursor): Parsed<Document | Patch> {
   if (peek(cursor, 1).text !== '1')
     reject(
@@ -40,13 +60,15 @@ function readEnvelope(cursor: Cursor): Parsed<Document | Patch> {
     );
   return readSupportedEnvelope(cursor);
 }
-/** Dispatch the two supported authoring envelope forms after checking version. */
+
+/** Reads a `canvas` or `patch` envelope; any other first word is a `syntax` error. */
 function readSupportedEnvelope(cursor: Cursor): Parsed<Document | Patch> {
   if (peek(cursor).text === 'canvas') return readCanvas(cursor);
   if (peek(cursor).text === 'patch') return readPatch(cursor);
   reject('syntax', peek(cursor).span, 'canvas or patch', 'Unknown document envelope');
 }
-/** A document has exactly one collection declaration. */
+
+/** Reads `canvas 1` and its single `collection` declaration; the ID is the collection's. */
 function readCanvas(cursor: Cursor): Parsed<Document> {
   const declaration = readDeclaration(advance(cursor, 2), ['collection']);
   const identity = readIdentity(advance(cursor, 3));
@@ -61,14 +83,15 @@ function readCanvas(cursor: Cursor): Parsed<Document> {
     next: declaration.next,
   };
 }
-/** Bounded patch operations retain source order and defer domain references until final planning. */
+
+/** Reads `patch 1 @id { operations }`, keeping the operations in source order. */
 function readPatch(cursor: Cursor): Parsed<Patch> {
   const identity = readIdentity(advance(cursor, 2));
   const start = enter(consume(identity.next, '{'));
   const operations = accepted(
-    repeat(start, (item) => peek(item).text !== '}', readOperation, 1000),
+    repeat(start, (item) => peek(item).text !== '}', readOperation, maxPatchOperations),
   );
-  if (operations.value.length > 1000)
+  if (operations.value.length > maxPatchOperations)
     reject('limit', peek(start).span, 'At most 1000 operations', 'Patch operation limit exceeded');
   const end = leave(consume(operations.next, '}'));
   return {
@@ -83,7 +106,10 @@ function readPatch(cursor: Cursor): Parsed<Patch> {
   };
 }
 
-/** Hosts receive resource requests before resolution, while parsed syntax contains no file or network effects. */
+/**
+ * Adds the resource requests and source mappings. For a document they come from its
+ * declarations; for a patch, from its operations (each mapping is the operation's target ID).
+ */
 function describeParsedSource(parsed: Document | Patch): ParsedSource {
   if (parsed.kind === 'canvas')
     return {

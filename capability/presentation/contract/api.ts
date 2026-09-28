@@ -52,7 +52,10 @@ function renderChecked(
   return requireValue(deps.renderer.render(node));
 }
 /** Existing measured geometry is retained; shaping only verifies the declared font resources and glyphs. */
-function checkFonts(node: VisualNode, measurement: Dependencies['measurement']): void {
+function checkFonts(
+  node: VisualNode,
+  measurement: Dependencies['measurement'],
+): void {
   node.content.primitives
     .filter((item) => item.kind === 'text')
     .forEach((item) => requireValue(measurement.measure(item.text, item.font, item.size)));

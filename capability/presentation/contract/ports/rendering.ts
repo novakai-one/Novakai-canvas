@@ -5,5 +5,8 @@ import type { Paint } from '../records/style.js';
 export interface RenderPort {
   readonly version: string;
   render(node: VisualNode): Result<string>;
-  marker(kind: MarkerKind, paint: Paint): Result<string>;
+  marker(
+    kind: MarkerKind,
+    paint: Paint,
+  ): Result<string>;
 }

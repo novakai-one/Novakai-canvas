@@ -88,7 +88,10 @@ it('5 retains independently chosen crow-foot endpoints and required wire labels'
 });
 
 /** Repeated descendant IDs and an object/field namespace collision must resolve through the canonical owner. */
-function keyedEntity(id: string, labels: readonly [string, string]): unknown {
+function keyedEntity(
+  id: string,
+  labels: readonly [string, string],
+): unknown {
   return object(id, 'entity', [
     { kind: 'keygroup', id: 'pk', key: 'primary', fields: ['local-id', 'tenant-id'] },
     { kind: 'field', id: 'tenant-id', label: labels[0], type: 'NamespaceCode' },

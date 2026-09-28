@@ -63,11 +63,17 @@ function container(
   };
 }
 /** Translation never changes dimensions or interprets IDs as coordinate paths. */
-export function translate(item: PlacementValue, offset: Point): PlacementValue {
+export function translate(
+  item: PlacementValue,
+  offset: Point,
+): PlacementValue {
   return { ...item, box: { ...item.box, x: item.box.x + offset.x, y: item.box.y + offset.y } };
 }
 /** Nested group layout is explicitly independent of the enclosing section's chosen algorithm. */
-function intent(parent: string | null, section: VisualSection): LayoutIntent {
+function intent(
+  parent: string | null,
+  section: VisualSection,
+): LayoutIntent {
   if (parent === null) return section.layout;
   const node = section.nodes.find((item) => item.id === parent);
   const group = section.groups.find((item) => item.id === node?.groupId);
@@ -75,7 +81,10 @@ function intent(parent: string | null, section: VisualSection): LayoutIntent {
   return group.layout;
 }
 /** Reattach child-local descendants after the native engine chooses the branch's outer position. */
-function flatten(value: PlacementValue, branches: readonly Branch[]): readonly PlacementValue[] {
+function flatten(
+  value: PlacementValue,
+  branches: readonly Branch[],
+): readonly PlacementValue[] {
   const found = branches.find((item) => item.root.id === value.id);
   if (!found) return reject('engine-failed', value.id, 'Placement returned an unknown branch');
   return [value, ...found.descendants.map((item) => translate(item, value.box))];

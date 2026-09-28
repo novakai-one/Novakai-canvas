@@ -87,7 +87,11 @@ export function fromPortable(
   return { theme, values };
 }
 /** Unknown, missing or role-incomplete values fail before any scope can be emitted. */
-function validateMembers(values: TokenValues, source: SourceSet, roles: readonly string[]): void {
+function validateMembers(
+  values: TokenValues,
+  source: SourceSet,
+  roles: readonly string[],
+): void {
   const known = Object.fromEntries(source.definitions.map((item) => [item.id, item]));
   Object.keys(values).forEach((id) => member(known, id));
   source.definitions.forEach((definition) => member(values, definition.id));
@@ -98,7 +102,11 @@ function validateMembers(values: TokenValues, source: SourceSet, roles: readonly
   );
 }
 /** Exact admitted font digest/family correspondence is verified before dropping its portable envelope. */
-function unpackValue(id: string, value: PortableToken, fonts: readonly FontPin[]): TokenValue {
+function unpackValue(
+  id: string,
+  value: PortableToken,
+  fonts: readonly FontPin[],
+): TokenValue {
   if (value.type === 'font') return unpackFont(id, value, fonts);
   if (value.type === 'color') return value;
   return unpackNumber(value);

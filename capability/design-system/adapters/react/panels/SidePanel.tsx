@@ -77,11 +77,17 @@ function emitDrag(
   props.onResize(clamp(origin.width + (event.clientX - origin.x) * direction, props));
 }
 /** Host supplied bounds are applied equally to keyboard and pointer movement. */
-function clamp(width: number, props: Pick<SidePanelProps, 'minimum' | 'maximum'>): number {
+function clamp(
+  width: number,
+  props: Pick<SidePanelProps, 'minimum' | 'maximum'>,
+): number {
   return Math.min(props.maximum, Math.max(props.minimum, width));
 }
 /** Named key table exposes interaction policy without nested conditional returns. */
-function keyboardWidth(key: string, props: SidePanelProps): number | null {
+function keyboardWidth(
+  key: string,
+  props: SidePanelProps,
+): number | null {
   const direction = props.side === 'left' ? 1 : -1;
   const widths: Readonly<Record<string, number>> = {
     ArrowLeft: props.width - direction,

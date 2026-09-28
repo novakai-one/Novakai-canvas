@@ -2,7 +2,10 @@ import type { PrototypeRoad } from '../contract/records/road-prototype.js';
 import type { RoadContact } from './prototype-road-registry.js';
 import { reject } from './nested-support-graph.js';
 
-function intersection(a: PrototypeRoad, b: PrototypeRoad): readonly number[] {
+function intersection(
+  a: PrototypeRoad,
+  b: PrototypeRoad,
+): readonly number[] {
   return [
     Math.min(a.bounds.x + a.bounds.width, b.bounds.x + b.bounds.width) -
       Math.max(a.bounds.x, b.bounds.x),

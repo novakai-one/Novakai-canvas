@@ -14,12 +14,19 @@ export function requireValue<T>(result: Result<T>): T {
   return result.value;
 }
 /** Raise a structured private failure; public protect owns recovery and preserves the committed diagram. */
-export function reject(code: ErrorCode, path: string, message: string): never {
+export function reject(
+  code: ErrorCode,
+  path: string,
+  message: string,
+): never {
   const result = fail<never>(code, path, message);
   return requireValue(result);
 }
 /** Parse known boundary records; never cast untrusted data into rendering props. */
-export function parse<T>(schema: Parser<T>, input: unknown): T {
+export function parse<T>(
+  schema: Parser<T>,
+  input: unknown,
+): T {
   const result = schema.safeParse(input);
   if (result.success) return result.data;
   const issue = result.error.issues[0];

@@ -7,9 +7,13 @@ import type {
   MovementPreviewContext,
 } from '../../contract/records/movement.js';
 import { failure } from '../../contract/errors.js';
-import { changes, plannedSections } from './movement-capture.js';
-import { normalizedEntries, validateMoveIntent } from './movement-intent.js';
-import { geometryChanges } from './movement-preview.js';
+import { changes, plannedSections } from './capture/settling/sections.js';
+import { sameStampValue, validateMoveIntent } from './movement-intent/admission.js';
+import { movableEntries } from './movement-intent/selection.js';
+import { geometryChanges } from './preview/geometry.js';
+
+export { buildExpandOption } from './expand/option.js';
+export { buildRearrangeOption } from './rearrange/option.js';
 
 type GeometryPreview = MoveOption['preview'];
 type PreparedMove = {
@@ -28,6 +32,19 @@ export function buildMoveReview(
   return inspectMove(prepared.value, context, previewed.value);
 }
 
+export function chooseMoveOption(
+  review: MoveReview,
+  optionId: string,
+  current: SceneStamp,
+): Result<MoveOption> {
+  if (!sameStampValue(review.stamp, current))
+    return failure('stale-gesture', 'The diagram changed while this move was under review');
+  const selected = review.options.find((option) => option.id === optionId);
+  if (selected === undefined)
+    return failure('invalid-edit', 'That movement option is no longer available');
+  return { ok: true, value: selected };
+}
+
 function prepareMove(
   intent: PlacementIntent,
   context: MovementPreviewContext,
@@ -43,20 +60,16 @@ function prepareMovePlan(
   intent: PlacementIntent,
   context: MovementPreviewContext,
 ): Result<PreparedMove> {
-  const normalized = normalizedEntries(context.document, intent);
+  const normalized = movableEntries(context.document, intent);
   if (!normalized.ok) return normalized;
   const preparedIntent = { ...intent, entries: normalized.value };
-  let sections: readonly import('../../contract/records/owners.js').Section[];
-  try {
-    sections = plannedSections(context.document, preparedIntent);
-  } catch {
-    return failure('stale-target', 'The movement target is no longer available');
-  }
+  const planned = plannedSections(context.document, preparedIntent);
+  if (!planned.ok) return planned;
   return {
     ok: true,
     value: {
       intent: preparedIntent,
-      changes: changes(context.document, sections),
+      changes: changes(context.document, planned.value),
     },
   };
 }
@@ -123,24 +136,3 @@ function createMoveReview(
     },
   };
 }
-
-export function chooseMoveOption(
-  review: MoveReview,
-  optionId: string,
-  current: SceneStamp,
-): Result<MoveOption> {
-  if (
-    review.stamp.collectionId !== current.collectionId ||
-    review.stamp.revision !== current.revision ||
-    review.stamp.inputKey !== current.inputKey ||
-    review.stamp.generation !== current.generation
-  )
-    return failure('stale-gesture', 'The diagram changed while this move was under review');
-  const selected = review.options.find((option) => option.id === optionId);
-  if (selected === undefined)
-    return failure('invalid-edit', 'That movement option is no longer available');
-  return { ok: true, value: selected };
-}
-
-export { buildExpandOption } from './movement-expand.js';
-export { buildRearrangeOption } from './movement-rearrange.js';

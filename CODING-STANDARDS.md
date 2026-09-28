@@ -98,6 +98,7 @@ Good:
 const next = { ...base, label }; return next;
 ```
 Prefer direct record transforms; no conditional spread chains.
+Order every file with all exported functions above all private internal functions, so the public surface is found first.
 
 ## 8. YAGNI
 

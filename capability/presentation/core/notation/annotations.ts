@@ -55,7 +55,10 @@ function numberedLabel(
 }
 
 /** Wire labels rest on a surface capsule; bare text never floats over panel boundaries or whitespace. */
-function pilledLabel(label: MeasuredContent, context: ContentContext): MeasuredContent {
+function pilledLabel(
+  label: MeasuredContent,
+  context: ContentContext,
+): MeasuredContent {
   const padding = context.style.gap / 2;
   const height = label.height + padding * 2;
   const width = label.width + padding * 2;

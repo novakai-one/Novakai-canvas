@@ -3,7 +3,10 @@ import type { ComponentType, ReactElement } from 'react';
 import type { HeaderProps, DesignSlots } from '../../contract/react-types.js';
 import type { HistoryAction } from '@novakai/canvas-authoring';
 type HistoryProps = Pick<HeaderProps, 'controller' | 'view'>;
-function describe(verb: string, action: HistoryAction | null): string {
+function describe(
+  verb: string,
+  action: HistoryAction | null,
+): string {
   if (action === null) return `${verb}: no available action`;
   const affected = action.collections.join(', ') || 'workspace';
   return `${verb} ${action.label} — ${action.actor.kind} ${action.actor.id} — ${affected}`;

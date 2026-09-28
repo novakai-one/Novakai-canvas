@@ -1,10 +1,9 @@
-import type {
-  ComponentType,
-  ReactElement,
-  ReactNode,
-  KeyboardEvent,
-  MouseEventHandler,
-} from 'react';
+/*
+ * The Canvas's React boundary: the surface props a host passes, the render slots it composes, the
+ * view data React Flow nodes and edges carry, and the owners the interactions are built from.
+ * Declarations only; nothing to recover. The host repairs failures reported through `onError`.
+ */
+import type { ComponentType, ReactNode, KeyboardEvent, MouseEventHandler } from 'react';
 import type { Node, Edge, NodeProps, EdgeProps, ReactFlowProps } from '@xyflow/react';
 import type {
   NodeContentProps,
@@ -26,8 +25,8 @@ import type { CanvasEvent } from './events.js';
 import type { Target } from './records/selection.js';
 import type { DropTarget } from './records/intent.js';
 import type { Point, Box } from './records/camera.js';
-import type { Emphasis } from './records/focus.js';
 import type { Diagnostic, Result } from './errors.js';
+import type { GestureId } from './brands.js';
 export type SurfaceSession = Pick<
   SessionStore,
   | 'getSnapshot'
@@ -103,6 +102,7 @@ export interface SurfaceProps {
   readonly followsInterfaceRoles?: boolean;
   readonly session: SurfaceSession;
   readonly reader: ViewReader;
+  /** Random text for each new gesture; Canvas parses it into a `GestureId` when the gesture begins. */
   readonly nextGestureId: () => string;
   readonly onError: (diagnostic: Diagnostic) => void;
   readonly paint: Paint;
@@ -122,14 +122,20 @@ export type UseScene = (session: SurfaceSession, reader: ViewReader) => Result<V
 export interface ViewActions {
   dispatch(event: CanvasEvent): void;
   beginResize(target: Target): void;
-  resize(target: Target, box: Box): void;
+  resize(
+    target: Target,
+    box: Box,
+  ): void;
   finishGeometry(): void;
   cancelGeometry(): void;
-  nextId(): string;
+  /** A new gesture's identity; see {@link NextGestureId}. */
+  nextGestureId(): Result<GestureId>;
   /** Live drag offset; nodes and wires subscribe by id so a move re-renders only what moves. */
   readPreview(): DragPreview | null;
   subscribePreview(listener: () => void): () => void;
 }
+/** What a control that starts a gesture uses: dispatch and a new gesture ID. */
+export type GestureActions = Pick<ViewActions, 'dispatch' | 'nextGestureId'>;
 export interface NodeData extends Record<string, unknown> {
   readonly view: ViewNode;
   readonly actions: Pick<
@@ -148,7 +154,8 @@ export interface SectionData extends Record<string, unknown> {
 }
 export interface EdgeData extends Record<string, unknown> {
   readonly view: ViewWire;
-  readonly actions: Pick<ViewActions, 'dispatch' | 'nextId' | 'readPreview' | 'subscribePreview'>;
+  /** A wire follows the live drag offset only. */
+  readonly actions: Pick<ViewActions, 'readPreview' | 'subscribePreview'>;
   readonly editable: boolean;
   readonly paint: Paint;
   readonly nudge: number;
@@ -174,7 +181,7 @@ export interface ControlsProps {
 }
 export interface OutlineProps {
   readonly sections: readonly OutlineSection[];
-  readonly actions: Pick<ViewActions, 'dispatch' | 'nextId' | 'readPreview' | 'subscribePreview'>;
+  readonly actions: GestureActions;
   readonly editable: boolean;
 }
 export interface SequenceProps {
@@ -183,13 +190,6 @@ export interface SequenceProps {
   readonly nodes: readonly ViewNode[];
   readonly actions: Pick<ViewActions, 'dispatch'>;
   readonly paint: Paint;
-}
-export interface RouteHandlesProps {
-  readonly edge: ViewWire;
-  readonly actions: Pick<ViewActions, 'dispatch' | 'nextId' | 'readPreview' | 'subscribePreview'>;
-  readonly editable: boolean;
-  readonly nudge: number;
-  readonly controlPosition: Point;
 }
 export interface Interactions {
   readonly actions: ViewActions;
@@ -234,14 +234,21 @@ export interface InteractionOwners {
     | 'subscribePreview'
   >;
   readonly input: BrowserInput;
-  readonly nextGestureId: () => string;
+  readonly nextGestureId: NextGestureId;
   readonly onError: (diagnostic: Diagnostic) => void;
 }
+/**
+ * A new gesture's identity, parsed from the host's text when the gesture begins. A refused text is
+ * already reported to the host's `onError`; the caller only starts no gesture.
+ */
+export type NextGestureId = () => Result<GestureId>;
+/** What the surface lends `createInteractions`: its session, gesture text and error sink. */
+export type SurfaceHost = Pick<SurfaceProps, 'session' | 'nextGestureId' | 'onError'>;
 export interface BrowserInput {
   ownsNativeInput(target: EventTarget | null): boolean;
   focusedId(target: EventTarget | null): string | null;
 }
-export type CreateInteractions = (owners: Omit<InteractionOwners, 'input'>) => Interactions;
+export type CreateInteractions = (host: SurfaceHost) => Interactions;
 export type GraphSelector = (
   result: Result<ViewSnapshot>,
   actions: ViewActions,
@@ -268,6 +275,3 @@ export interface SurfaceSlots {
 export interface ReactBindings {
   readonly CanvasSurface: ComponentType<SurfaceProps>;
 }
-export type CanvasElement = (props: SurfaceProps) => ReactElement;
-export type ScreenPoint = Point;
-export type ViewEmphasis = Emphasis;

@@ -1,38 +1,21 @@
-import type {
-  NestedWire,
-  NestedWireLane,
-  NestedWireSegment,
-} from '../contract/records/nested-wires.js';
+import type { NestedWire, NestedWireSegment } from '../contract/records/nested-wires.js';
 import type { PrototypeRoad } from '../contract/records/road-prototype.js';
+import type { AssignedTravel, TransferChannel, Travel } from './nested-travel.js';
 import { axes } from './prototype-road-geometry.js';
 import { roadLanePitch, terminalStem } from './nested-terminal-pins.js';
 import { laneOrder } from './nested-lane-order.js';
 
-export interface Travel {
-  readonly road: PrototypeRoad;
-  readonly wireId: string;
-  readonly first: number;
-  readonly last: number;
-  readonly direction: 1 | -1;
-}
-export interface AssignedTravel extends Travel {
-  readonly lane: NestedWireLane;
-  readonly at: number;
-  readonly count: number;
-  readonly fanIndex: number;
-  readonly fanCount: number;
-  readonly pitch: number;
-  readonly transfer?: TransferChannel;
-}
-export interface TransferChannel {
-  readonly roadId: string;
-  readonly coordinates: readonly number[];
-}
-export function transferKey(t: AssignedTravel, next: AssignedTravel): string {
+export function transferKey(
+  t: AssignedTravel,
+  next: AssignedTravel,
+): string {
   return `${t.wireId}:${t.last}:${next.first}`;
 }
 /** A rank swap needs separate entry and exit channels to avoid sharing a continuing lane. */
-export function needsMedianBridge(t: AssignedTravel, next: AssignedTravel): boolean {
+export function needsMedianBridge(
+  t: AssignedTravel,
+  next: AssignedTravel,
+): boolean {
   if (t.direction !== next.direction) return false;
   return (
     (next.lane.index < t.count && next.lane.index > t.lane.index) ||
@@ -50,7 +33,10 @@ function travel(
   const direction = segment.to[a] > segment.from[a] ? 1 : -1;
   return [{ road, wireId, first, last: first, direction }];
 }
-function append(parts: readonly Travel[], next: Travel): readonly Travel[] {
+function append(
+  parts: readonly Travel[],
+  next: Travel,
+): readonly Travel[] {
   const last = parts.at(-1);
   if (last?.road.id !== next.road.id) return [...parts, next];
   return [...parts.slice(0, -1), { ...next, first: last.first }];
@@ -108,7 +94,10 @@ export interface LaneAnnotation {
   readonly verticalPitch?: number;
 }
 /** Physical lane populations continue across collinear, zero-length junction crossings. */
-function continuityGroups(wires: readonly NestedWire[], roads: ReadonlyMap<string, PrototypeRoad>) {
+function continuityGroups(
+  wires: readonly NestedWire[],
+  roads: ReadonlyMap<string, PrototypeRoad>,
+) {
   const parent = new Map<string, string>();
   const all: Travel[] = [];
   const key = (t: Travel) => `${t.road.id}:${t.direction}`;
@@ -132,7 +121,11 @@ function continuityGroups(wires: readonly NestedWire[], roads: ReadonlyMap<strin
   all.forEach((t) => addTo(groups, root(key(t)), t));
   return { travels: all, groups: [...groups.values()] };
 }
-function continuous(t: Travel, next: Travel, wire: NestedWire): boolean {
+function continuous(
+  t: Travel,
+  next: Travel,
+  wire: NestedWire,
+): boolean {
   if (t.direction !== next.direction || t.road.axis !== next.road.axis) return false;
   const a = axes[t.road.axis];
   const center = (road: PrototypeRoad) => road.bounds[a.across] + road.bounds[a.breadth] / 2;
@@ -282,14 +275,21 @@ function allocateTransfers(
 }
 
 /** Buckets are invocation-local; append avoids copying a growing road population. */
-function addTo<T>(index: Map<string, T[]>, id: string, value: T): void {
+function addTo<T>(
+  index: Map<string, T[]>,
+  id: string,
+  value: T,
+): void {
   const bucket = index.get(id) ?? [];
   bucket.push(value);
   index.set(id, bucket);
 }
 
 /** Only the chosen endpoint lane receives measured annotation spacing. */
-function annotationPitch(travel: Travel, annotation?: LaneAnnotation): number {
+function annotationPitch(
+  travel: Travel,
+  annotation?: LaneAnnotation,
+): number {
   if (annotation?.roadId !== travel.road.id) return roadLanePitch(travel.road);
   const pitch =
     travel.road.axis === 'vertical'

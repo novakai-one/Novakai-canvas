@@ -1,0 +1,311 @@
+canvas 1
+collection @wsm-contract "Web state machines · 8 · Identity and errors: brands, IDs, error codes, import gate" theme=paper {
+
+  node @root concept "novakai-canvas/" size=small {}
+  node @d-web concept "apps/web/" size=small {}
+  node @d-contract concept "contract/" size=small {}
+  node @d-compose concept "compose/" size=small {}
+  node @d-ports concept "ports/" size=small {}
+  node @d-records concept "records/" size=small {}
+  node @d-wcore concept "core/" size=small {}
+  node @d-wws concept "workspace/" size=small {}
+  node @d-wpanels concept "panels/" size=small {}
+  node @d-winspector concept "inspector/" size=small {}
+  node @d-wediting concept "editing/connection/" size=small {}
+  node @d-adapters concept "adapters/" size=small {}
+  node @d-edge concept "edge/" size=small {}
+  node @d-service concept "apps/service/contract/" size=small {}
+  node @d-srecords concept "records/" size=small {}
+  node @d-model concept "capability/model/contract/" size=small {}
+  node @d-canvas concept "capability/canvas/" size=small {}
+  node @d-ccontract concept "contract/" size=small {}
+  node @d-crecords concept "records/" size=small {}
+  node @d-cadapters concept "adapters/" size=small {}
+  node @d-cflow concept "react-flow/" size=small {}
+  node @d-layout concept "capability/layout/" size=small {}
+  node @d-export concept "capability/export/contract/records/" size=small {}
+
+  node @w-brands module "brands.ts [NEW]" { signature @sig "nextCount" parameters=["schema: z.ZodType<T, number>", "current: T"] returns="T" }
+  node @w-errors module "errors.ts [CHANGE]" {
+    signature @sig "foreignFailure" parameters=["owner: 'authoring' | 'service'", "source: OperationSource"] returns="ForeignDiagnostic"
+    signature @fail "failure" parameters=["code: WebErrorCode", "message: string"] returns="Extract<Result<T>, { ok: false }>"
+  }
+  node @w-codes interface "error-codes.ts [NEW]" {}
+  node @w-source interface "failure-source.ts [DELETE]" {}
+  node @w-model module "workspace-model.ts [CHANGE]" {}
+  node @w-api module "api.ts [CHANGE]" { signature @sig "baseWorkspace" parameters=["base: EditingBase"] returns="WorkspaceId (re-export)" }
+  node @w-index module "index.ts [CHANGE]" {}
+  node @w-panel-types interface "panel-types.ts [CHANGE]" {}
+  node @w-panels interface "panels.ts [CHANGE]" {}
+  node @w-compose module "workspace.ts [collection 1]" { signature @sig "composeWorkspace" parameters=["parts: WorkspaceParts"] returns="WorkspaceController" }
+  node @p-ids interface "ids.ts [NEW]" {
+    member @request "requestId" type="() => Result<RequestId>"
+    member @collection "collectionId · sectionId · objectId · groupId · relationshipId · definitionId · descendantId · folderId" type="() => Result<the Model or Library ID>"
+  }
+  node @p-workspace interface "workspace.ts [CHANGE]" {}
+  node @x-ids module "ids.ts [NEW]" { signature @sig "createIdSource" parameters=["random: () => string"] returns="IdSource" }
+  node @x-builders module "request-builders.ts [NEW · moved]" { signature @sig "createRequestBuilders" parameters=["language: Language", "actor: ActorId", "planners: Planners"] returns="RequestBuilders" }
+  node @x-inputs module "workspace-inputs.ts [DELETE]" {}
+  node @x-export module "export-artifact.ts [NEW]" { signature @sig "exportArtifact" parameters=["client: ServiceClient", "input: ExportInput"] returns="Promise<Result<BinaryResponse>>" }
+  node @s-brands module "brands.ts [NEW]" {}
+  node @s-protocol module "protocol.ts [CHANGE]" {}
+  node @s-index module "index.ts [CHANGE]" {}
+  node @m-index module "index.ts [CHANGE]" {}
+  node @k-brands module "brands.ts [CHANGE]" { signature @sig "gestureId" parameters=[] returns="z.ZodType<GestureId> (the brand schema)" }
+  node @k-ids module "gesture-ids.ts [NEW · B5]" { signature @sig "nextGestureId" parameters=["random: () => string"] returns="Result<GestureId>" }
+  node @k-geometry module "geometry-gestures.ts [NEW · P7 split]" {}
+  node @k-keyboard module "keyboard-commands.ts [NEW · P7 split]" {}
+  node @k-events module "events.ts [CHANGE]" {}
+  node @k-intent module "intent.ts [CHANGE]" {}
+  node @k-draft module "draft.ts [CHANGE]" {}
+  node @k-handlers module "interaction-handlers.ts [CHANGE · P7: 358 to about 170]" {}
+  node @x-depcruise module ".dependency-cruiser.cjs [CHANGE]" {}
+  node @w-portpolicy interface "connection-policy.ts [NEW · moved, M1]" {}
+  node @w-features module "features.ts [CHANGE · B3b]" {}
+  node @w-panelstate module "panel-state.ts [CHANGE · P2a]" {}
+  node @w-preferences module "preferences.ts [CHANGE · P2a]" {}
+  node @w-endpoints module "endpoints.ts [CHANGE · P2a]" {}
+  node @w-conntypes module "types.ts [CHANGE · M1: policy types leave]" {}
+  node @s-server module "server.ts [CHANGE · P2b]" {}
+  node @l-layout module "core/, contract/records/ [CHANGE · P2b, 7 cycle reports]" {}
+  node @e-artifact module "artifact.ts [CHANGE · P2b]" {}
+
+  wire @t1 @root -> @d-web "contains" kind=parent
+  wire @t2 @root -> @d-service "contains" kind=parent
+  wire @t3 @root -> @d-model "contains" kind=parent
+  wire @t4 @root -> @d-canvas "contains" kind=parent
+  wire @t4b @root -> @d-layout "contains" kind=parent
+  wire @t4c @root -> @d-export "contains" kind=parent
+  wire @t5 @root -> @x-depcruise "contains" kind=parent
+  wire @t6 @d-web -> @d-contract "contains" kind=parent
+  wire @t7 @d-contract -> @d-compose "contains" kind=parent
+  wire @t8 @d-contract -> @d-ports "contains" kind=parent
+  wire @t9 @d-contract -> @d-records "contains" kind=parent
+  wire @t9b @d-web -> @d-wcore "contains" kind=parent
+  wire @t9c @d-wcore -> @d-wws "contains" kind=parent
+  wire @t9d @d-wcore -> @d-wpanels "contains" kind=parent
+  wire @t9e @d-wcore -> @d-winspector "contains" kind=parent
+  wire @t9f @d-wcore -> @d-wediting "contains" kind=parent
+  wire @t10 @d-web -> @d-adapters "contains" kind=parent
+  wire @t10b @d-adapters -> @d-edge "contains" kind=parent
+  wire @t11 @d-service -> @d-srecords "contains" kind=parent
+  wire @t12 @d-canvas -> @d-ccontract "contains" kind=parent
+  wire @t13 @d-ccontract -> @d-crecords "contains" kind=parent
+  wire @t14 @d-canvas -> @d-cadapters "contains" kind=parent
+  wire @t14b @d-cadapters -> @d-cflow "contains" kind=parent
+  wire @t15 @d-contract -> @w-brands "contains" kind=parent
+  wire @t16 @d-contract -> @w-errors "contains" kind=parent
+  wire @t17 @d-records -> @w-codes "contains" kind=parent
+  wire @t18 @d-records -> @w-source "contains" kind=parent
+  wire @t19 @d-contract -> @w-model "contains" kind=parent
+  wire @t20 @d-contract -> @w-api "contains" kind=parent
+  wire @t21 @d-contract -> @w-index "contains" kind=parent
+  wire @t22 @d-contract -> @w-panel-types "contains" kind=parent
+  wire @t23 @d-records -> @w-panels "contains" kind=parent
+  wire @t24 @d-compose -> @w-compose "contains" kind=parent
+  wire @t24b @d-compose -> @w-features "contains" kind=parent
+  wire @t25 @d-ports -> @p-ids "contains" kind=parent
+  wire @t26 @d-ports -> @p-workspace "contains" kind=parent
+  wire @t26b @d-ports -> @w-portpolicy "contains" kind=parent
+  wire @t26c @d-wws -> @w-panelstate "contains" kind=parent
+  wire @t26d @d-wpanels -> @w-preferences "contains" kind=parent
+  wire @t26e @d-winspector -> @w-endpoints "contains" kind=parent
+  wire @t26f @d-wediting -> @w-conntypes "contains" kind=parent
+  wire @t27 @d-edge -> @x-ids "contains" kind=parent
+  wire @t28 @d-edge -> @x-builders "contains" kind=parent
+  wire @t29 @d-edge -> @x-inputs "contains" kind=parent
+  wire @t30 @d-edge -> @x-export "contains" kind=parent
+  wire @t31 @d-service -> @s-brands "contains" kind=parent
+  wire @t32 @d-srecords -> @s-protocol "contains" kind=parent
+  wire @t32b @d-srecords -> @s-server "contains" kind=parent
+  wire @t33 @d-service -> @s-index "contains" kind=parent
+  wire @t34 @d-model -> @m-index "contains" kind=parent
+  wire @t35 @d-ccontract -> @k-brands "contains" kind=parent
+  wire @t36 @d-ccontract -> @k-events "contains" kind=parent
+  wire @t37 @d-crecords -> @k-intent "contains" kind=parent
+  wire @t38 @d-crecords -> @k-draft "contains" kind=parent
+  wire @t39 @d-cflow -> @k-handlers "contains" kind=parent
+  wire @t39b @d-cflow -> @k-geometry "contains" kind=parent
+  wire @t39c @d-cflow -> @k-keyboard "contains" kind=parent
+  wire @t39d @d-cflow -> @k-ids "contains" kind=parent
+  wire @t40 @d-layout -> @l-layout "contains" kind=parent
+  wire @t41 @d-export -> @e-artifact "contains" kind=parent
+
+  section @repo "1 · Target repo tree — identity, errors, and the files P2a, P2b and P7 touch ([collection N] = specified there)" mode=tree direction=down gap=compact order=1 {
+    show @root @d-web @d-contract @d-compose @d-ports @d-records @d-wcore @d-wws @d-wpanels @d-winspector @d-wediting @d-adapters @d-edge @d-service @d-srecords @d-model @d-canvas @d-ccontract @d-crecords @d-cadapters @d-cflow @d-layout @d-export detail=label size=small
+    show @w-brands @w-errors @w-codes @w-source @w-model @w-api @w-index @w-panel-types @w-panels @w-compose @w-features @p-ids @p-workspace @w-portpolicy @w-panelstate @w-preferences @w-endpoints @w-conntypes @x-ids @x-builders @x-inputs @x-export detail=label size=small
+    show @s-brands @s-protocol @s-server @s-index @m-index @k-brands @k-events @k-intent @k-draft @k-handlers @k-geometry @k-keyboard @k-ids @l-layout @e-artifact @x-depcruise detail=label size=small
+    connect @t1 @t2 @t3 @t4 @t4b @t4c @t5 @t6 @t7 @t8 @t9 @t9b @t9c @t9d @t9e @t9f @t10 @t10b @t11 @t12 @t13 @t14 @t14b @t15 @t16 @t17 @t18 @t19 @t20 @t21 @t22 @t23 @t24 @t24b @t25 @t26 @t26b @t26c @t26d @t26e @t26f @t27 @t28 @t29 @t30 @t31 @t32 @t32b @t33 @t34 @t35 @t36 @t37 @t38 @t39 @t39b @t39c @t39d @t40 @t41 source-side=bottom target-side=left
+    root @root
+  }
+
+  node @e-diagnostic entity "Diagnostic" {
+    field @origin "origin" type="'web' | 'authoring' | 'service' | 'canvas' | 'library' | 'layout' | 'language' | 'unrecognised'"
+    field @code "code" type="WebErrorCode (web) | that owner's closed code union (each foreign origin) | 'unrecognised-failure'"
+    field @text "message, recovery" type="string, string (content)"
+    field @source "source" type="the owner's own failure record (foreign only): OperationSource, CanvasDiagnostic, LibraryDiagnostic, …"
+    field @cause "cause" type="ForeignDiagnostic (web only; key omitted when none)"
+    text @i1 "invariant: consumers branch on origin and code only, never on message; 'owner' is gone (ProblemSlot.shown says where)"
+    text @i2 "invariant: the executor that called an endpoint names its owner once (authoring for apply and receipt); a code outside that owner's union => 'unrecognised-failure', raw failure kept in source"
+  }
+  node @e-minted entity "Minted ID" {
+    field @kind "kind" type="'request' | 'collection' | 'section' | 'object' | 'group' | 'relationship' | 'definition' | 'descendant' | 'folder'"
+    field @value "value" type="RequestId | CollectionId | SectionId | ObjectId | GroupId | RelationshipId | DefinitionId | DescendantId | FolderId" key=primary
+    field @text "text" type="'<uuid>' (request) or '<kind>-<uuid>' (collection-, section-, object-, group-, relationship-, definition-, content-, folder-)"
+    text @i1 "invariant: minted only by adapters/edge/ids.ts, checked with the owner's schema by safeParse; failure = 'id-unavailable'"
+    text @i2 "invariant: crypto.randomUUID is called once, in contract/compose/workspace.ts; core never mints"
+  }
+  node @e-gesture entity "GestureId (Canvas brand)" {
+    field @value "value" type="GestureId" key=primary
+    text @i1 "invariant: Canvas parses the host's random text when a gesture begins (gesture-ids.ts); parse fails => no gesture starts"
+    text @i2 "invariant: GestureId and RequestId are different brands; neither converts to the other"
+  }
+  node @e-generation entity "TransportGeneration (Service brand)" {
+    field @value "value" type="TransportGeneration (1 to 128 characters)" key=primary
+    text @i1 "invariant: parsed by the service envelope schemas, and by the web readers of stored drafts with the same Service schema; '' becomes 'unread'"
+  }
+  node @e-count entity "Count ticket" {
+    field @brand "brand" type="'SourceEdit' | 'ReadTicket' | 'HistoryTicket' | 'RenderId' | 'JournalTick'"
+    field @value "value" type="integer, 0 <= value <= MAX_SAFE_INTEGER"
+    text @i1 "invariant: next = nextCount(schema, current) = current + 1; only the owning machine folder may import the schema (ESLint importNames); at the maximum it stays"
+    text @i2 "invariant: only SourceEdit is stored; the reader reuses its schema"
+  }
+  node @e-draftkey entity "Draft key" {
+    field @kind "kind" type="ObjectDraftKey | WireDraftKey | DefinitionDraftKey"
+    field @parts "built from" type="CollectionId + ObjectId | SectionId + RelationshipId | DefinitionId"
+    text @i1 "invariant: made only by the three key functions; readers rebuild the key and reject a stored key that differs"
+  }
+  node @e-slot entity "Storage key" {
+    field @slot "slot" type="RetentionSlot (9 values)"
+    field @workspace "workspace" type="WorkspaceId"
+    text @i1 "invariant: the key text is built only in adapters/sessions/draft-retention.ts"
+  }
+
+  wire @er1 @e-draftkey.@parts -> @e-minted.@value "built from" kind=association from=1 to=1..many
+  wire @er2 @e-slot.@slot -> @e-draftkey.@kind "holds drafts keyed by" kind=association from=1 to=0..many
+  wire @er3 @e-gesture.@value -> @e-minted.@value "never converted to a RequestId" kind=association from=1 to=0..1
+
+  section @entities "2 · Entities and invariants — identities and diagnostics" mode=er direction=right order=2 {
+    show @e-diagnostic @e-minted @e-gesture @e-generation @e-count @e-draftkey @e-slot
+    connect @er1 @er2 @er3
+  }
+
+  wire @m1 @w-compose -> @x-ids.@sig "createIdSource(): IdSource" kind=imports
+  wire @m2 @w-compose -> @x-builders.@sig "createRequestBuilders(): RequestBuilders" kind=imports
+  wire @m3 @w-compose -> @x-export.@sig "exportArtifact(): Promise<Result<BinaryResponse>>" kind=imports
+  wire @m4 @x-builders -> @w-api.@sig "baseWorkspace(): WorkspaceId" kind=imports
+  wire @m5 @x-ids -> @p-ids.@request "implements IdSource" kind=implements
+  wire @m6 @k-handlers -> @k-ids.@sig "nextGestureId(): Result<GestureId>" kind=imports
+  wire @m7 @k-ids -> @k-brands.@sig "gestureId schema (safeParse)" kind=imports
+
+  section @modules "3 · Module imports — one ID source, one request builder, Canvas parses its own gesture IDs" mode=modules layout=layered direction=right order=3 {
+    group @g-web "apps/web/" {
+      group @g-contract "contract/" {
+        show @w-api
+        group @g-compose "compose/" {
+          show @w-compose
+        }
+        group @g-ports "ports/" {
+          show @p-ids
+        }
+      }
+      group @g-adapters "adapters/" {
+        group @g-edge "edge/" layout=grid columns=1 {
+          show @x-ids @x-builders @x-export
+        }
+      }
+    }
+    group @g-canvas "capability/canvas/" {
+      group @g-cadapters "adapters/" {
+        group @g-cflow "react-flow/" {
+          show @k-handlers @k-ids
+        }
+      }
+      group @g-ccontract "contract/" {
+        show @k-brands
+      }
+    }
+    connect @m1 @m2 @m3 @m4 @m5 @m6 @m7
+  }
+
+  node @summary concept "4 · Modules summary — collection 8" size=large {
+    table @summary-t columns=["Module", "Current Line Count", "Lines Added", "Lines Removed", "Net", "Expected final line count (estimate)", "What the module does"] {
+      row @sm-1 cells=["capability/canvas/contract/brands.ts", "6", "+8", "0", "+8", "14", "CHANGE · GestureId brand schema (B5)."]
+      row @sm-2 cells=["capability/canvas/contract/events.ts", "130", "+6", "-6", "0", "130", "CHANGE · Gesture events carry GestureId."]
+      row @sm-3 cells=["capability/canvas/contract/records/intent.ts", "69", "+3", "-3", "0", "69", "CHANGE · Edit intents carry GestureId."]
+      row @sm-4 cells=["capability/canvas/contract/records/draft.ts", "58", "+2", "-2", "0", "58", "CHANGE · Recovery entries keyed by GestureId."]
+      row @sm-5 cells=["capability/canvas/adapters/react-flow/interaction-handlers.ts", "358", "+20", "-208", "-188", "170", "CHANGE · P7 splits it by responsibility before B5 touches its 5 nextGestureId call sites (358 lines today; createInteractions alone is 246). Keeps selection, hover and composition."]
+      row @sm-26 cells=["capability/canvas/adapters/react-flow/geometry-gestures.ts", "0", "+130", "0", "+130", "130", "NEW, moved (P7) · Drag, resize and live preview handlers."]
+      row @sm-27 cells=["capability/canvas/adapters/react-flow/keyboard-commands.ts", "0", "+70", "0", "+70", "70", "NEW, moved (P7) · Keyboard commands and focus targets."]
+      row @sm-28 cells=["capability/canvas/adapters/react-flow/gesture-ids.ts", "0", "+25", "0", "+25", "25", "NEW (B5) · Parses the host's random text into a GestureId; no gesture if it fails."]
+      row @sm-6 cells=["contract/brands.ts", "0", "+130", "0", "+130", "130", "NEW · Every ID type: owner re-exports, web brands, count tickets."]
+      row @sm-7 cells=["contract/ports/ids.ts", "0", "+40", "0", "+40", "40", "NEW · IdSource port."]
+      row @sm-8 cells=["adapters/edge/ids.ts", "0", "+90", "0", "+90", "90", "NEW · IdSource from random(); safeParse; fails only with id-unavailable."]
+      row @sm-9 cells=["contract/errors.ts", "42", "+100", "-12", "+88", "130", "CHANGE · Diagnostic union keyed by origin (web, authoring, service, canvas, library, layout, language, unrecognised); foreignFailure(owner, source)."]
+      row @sm-10 cells=["contract/records/error-codes.ts", "0", "+90", "0", "+90", "90", "NEW · Closed WebErrorCode, grouped by area."]
+      row @sm-11 cells=["contract/records/failure-source.ts", "40", "0", "-40", "-40", "0", "DELETE · Hand copy of the service's OperationSource."]
+      row @sm-12 cells=["adapters/edge/request-builders.ts", "0", "+150", "0", "+150", "150", "NEW, moved · Request builders; moved out of workspace-inputs.ts (P3)."]
+      row @sm-13 cells=["adapters/edge/workspace-inputs.ts", "282", "0", "-282", "-282", "0", "DELETE · Split into request-builders.ts and workspace-decoders.ts (P3)."]
+      row @sm-14 cells=["adapters/edge/export-artifact.ts", "0", "+40", "0", "+40", "40", "NEW · Stateless export call used by the facade."]
+      row @sm-15 cells=["contract/workspace-model.ts", "52", "+5", "-12", "-7", "45", "CHANGE · ID minting leaves; ConnectionPolicy stays."]
+      row @sm-16 cells=["contract/api.ts", "228", "+40", "-38", "+2", "230", "CHANGE · Exports the machine and projection; session-era exports go."]
+      row @sm-17 cells=["contract/index.ts", "23", "+20", "-3", "+17", "40", "CHANGE · Public machine and projection, for the later table tests."]
+      row @sm-18 cells=["contract/panel-types.ts", "75", "+2", "-32", "-30", "45", "CHANGE · P2a: records move to records/panels.ts."]
+      row @sm-19 cells=["contract/records/panels.ts", "45", "+32", "-2", "+30", "75", "CHANGE · P2a and B6b: panel records; PanelSectionId."]
+      row @sm-20 cells=["contract/ports/workspace.ts", "118", "+10", "-68", "-58", "60", "CHANGE · WorkspaceBindings removed; record types move to records (P2a)."]
+      row @sm-21 cells=[".dependency-cruiser.cjs (repo root)", "70", "+1", "0", "+1", "71", "CHANGE · P2b: tsPreCompilationDeps true, so type-only imports are checked."]
+      row @sm-29 cells=["core/workspace/panel-state.ts", "130", "+4", "-4", "0", "130", "CHANGE · P2a: core-direction fix (imports record types, not ports)."]
+      row @sm-30 cells=["core/panels/preferences.ts", "85", "+3", "-3", "0", "85", "CHANGE · P2a: core-direction fix."]
+      row @sm-31 cells=["core/inspector/endpoints.ts", "45", "+3", "-3", "0", "45", "CHANGE · P2a: core-direction fix."]
+      row @sm-32 cells=["contract/ports/connection-policy.ts", "0", "+40", "0", "+40", "40", "NEW, moved (M1) · ConnectionPolicy, IdGrammar and EndpointKindTable; a port may not import core."]
+      row @sm-33 cells=["core/editing/connection/types.ts", "73", "+2", "-40", "-38", "35", "CHANGE (M1) · ConnectionPolicy, IdGrammar, EndpointKindTable move to contract/ports; endpoint types stay."]
+      row @sm-34 cells=["contract/compose/features.ts", "102", "+3", "-3", "0", "102", "CHANGE · B3b: content IDs from IdSource.descendantId (was crypto.randomUUID at line 79)."]
+      row @sm-35 cells=["apps/service/contract/records/server.ts", "84", "+10", "-10", "0", "84", "CHANGE · P2b: 2 service cycle reports."]
+      row @sm-36 cells=["capability/layout/{core, contract/records}", "n/a", "+80", "-80", "0", "n/a", "CHANGE · P2b: 7 cycle reports; record types move to records."]
+      row @sm-37 cells=["capability/export/contract/records/artifact.ts", "114", "+15", "-15", "0", "114", "CHANGE · P2b: 2 cycle reports."]
+      row @sm-22 cells=["apps/service/contract/brands.ts", "0", "+25", "0", "+25", "25", "NEW · TransportGeneration brand and its runtime schema, used by the envelope and by web readers."]
+      row @sm-23 cells=["apps/service/contract/records/protocol.ts", "60", "+4", "-2", "+2", "62", "CHANGE · Envelopes parse the generation as TransportGeneration."]
+      row @sm-24 cells=["apps/service/contract/index.ts", "42", "+5", "0", "+5", "47", "CHANGE · Exports TransportGeneration (type and schema), ErrorCode and OperationSource."]
+      row @sm-25 cells=["capability/model/contract/index.ts", "82", "+1", "-1", "0", "82", "CHANGE · Exports the CollectionId, GroupId and RelationshipId types."]
+      row @sm-total cells=["TOTAL · 37 files", "2413", "+1209", "-869", "+340", "2753", "Estimates, not gates. Paths are under apps/web/ unless they start with capability/, apps/service/ or name the repo root."]
+    }
+  }
+  section @s-summary "4 · Modules summary — identity and errors" mode=grid columns=1 order=4 {
+    show @summary
+  }
+
+  node @crud note "5 · Capability ownership — identities and diagnostics" size=large {
+    table @crud-t columns=["Object", "Create", "Read", "Update", "Delete"] {
+      row @e-diagnostic-row cells=["Diagnostic", "contract/errors.ts — failure(), foreignFailure(); every machine and reader", "notices/notices.ts; view/status.ts; React ProblemBar", "never", "notices/notices.ts — dismissed or cleared"]
+      row @e-minted-row cells=["Minted ID", "adapters/edge/ids.ts — IdSource, called by the facade files (adapters/facade/*.ts) and effects/canvas-intake.ts", "core machines, from the event payload", "never", "never"]
+      row @e-gesture-row cells=["GestureId", "capability/canvas gesture-ids.ts — nextGestureId() at gesture begin", "gesture/*.ts; adapters/effects/scene.ts (settle, preview)", "never", "never"]
+      row @e-generation-row cells=["TransportGeneration", "apps/service — local-credentials.ts mints; protocol.ts parses", "catalogue, diagram, journal (captured sends)", "never", "never"]
+      row @e-count-row cells=["Count ticket", "contract/brands.ts — first* constants", "the owning machine's answer check", "the owning machine folder only — nextCount() (lint-enforced)", "never"]
+      row @e-draftkey-row cells=["Draft key", "core/inspector/object-edits.ts, wire-edits.ts, core/definitions/draft-edits.ts — the key functions", "adapters/readers/* (rebuild and compare)", "never", "with its draft"]
+      row @e-slot-row cells=["Storage key", "adapters/sessions/draft-retention.ts", "draft-retention.ts", "never", "never"]
+    }
+  }
+  section @ownership "5 · Capability ownership — identities and diagnostics" mode=grid columns=1 order=5 {
+    show @crud
+  }
+
+  node @f-person start "A person clicks Add, or drops on the Canvas" {}
+  node @f-facade step "Facade or Canvas intake asks IdSource" {}
+  node @f-random step "random() — the one crypto.randomUUID" {}
+  node @f-check decision "Owner schema accepts it? (safeParse)" {}
+  node @f-event step "Event carries the branded ID into core" {}
+  node @f-report end "Report 'id-unavailable'; the draft is kept" {}
+  node @f-core end "Core uses it; core never mints" {}
+
+  wire @fw1 @f-person -> @f-facade "action" kind=flow step=1
+  wire @fw2 @f-facade -> @f-random "new value" kind=flow step=2
+  wire @fw3 @f-random -> @f-check "check" kind=flow step=3
+  wire @fw4 @f-check -> @f-event "yes" kind=flow step=4
+  wire @fw5 @f-check -> @f-report "no" kind=flow style=dashed
+  wire @fw6 @f-event -> @f-core "dispatch" kind=flow step=5
+
+  section @flow-51 "7 · Where a new ID comes from" mode=flow layout=layered direction=right order=6 {
+    show @f-person @f-facade @f-random @f-check @f-event @f-report @f-core
+    connect @fw1 @fw2 @fw3 @fw4 @fw5 @fw6
+  }
+}

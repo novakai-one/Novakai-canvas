@@ -26,7 +26,10 @@ function originalGeometry(
     .map((target) => geometryEntry(state, target));
 }
 /** Only nodes and sections support placement; wire/sequence mutation uses its own semantic control. */
-function geometryEntry(state: SessionState, target: Target): GeometryEntry {
+function geometryEntry(
+  state: SessionState,
+  target: Target,
+): GeometryEntry {
   if (target.kind === 'wire' || target.kind === 'sequence')
     reject('invalid-gesture', targetKey(target), 'This target cannot be moved as a node');
   if (treeNode(state, target))
@@ -35,7 +38,10 @@ function geometryEntry(state: SessionState, target: Target): GeometryEntry {
   return { target, box: info.box, locked: info.locked };
 }
 /** Route starts retain the displayed endpoints and path; caller cannot introduce a foreign wire. */
-function routeDraft(state: SessionState, event: EventOf<'begin'>): RouteDraft {
+function routeDraft(
+  state: SessionState,
+  event: EventOf<'begin'>,
+): RouteDraft {
   const target = event.targets[0];
   if (target?.kind !== 'wire')
     return reject('invalid-gesture', event.id, 'Route requires one wire target');
@@ -59,7 +65,10 @@ function routeDraft(state: SessionState, event: EventOf<'begin'>): RouteDraft {
   };
 }
 /** Draft identifiers cannot collide with pending/recoverable work; host allocates a fresh gesture ID. */
-function validateStart(state: SessionState, event: EventOf<'begin'>): void {
+function validateStart(
+  state: SessionState,
+  event: EventOf<'begin'>,
+): void {
   if (state.draft !== null)
     reject('invalid-gesture', event.id, 'Finish or cancel the current gesture');
   validateAvailable(state, event);
@@ -80,7 +89,10 @@ function requireSingleTarget(event: EventOf<'begin'>): void {
     reject('invalid-gesture', event.id, 'This gesture requires one target');
 }
 /** Build one recoverable gesture; public transition returns a typed failure without changing state. */
-export function beginDraft(state: SessionState, event: EventOf<'begin'>): GestureDraft {
+export function beginDraft(
+  state: SessionState,
+  event: EventOf<'begin'>,
+): GestureDraft {
   validateStart(state, event);
   if (event.gesture === 'route') return routeDraft(state, event);
   const original = originalGeometry(state, event.targets);
@@ -96,7 +108,10 @@ export function beginDraft(state: SessionState, event: EventOf<'begin'>): Gestur
 }
 
 /** Fixed read-only and current service gates both protect draft creation. */
-function validateAvailable(state: SessionState, event: EventOf<'begin'>): void {
+function validateAvailable(
+  state: SessionState,
+  event: EventOf<'begin'>,
+): void {
   if (!canMutate(state))
     reject('mutation-unavailable', event.id, 'Editing is currently unavailable');
 }

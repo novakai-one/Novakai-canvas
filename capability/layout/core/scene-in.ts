@@ -11,8 +11,8 @@ import type {
 import type {
   PrototypeNodePort,
   PrototypeLayoutMeasure,
-  RoadPrototypeScene,
 } from '../contract/records/road-prototype.js';
+import type { RoadPrototypeScene } from '../contract/records/road-scene.js';
 import { createNestedRoadScene } from './prototype-nested-scene.js';
 import { inspectNestedWires } from './nested-wire-inspection.js';
 import { reject } from './validation/outcomes.js';
@@ -25,7 +25,10 @@ function dimensions(node: VisualNode) {
     height: Math.max(node.height, node.placement?.height ?? 0),
   };
 }
-function required<T>(value: T | undefined, id: string): T {
+function required<T>(
+  value: T | undefined,
+  id: string,
+): T {
   if (value === undefined) return reject('invalid-input', id, 'Nested layout identity is missing');
   return value;
 }
@@ -37,7 +40,11 @@ function portId(
 ): string {
   return `node-${number}:${role}:${side}:${member ?? ''}`;
 }
-function ports(node: VisualNode, number: number, advance: number): readonly PrototypeNodePort[] {
+function ports(
+  node: VisualNode,
+  number: number,
+  advance: number,
+): readonly PrototypeNodePort[] {
   const { width, height } = dimensions(node);
   const sides: readonly Side[] = ['left', 'right', 'top', 'bottom'];
   const middle = {
@@ -67,7 +74,11 @@ function ports(node: VisualNode, number: number, advance: number): readonly Prot
     ),
   ]);
 }
-function nodeSpec(node: VisualNode, number: number, advance: number): NestedNodeSpec {
+function nodeSpec(
+  node: VisualNode,
+  number: number,
+  advance: number,
+): NestedNodeSpec {
   return {
     number,
     label: node.label,
@@ -237,7 +248,10 @@ export function toEngineScene(
 }
 
 /** Route-only supplies existing boxes; manual moves use the same parent-local representation on reload. */
-export function fixedSource(source: VisualSection, fixed?: readonly PlacedNode[]): VisualSection {
+export function fixedSource(
+  source: VisualSection,
+  fixed?: readonly PlacedNode[],
+): VisualSection {
   if (fixed === undefined) return source;
   return {
     ...source,

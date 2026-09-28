@@ -6,7 +6,10 @@ import type { RenderPort } from '../contract/ports/rendering.js';
 import type { Result } from '../contract/errors.js';
 import { fail } from '../contract/errors.js';
 /** React serialization errors reject export; caller retains the current collection and repairs its resource. */
-function render(element: ReactNode, native: StaticRenderer): Result<string> {
+function render(
+  element: ReactNode,
+  native: StaticRenderer,
+): Result<string> {
   try {
     return { ok: true, value: native(element) };
   } catch {

@@ -1,48 +1,57 @@
-import { parseArgs } from 'node:util';
-import { resolve } from 'node:path';
-import { runHeadless, headlessOptions, type HeadlessOptions } from '../contract/index.js';
-/** CLI owns malformed arguments and terminal display; render failures retain owner diagnostics. */
-function options(args: readonly string[]): HeadlessOptions {
-  const { values } = parseArgs({
-    args: args.filter((arg) => arg !== '--'),
-    options: {
-      collection: { type: 'string' },
-      theme: { type: 'string' },
-      'theme-file': { type: 'string' },
-      out: { type: 'string' },
-      format: { type: 'string', default: 'png' },
-      labels: { type: 'boolean', default: false },
-    },
-  });
-  return headlessOptions.parse({
-    collection: required(values.collection, '--collection'),
-    theme: values.theme,
-    themeFile: values['theme-file'],
-    out: resolve(required(values.out, '--out')),
-    format: format(values.format),
-    labels: values.labels,
-    root: new URL('../../../', import.meta.url).pathname,
-  });
-}
-/** Raw argv text is guarded for presence here and branded by headlessOptions; required arguments fail before any temporary asset store is created; main prints usage and permits retry. */
-function required(value: string | undefined, name: string): string {
-  if (!value) throw new TypeError(name + ' is required');
-  return value;
-}
-/** Raw argv format is guarded into a closed literal union; only the requested artifact encoders are exposed; main handles invalid input without partial output. */
-function format(value: string | undefined): 'svg' | 'png' {
-  if (value === 'svg' || value === 'png') return value;
-  throw new TypeError('--format must be svg or png');
-}
-/** Standalone read-only command; diagnostics set a failing process status and never modify stored state. */
+/*
+ * Why this file exists
+ *
+ * An agent needs to check what a diagram looks like, without a browser.
+ * `pnpm render:png --collection states --out out/` draws a collection to image files.
+ *
+ * This file is that program. It hands the words to `runRender` and prints the result as JSON on
+ * stdout. A typing mistake prints as lines on stderr instead, like `pnpm canvas`. Any failure
+ * exits with 1. It never changes a saved collection.
+ */
+import { fileURLToPath } from 'node:url';
+import type { CliFailure, RenderFailure, RenderReport, Result } from '../contract/index.js';
+import { formatFailure, runRender } from '../contract/index.js';
+
+/** The checkout this file ships in; every shipped theme, collection and wasm file is below it. */
+const root = fileURLToPath(new URL('../../../', import.meta.url));
+
+/** Everything a render can come back with: its report, or why it failed. */
+type RenderOutcome = Result<RenderReport, RenderFailure | CliFailure>;
+
+/** Runs the typed render, prints what came back, and sets the exit code to 1 on a failure. */
 async function main(): Promise<void> {
-  try {
-    const result = await runHeadless(options(process.argv.slice(2)));
-    console.log(JSON.stringify(result));
-    process.exitCode = result.ok ? 0 : 1;
-  } catch (error) {
-    console.error(String(error));
+  const argv = process.argv.slice(2);
+  const outcome = await runRender(argv, root);
+  if (!outcome.ok) {
     process.exitCode = 1;
   }
+  printOutcome(outcome);
 }
-await main();
+
+/** Prints a typing mistake as lines on stderr, and anything else as JSON on stdout. */
+function printOutcome(outcome: RenderOutcome): void {
+  if (!outcome.ok && isTypingMistake(outcome.error)) {
+    printFailure(outcome.error);
+    return;
+  }
+  process.stdout.write(`${JSON.stringify(outcome)}\n`);
+}
+
+/** Whether the render failed because its flags were typed wrong (`invalid-arguments`). */
+function isTypingMistake(failure: RenderFailure | CliFailure): failure is CliFailure {
+  return failure.code === 'invalid-arguments';
+}
+
+/** Prints the failure as lines on stderr, the same way `pnpm canvas` does. */
+function printFailure(failure: CliFailure): void {
+  const lines = formatFailure(failure);
+  process.stderr.write(`${lines.join('\n')}\n`);
+}
+
+/** Prints what went wrong and sets the exit code to 1. Only a bug gets here: failures are values. */
+function reportCrash(thrown: unknown): void {
+  process.stderr.write(`${String(thrown)}\n`);
+  process.exitCode = 1;
+}
+
+await main().catch(reportCrash);

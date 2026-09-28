@@ -28,7 +28,10 @@ export interface Presentation {
   supplement(input: unknown): Result<SupplementalMeasurements>;
   measureText(request: TextRequest): Result<MeasuredContent>;
   renderContent(node: unknown): Result<string>;
-  marker(kind: unknown, paint: unknown): Result<string>;
+  marker(
+    kind: unknown,
+    paint: unknown,
+  ): Result<string>;
 }
 
 /** Extra notation metrics share the same pinned font and marker geometry as the ordinary projection. */

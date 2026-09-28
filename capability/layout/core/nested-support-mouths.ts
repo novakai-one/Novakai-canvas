@@ -2,23 +2,14 @@ import type {
   NestedSupportGate,
   NestedSupportFootprint,
 } from '../contract/records/nested-support.js';
-import type {
-  PrototypePortLocation,
-  PrototypeRoad,
-  RoadPrototypeScene,
-} from '../contract/records/road-prototype.js';
+import type { PrototypePortLocation, PrototypeRoad } from '../contract/records/road-prototype.js';
+import type { RoadPrototypeScene } from '../contract/records/road-scene.js';
 import { terminalDepth } from './nested-terminal-pins.js';
 import { axes } from './prototype-road-geometry.js';
 import { nestedLanePitch } from './prototype-nested-placement.js';
-import { required, type retainSupportInput } from './nested-support-input.js';
-import {
-  anchor,
-  equate,
-  equateOffset,
-  reject,
-  type Anchor,
-  type SupportGraph,
-} from './nested-support-graph.js';
+import type { retainSupportInput } from './nested-support-input.js';
+import { anchor, equate, equateOffset, reject, required } from './nested-support-graph.js';
+import type { Anchor, SupportGraph } from './nested-support-graph.js';
 import { directedRelation } from './nested-support-structure.js';
 
 type Input = ReturnType<typeof retainSupportInput>;
@@ -94,7 +85,11 @@ function terminalMouth(
     );
   });
 }
-function admitPins(port: PrototypePortLocation, count: number, available: number): void {
+function admitPins(
+  port: PrototypePortLocation,
+  count: number,
+  available: number,
+): void {
   if (count === 0 || port.fixed) return;
   const need = nestedLanePitch * 2 + Math.max(0, count - 1) * nestedLanePitch;
   if (need > available)
@@ -221,7 +216,10 @@ function gateNormal(
   );
   return id;
 }
-function sideOrder(context: MouthContext, gates: readonly NestedSupportGate[]): void {
+function sideOrder(
+  context: MouthContext,
+  gates: readonly NestedSupportGate[],
+): void {
   const groups = new Map<string, NestedSupportGate[]>();
   const ports = new Map(context.scene.ports.map((p) => [p.portId, p]));
   gates.forEach((g) => {

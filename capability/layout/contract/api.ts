@@ -50,7 +50,10 @@ export { toCollection, toSection, toParent } from '../core/geometry/coordinates.
 export { hiddenLabelBoxes } from '../core/routing/hidden-labels.js';
 
 /** Independently validate and reconstruct a worker/HTTP scene; Canvas retains its accepted scene when rejected. */
-export function readScene(input: unknown, owners: SceneReaderOwners): Result<Scene> {
+export function readScene(
+  input: unknown,
+  owners: SceneReaderOwners,
+): Result<Scene> {
   return protect(() => {
     const request = readInspection(input, owners.projection);
     return admitScene(

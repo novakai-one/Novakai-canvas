@@ -11,7 +11,11 @@ export interface ContentMeasurePlan {
   readonly width: number;
 }
 /** Measure headings with the same checked pinned metrics used by the final text pass. */
-function headingWidth(label: string, context: ContentContext, maximum: number): number {
+function headingWidth(
+  label: string,
+  context: ContentContext,
+  maximum: number,
+): number {
   return measureText(
     {
       text: label,

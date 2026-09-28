@@ -25,18 +25,27 @@ function sectionInfo(section: PlacedSection): TargetInfo {
   };
 }
 /** Section origin plus measured parent origin defines the only parent-local conversion. */
-function parentOrigin(node: PlacedNode, section: PlacedSection): Point {
+function parentOrigin(
+  node: PlacedNode,
+  section: PlacedSection,
+): Point {
   const parent = section.nodes.find((candidate) => candidate.id === node.parent);
   if (!parent) return section.origin;
   return { x: section.origin.x + parent.box.x, y: section.origin.y + parent.box.y };
 }
 /** Explicit parent target keeps generated scene identities opaque. */
-function parentTarget(node: PlacedNode, section: PlacedSection): Target {
+function parentTarget(
+  node: PlacedNode,
+  section: PlacedSection,
+): Target {
   if (node.parent === null) return { kind: 'section', id: section.id };
   return { kind: 'node', section: section.id, id: node.parent };
 }
 /** Node index carries measured minima for resize and canonical labels for accessibility. */
-function nodeInfo(node: PlacedNode, section: PlacedSection): TargetInfo {
+function nodeInfo(
+  node: PlacedNode,
+  section: PlacedSection,
+): TargetInfo {
   const target: Target = { kind: 'node', section: section.id, id: node.id };
   return {
     target,

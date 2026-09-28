@@ -17,15 +17,27 @@ interface SequenceSpotlight {
   readonly y: number;
 }
 /** Participant lookup matches the supplied node by target within one section; missing nodes stay undecorated. */
-function participantNode(props: SequenceProps, section: string, id: string): ViewNode | undefined {
+function participantNode(
+  props: SequenceProps,
+  section: string,
+  id: string,
+): ViewNode | undefined {
   return props.nodes.find((node) => node.target.id === id && node.placed.sectionId === section);
 }
 /** Supplied participant visibility determines reading-mode sequence visibility; no aggregate message is invented. */
-function visibleParticipant(props: SequenceProps, section: string, id: string): boolean {
+function visibleParticipant(
+  props: SequenceProps,
+  section: string,
+  id: string,
+): boolean {
   return participantNode(props, section, id)?.hidden === false;
 }
 /** Role stroke tints participant material; unresolved participants keep the shared neutral paint. */
-function participantTint(props: SequenceProps, section: string, id: string): string {
+function participantTint(
+  props: SequenceProps,
+  section: string,
+  id: string,
+): string {
   const node = participantNode(props, section, id);
   if (node === undefined) return props.paint.stroke;
   if (props.followsInterfaceRoles === true)
@@ -33,7 +45,11 @@ function participantTint(props: SequenceProps, section: string, id: string): str
   return node.placed.measured.paint.stroke;
 }
 /** Reading collapse hides annotations incident to hidden participants, while canonical sequence data remains intact. */
-function visibleEvent(props: SequenceProps, section: string, event: SequenceEvent): boolean {
+function visibleEvent(
+  props: SequenceProps,
+  section: string,
+  event: SequenceEvent,
+): boolean {
   return [
     visibleParticipant(props, section, event.source),
     visibleParticipant(props, section, event.target),

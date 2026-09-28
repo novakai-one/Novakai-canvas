@@ -18,7 +18,10 @@ export function connectionPoints(
     return [from.exit, corner(from, to), to.entry];
   return parallelPath(from, to, junction);
 }
-function corner(from: PrototypeLane, to: PrototypeLane): PrototypePoint {
+function corner(
+  from: PrototypeLane,
+  to: PrototypeLane,
+): PrototypePoint {
   if (!horizontal(from.direction)) return { x: from.exit.x, y: to.entry.y };
   return { x: to.entry.x, y: from.exit.y };
 }
@@ -42,7 +45,10 @@ interface Segment {
   readonly low: number;
   readonly high: number;
 }
-function line(a: PrototypePoint, b: PrototypePoint): Segment {
+function line(
+  a: PrototypePoint,
+  b: PrototypePoint,
+): Segment {
   const axis = a.y === b.y ? 'x' : 'y';
   return {
     axis,
@@ -57,11 +63,17 @@ function segments(points: readonly PrototypePoint[]): readonly Segment[] {
     .map((b, i) => line(points[i] ?? b, b))
     .filter((s) => s.high > s.low);
 }
-function cross(a: Segment, b: Segment): readonly PrototypePoint[] {
+function cross(
+  a: Segment,
+  b: Segment,
+): readonly PrototypePoint[] {
   if (a.axis === b.axis) return [];
   return crossingPoint(a, b);
 }
-function crossingPoint(a: Segment, b: Segment): readonly PrototypePoint[] {
+function crossingPoint(
+  a: Segment,
+  b: Segment,
+): readonly PrototypePoint[] {
   if (!intersects(a, b)) return [];
   return [a.axis === 'x' ? { x: b.at, y: a.at } : { x: a.at, y: b.at }];
 }
@@ -155,7 +167,10 @@ export function crossingExamples(
   return junctions.flatMap((junction) => example(junction, index));
 }
 
-function alignedForward(from: PrototypeLane, to: PrototypeLane): boolean {
+function alignedForward(
+  from: PrototypeLane,
+  to: PrototypeLane,
+): boolean {
   const across = !horizontal(from.direction) ? 'x' : 'y';
   return from.direction === to.direction && from.exit[across] === to.entry[across];
 }
@@ -175,6 +190,9 @@ function cachedSegments(
   return result;
 }
 
-function intersects(a: Segment, b: Segment): boolean {
+function intersects(
+  a: Segment,
+  b: Segment,
+): boolean {
   return b.at > a.low && b.at < a.high && a.at > b.low && a.at < b.high;
 }

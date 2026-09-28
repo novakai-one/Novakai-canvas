@@ -72,7 +72,10 @@ function interfaceRoleField(enabled: boolean): { readonly followsInterfaceRoles?
   return { followsInterfaceRoles: true };
 }
 /** Re-evaluate admitted roots; the public resolver owns rejection and the host retains its prior scope. */
-export function rootsOnly(source: SourceSet, values: TokenValues): TokenValues {
+export function rootsOnly(
+  source: SourceSet,
+  values: TokenValues,
+): TokenValues {
   return Object.fromEntries(
     source.definitions
       .filter((item) => item.expression.op === 'literal')
@@ -149,7 +152,11 @@ function rolePaint(
 }
 
 /** Resolve one absolute text role; resolver boundary translates missing tokens into typed failure. */
-function metric(resolved: ResolvedTokenSet, font: string, sizeToken: string): TextMetric {
+function metric(
+  resolved: ResolvedTokenSet,
+  font: string,
+  sizeToken: string,
+): TextMetric {
   const size = metricNumber(tokenNumber(resolved.values, sizeToken), sizeToken);
   const ratio = tokenNumber(resolved.values, 'lineHeight.body');
   return {
@@ -170,7 +177,11 @@ function typography(resolved: ResolvedTokenSet): DiagramTypography {
   };
 }
 /** Width bands describe interior content; token validation owns finite positive values. */
-function band(values: TokenValues, preferred: string, maximum: string): SizeBand {
+function band(
+  values: TokenValues,
+  preferred: string,
+  maximum: string,
+): SizeBand {
   return {
     preferred: tokenNumber(values, preferred),
     maximum: tokenNumber(values, maximum),
@@ -198,11 +209,17 @@ function contentSizing(values: TokenValues): ContentSizing {
   };
 }
 /** Numeric token extraction has one local policy for projection consumers. */
-function tokenNumber(values: TokenValues, id: string): number {
+function tokenNumber(
+  values: TokenValues,
+  id: string,
+): number {
   return numeric(member(values, id), id);
 }
 /** Presentation-bound metrics must satisfy its finite positive public schema. */
-function metricNumber(value: number, path: string): number {
+function metricNumber(
+  value: number,
+  path: string,
+): number {
   if (!Number.isFinite(value) || value <= 0 || value > 10000)
     return reject(
       'invalid-input',

@@ -6,21 +6,102 @@ import type { Section } from '../../contract/records/section.js';
 import { diagnoseWhen } from '../invariants/issues.js';
 import { hasCycle, visibleObjects } from './groups.js';
 import { visibleRelationships } from './modes.js';
+import { sectionPath } from './paths.js';
 
-/** Explicit participation wins. Without it, notes annotate the tree and other objects participate. */
-function participatesInTree(id: ObjectId, section: Section, collection: Collection): boolean {
-  const appearance = section.appearances.find((candidate) => candidate.object === id);
-  if (appearance?.participation !== undefined) return appearance.participation === 'tree';
-  const object = collection.objects.find((candidate) => candidate.id === id);
+/**
+ * Checks a `tree` section's parent graph; other modes give nothing. Layout and annotation
+ * placement are not checked here.
+ *
+ * Participants are the visible objects (in `visibleObjects` order) whose appearance says
+ * `participation: 'tree'`, or, without a participation, every one that is not a `note` object
+ * (including a visible ID with no object in the collection).
+ * Parent edges are the drawn `parent` relationships. Every failure is a `tree` diagnostic,
+ * collected in this order:
+ * 1. the root, at `sections.<id>.root`: with no participants there must be no root ("Empty tree
+ *    has no root"); otherwise the root must be a participant ("Tree root must be an explicit
+ *    participant");
+ * 2. each parent edge must connect two participants, at `sections.<id>.wires.<relationship>`,
+ *    "Parent edge must connect tree participants";
+ * 3. the root must have no parent and every other participant exactly one, at
+ *    `sections.<id>.appearances.<object>`, "Root has zero parents; every other participant
+ *    exactly one";
+ * 4. following first parents from each participant must not repeat an object, at
+ *    `sections.<id>.appearances.<object>`, "Parent graph must be acyclic and rooted".
+ *
+ * Pure: Authoring owns correction, commit and crash recovery.
+ *
+ * @param section - A parsed section.
+ * @param collection - The collection the section belongs to.
+ * @returns Every diagnostic, in the order above, or an empty list.
+ * @throws Never for parsed data.
+ */
+export function validateTree(
+  section: Section,
+  collection: Collection,
+): readonly Diagnostic[] {
+  if (section.mode !== 'tree') {
+    return [];
+  }
+  const participants = visibleObjects(section).filter(
+    /** Tells whether the object takes part in the tree. */
+    (id) => participatesInTree(id, section, collection),
+  );
+  const parents = visibleRelationships(section, collection).filter(
+    /** Tells whether the relationship is a parent edge. */
+    (wire) => wire.kind === 'parent',
+  );
+  const rootIssues = validateRoot(participants, section);
+  const edgeIssues = parents.flatMap(
+    /** Checks one parent edge's endpoints. */
+    (wire) => validateParentEdge(wire, participants, section),
+  );
+  const countIssues = participants.flatMap(
+    /** Checks one participant's parent count. */
+    (id) => validateParentCount(id, parents, section),
+  );
+  const cycleIssues = participants.flatMap(
+    /** Checks one participant's parent chain. */
+    (id) => validateAncestry(id, parents, section),
+  );
+  return [...rootIssues, ...edgeIssues, ...countIssues, ...cycleIssues];
+}
+
+/**
+ * Tells whether an object takes part in the tree. An explicit participation decides; without
+ * one, notes are annotations and every other object (or a missing one) takes part.
+ */
+function participatesInTree(
+  id: ObjectId,
+  section: Section,
+  collection: Collection,
+): boolean {
+  const appearance = section.appearances.find(
+    /** Tells whether this appearance shows the object. */
+    (candidate) => candidate.object === id,
+  );
+  if (appearance?.participation !== undefined) {
+    return appearance.participation === 'tree';
+  }
+  const object = collection.objects.find(
+    /** Tells whether this is the object. */
+    (candidate) => candidate.id === id,
+  );
   return object?.kind !== 'note';
 }
 
-/** Empty trees have no root; nonempty trees must explicitly name one of their participants. */
-function validateRoot(participants: readonly ObjectId[], section: Section): readonly Diagnostic[] {
-  const path = `sections.${section.id}.root`;
-  if (participants.length === 0)
+/** Checks the root: none for an empty tree, otherwise one of the participants. */
+function validateRoot(
+  participants: readonly ObjectId[],
+  section: Section,
+): readonly Diagnostic[] {
+  const path = `${sectionPath(section)}.root`;
+  if (participants.length === 0) {
     return diagnoseWhen(section.root !== undefined, 'tree', path, 'Empty tree has no root');
-  const rootIsParticipant = participants.some((id) => id === section.root);
+  }
+  const rootIsParticipant = participants.some(
+    /** Tells whether this participant is the root. */
+    (id) => id === section.root,
+  );
   return diagnoseWhen(
     !rootIsParticipant,
     'tree',
@@ -29,7 +110,7 @@ function validateRoot(participants: readonly ObjectId[], section: Section): read
   );
 }
 
-/** Tree annotations can have reference wires, but cannot be endpoints of parent edges. */
+/** Reports a parent edge unless both ends are participants (annotations cannot be in the tree). */
 function validateParentEdge(
   wire: Relationship,
   participants: readonly ObjectId[],
@@ -40,69 +121,79 @@ function validateParentEdge(
   return diagnoseWhen(
     !sourceParticipates || !targetParticipates,
     'tree',
-    `sections.${section.id}.wires.${wire.id}`,
+    `${sectionPath(section)}.wires.${wire.id}`,
     'Parent edge must connect tree participants',
   );
 }
 
-/** The root has no parent; every other participant must have exactly one. */
-function expectedParentCount(id: ObjectId, section: Section): number {
-  if (id === section.root) return 0;
+/** Returns how many parents an object should have: none for the root, one otherwise. */
+function expectedParentCount(
+  id: ObjectId,
+  section: Section,
+): number {
+  if (id === section.root) {
+    return 0;
+  }
   return 1;
 }
 
-/** A missing edge terminates traversal; excess parents are diagnosed by their count. */
-function firstParent(id: ObjectId, parents: readonly Relationship[]): ObjectId | undefined {
-  const edge = parents.find((wire) => wire.target.object === id);
+/** Tells whether a parent edge points at the object (the child end). */
+function pointsAt(
+  wire: Relationship,
+  id: ObjectId,
+): boolean {
+  return wire.target.object === id;
+}
+
+/** Returns the source of the first parent edge into an object, if any. */
+function firstParent(
+  id: ObjectId,
+  parents: readonly Relationship[],
+): ObjectId | undefined {
+  const edge = parents.find(
+    /** Tells whether the edge points at the object. */
+    (wire) => pointsAt(wire, id),
+  );
   return edge?.source.object;
 }
 
-/** Parent counts distinguish the root from every nonroot participant. */
+/** Reports a participant whose number of parent edges differs from the expected count. */
 function validateParentCount(
   id: ObjectId,
   parents: readonly Relationship[],
   section: Section,
 ): readonly Diagnostic[] {
-  const actualCount = parents.filter((wire) => wire.target.object === id).length;
+  const incoming = parents.filter(
+    /** Tells whether the edge points at the object. */
+    (wire) => pointsAt(wire, id),
+  );
+  const actualCount = incoming.length;
   return diagnoseWhen(
     actualCount !== expectedParentCount(id, section),
     'tree',
-    `sections.${section.id}.appearances.${id}`,
+    `${sectionPath(section)}.appearances.${id}`,
     'Root has zero parents; every other participant exactly one',
   );
 }
 
-/** With valid counts, rejecting cycles ensures every participant reaches the explicit root. */
+/**
+ * Reports a participant whose first-parent chain repeats an object. With the counts checked,
+ * this means every participant reaches the root.
+ */
 function validateAncestry(
   id: ObjectId,
   parents: readonly Relationship[],
   section: Section,
 ): readonly Diagnostic[] {
-  const cycleExists = hasCycle(id, (current) => firstParent(current, parents));
+  const cycleExists = hasCycle(
+    id,
+    /** The object's first parent. */
+    (current) => firstParent(current, parents),
+  );
   return diagnoseWhen(
     cycleExists,
     'tree',
-    `sections.${section.id}.appearances.${id}`,
+    `${sectionPath(section)}.appearances.${id}`,
     'Parent graph must be acyclic and rooted',
   );
-}
-
-/**
- * Validates a rooted parent graph over the participating visible objects in a tree view.
- * Other modes are ignored. Pure diagnostic accumulation; Authoring owns correction and
- * commit/recovery. Layout and annotation placement are outside this validator.
- */
-export function validateTree(section: Section, collection: Collection): readonly Diagnostic[] {
-  if (section.mode !== 'tree') return [];
-  const participants = visibleObjects(section).filter((id) =>
-    participatesInTree(id, section, collection),
-  );
-  const parents = visibleRelationships(section, collection).filter(
-    (wire) => wire.kind === 'parent',
-  );
-  const rootIssues = validateRoot(participants, section);
-  const edgeIssues = parents.flatMap((wire) => validateParentEdge(wire, participants, section));
-  const countIssues = participants.flatMap((id) => validateParentCount(id, parents, section));
-  const cycleIssues = participants.flatMap((id) => validateAncestry(id, parents, section));
-  return [...rootIssues, ...edgeIssues, ...countIssues, ...cycleIssues];
 }

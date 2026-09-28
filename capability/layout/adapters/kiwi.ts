@@ -14,17 +14,26 @@ export type SolverFactory = () => Solver;
 const operators = { eq: Operator.Eq, le: Operator.Le, ge: Operator.Ge };
 const strengths = { required: Strength.required, strong: Strength.strong, weak: Strength.weak };
 /** Native variables are job-local handles; identity lookup never falls back to an unrelated variable. */
-function variable(id: string, variables: ReadonlyMap<string, Variable>): Variable {
+function variable(
+  id: string,
+  variables: ReadonlyMap<string, Variable>,
+): Variable {
   const found = variables.get(id);
   if (!found) throw new Error('Unknown solver variable');
   return found;
 }
 /** A term names its coefficient and variable explicitly rather than building opaque expression tuples inline. */
-function term(item: Term, variables: ReadonlyMap<string, Variable>): Expression {
+function term(
+  item: Term,
+  variables: ReadonlyMap<string, Variable>,
+): Expression {
   return new Expression([item.coefficient, variable(item.variable, variables)]);
 }
 /** Constraint semantics were compiled by core; this stage only maps them to the native numeric ABI. */
-function constraint(item: LinearConstraint, variables: ReadonlyMap<string, Variable>): Constraint {
+function constraint(
+  item: LinearConstraint,
+  variables: ReadonlyMap<string, Variable>,
+): Constraint {
   const expression = item.terms.reduce(
     (expression, item) => expression.plus(term(item, variables)),
     new Expression(),
@@ -50,7 +59,10 @@ function add(
   }
 }
 /** Patched native contradictions carry an explicit code; engine failures are never inferred from message text. */
-function rejection(error: unknown, item: LinearConstraint): Result<void> {
+function rejection(
+  error: unknown,
+  item: LinearConstraint,
+): Result<void> {
   if (isContradiction(error))
     return failure(
       'constraint-conflict',
@@ -99,7 +111,10 @@ function insertNext(
   return add(item, variables, solver);
 }
 /** Native variables are read once after solving; only detached numeric values leave this adapter. */
-function solve(problem: SolverProblem, native: SolverFactory): Result<readonly SolverValue[]> {
+function solve(
+  problem: SolverProblem,
+  native: SolverFactory,
+): Result<readonly SolverValue[]> {
   const solver = native();
   const variables = new Map(problem.variables.map((item) => [item.id, new Variable(item.id)]));
   suggest(problem, variables, solver);

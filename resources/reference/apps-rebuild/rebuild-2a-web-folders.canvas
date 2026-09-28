@@ -1,0 +1,119 @@
+canvas 1
+collection @rebuild-2a-web-folders "Apps rebuild · 2a / Web — folders and big files: before and target" {
+
+  node @b-sessions concept "sessions/  -  10 files, 3,263 lines" role=warning { text @d "Key file: workspace-session.ts, 1,746 lines. Target: folder deleted. Machines take over its work." }
+  node @b-react concept "react/  -  49 files, 4,536 lines" { text @d "32 .tsx + 17 .css, all in one folder. Target: 17 feature folders." }
+  node @b-readers concept "readers/  -  7 files, 1,016 lines" role=warning { text @d "Target: deleted. Files move to service/, storage/, layout/, library/." }
+  node @b-edge concept "edge/  -  4 files, 514 lines" role=warning { text @d "Key file: workspace-inputs.ts, 282 lines. Target: deleted. Files move to browser/, service/, authoring/." }
+  node @b-prefs concept "preferences/  -  2 files, 59 lines" role=warning { text @d "Target: deleted. Files move to browser/ and storage/." }
+  node @b-editing concept "editing/  -  48 files, 4,961 lines" role=warning { text @d "Target: split into canvas-edits/, movement/ and connection/." }
+  node @b-workspace concept "workspace/  -  15 files, 1,457 lines" { text @d "render/ 474, movement-review/ 372, history/ 187, 5 loose files 424. Target: grows to hold the machines." }
+  node @b-creation concept "creation/  -  6 files, 764 lines" { text @d "Target: kept." }
+  node @b-definitions concept "definitions/  -  9 files, 775 lines" { text @d "Target: kept, gains a machine." }
+  node @b-inspector concept "inspector/  -  6 files, 528 lines" { text @d "Target: split into inspector/object/ and inspector/wire/." }
+  node @b-recovery concept "recovery/  -  1 file, 186 lines" role=warning { text @d "Target: becomes drafts/." }
+  node @b-output concept "output/  -  1 file, 63 lines" role=warning { text @d "Target: becomes failures/." }
+  node @b-panels concept "panels/  -  1 file, 85 lines" { text @d "Target: kept, gains a machine." }
+  node @b-coreprefs concept "preferences/  -  1 file, 11 lines" { text @d "Target: kept, gains a machine." }
+  node @b-contract-root concept "loose files  -  12 files, 897 lines" { text @d "compose.ts 271, api.ts 228, plus 5 small react and model files (for example library-react.ts)." }
+  node @b-records concept "records/  -  18 files, 1,096 lines" {}
+  node @b-ports concept "ports/  -  3 files, 155 lines" {}
+  node @b-compose concept "compose/  -  4 files, 327 lines" {}
+  node @b-schemas concept "schemas/  -  1 file, 18 lines" {}
+  node @b-tests concept "tests/  -  19 files, 2,757 lines" role=warning { text @d "Target: removed. Tests come later, not scheduled." }
+  node @b-cli concept "cli/  -  1 file, 13 lines" {}
+  node @b-legend note "Key" { text @d "Red card = the folder goes away in the target. Counts are code files; README, package.json and index.html are not counted." }
+
+  section @s-before-tree "1 · apps/web before: 218 files, 23,481 lines" mode=grid layout=grid columns=2 order=0 {
+    group @bg-adapters "adapters/  -  5 folders, 72 files, 9,388 lines" layout=grid columns=1 {
+      show @b-sessions @b-react @b-readers @b-edge @b-prefs
+    }
+    group @bg-core "core/  -  9 folders, 88 files, 8,830 lines" layout=grid columns=2 {
+      show @b-editing @b-workspace @b-creation @b-definitions @b-inspector
+      show @b-recovery @b-output @b-panels @b-coreprefs
+    }
+    group @bg-contract "contract/  -  4 folders, 38 files, 2,493 lines" layout=grid columns=2 {
+      show @b-contract-root @b-records @b-ports @b-compose @b-schemas
+    }
+    group @bg-other "Other" layout=grid columns=1 {
+      show @b-tests @b-cli @b-legend
+    }
+  }
+
+  node @t-react concept "react/  -  ~60 files, ~4,800 lines" { text @d "17 feature folders: shell, header, panels, add, source, settings, failures and 10 more." }
+  node @t-runner concept "runner/  -  1 file, ~140 lines  (new)" role=success { text @d "Handles one event at a time." }
+  node @t-effects concept "effects/  -  6 files, ~710 lines  (new)" role=success { text @d "Does the I/O the machines ask for." }
+  node @t-facade concept "facade/  -  13 files  (new)" role=success { text @d "What the buttons call, one file per feature. 8 of the files come to ~450 lines; 5 have no estimate." }
+  node @t-browser concept "browser/  -  7 files  (new)" role=success { text @d "Host page, navigation, the ID maker, theme, download." }
+  node @t-service concept "service/  -  5 files  (new)" role=success { text @d "Talks to the local service." }
+  node @t-storage concept "storage/  -  7 files  (new)" role=success { text @d "Saved drafts, panel settings, sent requests." }
+  node @t-small concept "authoring/, language/, layout/, library/  (new)" role=success { text @d "4 small folders, 1 file each." }
+  node @t-workspace concept "workspace/  -  74 files" { text @d "The machines, their rules and the view. 68 of the files come to ~6,100 lines; 6 have no estimate." }
+  node @t-movement concept "movement/  -  33 files  (new)" role=success { text @d "Dragging and moving. Mostly files from editing/." }
+  node @t-canvas-edits concept "canvas-edits/  -  13 files, ~1,160 lines  (new)" role=success { text @d "Planning, capturing and settling an edit on the canvas. From editing/." }
+  node @t-connection concept "connection/  -  6 files  (new)" role=success { text @d "Drawing a new wire. From editing/." }
+  node @t-creation concept "creation/" { text @d "The Add panel's checks and change building." }
+  node @t-definitions concept "definitions/  -  11 files" { text @d "Definitions panel. Gains a machine." }
+  node @t-inspector concept "inspector/  -  2 folders" { text @d "object/ 4 files, wire/ 5 files." }
+  node @t-drafts concept "drafts/  -  5 files  (new)" role=success { text @d "Object, wire and definition drafts. Was recovery/. Gains a machine." }
+  node @t-failures concept "failures/  -  2 files  (new)" role=success { text @d "How a problem is shown. Was output/." }
+  node @t-panels concept "panels/  -  7 files" { text @d "Side panel layout. Gains a machine." }
+  node @t-coreprefs concept "preferences/  -  4 files" { text @d "Settings and theme. Gains a machine." }
+  node @t-library concept "library/  -  3 files  (new)" role=success { text @d "Collection library and folders, as a machine." }
+  node @t-shared concept "shared/  -  1 file  (new)" role=success { text @d "Result helpers." }
+  node @t-contract-root concept "loose files  -  6 files" { text @d "Includes the new list of named ID types." }
+  node @t-records concept "records/" { text @d "Data only. New workflow/ folder: 22 files, the machines' data (17 of them ~1,170 lines)." }
+  node @t-ports concept "ports/" { text @d "Interfaces to the outside, including the one ID maker." }
+  node @t-compose concept "compose/" { text @d "Wiring at start-up." }
+  node @t-schemas concept "schemas/  -  8 files" { text @d "Checks for stored drafts and panel settings." }
+  node @t-api concept "api/  -  10 files  (new)" role=success { text @d "Replaces the single api.ts." }
+  node @t-contract-react concept "react/  -  11 files  (new)" role=success { text @d "Types React uses. Replaces react-types.ts and 4 small react files." }
+  node @t-cli concept "cli/  -  1 file, ~18 lines" { text @d "The one place that reads the window, storage, random numbers and the clock." }
+  node @t-tests concept "tests/  -  removed" { text @d "Tests come later and are not scheduled." }
+  node @t-legend note "Key" { text @d "Green card = new folder. All sizes are plan estimates. Where the plan gives no number, none is shown." }
+
+  section @s-target-tree "2 · apps/web target: folders (sizes are plan estimates)" mode=grid layout=grid columns=2 order=1 {
+    group @tg-adapters "adapters/  -  11 folders (was 5)" layout=grid columns=1 {
+      show @t-react @t-runner @t-effects @t-facade @t-browser @t-service @t-storage @t-small
+    }
+    group @tg-core "core/  -  13 folders (was 9)" layout=grid columns=2 {
+      show @t-workspace @t-movement @t-canvas-edits @t-connection @t-creation @t-definitions @t-inspector
+      show @t-drafts @t-failures @t-panels @t-coreprefs @t-library @t-shared
+    }
+    group @tg-contract "contract/  -  6 folders (was 4)" layout=grid columns=2 {
+      show @t-contract-root @t-records @t-ports @t-compose @t-schemas @t-api @t-contract-react
+    }
+    group @tg-other "Other" layout=grid columns=1 {
+      show @t-cli @t-tests @t-legend
+    }
+  }
+
+  node @f-big concept "Files over 300 lines: 6 before, 0 target" size=large {
+    table @t columns=["File", "Before (lines)", "Target"] {
+      row @r1 cells=["adapters/sessions/workspace-session.ts", "1,746", "Deleted"]
+      row @r2 cells=["adapters/react/AddTools.tsx", "360", "AddTools ~129 + AddForms ~184 + AddFields ~89"]
+      row @r3 cells=["adapters/react/WorkspaceShell.tsx", "321", "WorkspaceShell ~224 + ShellAlerts ~47 + shell-hooks ~68"]
+      row @r4 cells=["core/editing/rearrange/materialize.ts", "311", "materialize ~220 + acceptance ~110"]
+      row @r5 cells=["tests/refusals.test.ts", "341", "Removed with tests/"]
+      row @r6 cells=["tests/authoring.test.ts", "303", "Removed with tests/"]
+      row @r7 cells=["Count", "6 (4 without tests)", "0"]
+    }
+    text @d "Largest target file: WorkspaceShell.tsx, ~224 lines." role=caption
+  }
+  node @f-watch concept "Files of 250-300 lines before" size=large {
+    table @t columns=["File", "Before (lines)", "Target"] {
+      row @r1 cells=["core/creation/records.ts", "296", "Deleted"]
+      row @r2 cells=["core/editing/preview/rules.ts", "285", "4 files"]
+      row @r3 cells=["adapters/edge/workspace-inputs.ts", "282", "~219 + ~162"]
+      row @r4 cells=["contract/compose.ts", "271", "~195"]
+      row @r5 cells=["adapters/react/WireEditor.tsx", "267", "3 files"]
+      row @r6 cells=["adapters/sessions/source-session.ts", "261", "Deleted"]
+      row @r7 cells=["adapters/react/DefinitionExpression.tsx", "253", "2 files"]
+    }
+    text @d "Outside apps/web: capability/canvas/.../interaction-handlers.ts, 358 lines, splits into 198 + 175 + 60." role=caption
+  }
+
+  section @s-big-files "3 · Web files over 300 lines: before vs target" mode=grid layout=grid columns=1 order=2 {
+    show @f-big @f-watch
+  }
+}

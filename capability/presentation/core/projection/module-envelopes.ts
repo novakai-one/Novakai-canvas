@@ -10,7 +10,10 @@ type EnvelopeContext = { readonly style: ResolvedStyle };
 
 /** Presentation owns container footprints before any routing runs. Reserves are based on
  * measured content and connection density, never on a router's calculated geometry. */
-export function moduleEnvelopes(section: VisualSection, context: EnvelopeContext): VisualSection {
+export function moduleEnvelopes(
+  section: VisualSection,
+  context: EnvelopeContext,
+): VisualSection {
   if (section.mode !== 'modules') return section;
   const annotated = { ...section, wires: annotationOwners(section.wires) };
   const measured = new Map<string, VisualNode>();
@@ -239,7 +242,10 @@ function keepsOrder(
   return placed || intent.columns !== undefined;
 }
 /** Wires between different members, as member indexes; a wire inside one member is ignored. */
-function memberLinks(members: readonly VisualNode[], section: VisualSection): readonly Link[] {
+function memberLinks(
+  members: readonly VisualNode[],
+  section: VisualSection,
+): readonly Link[] {
   const owner = new Map<string, number>();
   members.forEach((member, index) =>
     descendants([member], section.nodes).forEach((node) => owner.set(node.id, index)),
@@ -248,13 +254,19 @@ function memberLinks(members: readonly VisualNode[], section: VisualSection): re
     link(owner.get(wire.source.node), owner.get(wire.target.node)),
   );
 }
-function link(from: number | undefined, to: number | undefined): readonly Link[] {
+function link(
+  from: number | undefined,
+  to: number | undefined,
+): readonly Link[] {
   return from === undefined || to === undefined || from === to ? [] : [[from, to]];
 }
 const STACKED = new Set(['down', 'up']);
 const REVERSED = new Set(['left', 'up']);
 /** Layer runs along the direction; members of one layer sit side by side across it. */
-function layeredGrid(layers: readonly number[], direction: string): Grid {
+function layeredGrid(
+  layers: readonly number[],
+  direction: string,
+): Grid {
   const depth = Math.max(...layers) + 1;
   const order = layers.map((_, index) => index);
   const across = Array.from({ length: depth }, (_, layer) =>
@@ -269,14 +281,21 @@ function layeredGrid(layers: readonly number[], direction: string): Grid {
     : { columns: depth, cells: order.map((index) => position(index) * depth + step(index)) };
 }
 /** Longest path from members nothing points at. A cycle is broken at its first member. */
-function layerOf(count: number, links: readonly Link[]): readonly number[] {
+function layerOf(
+  count: number,
+  links: readonly Link[],
+): readonly number[] {
   const layers = Array.from({ length: count }, () => 0);
   const placed = new Set<number>();
   layers.forEach(() => placeNext(layers, placed, links));
   return layers;
 }
 /** Place every member whose sources are all placed; with none ready, place the first open one. */
-function placeNext(layers: number[], placed: Set<number>, links: readonly Link[]): void {
+function placeNext(
+  layers: number[],
+  placed: Set<number>,
+  links: readonly Link[],
+): void {
   const open = layers.map((_, index) => index).filter((index) => !placed.has(index));
   const ready = open.filter((index) => links.every((l) => waitsOn(l, index, placed)));
   const next = ready.length > 0 ? ready : open.slice(0, 1);
@@ -286,7 +305,11 @@ function placeNext(layers: number[], placed: Set<number>, links: readonly Link[]
   });
   next.forEach((index) => placed.add(index));
 }
-function waitsOn([from, to]: Link, index: number, placed: ReadonlySet<number>): boolean {
+function waitsOn(
+  [from, to]: Link,
+  index: number,
+  placed: ReadonlySet<number>,
+): boolean {
   return to !== index || from === index || placed.has(from);
 }
 
@@ -326,7 +349,11 @@ function pushPinned(
 }
 
 /** A style-derived spacing policy, not a promise that every route fits this capacity. */
-function trafficGap(population: number, pitch: number, padding: number): number {
+function trafficGap(
+  population: number,
+  pitch: number,
+  padding: number,
+): number {
   return Math.ceil(Math.max(padding * 4, (population + 2) * pitch * 2 + padding * 2));
 }
 
@@ -425,7 +452,10 @@ function annotatedFootprint(
     };
   }, body);
 }
-function annotationSide(wire: VisualWire, endpoint: 'source' | 'target'): Side {
+function annotationSide(
+  wire: VisualWire,
+  endpoint: 'source' | 'target',
+): Side {
   const side = endpoint === 'source' ? wire.route.sourceSide : wire.route.targetSide;
   return side === 'auto' ? (endpoint === 'source' ? 'right' : 'left') : side;
 }

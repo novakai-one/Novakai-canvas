@@ -2,13 +2,19 @@ import type { LayoutIntent, Projection, VisualSection } from '../../contract/rec
 import type { Result } from '../../contract/errors.js';
 import { protect, reject } from './outcomes.js';
 /** Independently check consumed column intent after Presentation decoding; public execute returns correction diagnostics. */
-function check(layout: LayoutIntent, path: string): void {
+function check(
+  layout: LayoutIntent,
+  path: string,
+): void {
   if (layout.columns === undefined) return;
   checkRange(layout.columns, path);
   if (layout.algorithm !== 'grid') reject('invalid-input', path, 'Columns require grid layout');
 }
 /** Never coerce malformed track counts; callers correct input and retry without side effects. */
-function checkRange(columns: number, path: string): void {
+function checkRange(
+  columns: number,
+  path: string,
+): void {
   const inRange = columns >= 1 && columns <= 12;
   if (!Number.isInteger(columns) || !inRange)
     reject('invalid-input', path, 'Columns must be an integer from 1 to 12');

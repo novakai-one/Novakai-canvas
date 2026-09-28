@@ -13,7 +13,10 @@ function fieldOf(variable: string): Field {
   return field;
 }
 /** Every evaluated variable must belong to a placed box; derivation never invents positions. */
-function valueOf(variable: string, boxes: ReadonlyMap<string, Box>): number {
+function valueOf(
+  variable: string,
+  boxes: ReadonlyMap<string, Box>,
+): number {
   const field = fieldOf(variable);
   const id = variable.slice(0, variable.length - field.length - 1);
   const box = boxes.get(id);
@@ -29,7 +32,10 @@ const checks: Readonly<
   le: (sum, constant) => sum - constant <= epsilon,
   ge: (sum, constant) => constant - sum <= epsilon,
 };
-function total(constraint: LinearConstraint, boxes: ReadonlyMap<string, Box>): number {
+function total(
+  constraint: LinearConstraint,
+  boxes: ReadonlyMap<string, Box>,
+): number {
   return constraint.terms.reduce(
     (sum, term) => sum + term.coefficient * valueOf(term.variable, boxes),
     0,

@@ -6,6 +6,7 @@ import type {
   RecoverableDraft,
 } from '../../contract/records/draft.js';
 import type { EditIntent, LocalPlacement } from '../../contract/records/intent.js';
+import type { GestureId } from '../../contract/brands.js';
 import { activeDraft } from './update.js';
 import { regroupIntent } from './regroup.js';
 import { targetInfo } from '../scenes/address.js';
@@ -23,7 +24,10 @@ function localPlacement(
   return { ...position, width: entry.box.width, height: entry.box.height };
 }
 /** One intent represents the whole gesture; Model/Authoring still own feasibility and committed truth. */
-export function draftIntent(state: SessionState, draft: GestureDraft): EditIntent {
+export function draftIntent(
+  state: SessionState,
+  draft: GestureDraft,
+): EditIntent {
   if (draft.kind === 'route')
     return {
       kind: 'route',
@@ -42,7 +46,10 @@ export function draftIntent(state: SessionState, draft: GestureDraft): EditInten
   return { kind: 'placement', id: draft.id, base: draft.base, scope: 'appearance', entries };
 }
 /** Release emits once and retains a recovery copy until the host confirms its matching receipt. */
-export function finishDraft(state: SessionState, id: string): Transition {
+export function finishDraft(
+  state: SessionState,
+  id: GestureId,
+): Transition {
   const draft = activeDraft(state, id);
   if (!draft.changed) return changed(state, { ...state, draft: null });
   if (!canMutate(state))

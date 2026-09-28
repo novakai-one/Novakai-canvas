@@ -1,69 +1,89 @@
 import { z } from 'zod';
 
-/** Shared identity grammar. Namespace schemas below mint checked, incompatible ID types. */
+/**
+ * Checked IDs and small shared value schemas.
+ *
+ * Every ID uses one grammar: a letter, then letters, digits, `_` or `-`. The branded ID schemas
+ * below are the same runtime object as {@link identifier} (zod's `.brand()` is type-only), so they
+ * accept the same strings; the brands keep the ID kinds apart in TypeScript only.
+ *
+ * Use `safeParse` to build a checked value: it returns a result object. `parse` throws a
+ * `ZodError` on invalid input. These schemas are exported objects shared by every caller; they
+ * are not frozen.
+ */
+
+/** The shared ID grammar: a letter, then letters, digits, `_` or `-`. */
 export const identifier = z.string().regex(/^[A-Za-z][A-Za-z0-9_-]*$/);
 
-/** Checked identity of one collection; never interchangeable with its child records. */
+/** A collection's ID; never interchangeable with its child records' IDs. */
 export const collectionId = identifier.brand<'CollectionId'>();
 
-/** Checked identity of a canonical object within its collection. */
+/** A canonical object's ID within its collection. */
 export const objectId = identifier.brand<'ObjectId'>();
 
-/** Checked identity of a canonical relationship within its collection. */
+/** A canonical relationship's ID within its collection. */
 export const relationshipId = identifier.brand<'RelationshipId'>();
 
-/** Checked identity of a diagram view within its collection. */
+/** A diagram view's (section's) ID within its collection. */
 export const sectionId = identifier.brand<'SectionId'>();
 
-/** Checked identity of an asset manifest entry; distinct from its content digest. */
+/** An asset manifest entry's ID; distinct from its content digest. */
 export const assetId = identifier.brand<'AssetId'>();
 
-/** Checked identity of a provenance entry within its collection. */
+/** A provenance entry's ID within its collection. */
 export const sourceId = identifier.brand<'SourceId'>();
 
-/** Checked identity of a shared type definition within its collection. */
+/** A shared type definition's ID within its collection. */
 export const definitionId = identifier.brand<'DefinitionId'>();
 
-/** Checked identity of a container within one section. */
+/** A container's ID within one section. */
 export const groupId = identifier.brand<'GroupId'>();
 
-/** Checked identity of a port, content block or table row within its owning scope. */
+/** A port's, content block's or table row's ID within its owning scope. */
 export const descendantId = identifier.brand<'DescendantId'>();
 
-/** Nonblank display text; validation preserves the original whitespace. */
-export const label = z
-  .string()
-  .refine((value): boolean => value.trim().length > 0, 'Must be nonblank');
+/**
+ * Display text that is not blank: at least one non-whitespace character ("Must be nonblank").
+ * The original whitespace is kept.
+ */
+export const label = z.string().refine(
+  /** Tells whether the text has a non-whitespace character. */
+  (value): boolean => value.trim().length > 0,
+  'Must be nonblank',
+);
 
-/** Pinned SHA-256 content identity; Model checks syntax and does not fetch bytes. */
+/**
+ * A pinned SHA-256 content identity: `sha256:` then 64 lowercase hex digits. Model checks the
+ * syntax only and never fetches bytes.
+ */
 export const digest = z.string().regex(/^sha256:[a-f0-9]{64}$/);
 
-/** Semantic size preference. Layout resolves dimensions; agents do not supply pixels. */
+/** A semantic size preference. Layout picks the dimensions; authors never supply pixels. */
 export const size = z.enum(['small', 'medium', 'large']);
 
-/** Object identity produced by the checked objectId schema. */
+/** An object ID checked by {@link objectId}. */
 export type ObjectId = z.infer<typeof objectId>;
 
-/** Collection identity produced by the checked collectionId schema. */
+/** A collection ID checked by {@link collectionId}. */
 export type CollectionId = z.infer<typeof collectionId>;
 
-/** Section identity produced by the checked sectionId schema. */
+/** A section ID checked by {@link sectionId}. */
 export type SectionId = z.infer<typeof sectionId>;
 
-/** Relationship identity produced by the checked relationshipId schema. */
+/** A relationship ID checked by {@link relationshipId}. */
 export type RelationshipId = z.infer<typeof relationshipId>;
 
-/** Local descendant identity produced by the checked descendantId schema. */
+/** A descendant (port, content block or row) ID checked by {@link descendantId}. */
 export type DescendantId = z.infer<typeof descendantId>;
 
-/** Asset manifest identity produced by the checked assetId schema. */
+/** An asset manifest ID checked by {@link assetId}. */
 export type AssetId = z.infer<typeof assetId>;
 
-/** Provenance identity produced by the checked sourceId schema. */
+/** A provenance ID checked by {@link sourceId}. */
 export type SourceId = z.infer<typeof sourceId>;
 
-/** Shared definition identity produced by the checked definitionId schema. */
+/** A shared definition ID checked by {@link definitionId}. */
 export type DefinitionId = z.infer<typeof definitionId>;
 
-/** Section-local container identity produced by the checked groupId schema. */
+/** A section-local container ID checked by {@link groupId}. */
 export type GroupId = z.infer<typeof groupId>;

@@ -38,7 +38,10 @@ function parallelRows(): Projection {
 }
 
 /** Candidate transport preserves owner metadata while changing only one supplied route for adversarial inspection. */
-function changedRoute(scene: Scene, points: readonly Point[]): Scene {
+function changedRoute(
+  scene: Scene,
+  points: readonly Point[],
+): Scene {
   return {
     ...scene,
     sections: scene.sections.map((section) => ({
@@ -62,7 +65,10 @@ function changedWire(
 }
 
 /** In one scenario the detour strikes an annotation; in the other it obscures the first horizontal route. */
-function adversarialRoute(scene: Scene, label: boolean): readonly Point[] {
+function adversarialRoute(
+  scene: Scene,
+  label: boolean,
+): readonly Point[] {
   const first = scene.sections[0]?.wires[0];
   const second = scene.sections[0]?.wires[1];
   assert(first && second);

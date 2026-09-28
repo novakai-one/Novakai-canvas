@@ -38,7 +38,10 @@ export function auditStyles(
   };
 }
 /** No eligible styles is no evidence, never a synthetic 100% success. */
-function ratio(numerator: number, denominator: number): number {
+function ratio(
+  numerator: number,
+  denominator: number,
+): number {
   if (!denominator) return 0;
   return numerator / denominator;
 }
@@ -63,7 +66,10 @@ function inspectDeclaration(
   return { eligible, tokenized, primary, reasons, declaration };
 }
 /** Literal visual decisions fail explicitly; structural keyword-only declarations are excluded. */
-function literalViolations(eligible: boolean, literals: readonly string[]): readonly string[] {
+function literalViolations(
+  eligible: boolean,
+  literals: readonly string[],
+): readonly string[] {
   if (!eligible) return [];
   return literals.map((value) => 'visual-literal:' + value);
 }

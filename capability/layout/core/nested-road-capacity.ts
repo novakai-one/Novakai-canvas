@@ -9,7 +9,10 @@ import { axes } from './prototype-road-geometry.js';
 import { nestedLaneWidth } from './prototype-nested-placement.js';
 
 /** Preserve the mouth and the full terminal fan even when a street consumes its approach. */
-function terminalExtent(road: PrototypeRoad, port: PrototypePortLocation): PrototypeRoad {
+function terminalExtent(
+  road: PrototypeRoad,
+  port: PrototypePortLocation,
+): PrototypeRoad {
   const a = axes[road.axis],
     b = road.bounds;
   // (count - 1) fan rows plus a quarter-pitch forward stem; gates retain their port plane.
@@ -24,12 +27,19 @@ function terminalExtent(road: PrototypeRoad, port: PrototypePortLocation): Proto
     end = Math.max(b[a.along] + b[a.length], pin, fan);
   return { ...road, bounds: { ...b, [a.along]: start, [a.length]: end - start } };
 }
-function admitTerminal(roads: Map<string, PrototypeRoad>, port: PrototypePortLocation): void {
+function admitTerminal(
+  roads: Map<string, PrototypeRoad>,
+  port: PrototypePortLocation,
+): void {
   const road = roads.get(`drive:${port.portId}`);
   if (road !== undefined) roads.set(road.id, terminalExtent(road, port));
 }
 
-function sized(road: PrototypeRoad, count: number, measuredWidth?: number): PrototypeRoad {
+function sized(
+  road: PrototypeRoad,
+  count: number,
+  measuredWidth?: number,
+): PrototypeRoad {
   const a = axes[road.axis],
     b = road.bounds,
     width = measuredWidth ?? nestedLaneWidth(count, roadLanePitch(road));
@@ -62,7 +72,10 @@ function contactDrive(c: RoadContact): RoadContact | undefined {
   if (c.b.kind === 'driveway') return c;
   return undefined;
 }
-function attached(drive: PrototypeRoad, street: PrototypeRoad): PrototypeRoad {
+function attached(
+  drive: PrototypeRoad,
+  street: PrototypeRoad,
+): PrototypeRoad {
   const a = axes[drive.axis],
     b = drive.bounds,
     s = street.bounds;
@@ -74,7 +87,10 @@ function attached(drive: PrototypeRoad, street: PrototypeRoad): PrototypeRoad {
   const [start = 0, end = 0] = interval;
   return { ...drive, bounds: { ...b, [a.along]: start, [a.length]: end - start } };
 }
-function attach(roads: Map<string, PrototypeRoad>, contact: RoadContact): void {
+function attach(
+  roads: Map<string, PrototypeRoad>,
+  contact: RoadContact,
+): void {
   const pair = contactDrive(contact);
   if (pair === undefined) return;
   const drive = roads.get(pair.b.id),
@@ -150,7 +166,10 @@ function capped(
   const end = center === high ? n[a.along] + n[a.length] : b[a.along] + b[a.length];
   return { ...road, bounds: { ...b, [a.along]: start, [a.length]: end - start } };
 }
-function capContact(roads: Map<string, PrototypeRoad>, contact: RoadContact): void {
+function capContact(
+  roads: Map<string, PrototypeRoad>,
+  contact: RoadContact,
+): void {
   const a = roads.get(contact.a.id),
     b = roads.get(contact.b.id);
   if (a === undefined || b === undefined) return;

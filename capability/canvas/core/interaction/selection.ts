@@ -9,7 +9,10 @@ function distinct(targets: readonly Target[]): readonly Target[] {
   return [...new Map(targets.map((target) => [targetKey(target), target])).values()];
 }
 /** Toggle uses symmetric membership; one canonical object in another section remains untouched. */
-function toggle(current: readonly Target[], incoming: readonly Target[]): readonly Target[] {
+function toggle(
+  current: readonly Target[],
+  incoming: readonly Target[],
+): readonly Target[] {
   const keys = new Set(incoming.map(targetKey));
   const old = new Set(current.map(targetKey));
   return [
@@ -25,7 +28,10 @@ const modes = {
   toggle,
 };
 /** Selection changes only scoped addresses; there is deliberately no camera or inspector visibility update. */
-export function selectTargets(state: SessionState, event: EventOf<'select'>): SessionState {
+export function selectTargets(
+  state: SessionState,
+  event: EventOf<'select'>,
+): SessionState {
   event.targets.forEach((target) => targetInfo(state.index, target));
   return {
     ...state,
@@ -34,7 +40,11 @@ export function selectTargets(state: SessionState, event: EventOf<'select'>): Se
   };
 }
 /** Marquee selects visible node appearances; section backgrounds cannot swallow their entire contents. */
-export function marquee(state: SessionState, bounds: Box, additive: boolean): SessionState {
+export function marquee(
+  state: SessionState,
+  bounds: Box,
+  additive: boolean,
+): SessionState {
   const targets = Object.values(state.index.targets)
     .filter((info) => info.target.kind === 'node')
     .filter((info) => intersects(info.box, bounds))

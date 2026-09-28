@@ -4,36 +4,77 @@ import type { Digest, Timestamp } from '../contract/brands.js';
 import type { Hasher, Clock } from '../contract/ports/runtime.js';
 import type { Result } from '../contract/errors.js';
 import { failure } from '../contract/errors.js';
-/** Native SHA256 has no domain knowledge; Authoring owns envelope canonicalization and retry recovery. */
-function nativeHash(text: string): string {
-  return createHash('sha256').update(text).digest('hex');
+
+/** The hashing and clock roles built on Node.js. */
+interface NodeIdentity {
+  readonly hash: Hasher;
+  readonly clock: Clock;
 }
-/** Native operations are injectable for contract failures; constructing roles performs no clock/hash work. */
+
+/**
+ * Builds the hashing and clock roles that Authoring uses, backed by Node.js.
+ *
+ * Both native operations can be replaced, so tests can make them fail or return bad output.
+ * Building the roles does no hashing and reads no clock.
+ * Neither role ever throws: every failure, including bad output, is returned as a
+ * `storage-unavailable` result. Authoring keeps the request identity so the caller can retry safely.
+ *
+ * @param hash - Turns text into a hex digest. Defaults to Node's SHA-256.
+ * @param now - Returns the current time in milliseconds. Defaults to `Date.now`.
+ * @returns The hashing role and the clock role.
+ */
 export function createNodeIdentity(
   hash: (text: string) => string = nativeHash,
   now: () => number = Date.now,
-): { readonly hash: Hasher; readonly clock: Clock } {
-  /** Invalid native hash output fails closed; Authoring retains request identity for safe retry. */
-  function hashText(text: string): Result<Digest> {
-    try {
-      const result = digest.safeParse(hash(text));
-      if (!result.success)
-        return failure('storage-unavailable', 'digest', 'Hash provider returned an invalid digest');
-      return { ok: true, value: result.data };
-    } catch {
-      return failure('storage-unavailable', 'digest', 'Hash provider failed');
-    }
+): NodeIdentity {
+  const hasher: Hasher = { digest: (text) => hashText(hash, text) };
+  const clock: Clock = { now: () => currentTime(now) };
+  return { hash: hasher, clock };
+}
+
+/** Hashes text with Node's SHA-256. It knows nothing about Authoring; Authoring builds the canonical text. */
+function nativeHash(text: string): string {
+  return createHash('sha256').update(text).digest('hex');
+}
+
+/**
+ * Hashes text and checks the output. A failing hasher or a malformed digest becomes a failed result.
+ * `digest.safeParse` is read before the hasher runs.
+ */
+function hashText(
+  hash: (text: string) => string,
+  text: string,
+): Result<Digest> {
+  try {
+    return checkedDigest(digest.safeParse(hash(text)));
+  } catch {
+    return failure('storage-unavailable', 'digest', 'Hash provider failed');
   }
-  /** Timestamp failures occur before commit; Authoring owns retry without partially allocated history. */
-  function currentTime(): Result<Timestamp> {
-    try {
-      const result = timestamp.safeParse(now());
-      if (!result.success)
-        return failure('storage-unavailable', 'timestamp', 'Clock returned an invalid timestamp');
-      return { ok: true, value: result.data };
-    } catch {
-      return failure('storage-unavailable', 'timestamp', 'Clock provider failed');
-    }
+}
+
+/** Turns the digest check of the hasher output into a result. */
+function checkedDigest(parsed: ReturnType<typeof digest.safeParse>): Result<Digest> {
+  if (!parsed.success)
+    return failure('storage-unavailable', 'digest', 'Hash provider returned an invalid digest');
+  return { ok: true, value: parsed.data };
+}
+
+/**
+ * Reads the clock and checks the output. A failing clock or an invalid timestamp becomes a failed result.
+ * This happens before commit, so no history is partly allocated when it fails.
+ * `timestamp.safeParse` is read before the clock runs.
+ */
+function currentTime(now: () => number): Result<Timestamp> {
+  try {
+    return checkedTimestamp(timestamp.safeParse(now()));
+  } catch {
+    return failure('storage-unavailable', 'timestamp', 'Clock provider failed');
   }
-  return { hash: { digest: hashText }, clock: { now: currentTime } };
+}
+
+/** Turns the timestamp check of the clock output into a result. */
+function checkedTimestamp(parsed: ReturnType<typeof timestamp.safeParse>): Result<Timestamp> {
+  if (!parsed.success)
+    return failure('storage-unavailable', 'timestamp', 'Clock returned an invalid timestamp');
+  return { ok: true, value: parsed.data };
 }

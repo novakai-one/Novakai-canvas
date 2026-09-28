@@ -71,7 +71,6 @@ it('roundtrips all original corpus sources and retains only the requested semant
   }
 });
 
-/** Inject resource metadata into pure Language; original artwork bytes establish stable distinct digests. No admission is claimed here. */
 async function resolved(requests: readonly ResourceRequest[]): Promise<ResolvedResources> {
   const themes = requests
     .filter((item) => item.kind === 'theme')
@@ -80,7 +79,6 @@ async function resolved(requests: readonly ResourceRequest[]): Promise<ResolvedR
   return { themes: Object.fromEntries(themes), assets: Object.fromEntries(assets) };
 }
 
-/** Corpus uses local SVG illustrations; a missing file or alt fails setup rather than fabricating a provider success. */
 async function asset(
   request: ResourceRequest,
 ): Promise<readonly [string, ResolvedResources['assets'][string]]> {

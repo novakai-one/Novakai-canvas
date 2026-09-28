@@ -1,4 +1,11 @@
-/** Public storage boundary. Only trusted Authoring/maintenance composition may construct this capability. */
+/**
+ * Persistence's public surface: atomic versioned storage, receipts, and backup/restore for one
+ * workspace.
+ *
+ * Only trusted composition (Authoring, and the maintenance host for backup/restore) should open
+ * it. Start with `openSqlite`; `createPersistence` binds any StorePort. Everything else here is
+ * a type or a checking schema.
+ */
 export { openSqlite } from './compose.js';
 export { createPersistence } from './api.js';
 export { workspaceId, recordId, requestId, digest } from './brands.js';

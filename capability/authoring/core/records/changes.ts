@@ -5,78 +5,65 @@ import type {
   Json,
   RecordKey,
 } from '../../contract/records/storage.js';
-import { findRecord, keyText } from './keys.js';
+import { findRecord, isVersionedDocument, keyText } from './keys.js';
 import { canonical } from '../identity/canonical.js';
 import { reject } from '../validation/outcomes.js';
-/** Collection/catalog revision fields track storage slots; other record schemas remain owner-defined. */
-function hasPayloadRevision(key: RecordKey): boolean {
-  return ['collection', 'catalog'].includes(key.kind);
-}
-/** Check record-shaped domain payloads without making arbitrary JSON paths a mutation interface. */
-function recordFields(value: Json): Readonly<Record<string, Json>> {
-  if (value === null || typeof value !== 'object')
-    reject('invalid-input', 'value', 'Versioned documents require object payloads');
-  if (Array.isArray(value))
-    reject('invalid-input', 'value', 'Versioned documents cannot be arrays');
-  return Object.fromEntries(Object.entries(value));
-}
-/** Stamp authoritative revision and check identity; submitted revisions never become write preconditions. */
-function stampValue(key: RecordKey, value: Json, version: number): Json {
-  if (!hasPayloadRevision(key)) return value;
-  const fields = recordFields(value);
-  if (fields.id !== key.id)
-    reject('invariant-violation', keyText(key), 'Document identity differs from its storage key');
-  return { ...fields, revision: version };
-}
-/** Stable resources are a set; spelling/order cannot manufacture spurious revisions. */
-function normalizePut(write: Extract<Write, { kind: 'put' }>, version: number): Write {
-  return {
-    ...write,
-    value: stampValue(write.key, write.value, version),
-    resources: [...new Set(write.resources)].toSorted(),
-  };
-}
-/** Compare equal live content at its current revision before incrementing anything. */
-function unchangedPut(
-  previous: StoredRecord | null,
-  write: Extract<Write, { kind: 'put' }>,
-): boolean {
-  if (previous === null || previous.deleted) return false;
-  const normalized = normalizePut(write, previous.version);
-  const current = {
-    kind: 'put',
-    key: previous.key,
-    value: previous.value,
-    resources: [...previous.resources].toSorted(),
-  };
-  return canonical(normalized) === canonical(current);
-}
-/** No-op deletions retain absent/tombstone tokens; only live deletion reaches physical persistence. */
-function unchanged(previous: StoredRecord | null, write: Write): boolean {
-  if (write.kind === 'put') return unchangedPut(previous, write);
-  if (previous === null) return true;
-  return previous.deleted;
-}
-/** Never wrap an exhausted version or conflate zero with absence. */
-function nextVersion(previous: StoredRecord | null): number {
-  if (previous === null) return 0;
-  if (previous.version === Number.MAX_SAFE_INTEGER)
-    reject('invalid-input', 'version', 'Record revision exhausted');
-  return previous.version + 1;
-}
-/** One net write creates exactly one next version; Authoring owns atomic commit/retry recovery. */
-export function netWrite(snapshot: Snapshot, write: Write): readonly Write[] {
+
+/** A write that stores a value, as opposed to a delete. */
+type PutWrite = Extract<Write, { kind: 'put' }>;
+
+/**
+ * Turns one planned write into the write that storage will actually receive.
+ *
+ * - A write that would change nothing becomes no write at all.
+ * - A put is normalized: its resource list is de-duplicated and sorted, and a versioned
+ *   document gets its `revision` header set to the new storage version.
+ * - A delete of a live record is kept as it is.
+ *
+ * Each returned write creates exactly one new version of its record.
+ * Storage is not touched here; Authoring commits the result later as one transaction.
+ *
+ * @param snapshot - The current workspace snapshot.
+ * @param write - The planned write.
+ * @returns An empty list when the write changes nothing, otherwise a list with the one normalized write.
+ * @throws AuthoringFault `invalid-input` when the record's revision is already at the largest safe integer,
+ *   or when a versioned document's payload is not a JSON object.
+ * @throws AuthoringFault `invariant-violation` when a versioned document's `id` differs from its key.
+ */
+export function netWrite(
+  snapshot: Snapshot,
+  write: Write,
+): readonly Write[] {
   const previous = findRecord(snapshot, write.key);
-  if (unchanged(previous, write)) return [];
+  if (writeChangesNothing(previous, write)) return [];
+
+  // Computed for deletes too, so that deleting a record whose revision is exhausted is also rejected.
   const version = nextVersion(previous);
+
   if (write.kind === 'delete') return [write];
   return [normalizePut(write, version)];
 }
-/** Materialize the exact storage result for validation/history; no persistence is performed here. */
-export function nextRecord(snapshot: Snapshot, write: Write): StoredRecord {
-  const version = nextVersion(findRecord(snapshot, write.key));
-  if (write.kind === 'delete')
+
+/**
+ * Builds the record that storage will hold after one write, without storing anything.
+ *
+ * Validation and history use this to see the exact result of a change before it is committed.
+ *
+ * @param snapshot - The workspace snapshot before the write.
+ * @param write - The write to apply.
+ * @returns The stored record after the write. A delete produces a tombstone with a `null` value.
+ * @throws AuthoringFault `invalid-input` when the record's revision is already at the largest safe integer.
+ */
+export function nextRecord(
+  snapshot: Snapshot,
+  write: Write,
+): StoredRecord {
+  const previous = findRecord(snapshot, write.key);
+  const version = nextVersion(previous);
+
+  if (write.kind === 'delete') {
     return { key: write.key, version, value: null, deleted: true, resources: [] };
+  }
   return {
     key: write.key,
     version,
@@ -85,12 +72,122 @@ export function nextRecord(snapshot: Snapshot, write: Write): StoredRecord {
     resources: write.resources,
   };
 }
-/** Immutable replacement preserves unrelated slots and tombstones without consulting global sequence. */
-export function installWrites(snapshot: Snapshot, writes: readonly Write[]): Snapshot {
-  const replaced = new Set(writes.map((write) => keyText(write.key)));
-  const retained = snapshot.records.filter((record) => !replaced.has(keyText(record.key)));
+
+/**
+ * Builds the snapshot that storage will hold after a set of writes, without storing anything.
+ *
+ * Records the writes do not touch, including tombstones, are kept unchanged.
+ * Written records move to the end of the record list.
+ * The snapshot's `sequence` number is not changed.
+ *
+ * @param snapshot - The workspace snapshot before the writes.
+ * @param writes - The writes to apply. Callers check beforehand that each key appears at most once;
+ *   this function does not.
+ * @returns A new snapshot. The input snapshot is not modified.
+ * @throws AuthoringFault `invalid-input` when a written record's revision is already at the largest safe integer.
+ */
+export function installWrites(
+  snapshot: Snapshot,
+  writes: readonly Write[],
+): Snapshot {
+  const writtenKeys = new Set(writes.map((write) => keyText(write.key)));
+  const untouchedRecords = snapshot.records.filter(
+    (record) => !writtenKeys.has(keyText(record.key)),
+  );
+  const writtenRecords = writes.map((write) => nextRecord(snapshot, write));
   return {
     ...snapshot,
-    records: [...retained, ...writes.map((write) => nextRecord(snapshot, write))],
+    records: [...untouchedRecords, ...writtenRecords],
   };
+}
+
+/** Tells whether a write would leave the stored record exactly as it is. */
+function writeChangesNothing(
+  previous: StoredRecord | null,
+  write: Write,
+): boolean {
+  if (write.kind === 'put') return putChangesNothing(previous, write);
+  return deleteChangesNothing(previous);
+}
+
+/** A delete changes nothing when the record was never stored or is already deleted. */
+function deleteChangesNothing(previous: StoredRecord | null): boolean {
+  if (previous === null) return true;
+  return previous.deleted;
+}
+
+/**
+ * A put changes nothing when the live record already holds the same normalized value and resources.
+ * The comparison uses the record's current revision, so no revision is spent on an unchanged put.
+ */
+function putChangesNothing(
+  previous: StoredRecord | null,
+  write: PutWrite,
+): boolean {
+  if (previous === null) return false;
+  if (previous.deleted) return false;
+
+  const normalizedWrite = normalizePut(write, previous.version);
+  const currentAsWrite = {
+    kind: 'put',
+    key: previous.key,
+    value: previous.value,
+    resources: [...previous.resources].toSorted(),
+  };
+  return canonical(normalizedWrite) === canonical(currentAsWrite);
+}
+
+/**
+ * Returns the storage version a record will have after its next write.
+ * A record that was never stored starts at version `0`.
+ */
+function nextVersion(previous: StoredRecord | null): number {
+  if (previous === null) return 0;
+  if (previous.version === Number.MAX_SAFE_INTEGER)
+    reject('invalid-input', 'version', 'Record revision exhausted');
+  return previous.version + 1;
+}
+
+/**
+ * Normalizes a put for storage.
+ * Resources are treated as a set, so their order or repetition never creates a new revision.
+ */
+function normalizePut(
+  write: PutWrite,
+  version: number,
+): Write {
+  const stampedValue = stampRevision(write.key, write.value, version);
+  const uniqueResources = [...new Set(write.resources)];
+  return {
+    ...write,
+    value: stampedValue,
+    resources: uniqueResources.toSorted(),
+  };
+}
+
+/**
+ * Sets a versioned document's `revision` header to its storage version, after checking its `id`.
+ * Any revision the author submitted is overwritten; it is never used as a write precondition.
+ * Payloads of other record kinds are returned unchanged.
+ */
+function stampRevision(
+  key: RecordKey,
+  value: Json,
+  version: number,
+): Json {
+  if (!isVersionedDocument(key.kind)) return value;
+
+  const fields = documentFields(value);
+  if (fields.id !== key.id)
+    reject('invariant-violation', keyText(key), 'Document identity differs from its storage key');
+  return { ...fields, revision: version };
+}
+
+/** Reads a versioned document payload as a plain object of fields. */
+function documentFields(value: Json): Readonly<Record<string, Json>> {
+  if (value === null || typeof value !== 'object')
+    reject('invalid-input', 'value', 'Versioned documents require object payloads');
+  if (Array.isArray(value))
+    reject('invalid-input', 'value', 'Versioned documents cannot be arrays');
+  return Object.fromEntries(Object.entries(value));
 }

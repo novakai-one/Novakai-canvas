@@ -89,12 +89,18 @@ const drawers: Readonly<Record<FigureForm, (block: FigureBlock, palette: Palette
 };
 
 /** Draw the admitted form once; Model owns parameter validity before projection runs. */
-function drawFigure(block: FigureBlock, palette: Palette): string {
+function drawFigure(
+  block: FigureBlock,
+  palette: Palette,
+): string {
   return drawers[block.form](block, palette);
 }
 
 /** Vessel: glass tank with a lit liquid column, settling particles and optional agitator or mark. */
-function vessel(block: FigureBlock, palette: Palette): string {
+function vessel(
+  block: FigureBlock,
+  palette: Palette,
+): string {
   const specific =
     block.form === 'vessel'
       ? block
@@ -117,12 +123,19 @@ function vessel(block: FigureBlock, palette: Palette): string {
 }
 
 /** Agitated vessels carry a shaft; calm vessels carry nothing. */
-function agitatorMark(on: boolean, top: number, ink: string): string {
+function agitatorMark(
+  on: boolean,
+  top: number,
+  ink: string,
+): string {
   return on ? agitator(top, ink) : '';
 }
 
 /** Layered bed: glass tank over lit strata; separated bands step from tint to ink under the flow. */
-function layeredBed(block: FigureBlock, palette: Palette): string {
+function layeredBed(
+  block: FigureBlock,
+  palette: Palette,
+): string {
   const level = block.form === 'layered-bed' ? block.level : 'full';
   const top = 30;
   const depth = 100;
@@ -151,7 +164,10 @@ function layeredBed(block: FigureBlock, palette: Palette): string {
 }
 
 /** Screen: cylindrical slats arrest glowing debris while the flow passes through. */
-function screen(block: FigureBlock, palette: Palette): string {
+function screen(
+  block: FigureBlock,
+  palette: Palette,
+): string {
   const debris = block.form === 'screen' ? block.debris : 'some';
   const bars = [0, 1, 2]
     .map(
@@ -173,7 +189,10 @@ function screen(block: FigureBlock, palette: Palette): string {
 }
 
 /** Gauge: gradient dial with an accent-lit needle; level selects the measured angle, never a raw degree. */
-function gauge(block: FigureBlock, palette: Palette): string {
+function gauge(
+  block: FigureBlock,
+  palette: Palette,
+): string {
   const level = block.form === 'gauge' ? block.level : 'half';
   const cx = 120;
   const cy = 110;
@@ -198,7 +217,10 @@ function gauge(block: FigureBlock, palette: Palette): string {
 }
 
 /** Window: four glass compartments charge from the stable prefix; a budget bar repeats the fill level. */
-function windowFigure(block: FigureBlock, palette: Palette): string {
+function windowFigure(
+  block: FigureBlock,
+  palette: Palette,
+): string {
   const fill = block.form === 'window' ? block.fill : 'half';
   const charged = 200 * LEVEL_FRACTION[fill];
   const compartments = [0, 1, 2, 3]
@@ -219,7 +241,10 @@ function windowFigure(block: FigureBlock, palette: Palette): string {
 }
 
 /** Gate: glowing candidates converge on one admission column; admitted streams exit as light beams. */
-function gate(block: FigureBlock, palette: Palette): string {
+function gate(
+  block: FigureBlock,
+  palette: Palette,
+): string {
   const pass = block.form === 'gate' ? block.pass : 'few';
   const candidates = [0, 1, 2, 3, 4]
     .map(
@@ -237,7 +262,10 @@ function gate(block: FigureBlock, palette: Palette): string {
 }
 
 /** Stack: ordered layers with the priority band charged; count stays semantic, never a raw number. */
-function stackFigure(block: FigureBlock, palette: Palette): string {
+function stackFigure(
+  block: FigureBlock,
+  palette: Palette,
+): string {
   const layers = block.form === 'stack' ? block.layers : 'some';
   const count = LAYER_COUNT[layers];
   const bands = Array.from({ length: count }, (_, index) =>
@@ -256,7 +284,10 @@ function stackFigure(block: FigureBlock, palette: Palette): string {
 const PASS_COUNT: Readonly<Record<'one' | 'few', number>> = { one: 1, few: 2 };
 
 /** Store: database cylinder; a luminous mouth over a plated metallic body, the canonical persistence glyph. */
-function store(_block: FigureBlock, palette: Palette): string {
+function store(
+  _block: FigureBlock,
+  palette: Palette,
+): string {
   const body = `<path d="M60 44 v62 a60 13 0 0 0 120 0 v-62" fill="url(#metal)" stroke="${palette.ink}" stroke-width="${STROKE.frame}"/>`;
   const sheen = `<rect x="70" y="52" width="9" height="48" rx="4.5" fill="${palette.lit}" opacity="0.2"/>`;
   const mouth = `<ellipse cx="120" cy="44" rx="60" ry="13" fill="url(#mouth)" stroke="${palette.ink}" stroke-width="${STROKE.frame}"/>`;
@@ -274,7 +305,10 @@ function store(_block: FigureBlock, palette: Palette): string {
 const QUEUE_CELLS: Readonly<Record<FigureLevel, number>> = { low: 1, half: 2, full: 3 };
 
 /** Queue: backlog pipe; occupied cells glow from within and one stream exits. */
-function queue(block: FigureBlock, palette: Palette): string {
+function queue(
+  block: FigureBlock,
+  palette: Palette,
+): string {
   const level = block.form === 'queue' ? block.level : 'half';
   const occupied = QUEUE_CELLS[level];
   const cells = [0, 1, 2, 3]
@@ -295,7 +329,10 @@ function queue(block: FigureBlock, palette: Palette): string {
 }
 
 /** Cloud: external network boundary; a lit volume of merged arcs with signal pulses inside. */
-function cloud(_block: FigureBlock, palette: Palette): string {
+function cloud(
+  _block: FigureBlock,
+  palette: Palette,
+): string {
   const outline = `<path d="M72 108 a20 20 0 0 1 -4 -39 a26 26 0 0 1 50 -8 a21 21 0 0 1 30 26 a17 17 0 0 1 -8 21 z" fill="url(#cloud)" stroke="${palette.ink}" stroke-width="${STROKE.frame}" stroke-linejoin="round"/>`;
   const pulses = [96, 120, 144]
     .map((x) => `<circle cx="${x}" cy="88" r="3" fill="${palette.accent}" opacity="0.6"/>`)
@@ -312,19 +349,31 @@ function tank(palette: Palette): string {
 }
 
 /** Soft elliptical contact pool grounds one object on the stage; shade deepens on dark themes and prints on light. */
-function pool(cx: number, cy: number, rx: number, ry: number): string {
+function pool(
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+): string {
   return `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="url(#pool)"/>`;
 }
 
 /** Settling particles gather near the vessel floor; count stays tiny and deterministic. */
-function sediment(count: number, floor: number, fill: string): string {
+function sediment(
+  count: number,
+  floor: number,
+  fill: string,
+): string {
   return Array.from({ length: count }, (_, index) =>
     dot(80 + index * 18, floor - 8 - (index % 2) * 6, 3, fill),
   ).join('');
 }
 
 /** Agitator shaft and paddle mark active mixing vessels. */
-function agitator(top: number, stroke: string): string {
+function agitator(
+  top: number,
+  stroke: string,
+): string {
   return (
     line(120, top - 18, 120, top + 58, stroke, STROKE.line) +
     line(102, top + 58, 138, top + 58, stroke, STROKE.line)
@@ -332,19 +381,32 @@ function agitator(top: number, stroke: string): string {
 }
 
 /** Inflow arrow signals media entering the bed from above, with a faint accent trail behind it. */
-function inflowArrow(top: number, palette: Palette): string {
+function inflowArrow(
+  top: number,
+  palette: Palette,
+): string {
   const trail = `<line x1="120" y1="${top - 22}" x2="120" y2="${top - 2}" stroke="${palette.accent}" stroke-width="8" stroke-linecap="round" stroke-opacity="0.2"/>`;
   return `${trail}${line(120, top - 22, 120, top - 2, palette.ink, STROKE.line)}<path d="m113 ${top - 10} 7 10 7-10" fill="none" stroke="${palette.ink}" stroke-width="${STROKE.line}" stroke-linejoin="round"/>`;
 }
 
 /** Horizontal flow segment with an arrowhead pointing right and a faint accent light trail. */
-function flowArrow(x1: number, y: number, x2: number, palette: Palette): string {
+function flowArrow(
+  x1: number,
+  y: number,
+  x2: number,
+  palette: Palette,
+): string {
   const trail = `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="${palette.accent}" stroke-width="7" stroke-linecap="round" stroke-opacity="0.2"/>`;
   return `${trail}${line(x1, y, x2, y, palette.ink, STROKE.line)}<path d="m${x2 - 9} ${y - 7} 10 7-10 7" fill="none" stroke="${palette.ink}" stroke-width="${STROKE.line}" stroke-linejoin="round"/>`;
 }
 
 /** Admitted stream: a beam that fades as it leaves the gate, tipped with a solid accent head. */
-function beamArrow(x1: number, y: number, x2: number, palette: Palette): string {
+function beamArrow(
+  x1: number,
+  y: number,
+  x2: number,
+  palette: Palette,
+): string {
   const beam = `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="url(#beam)" stroke-width="${STROKE.line}" stroke-linecap="round"/>`;
   const head = `<path d="m${x2 - 9} ${y - 7} 10 7-10 7" fill="none" stroke="${palette.accent}" stroke-opacity="0.85" stroke-width="${STROKE.line}" stroke-linejoin="round"/>`;
   return beam + head;
@@ -375,12 +437,23 @@ function markBadge(
 }
 
 /** Gauge arc spans the upper half dial. */
-function arc(cx: number, cy: number, radius: number, stroke: string): string {
+function arc(
+  cx: number,
+  cy: number,
+  radius: number,
+  stroke: string,
+): string {
   return `<path d="M${cx - radius} ${cy} a${radius} ${radius} 0 0 1 ${radius * 2} 0" fill="none" stroke="${stroke}" stroke-width="4" stroke-linecap="round"/>`;
 }
 
 /** One dial tick at a degree offset from vertical. */
-function tick(cx: number, cy: number, radius: number, degree: number, stroke: string): string {
+function tick(
+  cx: number,
+  cy: number,
+  radius: number,
+  degree: number,
+  stroke: string,
+): string {
   const angle = (degree * Math.PI) / 180;
   const inner = radius * 0.82;
   return line(
@@ -406,12 +479,22 @@ function line(
 }
 
 /** Filled circle painter; fills may reference document gradients. */
-function dot(cx: number, cy: number, r: number, fill: string): string {
+function dot(
+  cx: number,
+  cy: number,
+  r: number,
+  fill: string,
+): string {
   return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${fill}"/>`;
 }
 
 /** Soft debris blob caught against a screen, lit from within. */
-function blob(cx: number, cy: number, r: number, stroke: string): string {
+function blob(
+  cx: number,
+  cy: number,
+  r: number,
+  stroke: string,
+): string {
   return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="url(#blob)" stroke="${stroke}" stroke-width="1.5"/>`;
 }
 
@@ -479,12 +562,19 @@ function encodeBase64(ascii: string): string {
 }
 
 /** Missing tail bytes read as zero and are masked by padding. */
-function codeOrZero(text: string, index: number): number {
+function codeOrZero(
+  text: string,
+  index: number,
+): number {
   return index < text.length ? text.charCodeAt(index) : 0;
 }
 
 /** One 24-bit chunk becomes four alphabet characters with tail padding. */
-function quartet(alphabet: string, chunk: number, remaining: number): string {
+function quartet(
+  alphabet: string,
+  chunk: number,
+  remaining: number,
+): string {
   const pads = 3 - Math.min(remaining, 3);
   const body = [(chunk >> 18) & 63, (chunk >> 12) & 63, (chunk >> 6) & 63, chunk & 63]
     .map((unit) => alphabet[unit])
@@ -496,7 +586,11 @@ function quartet(alphabet: string, chunk: number, remaining: number): string {
 type Stop = readonly [offset: number, color: string, opacity: number];
 
 /** Linear gradient painter; vertical by default, horizontal for beams and metal. */
-function linear(id: string, stops: readonly Stop[], vertical = true): string {
+function linear(
+  id: string,
+  stops: readonly Stop[],
+  vertical = true,
+): string {
   const [x1, y1, x2, y2] = vertical ? [0, 0, 0, 1] : [0, 0, 1, 0];
   return `<linearGradient id="${id}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}">${stops
     .map(stop)
@@ -504,7 +598,13 @@ function linear(id: string, stops: readonly Stop[], vertical = true): string {
 }
 
 /** Radial gradient painter; defaults center the falloff in the painted bounds. */
-function radial(id: string, stops: readonly Stop[], cx = 0.5, cy = 0.5, r = 0.5): string {
+function radial(
+  id: string,
+  stops: readonly Stop[],
+  cx = 0.5,
+  cy = 0.5,
+  r = 0.5,
+): string {
   return `<radialGradient id="${id}" cx="${cx}" cy="${cy}" r="${r}">${stops
     .map(stop)
     .join('')}</radialGradient>`;
@@ -607,7 +707,10 @@ function studioLights(palette: Palette): string {
 }
 
 /** Wrap form artwork on a glass plinth: vertical surface gradient, top-light edge and a faint inner rim. */
-function document_(body: string, palette: Palette): string {
+function document_(
+  body: string,
+  palette: Palette,
+): string {
   const stage =
     `<rect x="6" y="4" width="228" height="142" rx="18" fill="url(#plinth)" stroke="url(#plinthEdge)" stroke-width="2"/>` +
     `<rect x="9" y="7" width="222" height="136" rx="15" fill="none" stroke="${palette.lit}" stroke-opacity="0.14" stroke-width="1"/>`;

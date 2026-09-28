@@ -179,7 +179,10 @@ export function createGraphSelector(): GraphSelector {
   };
 }
 /** A semantic view/reference or interaction permission change invalidates only that React Flow node record. */
-function stableFlowNode(next: FlowNode, previous: FlowNode | undefined): FlowNode {
+function stableFlowNode(
+  next: FlowNode,
+  previous: FlowNode | undefined,
+): FlowNode {
   if (!previous) return next;
   const equal = [
     next.data.view === previous.data.view,
@@ -192,7 +195,10 @@ function stableFlowNode(next: FlowNode, previous: FlowNode | undefined): FlowNod
   return equal ? previous : next;
 }
 /** Pinned paint, route and action identity determine edge changes; camera movement does not rebuild edge data. */
-function stableFlowEdge(next: FlowEdge, previous: FlowEdge | undefined): FlowEdge {
+function stableFlowEdge(
+  next: FlowEdge,
+  previous: FlowEdge | undefined,
+): FlowEdge {
   if (!previous) return next;
   const equal = [
     next.data?.view === previous.data?.view,
@@ -205,7 +211,10 @@ function stableFlowEdge(next: FlowEdge, previous: FlowEdge | undefined): FlowEdg
   ].every(Boolean);
   return equal ? previous : next;
 }
-function sameBox(a: Box | undefined, b: Box | undefined): boolean {
+function sameBox(
+  a: Box | undefined,
+  b: Box | undefined,
+): boolean {
   if (a === undefined || b === undefined) return a === b;
   return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
 }

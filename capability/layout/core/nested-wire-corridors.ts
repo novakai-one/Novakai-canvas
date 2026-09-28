@@ -31,15 +31,27 @@ export function coverPath(
   return segments.flatMap((part) => part ?? []);
 }
 
-function equal(a: PrototypePoint, b: PrototypePoint): boolean {
+function equal(
+  a: PrototypePoint,
+  b: PrototypePoint,
+): boolean {
   return a.x === b.x && a.y === b.y;
 }
 
-function overlap(a: number, b: number, low: number, high: number): boolean {
+function overlap(
+  a: number,
+  b: number,
+  low: number,
+  high: number,
+): boolean {
   return Math.max(Math.min(a, b), low) < Math.min(Math.max(a, b), high);
 }
 /** True when an orthogonal line passes through the open interior of a body. */
-export function crossesBody(from: PrototypePoint, to: PrototypePoint, b: PrototypeBounds): boolean {
+export function crossesBody(
+  from: PrototypePoint,
+  to: PrototypePoint,
+  b: PrototypeBounds,
+): boolean {
   if (from.y === to.y)
     return from.y > b.y && from.y < b.y + b.height && overlap(from.x, to.x, b.x, b.x + b.width);
   return from.x > b.x && from.x < b.x + b.width && overlap(from.y, to.y, b.y, b.y + b.height);

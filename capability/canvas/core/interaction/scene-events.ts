@@ -6,7 +6,10 @@ import { changed } from './changes.js';
 import { expectScene } from '../scenes/accept.js';
 import { receiveScene, retainActive } from '../drafts/reconcile.js';
 /** Disconnection preserves geometry recovery; reconnect does not replay or submit it. */
-function connectionState(state: SessionState, connected: boolean): SessionState {
+function connectionState(
+  state: SessionState,
+  connected: boolean,
+): SessionState {
   if (connected) return { ...state, connected };
   return {
     ...retainActive(state, 'disconnected', 'Service disconnected during gesture'),

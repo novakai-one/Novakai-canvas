@@ -1,11 +1,11 @@
 import type {
-  RoadPrototypeScene,
   PrototypeTravel,
   PrototypeTravelResult,
   PrototypeLane,
   PrototypePoint,
   PrototypeBounds,
 } from '../contract/records/road-prototype.js';
+import type { RoadPrototypeScene } from '../contract/records/road-scene.js';
 import { contains, follows, samePoint, directionVector } from './prototype-road-geometry.js';
 
 const allowed: PrototypeTravelResult = { ok: true, value: null };
@@ -16,7 +16,10 @@ function denied(
 }
 
 /** The lateral lane boundary is excluded: travel exactly on the opposing-lane divider is ambiguous. */
-function insideLane(lane: PrototypeLane, point: PrototypePoint): boolean {
+function insideLane(
+  lane: PrototypeLane,
+  point: PrototypePoint,
+): boolean {
   const vector = directionVector[lane.direction];
   const across = vector.x === 0 ? 'x' : 'y';
   const breadth = vector.x === 0 ? 'width' : 'height';
@@ -46,10 +49,16 @@ function inspectLane(
   return allowed;
 }
 
-function orthogonal(a: PrototypePoint, b: PrototypePoint): boolean {
+function orthogonal(
+  a: PrototypePoint,
+  b: PrototypePoint,
+): boolean {
   return a.x === b.x || a.y === b.y;
 }
-function confined(points: readonly PrototypePoint[], bounds: PrototypeBounds): boolean {
+function confined(
+  points: readonly PrototypePoint[],
+  bounds: PrototypeBounds,
+): boolean {
   return points.every((point) => contains(bounds, point));
 }
 

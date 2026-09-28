@@ -15,18 +15,71 @@ import { digest } from '../contract/brands.js';
 import type { Digest } from '../contract/brands.js';
 import { StorageFault } from '../contract/errors.js';
 import type { BlobFiles } from '../contract/ports/native.js';
+
+/** The file system calls the blob store uses, injectable so tests can simulate I/O failures. */
 interface FileSystem {
-  read(path: string): string;
-  open(path: string): number;
-  write(handle: number, encoded: string): void;
-  flush(handle: number): void;
-  close(handle: number): void;
-  publish(source: string, target: string): void;
-  remove(path: string): void;
-  list(path: string): readonly string[];
-  directory(path: string): void;
-  flushDirectory(path: string): void;
+  /** Reads a file as base64. */
+  readonly read: (path: string) => string;
+  /** Creates a new file for writing (fails if it exists) and returns its handle. */
+  readonly open: (path: string) => number;
+  /** Writes base64-decoded bytes to an open file. */
+  readonly write: (handle: number, encoded: string) => void;
+  /** Flushes an open file to disk. */
+  readonly flush: (handle: number) => void;
+  /** Closes an open file. */
+  readonly close: (handle: number) => void;
+  /** Links `source` at `target`; fails if `target` exists. */
+  readonly publish: (source: string, target: string) => void;
+  /** Deletes a file. */
+  readonly remove: (path: string) => void;
+  /** Lists a directory's entry names. */
+  readonly list: (path: string) => readonly string[];
+  /** Creates a directory and its parents. */
+  readonly directory: (path: string) => void;
+  /** Flushes a directory's entries to disk. */
+  readonly flushDirectory: (path: string) => void;
 }
+
+/**
+ * Creates the blob file store: one immutable file `<digest>.blob` per digest under `root`. It
+ * creates `root` (and its parents) immediately. Native errors other than the expected ones
+ * (`ENOENT` for a missing file, `EEXIST` for a publish collision) are thrown for the storage
+ * transaction to turn into failures.
+ *
+ * - `read`: the file's bytes as base64, or `null` when it does not exist.
+ * - `write`: if a file already exists, its bytes must equal the new ones (otherwise a
+ *   `StorageFault` `corrupt-asset` at `digest`: "Existing content-addressed file differs from
+ *   submitted bytes"). Otherwise it writes `<digest>.blob.<nonce>.tmp`, flushes and closes it,
+ *   links it at the final name without replacing (a racing identical file is accepted, a
+ *   different one refused as above), flushes the directory, and always removes the temporary
+ *   file.
+ * - `remove`: deletes the file; a missing file is not an error.
+ * - `list`: removes leftover temporary files matching `<digest>.blob.<uuid>.tmp`, then returns
+ *   the digests of `<digest>.blob` files. Other names are never touched. Removing temporary files
+ *   is safe only while writers are serialized: the storage adapter calls `list` inside its
+ *   `BEGIN IMMEDIATE` transaction.
+ *
+ * @param root - The blob directory.
+ * @param io - The file system calls. Defaults to `node:fs` (new files are created with mode 0600).
+ * @param nonce - Names temporary files. Defaults to `randomUUID`.
+ * @returns The blob file store.
+ * @throws Whatever creating `root` throws.
+ */
+export function createBlobFiles(
+  root: string,
+  io: FileSystem = native,
+  nonce: () => string = randomUUID,
+): BlobFiles {
+  io.directory(root);
+  return {
+    read: (id) => readFile(join(root, `${id}.blob`), io),
+    write: (id, encoded) => writeFile(root, id, encoded, io, nonce),
+    remove: (id) => removeFile(join(root, `${id}.blob`), io),
+    list: () => listFiles(root, io),
+  };
+}
+
+/** The real `node:fs` calls. */
 const native: FileSystem = {
   read: (path) => readFileSync(path).toString('base64'),
   open: (path) => openSync(path, 'wx', 0o600),
@@ -48,29 +101,45 @@ const native: FileSystem = {
     }
   },
 };
-/** Missing files are explicit null; permission/disk failures remain native errors for the store boundary. */
-function readFile(path: string, io: Pick<FileSystem, 'read'>): string | null {
+
+/** Reads a file, or returns `null` when it does not exist. Other errors are thrown. */
+function readFile(
+  path: string,
+  io: Pick<FileSystem, 'read'>,
+): string | null {
   try {
     return io.read(path);
   } catch (error) {
     return missingOrThrow(error);
   }
 }
-/** Structured native codes distinguish expected absence/collision without parsing messages. */
-function hasCode(error: unknown, code: string): boolean {
-  if (typeof error !== 'object' || error === null) return false;
+
+/** Tells whether an error has the given native `code`. The message is never parsed. */
+function hasCode(
+  error: unknown,
+  code: string,
+): boolean {
+  if (typeof error !== 'object' || error === null) {
+    return false;
+  }
   return 'code' in error && error.code === code;
 }
-/** Immutable identity means an existing path can be reused only for byte-identical content. */
-function requireSame(previous: string | null, encoded: string): void {
-  if (previous !== encoded)
+
+/** Throws `corrupt-asset` unless the existing bytes equal the new ones; a digest's file never changes. */
+function requireSame(
+  previous: string | null,
+  encoded: string,
+): void {
+  if (previous !== encoded) {
     throw new StorageFault(
       'corrupt-asset',
       'digest',
       'Existing content-addressed file differs from submitted bytes',
     );
+  }
 }
-/** Temporary content is flushed and closed before its directory entry becomes authoritative. */
+
+/** Writes, flushes and closes a new temporary file. It is closed even when writing fails. */
 function writeTemporary(
   path: string,
   encoded: string,
@@ -84,15 +153,20 @@ function writeTemporary(
     io.close(handle);
   }
 }
-/** Cleanup is idempotent so failed publication and a later GC pass can share the same operation. */
-function removeFile(path: string, io: Pick<FileSystem, 'remove'>): void {
+
+/** Deletes a file; a missing file is not an error, so cleanup can run twice. */
+function removeFile(
+  path: string,
+  io: Pick<FileSystem, 'remove'>,
+): void {
   try {
     io.remove(path);
   } catch (error) {
     ignoreMissing(error);
   }
 }
-/** Atomic no-replace publication avoids overwriting an already admitted file under a digest. */
+
+/** Links the temporary file at its final name without replacing an existing file. */
 function publishFile(
   temporary: string,
   destination: string,
@@ -105,7 +179,11 @@ function publishFile(
     resolveCollision(error, destination, encoded, io);
   }
 }
-/** File and directory fsync finish before the caller's SQLite metadata transaction may commit. */
+
+/**
+ * Writes the temporary file, publishes it, and flushes the directory, all before the caller's
+ * metadata transaction can commit. The temporary file is always removed.
+ */
 function persistFile(
   root: string,
   destination: string,
@@ -122,7 +200,11 @@ function persistFile(
     removeFile(temporary, io);
   }
 }
-/** Existing bytes are verified even after a previous metadata rollback left an orphan content file. */
+
+/**
+ * Writes a digest's file, or checks the existing one (which may be an orphan left by an earlier
+ * rollback) has the same bytes.
+ */
 function writeFile(
   root: string,
   id: Digest,
@@ -138,7 +220,11 @@ function writeFile(
   }
   persistFile(root, destination, encoded, io, nonce);
 }
-/** Only our strict temporary filename grammar is collected, while the caller holds maintenance serialization. */
+
+/**
+ * Removes leftover temporary files; only names in the exact temporary-file pattern are touched.
+ * The caller must hold the storage write lock, so no writer's temporary file is in use.
+ */
 function cleanupTemporary(
   root: string,
   names: readonly string[],
@@ -148,45 +234,43 @@ function cleanupTemporary(
     .filter((name) => /^[a-f0-9]{64}\.blob\.[a-f0-9-]{36}\.tmp$/.test(name))
     .forEach((name) => removeFile(join(root, name), io));
 }
-/** List only owned digest files; unknown user filenames are never deletion candidates. */
-function listFiles(root: string, io: Pick<FileSystem, 'list' | 'remove'>): readonly Digest[] {
+
+/** Cleans up temporary files, then lists the digests of blob files. Other names are ignored. */
+function listFiles(
+  root: string,
+  io: Pick<FileSystem, 'list' | 'remove'>,
+): readonly Digest[] {
   const names = io.list(root);
   cleanupTemporary(root, names, io);
   return names
     .filter((name) => /^[a-f0-9]{64}\.blob$/.test(name))
     .map((name) => digest.parse(name.slice(0, -5)));
 }
-/** Create the physical file adapter with injectable IO. AssetStorage catches all supported IO failures. */
-export function createBlobFiles(
-  root: string,
-  io: FileSystem = native,
-  nonce: () => string = randomUUID,
-): BlobFiles {
-  io.directory(root);
-  return {
-    read: (id) => readFile(join(root, `${id}.blob`), io),
-    write: (id, encoded) => writeFile(root, id, encoded, io, nonce),
-    remove: (id) => removeFile(join(root, `${id}.blob`), io),
-    list: () => listFiles(root, io),
-  };
-}
 
-/** Expected absence remains distinct from permissions and other native failures. */
+/** Returns `null` for `ENOENT`; throws any other error. */
 function missingOrThrow(error: unknown): null {
-  if (hasCode(error, 'ENOENT')) return null;
+  if (hasCode(error, 'ENOENT')) {
+    return null;
+  }
   throw error;
 }
-/** Idempotent cleanup ignores only already-missing files, not other failures. */
+
+/** Ignores `ENOENT`; throws any other error. */
 function ignoreMissing(error: unknown): void {
-  if (!hasCode(error, 'ENOENT')) throw error;
+  if (!hasCode(error, 'ENOENT')) {
+    throw error;
+  }
 }
-/** A publication race may reuse identical content; unrelated native errors propagate to the store boundary. */
+
+/** On `EEXIST`, accepts an identical racing file and refuses a different one; throws other errors. */
 function resolveCollision(
   error: unknown,
   destination: string,
   encoded: string,
   io: Pick<FileSystem, 'read'>,
 ): void {
-  if (!hasCode(error, 'EEXIST')) throw error;
+  if (!hasCode(error, 'EEXIST')) {
+    throw error;
+  }
   requireSame(readFile(destination, io), encoded);
 }

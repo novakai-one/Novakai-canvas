@@ -28,7 +28,11 @@ export function availableSections(
 }
 
 /** Moving downward in bottom-edge order clears each obstacle once, without shifting its owner. */
-function availableBox(preferred: Box, occupied: readonly Box[], gap: number): Box {
+function availableBox(
+  preferred: Box,
+  occupied: readonly Box[],
+  gap: number,
+): Box {
   return occupied
     .toSorted((a, b) => a.y + a.height - b.y - b.height)
     .reduce((box, obstacle) => {

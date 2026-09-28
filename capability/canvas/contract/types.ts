@@ -11,10 +11,22 @@ export interface Dependencies {
 /** Pure Canvas operations; host owns rendering diagnostics, effect delivery and retry after rejection. */
 export interface Canvas {
   open(input: unknown): Result<SessionState>;
-  transition(state: SessionState, event: unknown): Result<Transition>;
-  present(state: SessionState, previous?: CanvasView): Result<CanvasView>;
+  transition(
+    state: SessionState,
+    event: unknown,
+  ): Result<Transition>;
+  present(
+    state: SessionState,
+    previous?: CanvasView,
+  ): Result<CanvasView>;
   describeAccessibility(state: SessionState): Result<readonly OutlineSection[]>;
-  gesture(input: unknown, profile?: InteractionProfile): Result<GestureDecision>;
+  gesture(
+    input: unknown,
+    profile?: InteractionProfile,
+  ): Result<GestureDecision>;
   /** The group or section under a world point, for creating an object there. */
-  dropTarget(state: SessionState, point: Point): Result<DropTarget | null>;
+  dropTarget(
+    state: SessionState,
+    point: Point,
+  ): Result<DropTarget | null>;
 }

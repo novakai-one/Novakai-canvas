@@ -1,6 +1,10 @@
 import { CanvasFault, type Result, type ErrorCode } from '../../contract/errors.js';
 /** Private structured failure; Canvas facade retains caller state and host owns correction/retry. */
-export function reject(code: ErrorCode, path: string, message: string): never {
+export function reject(
+  code: ErrorCode,
+  path: string,
+  message: string,
+): never {
   throw new CanvasFault({
     code,
     path,
@@ -58,7 +62,10 @@ interface Reader<T> {
       };
 }
 /** Structural reader role keeps Zod out of core; diagnostics identify the failing public field. */
-export function parse<T>(reader: Reader<T>, input: unknown): T {
+export function parse<T>(
+  reader: Reader<T>,
+  input: unknown,
+): T {
   const result = reader.safeParse(input);
   if (result.success) return result.data;
   const first = result.error.issues[0];

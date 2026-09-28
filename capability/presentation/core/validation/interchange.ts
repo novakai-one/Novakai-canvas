@@ -25,18 +25,29 @@ function normalizedRecord(value: unknown): unknown {
   );
 }
 /** Reject altered domain fragments before reconstructing trusted records; caller retains its current scene. */
-function equal(expected: unknown, actual: unknown, path: string): void {
+function equal(
+  expected: unknown,
+  actual: unknown,
+  path: string,
+): void {
   if (JSON.stringify(normalized(expected)) !== JSON.stringify(normalized(actual)))
     reject('invalid-input', path, 'Serialized projection does not match its canonical collection');
 }
 /** Required owner identity lookup never substitutes a similarly named record. */
-function required<T>(value: T | undefined, path: string): T {
+function required<T>(
+  value: T | undefined,
+  path: string,
+): T {
   if (value === undefined)
     return reject('invalid-input', path, 'Projection references a missing canonical record');
   return value;
 }
 /** Foreign relationship kind and routing are copied only from the validated collection. */
-function readWire(raw: WireEnvelope, section: Section, collection: InputCollection): VisualWire {
+function readWire(
+  raw: WireEnvelope,
+  section: Section,
+  collection: InputCollection,
+): VisualWire {
   const relationship = required(
     collection.relationships.find((item) => item.id === raw.relationshipId),
     raw.id,
@@ -49,7 +60,10 @@ function readWire(raw: WireEnvelope, section: Section, collection: InputCollecti
   return { ...raw, kind: relationship.kind, route };
 }
 /** Canonical kind selects semantic admission even when an explicit frame projects a generic card shape. */
-function readNode(raw: VisualNode, collection: InputCollection): VisualNode {
+function readNode(
+  raw: VisualNode,
+  collection: InputCollection,
+): VisualNode {
   if (raw.objectId === null) return raw;
   const source = required(
     collection.objects.find((item) => item.id === raw.objectId),
@@ -65,7 +79,10 @@ function requireLodRoles(node: VisualNode): void {
     reject('invalid-input', node.id, 'Engineering node primitive is missing its semantic LOD role');
 }
 /** Section intent and sequence semantics belong to Model; visual measurements retain their checked shapes. */
-function readSection(raw: SectionEnvelope, collection: InputCollection): VisualSection {
+function readSection(
+  raw: SectionEnvelope,
+  collection: InputCollection,
+): VisualSection {
   const source = required(
     collection.sections.find((item) => item.id === raw.id),
     raw.id,

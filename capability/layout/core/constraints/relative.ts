@@ -16,14 +16,20 @@ const directions: Readonly<Record<LayoutIntent['direction'], Direction>> = {
 };
 type Target = LayoutIntent['constraints'][number]['targets'][number];
 /** Resolve canonical object/group references through the actual visible representation. */
-function target(reference: Target, nodes: readonly VisualNode[]): string {
+function target(
+  reference: Target,
+  nodes: readonly VisualNode[],
+): string {
   const found = nodes.find((node) => matches(reference, node));
   if (!found)
     return reject('invalid-input', reference.id, 'Relative constraint target is not visible');
   return found.id;
 }
 /** A represented object and its group intentionally resolve to the same physical box. */
-function matches(reference: Target, node: VisualNode): boolean {
+function matches(
+  reference: Target,
+  node: VisualNode,
+): boolean {
   if (reference.kind === 'object') return node.objectId === reference.id;
   return node.groupId === reference.id;
 }
@@ -127,7 +133,10 @@ export function relativeSections(
   return compileRelative(layout, (reference) => sectionTarget(reference, ids), gap, 'collection');
 }
 /** Section constraints cannot borrow object/group identities from inside one section. */
-function sectionTarget(reference: Target, ids: readonly string[]): string {
+function sectionTarget(
+  reference: Target,
+  ids: readonly string[],
+): string {
   if (reference.kind !== 'section' || !ids.includes(reference.id))
     return reject(
       'invalid-input',

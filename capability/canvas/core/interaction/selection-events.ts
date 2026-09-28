@@ -18,7 +18,10 @@ function escapeTool(state: SessionState): Transition {
 }
 
 /** Hover is view-only, graph-only and inactive throughout every edit gesture or explicit selection. */
-function canHover(state: SessionState, event: EventOf<'target-enter'>): boolean {
+function canHover(
+  state: SessionState,
+  event: EventOf<'target-enter'>,
+): boolean {
   return [
     state.selection.length === 0,
     state.draft === null,
@@ -30,13 +33,19 @@ function canHover(state: SessionState, event: EventOf<'target-enter'>): boolean 
 }
 
 /** A late leave clears only the same scoped target, never a newer hover. */
-function leaveTarget(state: SessionState, event: EventOf<'target-leave'>): SessionState {
+function leaveTarget(
+  state: SessionState,
+  event: EventOf<'target-leave'>,
+): SessionState {
   if (state.hover === null || targetKey(state.hover) !== targetKey(event.target)) return state;
   return { ...state, hover: null };
 }
 
 /** Enter validates against the admitted index before storing a transient appearance target. */
-function enterTarget(state: SessionState, event: EventOf<'target-enter'>): SessionState {
+function enterTarget(
+  state: SessionState,
+  event: EventOf<'target-enter'>,
+): SessionState {
   targetInfo(state.index, event.target);
   return canHover(state, event) ? { ...state, hover: event.target } : state;
 }

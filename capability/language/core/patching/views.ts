@@ -4,7 +4,10 @@ import type { RawRecord } from '../lowering/fields.js';
 import { reject } from '../validation/outcomes.js';
 import { viewOwner } from './targets.js';
 /** Membership changes operate on one view; canonical objects and relationships are not duplicated. */
-export function editMembership(collection: Collection, operation: Operation): RawRecord {
+export function editMembership(
+  collection: Collection,
+  operation: Operation,
+): RawRecord {
   const section = viewOwner(collection, operation);
   if (operation.action === 'hide')
     return { op: 'hide', section: section.id, object: operation.address.id };
@@ -12,7 +15,10 @@ export function editMembership(collection: Collection, operation: Operation): Ra
   return connect(collection, operation);
 }
 /** Showing an already visible object is an error, including represented group visibility. */
-function show(collection: Collection, operation: Operation): RawRecord {
+function show(
+  collection: Collection,
+  operation: Operation,
+): RawRecord {
   const section = viewOwner(collection, operation);
   const visible = [
     ...section.appearances.map((item) => item.object),
@@ -33,7 +39,10 @@ function show(collection: Collection, operation: Operation): RawRecord {
   };
 }
 /** Connect/disconnect only changes explicit wire appearances; endpoints are checked at final planning. */
-function connect(collection: Collection, operation: Operation): RawRecord {
+function connect(
+  collection: Collection,
+  operation: Operation,
+): RawRecord {
   const section = viewOwner(collection, operation);
   const existing = section.wires.find((item) => item.relationship === operation.address.id);
   const wires = changedWires(section.wires, existing !== undefined, operation);

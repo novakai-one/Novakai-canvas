@@ -170,14 +170,20 @@ export async function reroute(
 }
 
 /** Route-only requires an existing section before any native work is requested. */
-function fixedSection(source: VisualSection, request: CheckedRouteRequest): SectionCandidate {
+function fixedSection(
+  source: VisualSection,
+  request: CheckedRouteRequest,
+): SectionCandidate {
   const fixed = request.fixed.sections.find((item) => item.id === source.id);
   if (!fixed) return reject('invalid-input', source.id, 'Fixed section is missing');
   return fixed;
 }
 
 /** Module routing has one implementation; missing composition is an error, never native fallback. */
-function moduleEngine(source: VisualSection, dependencies: GeometryDependencies) {
+function moduleEngine(
+  source: VisualSection,
+  dependencies: GeometryDependencies,
+) {
   if (source.mode !== 'modules') return undefined;
   if (dependencies.nested === undefined)
     return reject('invalid-input', source.id, 'Module sections require the custom roads engine');

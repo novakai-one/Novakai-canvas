@@ -15,25 +15,37 @@ export interface Attachments {
   readonly target: ResolvedEndpoint;
 }
 /** Resolve the physical visible node; callers never substitute an absent member/object. Layout execute catches faults; Authoring retains the scene and owns correction. */
-export function visible(id: string, nodes: readonly PlacedNode[]): PlacedNode {
+export function visible(
+  id: string,
+  nodes: readonly PlacedNode[],
+): PlacedNode {
   const found = nodes.find((node): boolean => node.id === id);
   if (!found) return reject('invalid-input', id, 'Wire attachment node is not visible');
   return found;
 }
 /** Automatic sides follow centre separation, with a stable horizontal tie break. */
-function facing(source: PlacedNode, target: PlacedNode): Side {
+function facing(
+  source: PlacedNode,
+  target: PlacedNode,
+): Side {
   const a = center(source.box);
   const b = center(target.box);
   if (Math.abs(b.x - a.x) >= Math.abs(b.y - a.y)) return horizontalSide(a.x, b.x);
   return verticalSide(a.y, b.y);
 }
 /** Positive horizontal separation exits on the right; ties use the same stable side. */
-function horizontalSide(from: number, to: number): Side {
+function horizontalSide(
+  from: number,
+  to: number,
+): Side {
   if (to >= from) return 'right';
   return 'left';
 }
 /** Positive vertical separation exits below the source. */
-function verticalSide(from: number, to: number): Side {
+function verticalSide(
+  from: number,
+  to: number,
+): Side {
   if (to >= from) return 'bottom';
   return 'top';
 }
@@ -48,12 +60,19 @@ function chooseSide(
   return automaticSide(member, source, target);
 }
 /** A table/interface member must connect at its row height, not the centre of the object. */
-function automaticSide(member: string | null, source: PlacedNode, target: PlacedNode): Side {
+function automaticSide(
+  member: string | null,
+  source: PlacedNode,
+  target: PlacedNode,
+): Side {
   if (member === null) return facing(source, target);
   return horizontalSide(center(source.box).x, center(target.box).x);
 }
 /** Orthogonal attachment points lie on the chosen box edge. */
-function edge(node: PlacedNode, side: Side): Point {
+function edge(
+  node: PlacedNode,
+  side: Side,
+): Point {
   const box = node.box;
   const middle = center(box);
   const points = {
@@ -65,12 +84,20 @@ function edge(node: PlacedNode, side: Side): Point {
   return points[side];
 }
 /** Measured member coordinates are node-local and cannot be approximated by row indices. */
-function attachment(node: PlacedNode, member: string | null, side: Side): Point {
+function attachment(
+  node: PlacedNode,
+  member: string | null,
+  side: Side,
+): Point {
   if (member === null) return edge(node, side);
   return memberPoint(node, member, side);
 }
 /** Vertical member-side requests have no row-edge interpretation and are rejected with the member identity. */
-function memberPoint(node: PlacedNode, member: string, side: Side): Point {
+function memberPoint(
+  node: PlacedNode,
+  member: string,
+  side: Side,
+): Point {
   if (side === 'top' || side === 'bottom')
     return reject('constraint-conflict', member, 'Member ports require a left or right side', [
       node.id,
@@ -82,7 +109,10 @@ function memberPoint(node: PlacedNode, member: string, side: Side): Point {
   return { ...edge(node, side), y: node.box.y + anchor.y };
 }
 /** The semantically selected endpoint keeps a stable lateral approach, independent of label visibility. */
-export function preferredSide(wire: VisualWire, endpoint: 'source' | 'target'): Side | 'auto' {
+export function preferredSide(
+  wire: VisualWire,
+  endpoint: 'source' | 'target',
+): Side | 'auto' {
   const requested = endpoint === 'source' ? wire.route.sourceSide : wire.route.targetSide;
   if (requested !== 'auto' || wire.annotationEndpoint !== endpoint) return requested;
   return endpoint === 'source' ? 'right' : 'left';
@@ -135,7 +165,10 @@ function ordered(
     .sort((a, b) => a.far[across] - b.far[across] || incomingFirst(a, b));
 }
 /** Equal far ends: incoming wires take the earlier point. */
-function incomingFirst(a: SharedEnd, b: SharedEnd): number {
+function incomingFirst(
+  a: SharedEnd,
+  b: SharedEnd,
+): number {
   if (a.end === b.end) return 0;
   return a.end === 'target' ? -1 : 1;
 }
@@ -158,7 +191,10 @@ function place(
   const offset = Math.round(side.start + (side.length / (slots + 1)) * (slot + 1));
   return { ...endpoint, point: { ...endpoint.point, [across]: offset } };
 }
-function span(box: Box, across: 'x' | 'y'): { readonly start: number; readonly length: number } {
+function span(
+  box: Box,
+  across: 'x' | 'y',
+): { readonly start: number; readonly length: number } {
   return across === 'y'
     ? { start: box.y, length: box.height }
     : { start: box.x, length: box.width };
@@ -179,17 +215,26 @@ function sharedEnds(
     }));
 }
 /** Whole-node ends on the same node side compete for that side. */
-function meets(candidate: ResolvedEndpoint, endpoint: ResolvedEndpoint): boolean {
+function meets(
+  candidate: ResolvedEndpoint,
+  endpoint: ResolvedEndpoint,
+): boolean {
   return (
     candidate.node === endpoint.node &&
     candidate.member === null &&
     candidate.side === endpoint.side
   );
 }
-function farNode(wire: VisualWire, end: 'source' | 'target'): string {
+function farNode(
+  wire: VisualWire,
+  end: 'source' | 'target',
+): string {
   return end === 'source' ? wire.target.node : wire.source.node;
 }
-function sided(wire: VisualWire, nodes: readonly PlacedNode[]): Attachments {
+function sided(
+  wire: VisualWire,
+  nodes: readonly PlacedNode[],
+): Attachments {
   const source = visible(wire.source.node, nodes);
   const target = visible(wire.target.node, nodes);
   const sourceSide = chooseSide(preferredSide(wire, 'source'), wire.source.member, source, target);
@@ -208,7 +253,11 @@ function sided(wire: VisualWire, nodes: readonly PlacedNode[]): Attachments {
   };
 }
 /** A whole-object self-loop's automatic target uses its bottom; explicit sides remain unchanged. */
-function selfTarget(wire: VisualWire, source: PlacedNode, target: PlacedNode): Side {
+function selfTarget(
+  wire: VisualWire,
+  source: PlacedNode,
+  target: PlacedNode,
+): Side {
   if (
     wire.source.node === wire.target.node &&
     preferredSide(wire, 'target') === 'auto' &&
@@ -218,7 +267,10 @@ function selfTarget(wire: VisualWire, source: PlacedNode, target: PlacedNode): S
   return chooseSide(preferredSide(wire, 'target'), wire.target.member, target, source);
 }
 /** Exact outward points define marker stubs; the native adapter routes their free corridor without a directed ConnEnd constructor. Layout execute catches faults; Authoring retains the scene and owns correction. */
-export function approach(endpoint: ResolvedEndpoint, distance: number): Point {
+export function approach(
+  endpoint: ResolvedEndpoint,
+  distance: number,
+): Point {
   const vectors = {
     top: { x: 0, y: -1 },
     right: { x: 1, y: 0 },
@@ -230,12 +282,18 @@ export function approach(endpoint: ResolvedEndpoint, distance: number): Point {
 }
 
 /** The first fixed obstacle on the outward ray limits optional routing clearance, never marker length. Layout execute catches faults; Authoring retains the scene and owns correction. */
-export function departureSpace(endpoint: ResolvedEndpoint, nodes: readonly PlacedNode[]): number {
+export function departureSpace(
+  endpoint: ResolvedEndpoint,
+  nodes: readonly PlacedNode[],
+): number {
   const boxes = contentBoxes(nodes.filter((node): boolean => node.id !== endpoint.node));
   return Math.min(Infinity, ...boxes.map((box): number => obstacleDistance(endpoint, box)));
 }
 /** Normalize every named side to a positive ray; container headers use the same protected content geometry. */
-function obstacleDistance(endpoint: ResolvedEndpoint, box: Box): number {
+function obstacleDistance(
+  endpoint: ResolvedEndpoint,
+  box: Box,
+): number {
   const point = endpoint.point;
   const rays = {
     right: {

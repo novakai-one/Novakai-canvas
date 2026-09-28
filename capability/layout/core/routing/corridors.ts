@@ -9,14 +9,21 @@ export interface Corridor {
   readonly index: number;
 }
 /** Four endpoint-local sides at two measured distances give exactly eight local alternatives. Pure replay is safe; Layout owns retry and Authoring retains the scene on failure. */
-export function localCorridors(plan: RoutePlan, gap: number): readonly Corridor[] {
+export function localCorridors(
+  plan: RoutePlan,
+  gap: number,
+): readonly Corridor[] {
   const bounds = pointBounds([plan.connection.source, plan.connection.target]);
   return [1, 2].flatMap((scale): readonly Corridor[] =>
     around(plan, bounds, gap * scale, (scale - 1) * 4),
   );
 }
 /** The final fallback alone may depend on whole-scene bounds; it consumes exactly one attempt. Pure replay is safe; Layout owns retry and Authoring retains the scene on failure. */
-export function outsideCorridor(plan: RoutePlan, occupied: readonly Box[], gap: number): Corridor {
+export function outsideCorridor(
+  plan: RoutePlan,
+  occupied: readonly Box[],
+  gap: number,
+): Corridor {
   const bounds = union(occupied);
   const label = labelSize(plan);
   return corridor(
@@ -29,7 +36,12 @@ export function outsideCorridor(plan: RoutePlan, occupied: readonly Box[], gap: 
   );
 }
 /** Measured offsets reserve label space; approach-aligned checkpoints follow source-to-target order without forcing reversals past endpoint stubs. */
-function around(plan: RoutePlan, bounds: Box, gap: number, offset: number): readonly Corridor[] {
+function around(
+  plan: RoutePlan,
+  bounds: Box,
+  gap: number,
+  offset: number,
+): readonly Corridor[] {
   const label = labelSize(plan);
   const source = plan.connection.sourceApproach ?? plan.connection.source;
   const target = plan.connection.targetApproach ?? plan.connection.target;
@@ -77,7 +89,11 @@ function labelSize(plan: RoutePlan): { readonly width: number; readonly height: 
   return plan.wire.labelVisible === false ? { width: 0, height: 0 } : plan.wire.label;
 }
 /** Preserve only the approach checkpoints around each alternative, never an old outside detour. */
-function corridor(plan: RoutePlan, middle: readonly Point[], index: number): Corridor {
+function corridor(
+  plan: RoutePlan,
+  middle: readonly Point[],
+  index: number,
+): Corridor {
   return {
     index,
     connection: {
@@ -116,7 +132,11 @@ function bends(points: readonly Point[]): number {
     .filter((point, index): boolean => turns(points[index], point, points[index + 2])).length;
 }
 /** Missing neighbours cannot contribute a direction change. */
-function turns(a: Point | undefined, b: Point, c: Point | undefined): boolean {
+function turns(
+  a: Point | undefined,
+  b: Point,
+  c: Point | undefined,
+): boolean {
   if (a === undefined || c === undefined) return false;
   return (a.x === b.x) !== (b.x === c.x);
 }

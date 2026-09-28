@@ -60,7 +60,10 @@ export function draftHandlers(): readonly Handler[] {
 }
 
 /** Preview label bounds follow the admitted wire visibility, never a payload override. */
-function validatePreviewLabel(state: SessionState, preview: WireRoutePreview): void {
+function validatePreviewLabel(
+  state: SessionState,
+  preview: WireRoutePreview,
+): void {
   const source = state.scene.sections
     .find((section) => section.id === preview.section)
     ?.wires.find((wire) => wire.id === preview.id);
@@ -76,7 +79,10 @@ function validatePreviewLabel(state: SessionState, preview: WireRoutePreview): v
 }
 
 /** Release geometry is complete and identity-preserving; partial overlays cannot mix old/new frames. */
-function validateGeometry(state: SessionState, preview: GeometryPreview): void {
+function validateGeometry(
+  state: SessionState,
+  preview: GeometryPreview,
+): void {
   const expected = state.scene.sections.flatMap((section) => [
     targetKey({ kind: 'section', id: section.id }),
     ...section.nodes.map((node) => targetKey({ kind: 'node', section: section.id, id: node.id })),

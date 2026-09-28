@@ -13,7 +13,10 @@ export function sectionId(target: Target): string {
   return target.section;
 }
 /** Resolve a checked interaction target; public transition failure leaves current selection intact. */
-export function targetInfo(index: SceneIndex, target: Target): TargetInfo {
+export function targetInfo(
+  index: SceneIndex,
+  target: Target,
+): TargetInfo {
   const found = index.targets[targetKey(target)];
   if (!found)
     return reject('unknown-target', targetKey(target), 'The target is not in the displayed scene');

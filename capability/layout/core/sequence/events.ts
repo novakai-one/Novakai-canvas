@@ -3,7 +3,10 @@ import type { EventInput, SequenceContext, Body } from './records.js';
 import { center } from '../geometry/bounds.js';
 import { reject } from '../validation/outcomes.js';
 /** Canonical participant identity resolves to its single measured appearance. */
-export function participant(id: string, nodes: readonly PlacedNode[]): PlacedNode {
+export function participant(
+  id: string,
+  nodes: readonly PlacedNode[],
+): PlacedNode {
   const found = nodes.find((node) => node.measured.objectId === id);
   if (!found) return reject('invalid-input', id, 'Sequence participant is not visible');
   return found;
@@ -31,7 +34,11 @@ function path(
   ];
 }
 /** An event occupies its own ordered vertical band: one measured label, one label gap and one sequence gap — never a uniform double slot. */
-export function eventBody(input: EventInput, top: number, context: SequenceContext): Body {
+export function eventBody(
+  input: EventInput,
+  top: number,
+  context: SequenceContext,
+): Body {
   const source = participant(input.item.source, context.nodes);
   const target = participant(input.item.target, context.nodes);
   const y = top + input.label.height + context.options.labelGap;
@@ -57,7 +64,12 @@ export function eventBody(input: EventInput, top: number, context: SequenceConte
   };
 }
 /** Different-participant labels centre on their message; self labels sit in the loop's reserved width. */
-function labelLeft(source: PlacedNode, target: PlacedNode, width: number, gap: number): number {
+function labelLeft(
+  source: PlacedNode,
+  target: PlacedNode,
+  width: number,
+  gap: number,
+): number {
   if (source.id === target.id) return center(source.box).x + gap;
   return (center(source.box).x + center(target.box).x - width) / 2;
 }

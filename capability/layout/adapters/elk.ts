@@ -19,7 +19,10 @@ const directions = { right: 'RIGHT', down: 'DOWN', left: 'LEFT', up: 'UP' };
 const algorithms = { layered: 'layered', tree: 'layered' };
 const layerConstraints = { first: 'FIRST', last: 'LAST' };
 /** Job-local mutable native graph is built from readonly capability data. */
-function node(item: PlacementNode, problem: PlacementProblem): ElkNode {
+function node(
+  item: PlacementNode,
+  problem: PlacementProblem,
+): ElkNode {
   return {
     id: item.id,
     width: item.width,
@@ -66,7 +69,11 @@ function coordinate(value: number | undefined): number {
   return value;
 }
 /** Compound native positions are converted to the section-local coordinate frame. */
-function flatten(node: ElkNode, x: number, y: number): readonly PlacementValue[] {
+function flatten(
+  node: ElkNode,
+  x: number,
+  y: number,
+): readonly PlacementValue[] {
   const left = x + coordinate(node.x);
   const top = y + coordinate(node.y);
   const placed = {

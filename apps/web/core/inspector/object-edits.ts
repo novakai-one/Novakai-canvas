@@ -1,5 +1,22 @@
+/*
+ * An object form's draft: its key, and the object its retained edits produce. `objectDraftKey` is
+ * the only maker of `ObjectDraftKey`. Pure; no function here fails, so there is nothing to recover.
+ * Model and Authoring decide at Apply whether the edited object is valid.
+ */
 import type { DiagramObject, ContentBlock } from '../../contract/records/owners.js';
 import type { ObjectDraft, ObjectEdit } from '../../contract/records/inspector.js';
+import type { CollectionId, ObjectDraftKey, ObjectId } from '../../contract/brands.js';
+import { objectDraftKeySchema } from '../../contract/brands.js';
+/**
+ * The key of an object's form: its collection and object, as JSON text. It names one form whichever
+ * diagram appearance selected the object. The only maker of `ObjectDraftKey`; never fails.
+ */
+export function objectDraftKey(
+  collection: CollectionId,
+  object: ObjectId,
+): ObjectDraftKey {
+  return objectDraftKeySchema.parse(JSON.stringify([collection, object]));
+}
 /** Readable form data is derived from retained intentions. Only Model/Authoring may admit its final validity. */
 export function editedObject(draft: ObjectDraft): DiagramObject {
   return draft.edits.reduce(applyEdit, draft.object);
@@ -22,31 +39,49 @@ const operations: Readonly<
   'add-content': addContent,
 };
 /** One retained command changes only its named aspect; all other semantic fields remain present. */
-function applyEdit(object: DiagramObject, edit: ObjectEdit): DiagramObject {
+function applyEdit(
+  object: DiagramObject,
+  edit: ObjectEdit,
+): DiagramObject {
   return operations[edit.kind](object, edit);
 }
 /** Empty labels remain editable drafts; final Model validation owns the nonblank invariant. */
-function editLabel(object: DiagramObject, edit: ObjectEdit): DiagramObject {
+function editLabel(
+  object: DiagramObject,
+  edit: ObjectEdit,
+): DiagramObject {
   if (edit.kind !== 'label') return object;
   return { ...object, label: edit.value };
 }
 /** Semantic roles resolve through the collection theme when the draft is admitted. */
-function editRole(object: DiagramObject, edit: ObjectEdit): DiagramObject {
+function editRole(
+  object: DiagramObject,
+  edit: ObjectEdit,
+): DiagramObject {
   if (edit.kind !== 'role') return object;
   return { ...object, role: edit.value };
 }
 /** Human sizing uses the same semantic size options as agent DSL. */
-function editSize(object: DiagramObject, edit: ObjectEdit): DiagramObject {
+function editSize(
+  object: DiagramObject,
+  edit: ObjectEdit,
+): DiagramObject {
   if (edit.kind !== 'size') return object;
   return { ...object, size: edit.value };
 }
 /** A notation change preserves contents for correction; Model rejects incompatible final content. */
-function editNotation(object: DiagramObject, edit: ObjectEdit): DiagramObject {
+function editNotation(
+  object: DiagramObject,
+  edit: ObjectEdit,
+): DiagramObject {
   if (edit.kind !== 'notation') return object;
   return { ...object, kind: edit.value };
 }
 /** Stable descendant IDs allow text edits without rewriting relationships or other content rows. */
-function editContentText(object: DiagramObject, edit: ObjectEdit): DiagramObject {
+function editContentText(
+  object: DiagramObject,
+  edit: ObjectEdit,
+): DiagramObject {
   if (edit.kind !== 'content-text') return object;
   return { ...object, content: object.content.map((item) => replaceText(item, edit)) };
 }
@@ -83,7 +118,10 @@ function preservesLinkedReturn(
   return typeof item.returns !== 'string';
 }
 /** Nullable belongs to an ER field, never to an arbitrary content block. */
-function editNullable(object: DiagramObject, edit: ObjectEdit): DiagramObject {
+function editNullable(
+  object: DiagramObject,
+  edit: ObjectEdit,
+): DiagramObject {
   if (edit.kind !== 'nullable') return object;
   return { ...object, content: object.content.map((item) => nullableField(item, edit)) };
 }
@@ -97,12 +135,18 @@ function nullableField(
   return { ...item, nullable: edit.value };
 }
 /** Removing a referenced descendant can invalidate the draft; Model reports it before any commit. */
-function removeContent(object: DiagramObject, edit: ObjectEdit): DiagramObject {
+function removeContent(
+  object: DiagramObject,
+  edit: ObjectEdit,
+): DiagramObject {
   if (edit.kind !== 'remove-content') return object;
   return { ...object, content: object.content.filter((item) => item.id !== edit.id) };
 }
 /** New rows get their stable identity once, when the user chooses Add. Replay never allocates another ID. */
-function addContent(object: DiagramObject, edit: ObjectEdit): DiagramObject {
+function addContent(
+  object: DiagramObject,
+  edit: ObjectEdit,
+): DiagramObject {
   if (edit.kind !== 'add-content') return object;
   return { ...object, content: [...object.content, contentDefaults[edit.content](edit.id)] };
 }
@@ -118,13 +162,11 @@ const contentDefaults: Readonly<
   member: (id) => ({ id, kind: 'member', label: 'member', type: 'string', visibility: 'public' }),
   signature: (id) => ({ id, kind: 'signature', label: 'execute', parameters: [], returns: 'void' }),
 };
-/** A collection and object pair names one form regardless of which diagram appearance selected it. */
-export function objectDraftKey(collection: string, object: string): string {
-  return JSON.stringify([collection, object]);
-}
-
 /** ER key edits retain identity and clear reference metadata when the field no longer represents a foreign key. */
-function editKey(object: DiagramObject, edit: ObjectEdit): DiagramObject {
+function editKey(
+  object: DiagramObject,
+  edit: ObjectEdit,
+): DiagramObject {
   if (edit.kind !== 'field-key') return object;
   return { ...object, content: object.content.map((item) => keyField(item, edit)) };
 }
@@ -153,11 +195,17 @@ function withKey(
   return { ...field, key };
 }
 /** Foreign references name a canonical descendant, independent of its row position on the canvas. */
-function editReference(object: DiagramObject, edit: ObjectEdit): DiagramObject {
+function editReference(
+  object: DiagramObject,
+  edit: ObjectEdit,
+): DiagramObject {
   if (edit.kind !== 'field-reference') return object;
   return { ...object, content: object.content.map((item) => referenceField(item, edit)) };
 }
-function editType(object: DiagramObject, edit: ObjectEdit): DiagramObject {
+function editType(
+  object: DiagramObject,
+  edit: ObjectEdit,
+): DiagramObject {
   if (edit.kind !== 'field-type') return object;
   return { ...object, content: object.content.map((item) => typeField(item, edit)) };
 }
@@ -178,7 +226,10 @@ function referenceField(
   return { ...item, key: 'foreign', references: edit.target };
 }
 /** Callable parameters remain separate ordered labels; commas inside a type are never used as parsing delimiters. */
-function editParameters(object: DiagramObject, edit: ObjectEdit): DiagramObject {
+function editParameters(
+  object: DiagramObject,
+  edit: ObjectEdit,
+): DiagramObject {
   if (edit.kind !== 'parameters') return object;
   return { ...object, content: object.content.map((item) => parametersFor(item, edit)) };
 }

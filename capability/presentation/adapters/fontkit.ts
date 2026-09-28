@@ -22,7 +22,10 @@ function parseNative(bytes: Uint8Array): Font {
   return parsed;
 }
 /** Supplied content digest and glyph data must agree before metrics are exposed. */
-function load(source: FontSource, parser: FontParser): LoadedFont {
+function load(
+  source: FontSource,
+  parser: FontParser,
+): LoadedFont {
   const bytes = Buffer.from(source.base64, 'base64');
   const actual = createHash('sha256').update(bytes).digest('hex');
   if (actual !== source.digest) throw new Error('Font digest mismatch');
@@ -35,13 +38,20 @@ function load(source: FontSource, parser: FontParser): LoadedFont {
   return loaded;
 }
 /** Unsupported codepoints are explicit failures; invisible substitution would invalidate measured layout. */
-function missingGlyph(text: string, font: Font): string | undefined {
+function missingGlyph(
+  text: string,
+  font: Font,
+): string | undefined {
   return Array.from(text).find(
     (character) => !font.hasGlyphForCodePoint(character.codePointAt(0) ?? 0),
   );
 }
 /** Shape with the pinned font and convert native design units into the requested local text size. */
-function shape(text: string, loaded: LoadedFont, size: number): Result<TextMetrics> {
+function shape(
+  text: string,
+  loaded: LoadedFont,
+  size: number,
+): Result<TextMetrics> {
   const missing = missingGlyph(text, loaded.font);
   if (missing !== undefined)
     return fail(
@@ -82,7 +92,11 @@ function measure(
   return result;
 }
 /** Native shaping failure remains typed; caller restores the resource or corrects unsupported text. */
-function protectShape(text: string, font: LoadedFont, size: number): Result<TextMetrics> {
+function protectShape(
+  text: string,
+  font: LoadedFont,
+  size: number,
+): Result<TextMetrics> {
   try {
     return shape(text, font, size);
   } catch {

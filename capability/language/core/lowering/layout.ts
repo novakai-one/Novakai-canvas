@@ -1,4 +1,9 @@
-/** Pure semantic layout lowering is protected by Language protect; callers correct source and retry without partial writes. */
+/*
+ * Lowering layout: a collection's or section's layout attributes and its `rank`, `align`,
+ * `before` and `below` constraints become one plain layout record for Model. Nothing is written
+ * except that a written `columns` value is kept by reference and frozen in place with the
+ * result. Language owns correcting the source; Authoring owns commit recovery.
+ */
 import type {
   Declaration,
   Fields,
@@ -6,55 +11,78 @@ import type {
   Span,
   Reference,
 } from '../../contract/records/syntax.js';
-import { defaults, layouts } from '../vocabulary/defaults.js';
+import { defaults, modeLayouts } from '../vocabulary/defaults.js';
 import { isReference } from '../parsing/value-types.js';
 import type { Result } from '../../contract/errors.js';
 import { protect, reject } from '../validation/outcomes.js';
 import { list, optional, textOr, type RawRecord } from './fields.js';
+
+/** The declarations that are layout constraints. */
 const constraintKinds = ['rank', 'align', 'before', 'below'];
-/** Select constraint kinds without writes; Language owns correction and Authoring owns commit recovery. */
-export function isConstraint(declaration: Declaration): boolean {
-  return constraintKinds.includes(declaration.kind);
-}
-/** Lower semantic intent without writes; Language owns source correction and Authoring owns commit recovery. */
+
+/**
+ * Lowers layout attributes and constraints. Missing attributes take their defaults: the
+ * algorithm `fallback`, direction `right` and gap `normal`; `columns` is left out when not
+ * written. Constraint targets keep their written order. A written `columns` value is kept by
+ * reference, so the caller's object is frozen in place with the result.
+ */
 export function lowerLayout(
   fields: Fields,
   children: readonly Declaration[],
-  fallback = 'flow',
+  fallback: string = 'flow',
 ): Result<RawRecord> {
   return protect(() => {
-    return {
-      ...optional('columns', fields.columns?.value),
-      algorithm: textOr(fields, 'layout', fallback),
-      direction: textOr(fields, 'direction', defaults.direction),
-      gap: textOr(fields, 'gap', defaults.gap),
-      constraints: children.filter(isConstraint).map(lowerConstraint),
-    };
+    const columns = optional('columns', fields.columns?.value);
+    const algorithm = textOr(fields, 'layout', fallback);
+    const direction = textOr(fields, 'direction', defaults.direction);
+    const gap = textOr(fields, 'gap', defaults.gap);
+    const constraintDeclarations = children.filter(isConstraint);
+    const constraints = constraintDeclarations.map(lowerConstraint);
+    return { ...columns, algorithm, direction, gap, constraints };
   });
 }
-/** Read mode defaults without writes; Language owns correction and Authoring owns commit recovery. */
+
+/**
+ * The layout algorithm a section `mode` uses by default; `flow` for an unknown mode. The table
+ * is a plain object, so an inherited name is found too (`constructor` gives the `Object`
+ * function).
+ */
 export function modeLayout(mode: string): string {
-  return layouts[mode] ?? 'flow';
+  return modeLayouts[mode] ?? 'flow';
 }
-/** Constraint target order is authored meaning and must survive round trips exactly. */
+
+/** Whether a declaration is a layout constraint (`rank`, `align`, `before` or `below`). */
+function isConstraint(declaration: Declaration): boolean {
+  return constraintKinds.includes(declaration.kind);
+}
+
+/** One constraint: its kind and its targets in written order. */
 function lowerConstraint(declaration: Declaration): RawRecord {
-  return {
-    kind: declaration.kind,
-    targets: list(declaration.fields, 'targets').map((value) =>
-      lowerTarget(value, declaration.span),
-    ),
-  };
+  const kind = declaration.kind;
+  const written = list(declaration.fields, 'targets');
+  const targets = written.map((value) => lowerTarget(value, declaration.span));
+  return { kind, targets };
 }
-/** Explicit group/section selectors remain namespace-qualified; ordinary references target objects. */
-function lowerTarget(value: SyntaxValue, span: Span): RawRecord {
+
+/**
+ * One constraint target: `{ kind: 'group' | 'section', id }` for a `group:` or `section:`
+ * reference, otherwise `{ kind: 'object', id }`. It must be a reference.
+ */
+function lowerTarget(
+  value: SyntaxValue,
+  span: Span,
+): RawRecord {
   if (!isReference(value))
     reject('invalid-value', span, 'Reference', 'Constraint needs reference targets');
   checkTarget(value, span);
   return { kind: value.namespace ?? 'object', id: value.id };
 }
 
-/** Descendant and section-address selectors cannot be represented by a relative layout target. */
-function checkTarget(value: Reference, span: Span): void {
+/** Rejects a target with a member or section part, which a layout constraint cannot place. */
+function checkTarget(
+  value: Reference,
+  span: Span,
+): void {
   if (value.member !== undefined || value.section !== undefined)
     reject(
       'invalid-value',

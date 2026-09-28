@@ -3,12 +3,18 @@ import { box, point } from '../../contract/records/camera.js';
 import { parse, reject } from '../validation/outcomes.js';
 type Sequence = PlacedSection['sequence'];
 /** Rendering a sequence participant reference requires a visible node in the same section. */
-function participant(section: PlacedSection, id: string): void {
+function participant(
+  section: PlacedSection,
+  id: string,
+): void {
   if (!section.nodes.some((node) => node.id === id))
     reject('invalid-scene', id, 'Unknown sequence participant');
 }
 /** Message geometry is bounded and resolves both participants before it reaches the renderer. */
-function message(section: PlacedSection, event: Sequence['events'][number]): void {
+function message(
+  section: PlacedSection,
+  event: Sequence['events'][number],
+): void {
   participant(section, event.source);
   participant(section, event.target);
   parse(box, event.labelBox);
@@ -26,7 +32,10 @@ function fragment(frame: Sequence['fragments'][number]): void {
   });
 }
 /** Activation endpoint references cannot silently point at a missing message. */
-function activation(section: PlacedSection, item: Sequence['activations'][number]): void {
+function activation(
+  section: PlacedSection,
+  item: Sequence['activations'][number],
+): void {
   participant(section, item.participant);
   parse(box, item.box);
   const ids = new Set(section.sequence.events.map((event) => event.id));
@@ -34,7 +43,10 @@ function activation(section: PlacedSection, item: Sequence['activations'][number
   validateActivationEnd(ids, item.toEvent);
 }
 /** Open activation is represented explicitly by null; otherwise the end must be an admitted message. */
-function validateActivationEnd(ids: ReadonlySet<string>, end: string | null): void {
+function validateActivationEnd(
+  ids: ReadonlySet<string>,
+  end: string | null,
+): void {
   if (end === null) return;
   if (!ids.has(end)) reject('invalid-scene', end, 'Unknown activation end');
 }

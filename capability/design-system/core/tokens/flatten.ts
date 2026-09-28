@@ -19,7 +19,11 @@ export function flatten(
   return readGroup(data, prefix, type, depth);
 }
 /** Group type is inherited only when explicitly absent. */
-function readType(value: unknown, inherited: TokenType | null, path: string): TokenType | null {
+function readType(
+  value: unknown,
+  inherited: TokenType | null,
+  path: string,
+): TokenType | null {
   if (value === undefined) return inherited;
   return parsed(tokenType, value, path);
 }
@@ -40,7 +44,10 @@ function readGroup(
     .flatMap(([key, value]) => flatten(value, joined(prefix, key), type, depth + 1));
 }
 /** Preserve the hierarchy as a dot path; validated names cannot collide with CSS punctuation. */
-function joined(prefix: string, key: string): string {
+function joined(
+  prefix: string,
+  key: string,
+): string {
   if (!prefix) return key;
   return prefix + '.' + key;
 }

@@ -1,18 +1,18 @@
 import type {
-  CatalogChange,
+  OrganisationChange,
   LibrarySnapshot,
   QueryPage,
   QueryRequest,
   RecentVisit,
-  FolderId,
 } from '@novakai/canvas-library';
+import type { CollectionId, FolderId, LibraryCursor, VisitTime } from '../brands.js';
 import type { Snapshot, Collection, Receipt } from './owners.js';
 import type { Result, Diagnostic } from '../errors.js';
-import type { DraftRetention } from '../ports/workspace.js';
+import type { DraftRetention } from '../ports/draft-retention.js';
 /** Browse filters are browser preferences; catalog structure remains Library-owned canonical data. */
 export interface LibraryFilters {
   readonly text: string;
-  readonly folder: string | null;
+  readonly folder: FolderId | null;
   readonly archived: QueryRequest['archived'];
   readonly sort: QueryRequest['sort'];
 }
@@ -38,7 +38,7 @@ export interface LibraryReader {
   query(
     snapshot: LibrarySnapshot,
     filters: LibraryFilters,
-    cursor: string | null,
+    cursor: LibraryCursor | null,
   ): Result<QueryPage>;
   visits(input: unknown): Result<readonly RecentVisit[]>;
   folderDraft(input: unknown): Result<FolderDraft>;
@@ -47,21 +47,33 @@ export interface LibraryReader {
 export interface LibraryController {
   getSnapshot(): LibraryView;
   subscribe(listener: () => void): () => void;
-  refresh(snapshot: Snapshot, collections: readonly Collection[]): void;
+  refresh(
+    snapshot: Snapshot,
+    collections: readonly Collection[],
+  ): void;
   filter(filters: LibraryFilters): void;
   next(): void;
-  visit(collection: string): void;
-  apply(changes: readonly CatalogChange[], revision: number): Promise<void>;
+  visit(collection: CollectionId): void;
+  apply(
+    changes: readonly OrganisationChange[],
+    revision: number,
+  ): Promise<void>;
   editFolderTitle(title: string): void;
   createFolder(): Promise<void>;
   discardFolder(): void;
 }
 export interface LibraryBindings {
   readonly reader: LibraryReader;
-  readonly retention: DraftRetention;
-  now(): number;
-  nextFolderId(): FolderId;
-  apply(base: Snapshot, changes: readonly CatalogChange[]): Promise<Result<Receipt>>;
+  /** Keeps the folder form and the visits; the store never removes a key. */
+  readonly retention: Pick<DraftRetention, 'read' | 'write'>;
+  /** The time a collection is opened, recorded as a Library visit. */
+  now(): VisitTime;
+  /** A new folder ID from the ID source. Fails with `id-unavailable`. */
+  nextFolderId(): Result<FolderId>;
+  apply(
+    base: Snapshot,
+    changes: readonly OrganisationChange[],
+  ): Promise<Result<Receipt>>;
   report(error: Diagnostic): void;
 }
 export type LibraryFactory = (

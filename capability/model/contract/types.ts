@@ -1,22 +1,47 @@
 import type { Collection } from './records/collection.js';
-/** Collection record namespaces supported by structural operations and impact reporting. */
+import type { Change } from './records/change.js';
+
+/** The collection's record lists that changes can target and impact reports name. */
 export type Target =
   'objects' | 'relationships' | 'sections' | 'assets' | 'sources' | 'definitions';
-/** One net record change; collection denotes metadata rather than a child-record namespace. */
+
+/**
+ * One net change between the snapshot and the planned candidate. Reported per record list in
+ * target order (objects, relationships, sections, assets, sources, definitions): additions, then
+ * removals, then updates; a collection metadata update comes last.
+ */
 export interface Impact {
+  /** The record list, or `collection` for the collection's own fields (title, theme and so on). */
   readonly target: Target | 'collection';
+  /** The record's ID, or the collection's ID for `collection`. */
   readonly id: string;
+  /**
+   * `added` or `removed` by ID; `updated` when the record's JSON differs (array order and
+   * explicit overrides count).
+   */
   readonly action: 'added' | 'updated' | 'removed';
 }
-/** Detached valid candidate and net impact. Revision is unchanged; Authoring owns admission and commit. */
+
+/**
+ * A planned transition: a detached valid candidate and its net impact. The revision is unchanged;
+ * Authoring owns admission, commit and crash recovery.
+ */
 export interface ChangePlan {
+  /** The collection after every change, validated as a whole. */
   readonly candidate: Collection;
+  /** The net changes from the snapshot to the candidate. */
   readonly impact: readonly Impact[];
 }
 
-/** Compiler-only structural projection. References may be unresolved; only plan proves validity. */
+/**
+ * A staged transition for the language compiler. Its references may be unresolved; only a plan
+ * proves validity.
+ */
 export interface ChangeStage {
+  /** Always `unchecked`: the candidate has not been validated as a whole. */
   readonly validity: 'unchecked';
+  /** The collection after every change, not validated. */
   readonly candidate: Collection;
-  readonly changes: readonly import('./records/change.js').Change[];
+  /** The changes as parsed by the change schema (defaults filled in). */
+  readonly changes: readonly Change[];
 }

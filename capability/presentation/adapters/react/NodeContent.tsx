@@ -52,7 +52,10 @@ function contentSlack(node: VisualNode): number {
   return node.width / 2 - (left + right) / 2;
 }
 /** Compartment headings center against the final frame width; bodies stay left-aligned. */
-function headingSlack(node: VisualNode, heading: readonly Primitive[]): number {
+function headingSlack(
+  node: VisualNode,
+  heading: readonly Primitive[],
+): number {
   if (!COMPARTMENT_KINDS.includes(node.kind)) return 0;
   const bounds = heading.map(horizontalBounds);
   if (bounds.length === 0) return 0;
@@ -136,7 +139,10 @@ function separatesHeading(
   return classes !== undefined && COMPARTMENT_KINDS.includes(node.kind);
 }
 /** Only own registered names select a chrome; inherited and absent keys retain the card frame. */
-function resolveChrome(chromes: NodeChromeRegistry, name: ChromeName | 'card'): NodeChrome {
+function resolveChrome(
+  chromes: NodeChromeRegistry,
+  name: ChromeName | 'card',
+): NodeChrome {
   if (!Object.hasOwn(chromes, name)) return chromes.card;
   return chromes[name] ?? chromes.card;
 }
@@ -230,7 +236,10 @@ function compartments(
 }
 
 /** Explicit roles replace geometry classification only for the semantic LOD kinds introduced here. */
-function headingPrimitive(node: VisualNode, primitive: Primitive): boolean {
+function headingPrimitive(
+  node: VisualNode,
+  primitive: Primitive,
+): boolean {
   if (['module', 'entity', 'function', 'interface'].includes(node.kind))
     return primitive.lodRole === 'heading';
   return primitive.kind === 'text' && primitive.y <= node.headerHeight;

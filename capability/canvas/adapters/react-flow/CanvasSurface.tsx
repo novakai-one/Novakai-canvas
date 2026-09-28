@@ -18,7 +18,10 @@ import { paletteType } from '../../contract/react-types.js';
 import styles from './CanvasSurface.module.css';
 import themeStyles from './react-flow-theme.module.css';
 /** Report a rejected view from an effect, never as a render-time side effect; host retains its last committed data. */
-function reportView(result: Result<ViewSnapshot>, onError: SurfaceProps['onError']): void {
+function reportView(
+  result: Result<ViewSnapshot>,
+  onError: SurfaceProps['onError'],
+): void {
   if (!result.ok) onError(result.error);
 }
 /** Bind stable React Flow registries once. Host retains committed state/drafts and repairs reported rendering or measurement failures before remounting. */
@@ -159,7 +162,11 @@ export function createCanvasSurface(slots: SurfaceSlots): ComponentType<SurfaceP
   return CanvasSurface;
 }
 /** Hidden/zero-sized elements cannot supply a valid camera viewport; wait for their next visible measurement. */
-function dispatchSize(actions: Pick<ViewActions, 'dispatch'>, width: number, height: number): void {
+function dispatchSize(
+  actions: Pick<ViewActions, 'dispatch'>,
+  width: number,
+  height: number,
+): void {
   if (width <= 0 || height <= 0) return;
   actions.dispatch({ kind: 'resize-viewport', viewport: { width, height } });
 }
@@ -183,7 +190,10 @@ function pointerThreshold(type: string): 'coarseThreshold' | 'fineThreshold' {
   return type === 'touch' ? 'coarseThreshold' : 'fineThreshold';
 }
 /** Hand tool pans with any button. Otherwise the middle button pans, plus the left one when blank drag pans. Space+drag always pans. */
-function panButtons(hand: boolean, blankDrag: 'pan' | 'marquee'): boolean | number[] {
+function panButtons(
+  hand: boolean,
+  blankDrag: 'pan' | 'marquee',
+): boolean | number[] {
   if (hand) return true;
   return blankDrag === 'pan' ? [0, 1] : [1];
 }
@@ -209,7 +219,10 @@ function dropPalette(
 function onControls(event: DragEvent<HTMLDivElement>): boolean {
   return event.target instanceof Element && event.target.closest('[data-canvas-controls]') !== null;
 }
-function worldPoint(event: DragEvent<HTMLDivElement>, snapshot: ViewSnapshot): Point {
+function worldPoint(
+  event: DragEvent<HTMLDivElement>,
+  snapshot: ViewSnapshot,
+): Point {
   const frame = event.currentTarget.getBoundingClientRect();
   const camera = snapshot.view.camera;
   return {

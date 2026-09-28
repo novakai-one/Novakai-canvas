@@ -12,7 +12,10 @@ function definition(kind: Construct): ConstructDefinition {
   return value;
 }
 /** Required framing and supported property names are never redefined by individual renderers. */
-export function header(kind: Construct, record: RawRecord): string {
+export function header(
+  kind: Construct,
+  record: RawRecord,
+): string {
   const construct = definition(kind);
   const positions = construct.positions.flatMap((rule) => position(record, rule));
   return [kind, ...positions, ...printProperties(record, construct.properties)].join(' ');
@@ -36,7 +39,11 @@ export function printProperties(
   );
 }
 /** Absent optional fields do not become empty strings; meaningful empty strings remain quoted. */
-function propertyText(record: RawRecord, name: string, property: Property): readonly string[] {
+function propertyText(
+  record: RawRecord,
+  name: string,
+  property: Property,
+): readonly string[] {
   const value = record[property.field];
   if (value === undefined) return [];
   if (value === property.fallback) return [];

@@ -1,11 +1,16 @@
-import { harness, faultStore } from './storage-harness.js';
 import { describe, it, expect } from 'vitest';
 import { openSqlite, digest } from '../contract/index.js';
 import type { CommitRequest } from '../contract/index.js';
 import { request, value, rejects, collection, history, workspace, pristine } from './fixtures.js';
+import { harness, faultStore } from './storage-harness.js';
 
+// The same contract runs against an in-memory database and a database file.
 describe.each(['memory', 'file'] as const)('SQLite %s configuration', (mode) => {
-  it('atomically commits records and checks read-only dependencies', () => {
+  /**
+   * One request writing two records commits both at version 0. A request whose expected version
+   * of one record is stale is rejected whole: nothing is written and no receipt is kept.
+   */
+  it('commits every write of a request together and rejects the whole request on a stale version', () => {
     const store = harness(mode);
     const initial = request();
     const batch: CommitRequest = {
@@ -20,6 +25,8 @@ describe.each(['memory', 'file'] as const)('SQLite %s configuration', (mode) => 
       { key: collection, version: 0 },
       { key: history, version: 0 },
     ]);
+
+    // The history record is at version 0, not 1: conflict, and still two records, no receipt.
     const stale = {
       ...request('second'),
       expected: [
@@ -33,7 +40,13 @@ describe.each(['memory', 'file'] as const)('SQLite %s configuration', (mode) => 
     value(store.persistence.close());
     store.remove();
   });
-  it('reconciles receipts before stale comparisons and preserves no-op revisions', () => {
+
+  /**
+   * The receipt is checked before versions: a retry returns the original receipt, and a reused ID
+   * with another fingerprint is `request-reused`. A request with no writes still commits a new
+   * sequence without changing record versions, and is still checked for stale versions.
+   */
+  it('matches retries by receipt first and commits a no-write request without changing versions', () => {
     const store = harness(mode);
     const first = value(store.persistence.commit(request()));
     expect(value(store.persistence.commit(request()))).toEqual(first);
@@ -41,9 +54,13 @@ describe.each(['memory', 'file'] as const)('SQLite %s configuration', (mode) => 
       store.persistence.commit({ ...request(), fingerprint: digest.parse('b'.repeat(64)) }),
       'request-reused',
     );
+
+    // No writes: sequence 2, no versions, the record stays at version 0.
     const noop = { ...request('noop'), expected: [{ key: collection, version: 0 }], writes: [] };
     expect(value(store.persistence.commit(noop))).toMatchObject({ sequence: 2, versions: [] });
     expect(value(store.persistence.readSnapshot()).slots[0]?.version).toBe(0);
+
+    // No writes, but a stale expected version: conflict.
     rejects(
       store.persistence.commit({
         ...noop,
@@ -55,7 +72,13 @@ describe.each(['memory', 'file'] as const)('SQLite %s configuration', (mode) => 
     value(store.persistence.close());
     store.remove();
   });
-  it('retains tombstone versions and rejects unchecked requests', () => {
+
+  /**
+   * A delete keeps the record as a versioned tombstone, so a create that expects it absent is a
+   * conflict and a recreate continues its version. Requests without expected versions, with a
+   * duplicate expected key, or with a function value are `invalid-input`.
+   */
+  it('keeps deleted records as versioned tombstones and rejects malformed requests', () => {
     const store = harness(mode);
     value(store.persistence.commit(request()));
     value(
@@ -71,6 +94,8 @@ describe.each(['memory', 'file'] as const)('SQLite %s configuration', (mode) => 
       value: null,
       resources: [],
     });
+
+    // Creating it again as if absent conflicts; recreating from the tombstone gives version 2.
     rejects(store.persistence.commit(request('stale-create')), 'revision-conflict');
     expect(
       value(
@@ -80,6 +105,8 @@ describe.each(['memory', 'file'] as const)('SQLite %s configuration', (mode) => 
         }),
       ).versions,
     ).toEqual([{ key: collection, version: 2 }]);
+
+    // Malformed requests.
     rejects(store.persistence.commit({ ...request('blind'), expected: [] }), 'invalid-input');
     rejects(
       store.persistence.commit({
@@ -95,7 +122,14 @@ describe.each(['memory', 'file'] as const)('SQLite %s configuration', (mode) => 
     value(store.persistence.close());
     store.remove();
   });
-  it('returns detached frozen snapshots and protects workspace identity', () => {
+
+  /**
+   * A committed request is copied, so later changes to the caller's object are not stored.
+   * Snapshots are deeply frozen. A request for another workspace is `invalid-input`. A newer
+   * schema version is `unsupported-version` and left as stored; an inconsistent state is
+   * `corrupt-record`.
+   */
+  it('stores a copy of the request, returns frozen snapshots and rejects foreign or unreadable states', () => {
     const store = harness(mode);
     const input = { ...request(), outcome: { title: 'Original' } };
     value(store.persistence.commit(input));
@@ -105,17 +139,26 @@ describe.each(['memory', 'file'] as const)('SQLite %s configuration', (mode) => 
     expect(Object.isFrozen(snapshot.slots)).toBe(true);
     expect(Object.isFrozen(snapshot.slots[0]?.value)).toBe(true);
     rejects(store.persistence.commit({ ...request('wrong'), workspace: 'other' }), 'invalid-input');
+
+    // Stored schema version 2: unsupported, and the stored value is not reset.
     const newer = faultStore('none', { ...pristine(), schemaVersion: 2 });
     rejects(newer.persistence.readSnapshot(), 'unsupported-version');
     expect(newer.inspect()).toMatchObject({ schemaVersion: 2 });
     newer.close();
+
+    // Sequence 1 with no receipts: corrupt.
     const corrupt = faultStore('none', { ...pristine(), sequence: 1 });
     rejects(corrupt.persistence.readSnapshot(), 'corrupt-record');
     corrupt.close();
     value(store.persistence.close());
     store.remove();
   });
-  it('closes and reopens with explicit durability semantics', () => {
+
+  /**
+   * After close, reads are `storage-unavailable`. Reopening the location finds the commit only
+   * for a file database; an in-memory database starts empty.
+   */
+  it('fails reads after close and keeps commits across reopen only for a file database', () => {
     const store = harness(mode);
     const receipt = value(store.persistence.commit(request()));
     value(store.persistence.close());
@@ -128,8 +171,13 @@ describe.each(['memory', 'file'] as const)('SQLite %s configuration', (mode) => 
     store.remove();
   });
 });
-it('reports injected write/commit/read failures and uncertain commit recovery honestly', () => {
-  ['read', 'write', 'commit'].forEach((fault) => checkRollback(fault));
+
+/**
+ * A driver that throws on read, write or COMMIT gives `storage-unavailable` and stores nothing. A
+ * lost COMMIT acknowledgement also gives `storage-unavailable`, although the commit was stored.
+ */
+it('reports driver failures as storage-unavailable, rolled back or, after COMMIT, installed', () => {
+  (['read', 'write', 'commit'] as const).forEach((fault) => checkRollback(fault));
   const uncertain = faultStore('after-commit');
   rejects(uncertain.persistence.commit(request()), 'storage-unavailable');
   expect(uncertain.inspect()).toMatchObject({
@@ -138,9 +186,9 @@ it('reports injected write/commit/read failures and uncertain commit recovery ho
   });
   uncertain.close();
 });
-/** Typed selection validates fixture fault names; failed transactions must leave pristine durable state. */
-function checkRollback(fault: string): void {
-  if (fault !== 'read' && fault !== 'write' && fault !== 'commit') return;
+
+/** Commits through a store that throws at `fault`, and checks the stored state is still empty. */
+function checkRollback(fault: 'read' | 'write' | 'commit'): void {
   const store = faultStore(fault);
   rejects(store.persistence.commit(request()), 'storage-unavailable');
   expect(store.inspect()).toMatchObject({ sequence: 0, slots: [], receipts: [] });

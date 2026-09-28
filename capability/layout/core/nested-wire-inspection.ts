@@ -5,8 +5,8 @@ import type {
   PrototypePoint,
   PrototypePortLocation,
   PrototypeRoad,
-  RoadPrototypeScene,
 } from '../contract/records/road-prototype.js';
+import type { RoadPrototypeScene } from '../contract/records/road-scene.js';
 
 /** Independent invariant observations, not the router's own feasibility predicates. */
 export interface NestedWireInspection {
@@ -15,10 +15,16 @@ export interface NestedWireInspection {
   readonly boundaries: readonly string[];
   readonly continuity: readonly string[];
 }
-function containsPoint(b: PrototypeBounds, p: PrototypePoint): boolean {
+function containsPoint(
+  b: PrototypeBounds,
+  p: PrototypePoint,
+): boolean {
   return [b.x <= p.x, p.x <= b.x + b.width, b.y <= p.y, p.y <= b.y + b.height].every(Boolean);
 }
-function covered(s: NestedWireSegment, roads: ReadonlyMap<string, PrototypeRoad>): boolean {
+function covered(
+  s: NestedWireSegment,
+  roads: ReadonlyMap<string, PrototypeRoad>,
+): boolean {
   const road = roads.get(s.corridorId);
   if (road === undefined) return false;
   return [
@@ -30,10 +36,18 @@ function covered(s: NestedWireSegment, roads: ReadonlyMap<string, PrototypeRoad>
 function orthogonal(s: NestedWireSegment): boolean {
   return s.from.x === s.to.x || s.from.y === s.to.y;
 }
-function openOverlap(a: number, b: number, c: number, d: number): boolean {
+function openOverlap(
+  a: number,
+  b: number,
+  c: number,
+  d: number,
+): boolean {
   return Math.max(Math.min(a, b), c) < Math.min(Math.max(a, b), d);
 }
-function bodyIntersection(s: NestedWireSegment, b: PrototypeBounds): boolean {
+function bodyIntersection(
+  s: NestedWireSegment,
+  b: PrototypeBounds,
+): boolean {
   const horizontal = [
     s.from.y > b.y,
     s.from.y < b.y + b.height,
@@ -46,7 +60,11 @@ function bodyIntersection(s: NestedWireSegment, b: PrototypeBounds): boolean {
   ].every(Boolean);
   return horizontal || vertical;
 }
-function within(n: number, a: number, b: number): boolean {
+function within(
+  n: number,
+  a: number,
+  b: number,
+): boolean {
   return n >= Math.min(a, b) && n <= Math.max(a, b);
 }
 const perpendicular = { x: 'y', y: 'x' } as const;
@@ -63,13 +81,19 @@ function intersection(
     return [];
   return [{ ...s.from, [axis]: at }];
 }
-function touches(s: NestedWireSegment, b: PrototypeBounds): readonly PrototypePoint[] {
+function touches(
+  s: NestedWireSegment,
+  b: PrototypeBounds,
+): readonly PrototypePoint[] {
   return [
     ...[b.x, b.x + b.width].flatMap((x) => intersection(s, 'x', x, b.y, b.y + b.height)),
     ...[b.y, b.y + b.height].flatMap((y) => intersection(s, 'y', y, b.x, b.x + b.width)),
   ];
 }
-function same(a: PrototypePoint, b: PrototypePoint): boolean {
+function same(
+  a: PrototypePoint,
+  b: PrototypePoint,
+): boolean {
   return a.x === b.x && a.y === b.y;
 }
 function gatePosition(
@@ -109,12 +133,19 @@ function permittedGate(
     same(point, expected),
   ].every(Boolean);
 }
-function nongate(s: NestedWireSegment, scene: RoadPrototypeScene, wire: NestedWire): boolean {
+function nongate(
+  s: NestedWireSegment,
+  scene: RoadPrototypeScene,
+  wire: NestedWire,
+): boolean {
   return scene.sections.some((section) =>
     touches(s, section.bounds).some((p) => !permitted(p, scene, wire, section.id)),
   );
 }
-function terminals(wire: NestedWire, scene: RoadPrototypeScene): boolean {
+function terminals(
+  wire: NestedWire,
+  scene: RoadPrototypeScene,
+): boolean {
   const ends = [
     [wire.sourcePortId, wire.segments[0]?.from],
     [wire.targetPortId, wire.segments.at(-1)?.to],

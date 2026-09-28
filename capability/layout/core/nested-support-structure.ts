@@ -2,22 +2,19 @@ import type { PrototypeBounds, PrototypeRoad } from '../contract/records/road-pr
 import type { NestedSupportConstraint } from '../contract/records/nested-support.js';
 import type { SectionPlacement } from './prototype-nested-placement.js';
 import { axes } from './prototype-road-geometry.js';
-import {
-  anchor,
-  equate,
-  relate,
-  reject,
-  type Anchor,
-  type SupportGraph,
-} from './nested-support-graph.js';
-import { required, type retainSupportInput } from './nested-support-input.js';
+import { anchor, equate, relate, reject, required } from './nested-support-graph.js';
+import type { Anchor, SupportGraph } from './nested-support-graph.js';
+import type { retainSupportInput } from './nested-support-input.js';
 
 type Input = ReturnType<typeof retainSupportInput>;
 type Axis = Anchor['axis'];
 const dimensions = { x: 'width', y: 'height' } as const;
 
 /** Construction aliases collapse only shared spans/contact endpoints, not coincident objects. */
-export function supportStructure(graph: SupportGraph, input: Input) {
+export function supportStructure(
+  graph: SupportGraph,
+  input: Input,
+) {
   const lines = new Map<string, Anchor>();
   input.populations.forEach((p) => {
     const road = required(input.final, p.roadId),

@@ -37,7 +37,10 @@ function readSource(source: StylesheetSource): readonly StyleDeclaration[] {
   return declarations;
 }
 /** A rule's local declarations are not multiplied by generated aliases or selector fragments. */
-function readDeclaration(file: string, declaration: Declaration): StyleDeclaration {
+function readDeclaration(
+  file: string,
+  declaration: Declaration,
+): StyleDeclaration {
   return {
     file,
     selector: selector(declaration.parent),
@@ -66,7 +69,10 @@ function selector(parent: Container | Document | undefined): string {
   return selector(parent.parent);
 }
 /** Unlayered imports outrank layered controls, so the style gate receives them as explicit policy inputs. */
-function importDeclaration(file: string, rule: AtRule): StyleDeclaration {
+function importDeclaration(
+  file: string,
+  rule: AtRule,
+): StyleDeclaration {
   const match = /\blayer\(([a-z]+)\)/.exec(rule.params);
   return {
     file,

@@ -7,6 +7,9 @@ export function quote(text: string): string {
   );
 }
 /** Indent authored statements without changing any quoted multiline payload. */
-export function body(header: string, statements: readonly string[]): string {
+export function body(
+  header: string,
+  statements: readonly string[],
+): string {
   return `${header} {\n${statements.map((item) => `  ${item}`).join('\n')}\n}`;
 }

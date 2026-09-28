@@ -100,7 +100,10 @@ async function completeWithRetry(
   return completeSection(source, relaxed, metrics, context);
 }
 /** Only a routing conflict with relaxable authored hints justifies a second derivation. */
-function retryable(error: Diagnostic, source: VisualSection): boolean {
+function retryable(
+  error: Diagnostic,
+  source: VisualSection,
+): boolean {
   return error.code === 'constraint-conflict' && hasHints(source);
 }
 /** Section or group scopes carry the relaxable hints; participant/geometry constraints are never dropped. */

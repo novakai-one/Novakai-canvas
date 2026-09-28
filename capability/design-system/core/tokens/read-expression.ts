@@ -4,20 +4,31 @@ import { reject } from '../validation/outcomes.js';
 import { reference } from './references.js';
 import { readLiteral } from './values.js';
 /** Literal or alias token values have no executable interpretation. */
-export function readValueExpression(type: TokenType, value: unknown, path: string): Expression {
+export function readValueExpression(
+  type: TokenType,
+  value: unknown,
+  path: string,
+): Expression {
   const target = reference(value, path);
   if (target) return { op: 'reference', target };
   return { op: 'literal', value: readLiteral(type, value, path) };
 }
 /** Parse only declared recipe operators; facade owns correction and retry. */
-export function readRecipe(value: unknown, path: string, depth = 0): Expression {
+export function readRecipe(
+  value: unknown,
+  path: string,
+  depth = 0,
+): Expression {
   depthLimit(depth, path);
   const data = record(value, path);
   const op = text(data.op, path);
   return member(recipeReaders, op)(data, path, depth + 1);
 }
 /** Reference recipes share the ordinary alias grammar. */
-function readReference(data: Readonly<Record<string, unknown>>, path: string): Expression {
+function readReference(
+  data: Readonly<Record<string, unknown>>,
+  path: string,
+): Expression {
   keys(data, ['op', 'value'], path);
   const target = reference(data.value, path);
   if (!target)

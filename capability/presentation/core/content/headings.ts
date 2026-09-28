@@ -28,7 +28,10 @@ const engineeringKinds: Readonly<Partial<Record<DiagramObject['kind'], string>>>
   function: 'FUNCTION',
 };
 /** Measure kind and title together so body separators and member anchors start below both. Public project owns failure; Authoring retains the prior scene. */
-export function nodeHeading(object: DiagramObject, context: ContentContext): MeasuredContent {
+export function nodeHeading(
+  object: DiagramObject,
+  context: ContentContext,
+): MeasuredContent {
   const title = labelContent(displayHeading(object), context, 'nodeHeading');
   const kind = kindLabel(object, context);
   if (kind === undefined) return title;

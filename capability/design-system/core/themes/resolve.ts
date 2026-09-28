@@ -13,7 +13,11 @@ import { validateContrast } from '../tokens/contrast.js';
 import { validateFonts } from './fonts.js';
 import { emitVariables } from '../tokens/emit.js';
 /** Theme identity pins definitions and policy as well as its own delta; other shipped themes do not affect it. */
-export function themePin(source: SourceSet, theme: ThemeDelta, identity: Identity): UiThemePin {
+export function themePin(
+  source: SourceSet,
+  theme: ThemeDelta,
+  identity: Identity,
+): UiThemePin {
   return {
     id: theme.id,
     version: theme.version,
@@ -87,7 +91,10 @@ function selectedTheme(
   return theme;
 }
 /** A missing theme is not silently replaced; host retains its stored record and chooses session recovery. */
-export function namedTheme(source: SourceSet, id: string): ThemeDelta {
+export function namedTheme(
+  source: SourceSet,
+  id: string,
+): ThemeDelta {
   const matches = source.themes.filter((theme) => theme.id === id);
   if (matches.length !== 1)
     return reject('stale-pin', id, 'one available theme', 'Theme missing or ambiguous');

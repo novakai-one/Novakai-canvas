@@ -19,7 +19,10 @@ function literal(expression: Expression): TokenValue {
   return expression.value;
 }
 /** Aliases point at an already resolved primitive. */
-function reference(expression: Expression, values: TokenValues): TokenValue {
+function reference(
+  expression: Expression,
+  values: TokenValues,
+): TokenValue {
   if (expression.op !== 'reference')
     return reject('type-mismatch', 'recipe', 'reference', 'Invalid dispatch');
   return member(values, expression.target);
@@ -69,19 +72,30 @@ function alpha(
   return { type: 'color', value: color.slice(0, 7) + alphaSuffix(byte) };
 }
 /** A scalar cannot smuggle dimensions into another expression. */
-function scalarValue(value: TokenValue, path: string): number {
+function scalarValue(
+  value: TokenValue,
+  path: string,
+): number {
   if (value.type !== 'number')
     return reject('type-mismatch', path, 'number scalar', 'Expected scalar token');
   return value.value;
 }
 /** Same token type implies the one supported unit for that numeric type. */
-function sameUnit(value: TokenValue, first: TokenValue, path: string): number {
+function sameUnit(
+  value: TokenValue,
+  first: TokenValue,
+  path: string,
+): number {
   if (value.type !== first.type)
     return reject('type-mismatch', path, 'matching operand units', 'Mixed-unit recipe');
   return numeric(value, path);
 }
 /** Rebuild a numeric primitive without unsafe narrowing or unchecked casts. */
-function changedNumber(value: TokenValue, next: number, path: string): TokenValue {
+function changedNumber(
+  value: TokenValue,
+  next: number,
+  path: string,
+): TokenValue {
   if (!Number.isFinite(next))
     return reject('out-of-range', path, 'finite recipe result', 'Recipe overflow');
   if (typeof value.value !== 'number')
@@ -103,7 +117,10 @@ const operations: Readonly<
 > = { literal, reference, multiply, sum: aggregate, max: aggregate, alpha };
 
 /** The two aggregate algorithms share checked same-unit numeric operands. */
-function aggregateNumber(op: string, numbers: readonly number[]): number {
+function aggregateNumber(
+  op: string,
+  numbers: readonly number[],
+): number {
   if (op === 'sum') return numbers.reduce((a, b) => a + b, 0);
   return Math.max(...numbers);
 }

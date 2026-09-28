@@ -14,7 +14,8 @@
     border: var(--nv-stroke-base) solid var(--nv-border-default);
     border-radius: var(--nv-radius-panel);
     padding: var(--nv-space-6);
-    box-shadow: 0 var(--nv-space-2) var(--nv-space-8) var(--nv-shadow-opacity-color);
+    box-shadow: var(--nv-elevation-offset-x) var(--nv-elevation-offset-y) var(--nv-elevation-blur)
+      var(--nv-shadow-opacity-color);
   }
   .source header,
   .source footer {
@@ -47,9 +48,5 @@
     border: var(--nv-stroke-base) solid var(--nv-color-input-boundary);
     border-radius: var(--nv-radius-control);
     tab-size: 2;
-  }
-  .source textarea:focus-visible {
-    outline: var(--nv-focus-width) solid var(--nv-color-focus);
-    outline-offset: var(--nv-focus-offset);
   }
 }

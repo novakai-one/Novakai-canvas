@@ -15,7 +15,10 @@ import { treeGeometry } from './tree.js';
 import { availableSections } from './arrangement/available-space.js';
 
 /** Preserve lane changes; redundant collinear checkpoints do not create extra SVG vertices. */
-function points(engine: EngineScene, id: string): readonly Point[] {
+function points(
+  engine: EngineScene,
+  id: string,
+): readonly Point[] {
   const path = engine.wires.find((w) => w.wireId === id)?.path;
   if (path === undefined) return reject('engine-failed', id, 'Custom engine omitted wire');
   const distinct = path.filter((p, i) => p.x !== path[i - 1]?.x || p.y !== path[i - 1]?.y);
@@ -174,7 +177,11 @@ export function placeAppSections(
   return availableSections(preferred, projection, gap);
 }
 
-function straight(before: Point | undefined, point: Point, after: Point | undefined): boolean {
+function straight(
+  before: Point | undefined,
+  point: Point,
+  after: Point | undefined,
+): boolean {
   if (before === undefined || after === undefined) return false;
   return (
     Math.sign(point.x - before.x) === Math.sign(after.x - point.x) &&

@@ -1,7 +1,6 @@
 import type { PrototypePoint, PrototypePortSide } from '../contract/records/road-prototype.js';
 import type { NestedWireSegment } from '../contract/records/nested-wires.js';
-import type { Access, Terminal } from './nested-wire-access.js';
-import type { WireRegistry, Crossing } from './nested-wire-registry.js';
+import type { Access, Crossing, Terminal, WireRegistry } from './nested-wire-access.js';
 import { clear, coverPath } from './nested-wire-corridors.js';
 import type { OwnedLine } from './nested-wire-corridors.js';
 import { searchTrunk } from './nested-wire-search.js';
@@ -22,7 +21,10 @@ function sameRoad(
   return a !== undefined && a.roadId === b?.roadId;
 }
 /** Band law, then shared-road law, then the quadrant corner. Search runs only when this fails. */
-function pair(s: Terminal, t: Terminal): Pair {
+function pair(
+  s: Terminal,
+  t: Terminal,
+): Pair {
   const bands: readonly { readonly matches: boolean; readonly value: Pair }[] = [
     { matches: s.point.y === t.point.y, value: ['right', 'left'] },
     { matches: s.point.x === t.point.x, value: ['bottom', 'top'] },
@@ -31,19 +33,33 @@ function pair(s: Terminal, t: Terminal): Pair {
   ];
   return bands.find((rule) => rule.matches)?.value ?? quadrant(s, t);
 }
-function quadrant(s: Terminal, t: Terminal): Pair {
+function quadrant(
+  s: Terminal,
+  t: Terminal,
+): Pair {
   return s.point.x < t.point.x ? ['right', 'top'] : ['bottom', 'left'];
 }
 
-function shifted(a: Access, offset: number): PrototypePoint {
+function shifted(
+  a: Access,
+  offset: number,
+): PrototypePoint {
   return a.drive.axis === 'horizontal'
     ? { x: a.join.x + offset, y: a.join.y }
     : { x: a.join.x, y: a.join.y + offset };
 }
-function line(from: PrototypePoint, to: PrototypePoint, roadId: string): OwnedLine {
+function line(
+  from: PrototypePoint,
+  to: PrototypePoint,
+  roadId: string,
+): OwnedLine {
   return { from, to, roadId };
 }
-function highway(a: Access, b: Access, registry: WireRegistry): Crossing | undefined {
+function highway(
+  a: Access,
+  b: Access,
+  registry: WireRegistry,
+): Crossing | undefined {
   const destination = new Set((registry.crossings.get(b.roadId) ?? []).map((c) => c.roadId));
   const coordinate = a.drive.axis === 'horizontal' ? 'y' : 'x';
   const candidates = (registry.crossings.get(a.roadId) ?? []).filter((c) =>
@@ -123,7 +139,10 @@ export interface LegPreference {
   readonly original: boolean;
 }
 /** Rank admitted legacy pairs before extended pairs; no route is evaluated to choose a pair. */
-export function lawPreference(s: Terminal, t: Terminal): LegPreference {
+export function lawPreference(
+  s: Terminal,
+  t: Terminal,
+): LegPreference {
   const [out, input] = pair(s, t);
   const source = s.accesses.find((p) => p.side === out),
     target = t.accesses.find((p) => p.side === input);
@@ -151,7 +170,12 @@ export function lawLeg(
       : completeLeg(source, target, registry, offset);
   return preferred ?? fallbackLeg(s, t, registry, offset);
 }
-function fallbackLeg(s: Terminal, t: Terminal, registry: WireRegistry, offset: number): Leg | null {
+function fallbackLeg(
+  s: Terminal,
+  t: Terminal,
+  registry: WireRegistry,
+  offset: number,
+): Leg | null {
   const legs = s.accesses.flatMap((a) =>
     t.accesses.flatMap((b) => {
       const leg = completeLeg(a, b, registry, offset);

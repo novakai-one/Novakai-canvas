@@ -10,11 +10,47 @@ import type { Section } from '../../contract/records/section.js';
 import { diagnoseWhen, referenceIssue } from '../invariants/issues.js';
 import { duplicates } from '../invariants/duplicates.js';
 import { nestedIn, visibleObjects } from './groups.js';
+import { sectionPath } from './paths.js';
 
-/** before/below order a pair; rank/align can address two or more unique targets. */
-function validateConstraint(constraint: LayoutConstraint, path: string): readonly Diagnostic[] {
+/**
+ * Checks every layout request: the collection's `arrangement`, then each section's layout
+ * followed by its groups' layouts. Only the request is checked; no geometry is computed. Every
+ * failure is collected.
+ *
+ * Each layout (at `<layout path>`) reports, in this order:
+ * 1. `columns` without the `grid` algorithm: `layout` at `<layout path>.columns`, "Columns require
+ *    grid layout";
+ * 2. per constraint, at `<layout path>.constraints.<index>`: repeated targets (`duplicate` at
+ *    `...<index>.<kind>:<id>`), then `before`/`below` without exactly two targets (`layout`,
+ *    "before/below need exactly two targets");
+ * 3. each target that does not resolve (`reference` at `<layout path>.<target id>`): in the
+ *    arrangement, a target must be an existing section; in a section or group layout, a visible
+ *    object or a group of that section;
+ * 4. for a group's layout, each target that is not inside that group (by appearance group,
+ *    represented group's parent, or group parent chain): `layout` at `<layout path>.<target
+ *    id>`, "Group constraints must address descendants".
+ *
+ * Paths: `arrangement`, `sections.<id>.layout`, `sections.<id>.groups.<group>.layout`. Pure:
+ * Authoring owns correction, commit and crash recovery.
+ *
+ * @param collection - A parsed collection.
+ * @returns Every diagnostic, in the order above, or an empty list.
+ * @throws Never for a parsed collection.
+ */
+export function validateLayouts(collection: Collection): readonly Diagnostic[] {
+  const arrangementIssues = validateArrangement(collection);
+  const sectionIssues = collection.sections.flatMap(validateSectionLayouts);
+  return [...arrangementIssues, ...sectionIssues];
+}
+
+/** Checks one constraint: repeated targets, then that `before`/`below` have exactly two. */
+function validateConstraint(
+  constraint: LayoutConstraint,
+  path: string,
+): readonly Diagnostic[] {
   const duplicateTargets = duplicates(
     constraint.targets,
+    /** A target's key is its kind and ID. */
     (target) => `${target.kind}:${target.id}`,
     path,
   );
@@ -29,59 +65,108 @@ function validateConstraint(constraint: LayoutConstraint, path: string): readonl
   return [...duplicateTargets, ...arityIssues];
 }
 
-/** Structural constraint rules apply equally to collection, section and group layouts. */
-function validateConstraintShapes(layout: LayoutIntent, path: string): readonly Diagnostic[] {
+/** Checks the rules shared by every layout level: `columns` needs `grid`, then each constraint. */
+function validateConstraintShapes(
+  layout: LayoutIntent,
+  path: string,
+): readonly Diagnostic[] {
   const columnIssues = diagnoseWhen(
     layout.columns !== undefined && layout.algorithm !== 'grid',
     'layout',
     `${path}.columns`,
     'Columns require grid layout',
   );
-  const constraints = layout.constraints.flatMap((constraint, index): readonly Diagnostic[] =>
-    validateConstraint(constraint, `${path}.constraints.${index}`),
+  const constraints = layout.constraints.flatMap(
+    /** Checks one constraint at its index path. */
+    (constraint, index): readonly Diagnostic[] =>
+      validateConstraint(constraint, `${path}.constraints.${index}`),
   );
   return [...columnIssues, ...constraints];
 }
 
-/** A section constraint may address its visible objects or groups, never another section. */
-function isVisibleTarget(target: LayoutTarget, section: Section): boolean {
-  if (target.kind === 'object') return visibleObjects(section).includes(target.id);
-  return target.kind === 'group' && section.groups.some((group) => group.id === target.id);
+/**
+ * Tells whether a section-level target resolves: an object the section shows, or one of its
+ * groups. A section target never resolves here.
+ */
+function isVisibleTarget(
+  target: LayoutTarget,
+  section: Section,
+): boolean {
+  if (target.kind === 'object') {
+    return visibleObjects(section).includes(target.id);
+  }
+  if (target.kind !== 'group') {
+    return false;
+  }
+  return section.groups.some(
+    /** Tells whether this is the target group. */
+    (group) => group.id === target.id,
+  );
 }
 
-/** Prefer ordinary membership; a represented object derives membership from its container's parent. */
-function targetParent(target: LayoutTarget, section: Section): GroupId | undefined {
+/**
+ * Returns the group a target sits in. A group target: its parent. Any other target (an object,
+ * or an invalid section target): the group of the first appearance whose object has the
+ * target's ID; when there is no such appearance or its `group` is undefined, the parent of the
+ * first group that represents that ID.
+ */
+function targetParent(
+  target: LayoutTarget,
+  section: Section,
+): GroupId | undefined {
   if (target.kind === 'group') {
-    const group = section.groups.find((candidate) => candidate.id === target.id);
+    const group = section.groups.find(
+      /** Tells whether this is the target group. */
+      (candidate) => candidate.id === target.id,
+    );
     return group?.parent;
   }
-  const appearance = section.appearances.find((candidate) => candidate.object === target.id);
-  if (appearance?.group !== undefined) return appearance.group;
-  const representation = section.groups.find((group) => group.represents === target.id);
+  const appearance = section.appearances.find(
+    /** Tells whether this appearance shows the target object. */
+    (candidate) => candidate.object === target.id,
+  );
+  if (appearance?.group !== undefined) {
+    return appearance.group;
+  }
+  const representation = section.groups.find(
+    /** Tells whether this group represents the target object. */
+    (group) => group.represents === target.id,
+  );
   return representation?.parent;
 }
 
-/** Group-owned constraints may address descendants, not the owning group or unrelated peers. */
+/**
+ * For a group's layout, reports each target that is not inside the group. A section's own
+ * layout (no owner) gives nothing.
+ */
 function validateGroupScope(
   targets: readonly LayoutTarget[],
   section: Section,
   path: string,
   ownerId: GroupId | undefined,
 ): readonly Diagnostic[] {
-  if (ownerId === undefined) return [];
-  return targets.flatMap((target) => {
-    const parentId = targetParent(target, section);
-    const isDescendant = nestedIn(parentId, ownerId, section);
-    return diagnoseWhen(
-      !isDescendant,
-      'layout',
-      `${path}.${target.id}`,
-      'Group constraints must address descendants',
-    );
-  });
+  if (ownerId === undefined) {
+    return [];
+  }
+  return targets.flatMap(
+    /** Reports the target if it is not inside the owning group. */
+    (target) => {
+      const parentId = targetParent(target, section);
+      const isDescendant = nestedIn(parentId, ownerId, section);
+      return diagnoseWhen(
+        !isDescendant,
+        'layout',
+        `${path}.${target.id}`,
+        'Group constraints must address descendants',
+      );
+    },
+  );
 }
 
-/** Resolve references in the containing section, then apply optional group ownership restrictions. */
+/**
+ * Checks a section or group layout: shared rules, then every target resolves in the section,
+ * then (for a group) every target is inside that group.
+ */
 function validateLocalLayout(
   layout: LayoutIntent,
   section: Section,
@@ -89,42 +174,48 @@ function validateLocalLayout(
   ownerId?: GroupId,
 ): readonly Diagnostic[] {
   const shapeIssues = validateConstraintShapes(layout, path);
-  const targets = layout.constraints.flatMap((constraint) => constraint.targets);
-  const targetIssues = targets.flatMap((target) =>
-    referenceIssue(!isVisibleTarget(target, section), `${path}.${target.id}`),
+  const targets = layout.constraints.flatMap(
+    /** The constraint's targets. */
+    (constraint) => constraint.targets,
+  );
+  const targetIssues = targets.flatMap(
+    /** Reports the target if it does not resolve in the section. */
+    (target) => referenceIssue(!isVisibleTarget(target, section), `${path}.${target.id}`),
   );
   const scopeIssues = validateGroupScope(targets, section, path, ownerId);
   return [...shapeIssues, ...targetIssues, ...scopeIssues];
 }
 
-/** Collection arrangement addresses section IDs only, in collection scope. */
+/** Checks the collection's arrangement: shared rules, then every target is an existing section. */
 function validateArrangement(collection: Collection): readonly Diagnostic[] {
   const shapeIssues = validateConstraintShapes(collection.arrangement, 'arrangement');
-  const targets = collection.arrangement.constraints.flatMap((constraint) => constraint.targets);
-  const targetIssues = targets.flatMap((target) => {
-    const sectionExists =
-      target.kind === 'section' && collection.sections.some((section) => section.id === target.id);
-    return referenceIssue(!sectionExists, `arrangement.${target.id}`);
-  });
+  const targets = collection.arrangement.constraints.flatMap(
+    /** The constraint's targets. */
+    (constraint) => constraint.targets,
+  );
+  const targetIssues = targets.flatMap(
+    /** Reports the target unless it is an existing section. */
+    (target) => {
+      const sectionExists =
+        target.kind === 'section' &&
+        collection.sections.some(
+          /** Tells whether this is the target section. */
+          (section) => section.id === target.id,
+        );
+      return referenceIssue(!sectionExists, `arrangement.${target.id}`);
+    },
+  );
   return [...shapeIssues, ...targetIssues];
 }
 
-/** Each group has its own descendant scope while sharing the section's visibility set. */
+/** Checks a section's layout, then each group's layout with that group as the owner. */
 function validateSectionLayouts(section: Section): readonly Diagnostic[] {
-  const path = `sections.${section.id}`;
+  const path = sectionPath(section);
   const sectionIssues = validateLocalLayout(section.layout, section, `${path}.layout`);
-  const groupIssues = section.groups.flatMap((group) =>
-    validateLocalLayout(group.layout, section, `${path}.groups.${group.id}.layout`, group.id),
+  const groupIssues = section.groups.flatMap(
+    /** Checks one group's layout. */
+    (group) =>
+      validateLocalLayout(group.layout, section, `${path}.groups.${group.id}.layout`, group.id),
   );
   return [...sectionIssues, ...groupIssues];
-}
-
-/**
- * Validates semantic constraint shape and scope at every layout level; computes no geometry.
- * Failures accumulate without mutation. Pure replay; Authoring owns correction and commit/recovery.
- */
-export function validateLayouts(collection: Collection): readonly Diagnostic[] {
-  const arrangementIssues = validateArrangement(collection);
-  const sectionIssues = collection.sections.flatMap(validateSectionLayouts);
-  return [...arrangementIssues, ...sectionIssues];
 }

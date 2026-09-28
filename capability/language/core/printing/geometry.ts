@@ -29,7 +29,10 @@ function placementSummary(
   return [{ target, kind: 'placement', locked: placement.locked }];
 }
 /** A lock is visible even if malformed legacy input would omit manual points; Model validation runs first. */
-function wireSummary(section: string, wire: Section['wires'][number]): readonly ManualTarget[] {
+function wireSummary(
+  section: string,
+  wire: Section['wires'][number],
+): readonly ManualTarget[] {
   if (wire.manual === undefined && !wire.locked) return [];
   return [{ target: `@${section}/@${wire.relationship}`, kind: 'route', locked: wire.locked }];
 }

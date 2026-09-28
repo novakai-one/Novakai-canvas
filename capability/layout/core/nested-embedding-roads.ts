@@ -4,8 +4,7 @@ import type {
   NestedSupportSpanGrowth,
 } from '../contract/records/nested-support.js';
 import { axes } from './prototype-road-geometry.js';
-import { required } from './nested-support-input.js';
-import { reject } from './nested-support-graph.js';
+import { reject, required } from './nested-support-graph.js';
 import type { RoadContact } from './prototype-road-registry.js';
 
 interface Context {
@@ -14,7 +13,10 @@ interface Context {
   readonly keys: ReadonlyMap<string, string>;
   readonly growth: ReadonlyMap<string, NestedSupportSpanGrowth>;
 }
-function street(road: PrototypeRoad, context: Context): PrototypeRoad {
+function street(
+  road: PrototypeRoad,
+  context: Context,
+): PrototypeRoad {
   const { values, old, keys } = context,
     key = required(keys, road.id),
     a = axes[road.axis],

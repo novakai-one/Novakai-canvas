@@ -4,7 +4,7 @@ import type {
   DiagramObject,
   ContentBlock,
 } from '../../contract/records/owners.js';
-import type { EndpointChoice } from '../../contract/wire-react.js';
+import type { EndpointChoice } from '../../contract/records/wire-editor.js';
 /** Option identity survives label changes and does not depend on punctuation inside labels. */
 export function endpointKey(endpoint: Endpoint): string {
   return JSON.stringify([endpoint.object, endpoint.member ?? null]);
@@ -37,6 +37,9 @@ function isConnectable(
   return ['field', 'member', 'signature'].includes(item.kind);
 }
 /** A single formatter keeps controlled select values consistent with their semantic identities. */
-function choice(label: string, endpoint: Endpoint): EndpointChoice {
+function choice(
+  label: string,
+  endpoint: Endpoint,
+): EndpointChoice {
   return { value: endpointKey(endpoint), label, endpoint };
 }

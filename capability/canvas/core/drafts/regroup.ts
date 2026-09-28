@@ -8,7 +8,10 @@ import { targetKey } from '../scenes/address.js';
 function centre(box: Box): Point {
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
-function contains(box: Box, point: Point): boolean {
+function contains(
+  box: Box,
+  point: Point,
+): boolean {
   return (
     point.x >= box.x &&
     point.x <= box.x + box.width &&
@@ -16,19 +19,30 @@ function contains(box: Box, point: Point): boolean {
     point.y <= box.y + box.height
   );
 }
-function isGroup(state: SessionState, key: string): boolean {
+function isGroup(
+  state: SessionState,
+  key: string,
+): boolean {
   return typeof state.index.nodes[key]?.measured.groupId === 'string';
 }
 function section(info: TargetInfo): string | null {
   return info.target.kind === 'node' ? info.target.section : null;
 }
 /** True when `key` is `root` or sits anywhere inside it. */
-function within(state: SessionState, key: string | null, root: string): boolean {
+function within(
+  state: SessionState,
+  key: string | null,
+  root: string,
+): boolean {
   if (key === null) return false;
   return key === root || within(state, state.index.targets[key]?.parentKey ?? null, root);
 }
 /** Smallest group under the point in the node's section; never the node itself or its own children. */
-function groupAt(state: SessionState, node: TargetInfo, point: Point): TargetInfo | undefined {
+function groupAt(
+  state: SessionState,
+  node: TargetInfo,
+  point: Point,
+): TargetInfo | undefined {
   return Object.values(state.index.targets)
     .filter(
       (item) =>
@@ -45,7 +59,10 @@ function soleNode(draft: PlacementDraft): GeometryEntry | undefined {
   return draft.current.find((entry) => entry.target.kind === 'node');
 }
 /** The container the node was dropped in, when it differs from its current one. */
-function destination(state: SessionState, entry: GeometryEntry): TargetInfo | null {
+function destination(
+  state: SessionState,
+  entry: GeometryEntry,
+): TargetInfo | null {
   const node = state.index.targets[targetKey(entry.target)];
   if (node === undefined || isGroup(state, node.key)) return null;
   const into =
@@ -58,7 +75,10 @@ function origin(into: TargetInfo): Point {
   return into.target.kind === 'section' ? into.sectionOrigin : into.box;
 }
 /** Dropping one node into another group (or out of every group) changes its group, not just its position. */
-export function regroupIntent(state: SessionState, draft: PlacementDraft): RegroupIntent | null {
+export function regroupIntent(
+  state: SessionState,
+  draft: PlacementDraft,
+): RegroupIntent | null {
   const entry = soleNode(draft);
   const into = entry === undefined ? null : destination(state, entry);
   if (entry === undefined || into === null) return null;

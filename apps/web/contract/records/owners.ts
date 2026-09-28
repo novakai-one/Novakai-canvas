@@ -11,6 +11,7 @@ export type {
   WireAppearance,
   Relationship,
   Endpoint,
+  MemberEndpointKind,
 } from '@novakai/canvas-model';
 export type { RenderDocument, TransportResponse } from '@novakai/canvas-service';
 export type {
@@ -18,6 +19,7 @@ export type {
   Request,
   Receipt,
   StoredRecord,
+  RecordKey,
   ReadVersion,
 } from '@novakai/canvas-authoring';
 export type {
@@ -28,7 +30,10 @@ export type {
   PlacementIntent,
   RegroupIntent,
   RouteIntent,
+  DropTarget,
   Target,
+  NodeTarget,
+  CanvasEvent,
   SceneStamp,
   CanvasEffect,
 } from '@novakai/canvas-canvas';

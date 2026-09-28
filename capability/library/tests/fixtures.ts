@@ -1,29 +1,52 @@
-import { assert } from 'vitest';
+/*
+ * Library test data: frozen fixture IDs and a fresh valid snapshot per call. Data only; the
+ * result assertions live in `assertions.ts`. A fixture that fails to build fails the test run;
+ * correct the fixture and rerun the tests.
+ */
 import {
-  catalogId,
-  collectionId,
-  folderId,
-  sectionId,
-  objectId,
+  organisationIdSchema,
+  collectionIdSchema,
+  folderIdSchema,
+  sectionIdSchema,
+  objectIdSchema,
   type LibrarySnapshot,
-  type Result,
+  type OrganisationId,
+  type FolderId,
+  type CollectionId,
+  type SectionId,
+  type ObjectId,
 } from '../contract/index.js';
-/** Independently minted fixture identities; no private implementation is used. */
-export const ids = {
-  catalog: catalogId.parse('catalog'),
-  folder: folderId.parse('engineering'),
-  child: folderId.parse('backend'),
-  alpha: collectionId.parse('alpha'),
-  beta: collectionId.parse('beta'),
-  section: sectionId.parse('er'),
-  object: objectId.parse('invoice'),
-};
-/** Explicit fixture values prevent schema defaults from manufacturing expected results. */
+
+/** The fixture IDs. The object is frozen, so no test can change an ID another test reads. */
+export interface FixtureIds {
+  readonly organisation: OrganisationId;
+  /** Folder `engineering`. */
+  readonly folder: FolderId;
+  /** Folder `backend`, a child of `engineering`. */
+  readonly child: FolderId;
+  readonly alpha: CollectionId;
+  readonly beta: CollectionId;
+  readonly section: SectionId;
+  readonly object: ObjectId;
+}
+
+/** Fixture IDs, checked with the public ID schemas (no private code is used). */
+export const ids: FixtureIds = Object.freeze(checkedIds());
+
+/**
+ * A valid snapshot: organisation `organisation` (revision 7) with folder `engineering` and its child
+ * `backend`; collection `alpha` ("Billing", revision 3) in `backend` with section `er` and the
+ * unplaced object `invoice`; archived collection `beta` ("Architecture", revision 4) at the root;
+ * `alpha` opened at 100 and `beta` at 200.
+ *
+ * Every field is given explicitly, so schema defaults never produce an expected value. A fresh
+ * object is returned on every call.
+ */
 export function snapshot(): LibrarySnapshot {
   return {
-    catalog: {
+    organisation: {
       schemaVersion: 1,
-      id: ids.catalog,
+      id: ids.organisation,
       revision: 7,
       folders: [
         { id: ids.folder, title: 'Engineering', order: 0 },
@@ -65,15 +88,21 @@ export function snapshot(): LibrarySnapshot {
     ],
   };
 }
-/** Assert success before exposing the public value; a failed fixture result stops its test. */
-export function valueOf<T>(result: Result<T>): T {
-  assert(result.ok, JSON.stringify(result));
-  return result.value;
-}
-/** Check both failure category and its independently specified affected path. */
-export function hasFailure<T>(result: Result<T>, code: string, path: string): boolean {
-  if (result.ok) return false;
-  return result.error.diagnostics.some(
-    (diagnostic) => diagnostic.code === code && diagnostic.path === path,
-  );
+
+/** Checks each fixture ID with a schema of its kind; the folder schema is used for both folders. */
+function checkedIds(): FixtureIds {
+  const organisationIds = organisationIdSchema();
+  const folderIds = folderIdSchema();
+  const collectionIds = collectionIdSchema();
+  const sectionIds = sectionIdSchema();
+  const objectIds = objectIdSchema();
+  return {
+    organisation: organisationIds.parse('organisation'),
+    folder: folderIds.parse('engineering'),
+    child: folderIds.parse('backend'),
+    alpha: collectionIds.parse('alpha'),
+    beta: collectionIds.parse('beta'),
+    section: sectionIds.parse('er'),
+    object: objectIds.parse('invoice'),
+  };
 }

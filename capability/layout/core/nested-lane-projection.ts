@@ -5,7 +5,7 @@ import type {
   PrototypeRoad,
   PrototypePortLocation,
 } from '../contract/records/road-prototype.js';
-import type { AssignedTravel } from './nested-wire-lanes.js';
+import type { AssignedTravel } from './nested-travel.js';
 import { needsMedianBridge, terminalFanDistance } from './nested-wire-lanes.js';
 import { axes, contains, samePoint } from './prototype-road-geometry.js';
 import { reject } from './nested-support-graph.js';
@@ -74,7 +74,10 @@ function line(
 function laneProperty(laneId: string | undefined) {
   return laneId === undefined ? {} : { laneId };
 }
-function point(t: AssignedTravel, along: number): PrototypePoint {
+function point(
+  t: AssignedTravel,
+  along: number,
+): PrototypePoint {
   return t.road.axis === 'horizontal' ? { x: along, y: t.at } : { x: t.at, y: along };
 }
 function corner(
@@ -91,7 +94,11 @@ function center(road: PrototypeRoad): number {
   const a = axes[road.axis];
   return road.bounds[a.across] + road.bounds[a.breadth] / 2;
 }
-function turnKey(t: AssignedTravel, next: AssignedTravel, direction: number): string {
+function turnKey(
+  t: AssignedTravel,
+  next: AssignedTravel,
+  direction: number,
+): string {
   return `${t.road.axis}/${center(t.road)}/${center(next.road)}/${direction}`;
 }
 /** One physical junction uses nested channels on every arm when either opposing pair needs them. */
@@ -183,7 +190,11 @@ function bridge(
   if (road === undefined) return gateJoin(t, next, wire);
   return streetBridge(t, next, road);
 }
-function streetBridge(t: AssignedTravel, next: AssignedTravel, road: PrototypeRoad): Connection {
+function streetBridge(
+  t: AssignedTravel,
+  next: AssignedTravel,
+  road: PrototypeRoad,
+): Connection {
   if (needsMedianBridge(t, next)) return medianBridge(t, next, road);
   if (t.at === next.at) {
     const a = axes[t.road.axis];
@@ -194,12 +205,19 @@ function streetBridge(t: AssignedTravel, next: AssignedTravel, road: PrototypeRo
   return { from: point(t, at), to: point(next, at), roadId: road.id };
 }
 /** No transfer is invented during projection: capacity already includes its measured slot. */
-function transferCoordinates(t: AssignedTravel, road: PrototypeRoad): readonly number[] {
+function transferCoordinates(
+  t: AssignedTravel,
+  road: PrototypeRoad,
+): readonly number[] {
   if (t.transfer?.roadId !== road.id)
     return reject('unsupported-support', [t.wireId, road.id, 'missing-transfer-capacity']);
   return t.transfer.coordinates;
 }
-function medianBridge(t: AssignedTravel, next: AssignedTravel, road: PrototypeRoad): Connection {
+function medianBridge(
+  t: AssignedTravel,
+  next: AssignedTravel,
+  road: PrototypeRoad,
+): Connection {
   const a = axes[t.road.axis];
   const coordinates = transferCoordinates(t, road).toSorted((a, b) => t.direction * (a - b));
   const near = coordinates[0]!,
@@ -215,7 +233,11 @@ function medianBridge(t: AssignedTravel, next: AssignedTravel, road: PrototypeRo
     via: [point(t, near), point(t, far)].map((p) => ({ ...p, [a.across]: median })),
   };
 }
-function gateJoin(t: AssignedTravel, next: AssignedTravel, wire: NestedWire): Connection {
+function gateJoin(
+  t: AssignedTravel,
+  next: AssignedTravel,
+  wire: NestedWire,
+): Connection {
   const at = wire.segments[t.last]?.to[axes[t.road.axis].along] ?? 0;
   return { from: point(t, at), to: point(next, at), roadId: t.road.id };
 }
@@ -229,14 +251,21 @@ function connect(
   if (t.road.axis !== next.road.axis) return corner(t, next, roads, turns);
   return bridge(t, next, wire, roads);
 }
-function fan(t: AssignedTravel, endpoint: PrototypePoint, sign: number) {
+function fan(
+  t: AssignedTravel,
+  endpoint: PrototypePoint,
+  sign: number,
+) {
   const a = axes[t.road.axis];
   const pin = terminalPin(endpoint, a.across, t.lane, t.count, t.road.access?.fixed);
   const distance = terminalFanDistance(t);
   const along = endpoint[a.along] + sign * t.direction * distance;
   return { pin, bend: { ...pin, [a.along]: along }, end: point(t, along) };
 }
-function clipped(p: PrototypePoint, road: PrototypeRoad): PrototypePoint {
+function clipped(
+  p: PrototypePoint,
+  road: PrototypeRoad,
+): PrototypePoint {
   const a = axes[road.axis],
     b = road.bounds;
   return { ...p, [a.along]: Math.max(b[a.along], Math.min(b[a.along] + b[a.length], p[a.along])) };
@@ -392,13 +421,22 @@ function projectNestedWire(
   };
 }
 
-function turnDirection(t: AssignedTravel, next: AssignedTravel): number {
+function turnDirection(
+  t: AssignedTravel,
+  next: AssignedTravel,
+): number {
   return t.direction * next.direction * (t.road.axis === 'horizontal' ? 1 : -1);
 }
-function leftKey(t: AssignedTravel, next: AssignedTravel): readonly string[] {
+function leftKey(
+  t: AssignedTravel,
+  next: AssignedTravel,
+): readonly string[] {
   return turnDirection(t, next) < 0 ? [turnKey(t, next, t.direction)] : [];
 }
-function leftKeys(t: AssignedTravel, next: AssignedTravel | undefined): readonly string[] {
+function leftKeys(
+  t: AssignedTravel,
+  next: AssignedTravel | undefined,
+): readonly string[] {
   if (!next || t.road.axis === next.road.axis) return [];
   return leftKey(t, next);
 }

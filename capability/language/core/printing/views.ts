@@ -16,7 +16,11 @@ export function printSection(section: Section): string {
   ]);
 }
 /** Appearance and group orders are preserved within their owning layout scopes. */
-function printScope(section: Section, parent?: string, depth = 0): readonly string[] {
+function printScope(
+  section: Section,
+  parent?: string,
+  depth = 0,
+): readonly string[] {
   requireDepth(depth);
   const appearances = section.appearances
     .filter((item) => item.group === parent)
@@ -27,7 +31,11 @@ function printScope(section: Section, parent?: string, depth = 0): readonly stri
   return [...appearances, ...groups];
 }
 /** Represented groups do not emit an additional show for their represented canonical object. */
-function printGroup(section: Section, group: Section['groups'][number], depth: number): string {
+function printGroup(
+  section: Section,
+  group: Section['groups'][number],
+  depth: number,
+): string {
   const title = [header('group', group), ...layoutAttributes(group.layout)].join(' ');
   return body(title, [...printScope(section, group.id, depth), ...printConstraints(group.layout)]);
 }

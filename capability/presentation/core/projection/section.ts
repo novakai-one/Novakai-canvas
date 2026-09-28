@@ -13,14 +13,20 @@ import { wireNotation, sequenceMarker, sequenceLabel } from '../notation/wires.j
 import { measureWireAnnotation } from '../notation/annotations.js';
 import { reject } from '../validation/outcomes.js';
 /** Canonical endpoints resolve through the visible representation, including represented groups. */
-function endpoint(value: Endpoint, nodes: readonly VisualNode[]): VisualEndpoint {
+function endpoint(
+  value: Endpoint,
+  nodes: readonly VisualNode[],
+): VisualEndpoint {
   const node = nodes.find((item) => item.objectId === value.object);
   if (!node)
     return reject('invalid-input', value.object, 'Wire endpoint has no visible representation');
   return { node: node.id, member: value.member ?? null };
 }
 /** Missing relationship is a broken domain-reader contract and rejects the whole projection. */
-function relationship(id: string, context: ContentContext): Relationship {
+function relationship(
+  id: string,
+  context: ContentContext,
+): Relationship {
   const found = context.collection.relationships.find((item) => item.id === id);
   if (!found) return reject('invalid-input', id, 'Relationship is missing');
   return found;
@@ -53,7 +59,10 @@ function wire(
   };
 }
 /** Measure one section; public project owns rejection and Authoring retains the prior scene. */
-export function projectSection(section: Section, context: ContentContext): VisualSection {
+export function projectSection(
+  section: Section,
+  context: ContentContext,
+): VisualSection {
   const nodes = [
     ...section.groups.map((group) => projectGroup(group, section, context)),
     ...section.appearances.map((view) => projectNode(view, section, context)),
@@ -80,7 +89,10 @@ export function projectSection(section: Section, context: ContentContext): Visua
   );
 }
 /** Section headings may use the generic large-band ceiling; measured width remains content-driven. */
-function sectionTitle(title: string, context: ContentContext): VisualSection['title'] {
+function sectionTitle(
+  title: string,
+  context: ContentContext,
+): VisualSection['title'] {
   const width = context.style.contentSizing.widths.large.maximum;
   return labelContent(title, { ...context, width }, 'sectionHeading');
 }

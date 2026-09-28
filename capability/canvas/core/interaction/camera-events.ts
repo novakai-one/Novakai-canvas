@@ -10,7 +10,10 @@ import { previewBox } from '../scenes/preview.js';
 import { targetInfo } from '../scenes/address.js';
 import { parse } from '../validation/outcomes.js';
 /** Explicit fit chooses admitted collection/target bounds; selection updates cannot enter this handler. */
-function fitted(state: SessionState, event: EventOf<'fit'>): Camera {
+function fitted(
+  state: SessionState,
+  event: EventOf<'fit'>,
+): Camera {
   const bounds =
     event.target === null
       ? (state.routePreview?.bounds ?? state.scene.bounds)

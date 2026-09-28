@@ -50,7 +50,10 @@ function resolveReady(
   );
 }
 /** Declared output type must agree with the recipe's actual primitive. */
-function evaluateDefinition(definition: TokenDefinition, values: TokenValues): TokenValue {
+function evaluateDefinition(
+  definition: TokenDefinition,
+  values: TokenValues,
+): TokenValue {
   const value = evaluate(definition.expression, values, definition.id);
   if (value.type !== definition.type)
     return reject('type-mismatch', definition.id, definition.type, 'Recipe or alias type differs');

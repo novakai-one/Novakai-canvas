@@ -5,7 +5,10 @@ import { inspectSections } from './sections.js';
 import { same } from './facts.js';
 import { warnings } from '../arrangement/notices.js';
 /** Reconstruct transported geometry from checked measured content; never return unknown payloads retained by the wire schema. */
-export function admitScene(request: CheckedInspectionRequest, engines: readonly string[]): Scene {
+export function admitScene(
+  request: CheckedInspectionRequest,
+  engines: readonly string[],
+): Scene {
   inspectDerivation(request, engines);
   const sections = inspectSections(request.projection, request.candidate, {
     measurements: request.measurements,

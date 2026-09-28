@@ -27,12 +27,18 @@ export type CheckedInspectionRequest = Omit<InspectionRequest, 'candidate'> & {
   readonly candidate: SceneCandidate;
 };
 /** Duplicate identities never reach solvers whose maps would silently overwrite one member. */
-function unique(ids: readonly string[], path: string): void {
+function unique(
+  ids: readonly string[],
+  path: string,
+): void {
   if (new Set(ids).size !== ids.length)
     reject('invalid-input', path, 'Duplicate geometry identity', ids);
 }
 /** Validate consumed geometry after the owner decodes its full measured vocabulary. */
-function projection(input: unknown, reader: ProjectionReader): Projection {
+function projection(
+  input: unknown,
+  reader: ProjectionReader,
+): Projection {
   const result = requireValue(reader.read(input));
   unique(
     result.sections.map((item) => item.id),
@@ -75,14 +81,21 @@ function checkSection(section: VisualSection): void {
   });
 }
 /** Measured sizes are finite minimum bounds; ancestors must resolve without cycles in the same scope. */
-function checkNode(node: VisualNode, section: VisualSection): void {
+function checkNode(
+  node: VisualNode,
+  section: VisualSection,
+): void {
   parse(box, { x: 0, y: 0, width: node.width, height: node.height });
   if (node.sectionId !== section.id)
     reject('invalid-input', node.id, 'Node section does not match its scope');
   checkParents(node, section, []);
 }
 /** A bounded immutable ancestor path makes cycle diagnostics explicit rather than recursing indefinitely. */
-function checkParents(node: VisualNode, section: VisualSection, path: readonly string[]): void {
+function checkParents(
+  node: VisualNode,
+  section: VisualSection,
+  path: readonly string[],
+): void {
   if (node.parent === null) return;
   if (path.includes(node.id))
     reject('invalid-input', node.id, 'Group parent cycle', [...path, node.id]);
@@ -90,7 +103,10 @@ function checkParents(node: VisualNode, section: VisualSection, path: readonly s
   checkParents(parent, section, [...path, node.id]);
 }
 /** Required local node lookup rejects a missing reference at the consumer boundary. */
-function requiredNode(id: string, section: VisualSection): VisualNode {
+function requiredNode(
+  id: string,
+  section: VisualSection,
+): VisualNode {
   const found = section.nodes.find((node) => node.id === id);
   if (!found) return reject('invalid-input', id, 'Referenced visible node is missing');
   return found;
@@ -133,11 +149,18 @@ function branchKeys(
   return item.branches.map((branch) => key(section, item.id, branch.id));
 }
 /** Namespaced tuple encoding avoids collisions between author-controlled string identities. */
-function key(section: string, fragment: string, branch: string): string {
+function key(
+  section: string,
+  fragment: string,
+  branch: string,
+): string {
   return JSON.stringify([section, fragment, branch]);
 }
 /** Snapshot and check arrangement inputs; public execute returns any structured failure to Authoring. */
-export function readArrangement(input: unknown, reader: ProjectionReader): CheckedLayoutRequest {
+export function readArrangement(
+  input: unknown,
+  reader: ProjectionReader,
+): CheckedLayoutRequest {
   const raw = parse(arrangementRequest, snapshot(input));
   const source = projection(raw.projection, reader);
   return {
@@ -147,7 +170,10 @@ export function readArrangement(input: unknown, reader: ProjectionReader): Check
   };
 }
 /** Route-only requires fixed geometry, never an optional previous-scene hint. */
-export function readRoute(input: unknown, reader: ProjectionReader): CheckedRouteRequest {
+export function readRoute(
+  input: unknown,
+  reader: ProjectionReader,
+): CheckedRouteRequest {
   const raw = parse(routeRequest, snapshot(input));
   const source = projection(raw.projection, reader);
   return {
@@ -157,7 +183,10 @@ export function readRoute(input: unknown, reader: ProjectionReader): CheckedRout
   };
 }
 /** Inspection always pairs candidate geometry with authoritative measured intent/options. */
-export function readInspection(input: unknown, reader: ProjectionReader): CheckedInspectionRequest {
+export function readInspection(
+  input: unknown,
+  reader: ProjectionReader,
+): CheckedInspectionRequest {
   const raw = parse(inspectionRequest, snapshot(input));
   const source = projection(raw.projection, reader);
   return {

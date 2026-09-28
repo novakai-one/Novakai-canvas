@@ -73,7 +73,10 @@ function sectionTitle(
     box: { x: padding, y: padding, width: source.title.width, height: source.title.height },
   };
 }
-function withTree(section: PlacedSection, tree: PlacedSection['tree']): PlacedSection {
+function withTree(
+  section: PlacedSection,
+  tree: PlacedSection['tree'],
+): PlacedSection {
   return tree === undefined ? section : { ...section, tree };
 }
 /** Collection-space bounds enclose all local geometry after applying the explicit origin exactly once. */
@@ -94,14 +97,21 @@ function checkBounds(
     reject('constraint-conflict', candidate.id, 'Section origin differs from visible bounds');
 }
 /** A section lock fixes origin and only the optional dimensions that were actually authored. */
-function checkLock(source: VisualSection, candidate: SectionCandidate): void {
+function checkLock(
+  source: VisualSection,
+  candidate: SectionCandidate,
+): void {
   if (!source.placement?.locked) return;
   same({ x: source.placement.x, y: source.placement.y }, candidate.origin, source.id);
   supplied(source.placement.width, candidate.box.width, source.id);
   supplied(source.placement.height, candidate.box.height, source.id);
 }
 /** Omitted dimensions remain content-driven instead of accidentally becoming implicit locks. */
-function supplied(expected: number | undefined, actual: number, id: string): void {
+function supplied(
+  expected: number | undefined,
+  actual: number,
+  id: string,
+): void {
   if (expected === undefined) return;
   same(expected, actual, id);
 }
@@ -153,7 +163,11 @@ function requiredSection(
 }
 
 /** Fixed app-owned envelope must contain all content; routing cannot silently grow it. */
-function checkEnvelope(source: VisualSection, candidate: SectionCandidate, content: Box): void {
+function checkEnvelope(
+  source: VisualSection,
+  candidate: SectionCandidate,
+  content: Box,
+): void {
   const envelope = source.envelope;
   if (envelope === undefined) return;
   same([candidate.box.width, candidate.box.height], [envelope.width, envelope.height], source.id);

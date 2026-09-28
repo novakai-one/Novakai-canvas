@@ -3,7 +3,10 @@ import type { WireEditorSession } from './wire-editor.js';
 import type { InspectorSession } from './inspector.js';
 import type { DefinitionSession } from './definitions.js';
 import type { SourceView } from './source.js';
-import type { Collection, Snapshot, RenderDocument, Canvas, SessionStore } from './owners.js';
+import type { Collection, Snapshot, RenderDocument } from './owners.js';
+import type { ActiveDiagram } from './active-diagram.js';
+import type { ReadGeneration } from './read-generation.js';
+import type { CollectionId, RequestId } from '../brands.js';
 import type { Submission } from './submission.js';
 import type { Diagnostic } from '../errors.js';
 import type { MoveReview } from './movement.js';
@@ -12,26 +15,19 @@ import type { ConnectionDraft, ConnectionEdit } from './connection.js';
 import type { Receipt } from './owners.js';
 import type { Result } from '../errors.js';
 import type { BinaryResponse } from '../ports/client.js';
-/** UI owns form drafts and selected collection; committed records are immutable Authoring snapshots. */
-export interface ActiveDiagram {
-  readonly generation: string;
-  readonly base: Snapshot;
-  readonly document: RenderDocument;
-  readonly canvas: Canvas;
-  readonly session: SessionStore;
-}
+import type { Diagnostic as CanvasDiagnostic } from '@novakai/canvas-canvas';
 export type CollectionSwitch =
-  | { readonly phase: 'idle'; readonly activeId: string | null }
-  | { readonly phase: 'choosing'; readonly activeId: string | null }
+  | { readonly phase: 'idle'; readonly activeId: CollectionId | null }
+  | { readonly phase: 'choosing'; readonly activeId: CollectionId | null }
   | {
       readonly phase: 'loading';
-      readonly activeId: string | null;
-      readonly targetId: string;
+      readonly activeId: CollectionId | null;
+      readonly targetId: CollectionId;
     }
   | {
       readonly phase: 'failed';
-      readonly activeId: string | null;
-      readonly targetId: string;
+      readonly activeId: CollectionId | null;
+      readonly targetId: CollectionId;
       readonly problem: Diagnostic;
     };
 export interface MovementReviewState {
@@ -39,7 +35,6 @@ export interface MovementReviewState {
   readonly optionId: string;
   readonly phase: 'review' | 'sending' | 'uncertain' | 'rejected';
   readonly document: RenderDocument;
-  readonly requestId?: string;
 }
 export interface WorkspaceView extends SourceView {
   readonly history?: {
@@ -47,10 +42,10 @@ export interface WorkspaceView extends SourceView {
     readonly busy: boolean;
   };
   readonly snapshot: Snapshot | null;
-  readonly generation: string;
+  readonly generation: ReadGeneration;
   readonly collections: readonly Collection[];
   readonly active: ActiveDiagram | null;
-  readonly opening: string | null;
+  readonly opening: CollectionId | null;
   readonly collectionSwitch: CollectionSwitch;
   readonly status: string;
   readonly problem: Diagnostic | null;
@@ -71,10 +66,10 @@ export interface WorkspaceController {
   getSnapshot(): WorkspaceView;
   subscribe(listener: () => void): () => void;
   start(): Promise<void>;
-  open(id: string): Promise<void>;
+  open(id: CollectionId): Promise<void>;
   beginCollectionSwitch(): void;
   cancelCollectionSwitch(): void;
-  chooseCollection(id: string): void;
+  chooseCollection(id: CollectionId): void;
   retryCollectionSwitch(): void;
   showLibrary(): void;
   refresh(): Promise<void>;
@@ -82,11 +77,11 @@ export interface WorkspaceController {
   editSource(source: string): void;
   applySource(): Promise<void>;
   closeSource(decision: 'keep' | 'discard' | 'stay'): void;
-  reconcileRequest(id: string): Promise<void>;
-  dismissRequest(id: string): void;
+  reconcileRequest(id: RequestId): Promise<void>;
+  dismissRequest(id: RequestId): void;
   /** Hide the problem bar; the underlying drafts and pending requests are unchanged. */
   dismissProblem(): void;
-  retryRequest(id: string): Promise<void>;
+  retryRequest(id: RequestId): Promise<void>;
   create(title: string): Promise<void>;
   addDiagram(draft: AddDiagramDraft): Promise<Result<Receipt>>;
   addObject(draft: AddObjectDraft): Promise<Result<Receipt>>;
@@ -100,6 +95,8 @@ export interface WorkspaceController {
   cancelConnection(): void;
   exportArtifact(input: unknown): Promise<Result<BinaryResponse>>;
   report(error: Diagnostic): void;
+  /** Show a failure the Canvas reported, kept as Canvas's own. */
+  reportCanvas(error: CanvasDiagnostic): void;
   applyMove(optionId: string): Promise<void>;
   chooseMoveOption(optionId: string): void;
   cancelMove(): void;

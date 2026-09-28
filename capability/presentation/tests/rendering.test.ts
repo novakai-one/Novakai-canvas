@@ -124,13 +124,20 @@ it('9 shares escaped React markup and pinned fonts across every local shape', as
 });
 
 /** Independent bounding-box oracle includes font ascent/descent rather than only SVG metadata. */
-function assertContained(node: VisualNode, metrics: MeasurementPort): void {
+function assertContained(
+  node: VisualNode,
+  metrics: MeasurementPort,
+): void {
   node.content.primitives
     .filter((item) => item.kind === 'text')
     .forEach((run) => assertRun(node, run, metrics));
 }
 /** Every text rectangle must fit its measured node; diamond corners satisfy its normalized half-plane. */
-function assertRun(node: VisualNode, run: TextRun, metrics: MeasurementPort): void {
+function assertRun(
+  node: VisualNode,
+  run: TextRun,
+  metrics: MeasurementPort,
+): void {
   const font = value(metrics.measure(run.text, run.font, run.size));
   const corners = [
     { x: run.x, y: run.y - font.ascent },
@@ -141,7 +148,10 @@ function assertRun(node: VisualNode, run: TextRun, metrics: MeasurementPort): vo
   corners.forEach((point) => assertCorner(node, point));
 }
 /** Frame-specific geometry is asserted without calling production sizing helpers. */
-function assertCorner(node: VisualNode, point: { readonly x: number; readonly y: number }): void {
+function assertCorner(
+  node: VisualNode,
+  point: { readonly x: number; readonly y: number },
+): void {
   expect(point.x).toBeGreaterThanOrEqual(0);
   expect(point.y).toBeGreaterThanOrEqual(0);
   expect(point.x).toBeLessThanOrEqual(node.width);

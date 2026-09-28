@@ -9,7 +9,10 @@ export function colorByte(channel: number): string {
     .padStart(2, '0');
 }
 /** Canonical hex preserves exactly the bytes accepted by Templates and Presentation. */
-function colorValue(value: unknown, path: string): TokenValue {
+function colorValue(
+  value: unknown,
+  path: string,
+): TokenValue {
   const color = parsed(componentColor, value, path);
   const rgb = color.components.map(colorByte).join('');
   const alpha = colorByte(color.alpha);
@@ -17,7 +20,10 @@ function colorValue(value: unknown, path: string): TokenValue {
   return { type: 'color', value: '#' + rgb + alpha };
 }
 /** Approved aliases or admitted family names remain data; CSS serialization adds quoting. */
-function fontValue(value: unknown, path: string): TokenValue {
+function fontValue(
+  value: unknown,
+  path: string,
+): TokenValue {
   const values = typeof value === 'string' ? [value] : list(value, path);
   const families = values.map((item) => text(item, path));
   if (!families.length)
@@ -26,7 +32,10 @@ function fontValue(value: unknown, path: string): TokenValue {
   return { type: 'fontFamily', value: families };
 }
 /** Font strings cannot contain CSS syntax; exact approval is checked at scope resolution. */
-function checkFamily(family: string, path: string): void {
+function checkFamily(
+  family: string,
+  path: string,
+): void {
   if (!/^[A-Za-z][A-Za-z0-9 -]{0,127}$/.test(family))
     reject('missing-font', path, 'safe approved family', 'Unsafe font family');
 }
@@ -38,17 +47,27 @@ const readers: Readonly<Record<TokenType, (value: unknown, path: string) => Toke
   fontFamily: fontValue,
 };
 /** Decode supported DTCG literal types; facade catches structured failures. */
-export function readLiteral(type: TokenType, value: unknown, path: string): TokenValue {
+export function readLiteral(
+  type: TokenType,
+  value: unknown,
+  path: string,
+): TokenValue {
   return readers[type](value, path);
 }
 /** Numeric extraction keeps dimensions and scalar recipes distinct. */
-export function numeric(value: TokenValue, path: string): number {
+export function numeric(
+  value: TokenValue,
+  path: string,
+): number {
   if (typeof value.value !== 'number')
     return reject('type-mismatch', path, 'numeric value', 'Expected numeric token');
   return value.value;
 }
 /** Require a color rather than coercing another primitive to CSS. */
-export function colorText(value: TokenValue, path: string): string {
+export function colorText(
+  value: TokenValue,
+  path: string,
+): string {
   if (value.type !== 'color') return reject('type-mismatch', path, 'color', 'Expected color token');
   return value.value;
 }

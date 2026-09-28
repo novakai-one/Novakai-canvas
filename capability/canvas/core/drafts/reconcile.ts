@@ -3,6 +3,7 @@ import type { SessionState, Transition } from '../../contract/records/state.js';
 import type { RecoverableDraft } from '../../contract/records/draft.js';
 import type { SceneAdmission } from '../../contract/ports/scene-admission.js';
 import type { EventOf } from '../../contract/events.js';
+import type { GestureId } from '../../contract/brands.js';
 import { sameStamp, admitScene } from '../scenes/accept.js';
 import { indexScene } from '../scenes/index.js';
 import { refreshReadingOrder } from '../scenes/reading.js';
@@ -58,7 +59,11 @@ function reconcileScene(
   ]);
 }
 /** Definitive rejection changes only the matching retained gesture; later drafts cannot be cleared accidentally. */
-export function rejectDraft(state: SessionState, id: string, message: string): SessionState {
+export function rejectDraft(
+  state: SessionState,
+  id: GestureId,
+  message: string,
+): SessionState {
   const recovery = state.recovery.map((entry): RecoverableDraft => {
     if (entry.draft.id !== id) return entry;
     return { ...entry, reason: 'rejected', message };
@@ -70,7 +75,10 @@ export function rejectDraft(state: SessionState, id: string, message: string): S
   };
 }
 /** Receipt confirmation and explicit discard remove a single matching recovery copy; replay is harmless. */
-export function removeRecovery(state: SessionState, id: string): SessionState {
+export function removeRecovery(
+  state: SessionState,
+  id: GestureId,
+): SessionState {
   return {
     ...state,
     recovery: state.recovery.filter((entry) => entry.draft.id !== id),
@@ -79,7 +87,10 @@ export function removeRecovery(state: SessionState, id: string): SessionState {
 }
 
 /** A removed target is retained as recovery data only; it cannot be projected onto an unrelated replacement scene. */
-function draftSurvives(state: SessionState, index: SessionState['index']): boolean {
+function draftSurvives(
+  state: SessionState,
+  index: SessionState['index'],
+): boolean {
   const draft = state.draft;
   if (draft === null) return true;
   const targets =
@@ -88,7 +99,10 @@ function draftSurvives(state: SessionState, index: SessionState['index']): boole
 }
 
 /** Scene replacement classifies a removed gesture target distinctly while preserving the full recovery payload. */
-function retainForScene(state: SessionState, index: SessionState['index']): SessionState {
+function retainForScene(
+  state: SessionState,
+  index: SessionState['index'],
+): SessionState {
   const reason = draftSurvives(state, index) ? 'scene-changed' : 'target-removed';
   return retainActive(state, reason, 'The collection changed during your gesture');
 }

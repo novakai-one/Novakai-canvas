@@ -41,7 +41,10 @@ function disposed(): Result<never> {
 /** Session owns ephemeral state and subscriptions. Repeated edit IDs replay without effects; conflicting reuse rejects.
  * Host drains effects, reconciles durable Authoring receipts, and persists recoverable drafts before closing.
  */
-export function createStore(reducer: SessionReducer, initial: SessionState): SessionStore {
+export function createStore(
+  reducer: SessionReducer,
+  initial: SessionState,
+): SessionStore {
   let state = initial;
   let pointer: PointerGesture | null = null;
   let preview: DragPreview | null = null;

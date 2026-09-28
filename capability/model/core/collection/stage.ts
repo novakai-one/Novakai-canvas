@@ -9,36 +9,84 @@ import { failure, success, rejected } from '../invariants/issues.js';
 import { freeze } from '../invariants/freeze.js';
 import { applyOperation } from './operations.js';
 
-/** Stop after the first failed structural operation; never apply to a rejected prefix. */
-function applyNextOperation(current: Result<Collection>, change: Change): Result<Collection> {
-  if (!current.ok) return current;
-  return applyOperation(current.value, change);
-}
-/** Check operation shapes once, then expose their exact ordered structural effects to the compiler. */
-function applyCheckedChanges(before: Collection, changes: unknown): Result<ChangeStage> {
-  const parsed = changesSchema.safeParse(changes);
-  if (!parsed.success) return rejected(shapeErrors(parsed.error.issues));
-  const applied = parsed.data.reduce(applyNextOperation, success(before));
-  if (!applied.ok) return applied;
-  return success({ validity: 'unchecked', candidate: applied.value, changes: parsed.data });
-}
-/** A valid original is mandatory; only intermediate dependency completeness may be deferred. */
-function inspectStageInputs(snapshot: unknown, changes: unknown): Result<ChangeStage> {
-  const before = validateCollection(snapshot);
-  if (!before.ok) return before;
-  const inspected = inspectInput(changes);
-  if (!inspected.ok) return inspected;
-  return applyCheckedChanges(before.value, changes);
-}
 /**
- * Return detached checked operations and an explicitly unchecked candidate. Unresolved final references
- * are permitted here; consumers must call plan for validity. Pure replay, no revision allocation or I/O.
- * Language owns syntax correction; Authoring owns final admission, commit and recovery.
+ * Stages a change batch without the final validity check, for the language compiler. Published
+ * as Model's `stage`. Steps, stopping at the first failure and returning its diagnostics:
+ * 1. validate the snapshot as a collection (see `validateCollection`); a valid snapshot is
+ *    always required;
+ * 2. inspect the changes as plain JSON data (see `inspectInput`);
+ * 3. parse them with the changes schema (at most 1,000 changes; every schema issue is reported,
+ *    see `shapeErrors`);
+ * 4. apply them in order (see `applyOperation`), stopping at the first failing change; later
+ *    changes are not applied to a failed prefix.
+ *
+ * The candidate's references may be unresolved; only `plan` proves validity. Steps 1 and 2 turn
+ * their own throws into failures and reject accessors before they run; a throw that still
+ * escapes (for example from a proxy trap during parsing or applying) becomes `shape` at
+ * `changes`, "Input could not be read as plain data".
+ *
+ * Pure: no revision is allocated and nothing is written. Language owns correcting syntax;
+ * Authoring owns final admission, commit and crash recovery.
+ *
+ * @param snapshot - The current collection data.
+ * @param changes - The ordered changes.
+ * @returns `{ validity: 'unchecked', candidate, changes }` with the candidate and the parsed
+ * (detached) changes, or `validation-failed`. Either outcome is deeply frozen.
+ * @throws Never.
  */
-export function stageChanges(snapshot: unknown, changes: unknown): Result<ChangeStage> {
+export function stageChanges(
+  snapshot: unknown,
+  changes: unknown,
+): Result<ChangeStage> {
   try {
     return freeze(inspectStageInputs(snapshot, changes));
   } catch {
     return freeze(failure('shape', 'changes', 'Input could not be read as plain data'));
   }
+}
+
+/** Validates the snapshot, then inspects the changes as plain data, then applies them. */
+function inspectStageInputs(
+  snapshot: unknown,
+  changes: unknown,
+): Result<ChangeStage> {
+  const before = validateCollection(snapshot);
+  if (!before.ok) {
+    return before;
+  }
+  const inspected = inspectInput(changes);
+  if (!inspected.ok) {
+    return inspected;
+  }
+  return applyCheckedChanges(before.value, changes);
+}
+
+/**
+ * Parses the changes once with the changes schema, then applies them in order to the snapshot.
+ * Returns the unchecked candidate with the parsed changes.
+ */
+function applyCheckedChanges(
+  before: Collection,
+  changes: unknown,
+): Result<ChangeStage> {
+  const parsed = changesSchema.safeParse(changes);
+  if (!parsed.success) {
+    return rejected(shapeErrors(parsed.error.issues));
+  }
+  const applied = parsed.data.reduce(applyNextOperation, success(before));
+  if (!applied.ok) {
+    return applied;
+  }
+  return success({ validity: 'unchecked', candidate: applied.value, changes: parsed.data });
+}
+
+/** Applies one change to the result so far; once a change has failed, keeps that failure. */
+function applyNextOperation(
+  current: Result<Collection>,
+  change: Change,
+): Result<Collection> {
+  if (!current.ok) {
+    return current;
+  }
+  return applyOperation(current.value, change);
 }

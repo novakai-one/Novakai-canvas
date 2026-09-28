@@ -1,40 +1,25 @@
-/** Service public boundary. Web and CLI use checked requests; Authoring remains the sole mutation authority. */
+/*
+ * Why this file exists
+ *
+ * The web app and the CLI use the service, but they may import only from `@novakai/canvas-service`,
+ * and that name points here. For example, the CLI calls `readAgentCredential` to find its token,
+ * and both check every service answer with `transportResponse`. The web app also checks stored
+ * generations with `generation`; the CLI checks `canvas inspect` answers with `inspectionReport`.
+ *
+ * This file lists everything they may import: a few functions and checks, the types those return,
+ * and the failure types the web keeps (`ErrorCode`, `CapabilityFailure`). Anything else is private
+ * to the service. The service's own start files in `cli/` import `compose.ts` instead.
+ */
+export { projectCollection, validReport } from './api.js';
+export { prepareBuiltins, readAgentCredential, createHeadlessBindings } from './compose.js';
+export { transportResponse } from './records/transport/protocol.js';
+export type { TransportResponse } from './records/transport/protocol.js';
+export type { CapabilityFailure } from './records/transport/failure-source.js';
+export { renderDocumentMessage } from './records/rendering/worker.js';
+export type { RenderingJob, RenderDocument } from './records/rendering/job.js';
+export { inspectionReport } from './records/rendering/inspection.js';
+export type { InspectionReport } from './records/rendering/inspection.js';
+export type { PreparedBuiltins } from './records/presets/builtins.js';
 export type { Result, Diagnostic, ErrorCode } from './errors.js';
-
-export { runRenderWorker, createDiagramProducer } from './compose.js';
-export type { RenderingJob, RenderDocument } from './records/rendering.js';
-export { renderEnvelope } from './records/worker.js';
-export { inspectionReport } from './records/inspection.js';
-export type { InspectionReport } from './records/inspection.js';
-
-export { prepareInstallation } from './compose.js';
-
-export { openWorkspace } from './compose.js';
-export { serveWorkspace } from './compose.js';
-export { readAgentCredential } from './compose.js';
-export type { ServerOptions, LocalServer, BodyStream } from './records/server.js';
-export { createWorkspaceSession } from './api.js';
-export type { WorkspaceSession, SessionDependencies } from './types.js';
-export type { WorkspaceOptions } from './records/startup.js';
-export { createHttpAdmission } from './api.js';
-export type {
-  Caller,
-  HttpMetadata,
-  HttpSecurity,
-  HttpAdmission,
-  MutationOwner,
-} from './records/http.js';
-export { httpBodyLimit, browserCookieName } from './records/http.js';
-export { readCommand } from './api.js';
-export { responseEnvelope } from './records/protocol.js';
-export type { TransportResponse } from './records/protocol.js';
-export type {
-  CommandAdmission,
-  AdmittedMutation,
-  ApiCall,
-  ApiRouter,
-  WireOutcome,
-} from './records/protocol.js';
-
-export { projectCollection } from './api.js';
-export { createHeadlessBindings } from './compose.js';
+export { hostPath, generation } from './brands.js';
+export type { Generation } from './brands.js';

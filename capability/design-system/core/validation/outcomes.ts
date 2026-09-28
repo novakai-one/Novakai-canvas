@@ -1,6 +1,11 @@
 import { TokenFault, type Result, type ErrorCode } from '../../contract/errors.js';
 /** Reject one invalid token boundary; public Design System operations own recovery. */
-export function reject(code: ErrorCode, path: string, expected: string, message: string): never {
+export function reject(
+  code: ErrorCode,
+  path: string,
+  expected: string,
+  message: string,
+): never {
   throw new TokenFault({
     code,
     path,

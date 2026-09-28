@@ -17,7 +17,10 @@ function wirePath(points: readonly Point[]): string {
   return points.map((point, index) => `${index === 0 ? 'M' : 'L'}${point.x} ${point.y}`).join(' ');
 }
 /** Marker local +x faces toward its endpoint; source and target have opposite route tangents. */
-function endpointTransform(point: Point, neighbor: Point): string {
+function endpointTransform(
+  point: Point,
+  neighbor: Point,
+): string {
   const angle = (Math.atan2(point.y - neighbor.y, point.x - neighbor.x) * 180) / Math.PI;
   return `translate(${point.x} ${point.y}) rotate(${angle}) translate(-26 -8)`;
 }
@@ -54,12 +57,22 @@ function pulseVisible(view: ViewWire): boolean {
   return !view.draft && (view.hovered === true || highlighted(view));
 }
 /** Coincident endpoints cannot define a gradient direction; keep their actual paint. */
-function directedStroke(id: string, fallback: string, first: Point, last: Point): string {
+function directedStroke(
+  id: string,
+  fallback: string,
+  first: Point,
+  last: Point,
+): string {
   if (first.x === last.x && first.y === last.y) return fallback;
   return `url(#${id}) ${fallback}`;
 }
 /** Selection uses the accent gradient while supporting routes keep their neutral flow. */
-function traceStroke(view: ViewWire, id: string, first: Point, last: Point): string {
+function traceStroke(
+  view: ViewWire,
+  id: string,
+  first: Point,
+  last: Point,
+): string {
   if (view.emphasis === 'primary')
     return directedStroke(`${id}-accent`, 'var(--nv-action-accent)', first, last);
   return directedStroke(id, view.wire.appearance.paint.stroke, first, last);
@@ -74,16 +87,28 @@ function useDragPreview(data: EdgeData | undefined): DragPreview | null {
     return touches ? preview : null;
   });
 }
-function shift(point: Point, delta: Point, moves: boolean): Point {
+function shift(
+  point: Point,
+  delta: Point,
+  moves: boolean,
+): Point {
   return moves ? { x: point.x + delta.x, y: point.y + delta.y } : point;
 }
 /** Every point follows when both ends move; otherwise only the moving end's point. */
-function followsDrag(index: number, last: number, source: boolean, target: boolean): boolean {
+function followsDrag(
+  index: number,
+  last: number,
+  source: boolean,
+  target: boolean,
+): boolean {
   if (source && target) return true;
   return [source, target][[0, last].indexOf(index)] === true;
 }
 /** Same as the drop preview: both ends moving translates the route; one end moving stretches it. */
-function draggedView(view: ViewWire, preview: DragPreview): ViewWire {
+function draggedView(
+  view: ViewWire,
+  preview: DragPreview,
+): ViewWire {
   const source = preview.moved.has(view.sourceId);
   const target = preview.moved.has(view.targetId);
   const wire = view.wire;

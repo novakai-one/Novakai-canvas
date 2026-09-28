@@ -5,7 +5,11 @@ import type { TextRequest } from '../../contract/types.js';
 import { content as contentSchema } from '../../contract/records/visual.js';
 import { requireValue, reject, parse } from '../validation/outcomes.js';
 /** Exact font metrics are checked before they can become layout geometry. */
-function measure(text: string, request: TextRequest, metrics: MeasurementPort): TextMetrics {
+function measure(
+  text: string,
+  request: TextRequest,
+  metrics: MeasurementPort,
+): TextMetrics {
   const value = requireValue(metrics.measure(text, request.font, request.size));
   if (
     ![value.width, value.ascent, value.descent].every(
@@ -38,7 +42,11 @@ function fittingEnd(
   return Math.max(start + 1, low);
 }
 /** A word boundary is preferred, while an overlong identifier splits between whole graphemes. */
-function wordEnd(units: readonly string[], start: number, end: number): number {
+function wordEnd(
+  units: readonly string[],
+  start: number,
+  end: number,
+): number {
   if (end === units.length) return end;
   const space = units.slice(start, end).lastIndexOf(' ');
   return space > 0 ? start + space + 1 : end;
@@ -91,7 +99,10 @@ function run(
   };
 }
 /** Marker-free text shapes whole candidate strings exactly as before; no run splitting is introduced. */
-function measurePlain(request: TextRequest, metrics: MeasurementPort): MeasuredContent {
+function measurePlain(
+  request: TextRequest,
+  metrics: MeasurementPort,
+): MeasuredContent {
   const lines = request.text.split('\n').flatMap((text) => paragraph(text, request, metrics));
   if (lines.length > 10000) return reject('limit', 'text', 'Text exceeds 10000 lines');
   return parse(contentSchema, finishPlain(lines, request, metrics));
@@ -150,22 +161,36 @@ function measureFont(
   return measure(text, { ...request, font }, metrics);
 }
 /** Paired `*…*` spans select the strong face; unpaired markers never reach this path. */
-function pieces(text: string, request: TextRequest): readonly Piece[] {
+function pieces(
+  text: string,
+  request: TextRequest,
+): readonly Piece[] {
   const parts = text.replaceAll('\\*', ESCAPED).split('*');
   return parts.flatMap((part, index) => piece(part, index, request));
 }
 /** Empty spans vanish; odd split indices carry the strong face. */
-function piece(text: string, index: number, request: TextRequest): readonly Piece[] {
+function piece(
+  text: string,
+  index: number,
+  request: TextRequest,
+): readonly Piece[] {
   const value = text.replaceAll(ESCAPED, '*');
   if (value === '') return [];
   return [{ text: value, font: pieceFont(index, request) }];
 }
 /** Alternating spans index the body/strong pair; the strong face is checked on this path. */
-function pieceFont(index: number, request: TextRequest): FontRef {
+function pieceFont(
+  index: number,
+  request: TextRequest,
+): FontRef {
   return [request.font, request.strong ?? request.font][index % 2] ?? request.font;
 }
 /** A span becomes measured word/space atoms; every token is shaped once under its own font. */
-function words(piece: Piece, request: TextRequest, metrics: MeasurementPort): readonly Token[] {
+function words(
+  piece: Piece,
+  request: TextRequest,
+  metrics: MeasurementPort,
+): readonly Token[] {
   return piece.text.split(/( )/).flatMap((part) => token(part, piece.font, request, metrics));
 }
 /** Atoms are measured under their own face; nothing indivisible is clipped. */
@@ -188,7 +213,11 @@ function token(
   );
 }
 /** Words wider than the measure band pre-split into graphemes. */
-function split(atom: Token, request: TextRequest, metrics: MeasurementPort): readonly Token[] {
+function split(
+  atom: Token,
+  request: TextRequest,
+  metrics: MeasurementPort,
+): readonly Token[] {
   if (atom.space || atom.metrics.width <= request.width) return [atom];
   return graphemes(atom.text).map((char) => ({
     ...atom,
@@ -197,14 +226,21 @@ function split(atom: Token, request: TextRequest, metrics: MeasurementPort): rea
   }));
 }
 /** Keep a fitting candidate on its line; overflow breaks before the offending atom. */
-function appendToken(state: TokenLines, next: Token, width: number): TokenLines {
+function appendToken(
+  state: TokenLines,
+  next: Token,
+  width: number,
+): TokenLines {
   const candidate = sumWidths(state.current) + next.metrics.width;
   if (candidate <= width || state.current.length === 0)
     return { ...state, current: [...state.current, next] };
   return breakToken(state, next);
 }
 /** Prefer the last word boundary; unbroken identifiers split only between complete graphemes. */
-function breakToken(state: TokenLines, next: Token): TokenLines {
+function breakToken(
+  state: TokenLines,
+  next: Token,
+): TokenLines {
   const boundary = state.current.findLastIndex((token) => token.space);
   if (boundary > 0)
     return {
@@ -241,13 +277,19 @@ function fontGroups(tokens: readonly Token[]): readonly (readonly Token[])[] {
   );
 }
 /** Same-face atoms extend the open run; a face change opens a new run. */
-function join(groups: readonly (readonly Token[])[], token: Token): readonly (readonly Token[])[] {
+function join(
+  groups: readonly (readonly Token[])[],
+  token: Token,
+): readonly (readonly Token[])[] {
   const last = groups.at(-1);
   if (last !== undefined && sameFont(last, token.font)) return extend(groups, last, token);
   return [...groups, [token]];
 }
 /** The open run's face is its first atom's face. */
-function sameFont(group: readonly Token[], font: FontRef): boolean {
+function sameFont(
+  group: readonly Token[],
+  font: FontRef,
+): boolean {
   return group[0]?.font === font;
 }
 /** The extended run replaces the open run at the end of the group list. */
@@ -259,7 +301,12 @@ function extend(
   return [...groups.slice(0, -1), [...last, token]];
 }
 /** A final run stores the actual shaped width, advance and baseline used by both renderers. */
-function tokenRun(tokens: readonly Token[], x: number, y: number, request: TextRequest): TextRun {
+function tokenRun(
+  tokens: readonly Token[],
+  x: number,
+  y: number,
+  request: TextRequest,
+): TextRun {
   return {
     kind: 'text',
     text: tokens.map((token) => token.text).join(''),
@@ -305,7 +352,10 @@ function emptyRun(
   };
 }
 /** Emphasis text wraps and measures per run; renderer consumes these exact runs. */
-function measureEmphasis(request: TextRequest, metrics: MeasurementPort): MeasuredContent {
+function measureEmphasis(
+  request: TextRequest,
+  metrics: MeasurementPort,
+): MeasuredContent {
   const lines = request.text
     .split('\n')
     .flatMap((text) => tokenParagraph(pieces(text, request), request, metrics));
@@ -334,13 +384,20 @@ function finishEmphasis(
   };
 }
 /** Wrap and measure once. Renderer consumes these exact runs; Authoring owns preview rejection/retry. */
-export function measureText(request: TextRequest, metrics: MeasurementPort): MeasuredContent {
+export function measureText(
+  request: TextRequest,
+  metrics: MeasurementPort,
+): MeasuredContent {
   checkRequest(request);
   if (!hasEmphasis(request)) return measurePlain(request, metrics);
   return measureEmphasis(request, metrics);
 }
 /** Move measured local content by an explicit typography offset; this is not global diagram layout. */
-export function offset(content: MeasuredContent, x: number, y: number): MeasuredContent {
+export function offset(
+  content: MeasuredContent,
+  x: number,
+  y: number,
+): MeasuredContent {
   return {
     ...content,
     primitives: content.primitives.map((item) => movePrimitive(item, x, y)),
@@ -358,7 +415,10 @@ function movePrimitive(
   return { ...item, x: item.x + x, y: item.y + y };
 }
 /** Ordered blocks share one vertical flow; their explicit local anchors move with the same content. */
-export function stack(contents: readonly MeasuredContent[], gap: number): MeasuredContent {
+export function stack(
+  contents: readonly MeasuredContent[],
+  gap: number,
+): MeasuredContent {
   const positioned = contents.reduce<readonly MeasuredContent[]>(
     (result, content) => appendContent(result, content, gap),
     [],
@@ -381,12 +441,18 @@ function appendContent(
   return [...result, offset(content, 0, y)];
 }
 /** No leading gap; empty composition has exactly zero height. */
-function gapBefore(contents: readonly MeasuredContent[], gap: number): number {
+function gapBefore(
+  contents: readonly MeasuredContent[],
+  gap: number,
+): number {
   if (contents.length === 0) return 0;
   return gap;
 }
 /** Intrinsic heights remain additive regardless of primitive positions. */
-function stackHeight(contents: readonly MeasuredContent[], gap: number): number {
+function stackHeight(
+  contents: readonly MeasuredContent[],
+  gap: number,
+): number {
   return (
     contents.reduce((height, item) => height + item.height, 0) +
     Math.max(0, contents.length - 1) * gap

@@ -8,7 +8,10 @@ function radius(node: VisualNode): number {
   return node.radius;
 }
 /** Media-led frame-free cards exhibit on an ambient halo plus floor shadow; static export stays flat. */
-function haloEligible(node: VisualNode, classes?: NodeRenderClasses): boolean {
+function haloEligible(
+  node: VisualNode,
+  classes?: NodeRenderClasses,
+): boolean {
   return classes !== undefined && node.frame === 'none' && mediaBounds(node) !== undefined;
 }
 /** Per-node halo identity follows the established chrome paint-server pattern. */
@@ -33,7 +36,10 @@ function mediaBounds(
   };
 }
 /** Soft radial token glow behind the media band and a squashed floor shadow at the node base. */
-function halo(node: VisualNode, classes?: NodeRenderClasses): ReactElement | null {
+function halo(
+  node: VisualNode,
+  classes?: NodeRenderClasses,
+): ReactElement | null {
   if (!haloEligible(node, classes)) return null;
   const bounds = mediaBounds(node);
   if (bounds === undefined) return null;
@@ -77,12 +83,18 @@ function halo(node: VisualNode, classes?: NodeRenderClasses): ReactElement | nul
   );
 }
 /** Diamond bounds expand around the measured inscribed content rectangle. */
-function frame(node: VisualNode, classes?: NodeRenderClasses): ReactElement | null {
+function frame(
+  node: VisualNode,
+  classes?: NodeRenderClasses,
+): ReactElement | null {
   if (node.frame === 'none') return null;
   return visibleFrame(node, classes);
 }
 /** Neutral browser frames carry their own paint server: SVG fill cannot use CSS gradients, and static export keeps flat paint. */
-function gradientEligible(node: VisualNode, classes?: NodeRenderClasses): boolean {
+function gradientEligible(
+  node: VisualNode,
+  classes?: NodeRenderClasses,
+): boolean {
   return (
     classes !== undefined &&
     node.followsInterfaceRoles === true &&
@@ -99,19 +111,28 @@ function edgeGradientId(node: VisualNode): string {
   return `node-edge-${node.id}`;
 }
 /** Eligible frames paint the token gradient with the flat projection fill as fallback. */
-function frameFill(node: VisualNode, classes?: NodeRenderClasses): string {
+function frameFill(
+  node: VisualNode,
+  classes?: NodeRenderClasses,
+): string {
   return gradientEligible(node, classes)
     ? `url(#${surfaceGradientId(node)}) ${node.paint.fill}`
     : node.paint.fill;
 }
 /** Eligible frames stroke a top-to-bottom edge light with the flat projection stroke as fallback. */
-function frameStroke(node: VisualNode, classes?: NodeRenderClasses): string {
+function frameStroke(
+  node: VisualNode,
+  classes?: NodeRenderClasses,
+): string {
   return gradientEligible(node, classes)
     ? `url(#${edgeGradientId(node)}) ${node.paint.stroke}`
     : node.paint.stroke;
 }
 /** Vertical top-to-bottom token gradient; stop colors resolve against the installed scope. */
-function surfaceGradient(node: VisualNode, classes?: NodeRenderClasses): ReactElement | null {
+function surfaceGradient(
+  node: VisualNode,
+  classes?: NodeRenderClasses,
+): ReactElement | null {
   if (!gradientEligible(node, classes)) return null;
   return (
     <defs>
@@ -127,7 +148,10 @@ function surfaceGradient(node: VisualNode, classes?: NodeRenderClasses): ReactEl
   );
 }
 /** Explicit cards/panels use rounded regions; auto retains semantic shape notation. */
-function visibleFrame(node: VisualNode, classes?: NodeRenderClasses): ReactElement {
+function visibleFrame(
+  node: VisualNode,
+  classes?: NodeRenderClasses,
+): ReactElement {
   if (node.shape === 'diamond' && node.frame === 'auto')
     return (
       <polygon
@@ -153,14 +177,20 @@ function visibleFrame(node: VisualNode, classes?: NodeRenderClasses): ReactEleme
   );
 }
 /** Engineering notation has a distinct title compartment; ordinary process cards retain their simpler frame. */
-function headerRule(node: VisualNode, classes?: NodeRenderClasses): ReactElement | null {
+function headerRule(
+  node: VisualNode,
+  classes?: NodeRenderClasses,
+): ReactElement | null {
   if (node.frame !== 'auto') return null;
   return semanticHeaderRule(node, classes);
 }
 /** Compartment cards keep left-aligned compartments under a separator; panel containers keep left-aligned tab titles. */
 const COMPARTMENT_SHAPES: readonly string[] = ['entity', 'module', 'interface', 'function'];
 /** Only kind-appropriate auto frames receive a separator, after the measured heading region. */
-function semanticHeaderRule(node: VisualNode, classes?: NodeRenderClasses): ReactElement | null {
+function semanticHeaderRule(
+  node: VisualNode,
+  classes?: NodeRenderClasses,
+): ReactElement | null {
   if (!COMPARTMENT_SHAPES.includes(node.shape)) return null;
   if (node.height <= node.headerHeight) return null;
   return (
@@ -177,7 +207,10 @@ function semanticHeaderRule(node: VisualNode, classes?: NodeRenderClasses): Reac
   );
 }
 /** Browser-only header paint adds hierarchy without changing measured bounds or static output. */
-function header(node: VisualNode, classes?: NodeRenderClasses): ReactElement | null {
+function header(
+  node: VisualNode,
+  classes?: NodeRenderClasses,
+): ReactElement | null {
   if (classes === undefined || node.frame !== 'auto') return null;
   if (!COMPARTMENT_SHAPES.includes(node.shape)) return null;
   const corner = Math.min(radius(node), node.headerHeight / 2);
@@ -185,7 +218,10 @@ function header(node: VisualNode, classes?: NodeRenderClasses): ReactElement | n
   return <path className={classes.header} d={path} />;
 }
 /** The top-facing rim catches light without outlining the entire body a second time. */
-function rim(node: VisualNode, classes?: NodeRenderClasses): ReactElement | null {
+function rim(
+  node: VisualNode,
+  classes?: NodeRenderClasses,
+): ReactElement | null {
   if (classes === undefined || node.frame === 'none' || node.shape === 'diamond') return null;
   const inset = node.strokeWidth / 2;
   return (
@@ -197,7 +233,10 @@ function rim(node: VisualNode, classes?: NodeRenderClasses): ReactElement | null
   );
 }
 /** Comet ring: a normalized-perimeter outline the primary-selection CSS animates; hidden by default. */
-function ring(node: VisualNode, classes?: NodeRenderClasses): ReactElement | null {
+function ring(
+  node: VisualNode,
+  classes?: NodeRenderClasses,
+): ReactElement | null {
   if (classes === undefined || node.frame === 'none' || node.shape === 'diamond') return null;
   const r = radius(node);
   const w = node.width;

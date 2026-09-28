@@ -31,7 +31,10 @@ export interface BodySelection {
   readonly complete: boolean;
 }
 /** Measure selected rows against columns derived only from those visible rows. */
-function measureBody(selection: BodySelection, context: ContentContext): MeasuredContent {
+function measureBody(
+  selection: BodySelection,
+  context: ContentContext,
+): MeasuredContent {
   const scoped = { ...context, fields: fieldColumns(selection.content, context) };
   const blocks = [
     ...selection.content.map((block) => measureBlock(block, scoped)),
@@ -44,13 +47,19 @@ function collapsed(anchor: Anchor): Anchor {
   return { ...anchor, x: 0, y: 0, collapsed: true };
 }
 /** Visible summary rows retain measured row anchors; only omitted descendants collapse. */
-function visibleAnchor(anchor: Anchor, visible: MeasuredContent): Anchor {
+function visibleAnchor(
+  anchor: Anchor,
+  visible: MeasuredContent,
+): Anchor {
   const found = visible.anchors.find((item) => item.member === anchor.member);
   if (found) return found;
   return collapsed(anchor);
 }
 /** Compact detail keeps canonical outline/anchors while visible geometry stays independently measured. */
-function compact(visible: MeasuredContent, canonical: MeasuredContent): MeasuredContent {
+function compact(
+  visible: MeasuredContent,
+  canonical: MeasuredContent,
+): MeasuredContent {
   return {
     ...visible,
     anchors: canonical.anchors.map((anchor) => visibleAnchor(anchor, visible)),
@@ -68,7 +77,10 @@ export function measureNodeBody(
   return compact(visible, measureBody(fullBody(object), context));
 }
 /** Derive one visible-body policy for sizing and final measurement. */
-export function visibleBody(object: DiagramObject, mode: Appearance['detail']): BodySelection {
+export function visibleBody(
+  object: DiagramObject,
+  mode: Appearance['detail'],
+): BodySelection {
   if (mode === 'full') return fullBody(object);
   if (mode === 'label') return { content: [], ports: [], complete: false };
   return summaryBody(object);

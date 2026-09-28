@@ -13,7 +13,10 @@ import { printSection } from './views.js';
 import { manualSummary } from './geometry.js';
 import { selectScope } from './scope.js';
 /** Validate unknown persisted data before printing; unsupported fields never silently disappear. */
-export function printCollection(request: PrintRequest, reader: ModelReader): Readout {
+export function printCollection(
+  request: PrintRequest,
+  reader: ModelReader,
+): Readout {
   const collection = ownerValue(reader.validate(request.collection), [], origin);
   const selected = selectScope(collection, request.scope);
   const source = readSource(withHeading(printEnvelope(selected, request.scope), request.heading));
@@ -27,7 +30,10 @@ export function printCollection(request: PrintRequest, reader: ModelReader): Rea
   };
 }
 /** A view envelope is structurally non-authorable; revision remains outside full canvas source. */
-function printEnvelope(collection: Collection, scope: Scope): string {
+function printEnvelope(
+  collection: Collection,
+  scope: Scope,
+): string {
   const contents = printDeclarations(collection);
   if (scope.kind !== 'all')
     return body(
@@ -123,7 +129,10 @@ function assetKind(mediaType: string): string {
 }
 
 /** Optional display headings remain comments even when they contain line breaks. */
-function withHeading(source: string, heading: string | undefined): string {
+function withHeading(
+  source: string,
+  heading: string | undefined,
+): string {
   if (heading === undefined) return source;
   return `# ${heading.replace(/\n/g, '\n# ')}\n${source}`;
 }

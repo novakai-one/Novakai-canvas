@@ -12,7 +12,10 @@ const sections: readonly SectionSpec[] = [
   { number: 3, nodes: nodeSpecs(11, 6), children: [] },
   { number: 4, nodes: nodeSpecs(17, 6), children: [] },
 ];
-function nodeSpecs(first: number, count: number): readonly NodeSpec[] {
+function nodeSpecs(
+  first: number,
+  count: number,
+): readonly NodeSpec[] {
   return Array.from({ length: count }, (_, i) => ({
     number: first + i,
     label: `Node ${first + i}`,

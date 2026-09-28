@@ -877,7 +877,11 @@ describe('Presentation measured content', () => {
 });
 
 /** Capacity collections distribute appearances and wires across sections without changing semantic limits. */
-function capacityCollection(sectionCount: number, objectCount: number, wireCount: number): unknown {
+function capacityCollection(
+  sectionCount: number,
+  objectCount: number,
+  wireCount: number,
+): unknown {
   const ids = Array.from({ length: objectCount }, (_, index) => `n${index}`);
   const relationships = Array.from({ length: wireCount }, (_, index) => ({
     id: `w${index}`,

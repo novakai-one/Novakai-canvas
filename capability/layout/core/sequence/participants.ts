@@ -38,7 +38,10 @@ function pair(
   ];
 }
 /** A tuple's two known participant IDs form one explicit horizontal ordering constraint. */
-function participantOrder(ids: readonly [string, string], gap: number): LinearConstraint {
+function participantOrder(
+  ids: readonly [string, string],
+  gap: number,
+): LinearConstraint {
   const first = ids[0];
   const second = ids[1];
   return before(`${first}:${second}:participant-order`, first, second, 'x', gap, 'required');

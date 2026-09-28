@@ -129,12 +129,20 @@ function laneCheckpoints(
   return [source, { x, y: source.y }, { x, y: target.y }, target];
 }
 /** Bottom departures stay below the row; other horizontal lanes use its upper boundary. */
-function horizontalLane(side: Connection['sourceSide'], bounds: Box, distance: number): number {
+function horizontalLane(
+  side: Connection['sourceSide'],
+  bounds: Box,
+  distance: number,
+): number {
   if (side === 'bottom') return bounds.y + bounds.height + distance;
   return bounds.y - distance;
 }
 /** Right departures stay beyond the column; other vertical lanes use its left boundary. */
-function verticalLane(side: Connection['sourceSide'], bounds: Box, distance: number): number {
+function verticalLane(
+  side: Connection['sourceSide'],
+  bounds: Box,
+  distance: number,
+): number {
   if (side === 'right') return bounds.x + bounds.width + distance;
   return bounds.x - distance;
 }
@@ -176,7 +184,10 @@ function checkedRoute(value: RouteValue): RouteValue {
   };
 }
 /** A missing predecessor identifies the first native point. */
-function distinct(point: Point, previous: Point | undefined): boolean {
+function distinct(
+  point: Point,
+  previous: Point | undefined,
+): boolean {
   if (previous === undefined) return true;
   return !samePoint(point, previous);
 }

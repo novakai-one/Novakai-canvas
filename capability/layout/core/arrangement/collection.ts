@@ -41,7 +41,10 @@ function item(
   };
 }
 /** Authored section placement addresses the stable origin, not its potentially negative visible bounds. */
-function translatedPlacement(placement: Placement | null, box: Box): Placement | null {
+function translatedPlacement(
+  placement: Placement | null,
+  box: Box,
+): Placement | null {
   if (placement === null) return null;
   return { ...placement, x: placement.x + box.x, y: placement.y + box.y };
 }
@@ -58,7 +61,10 @@ function previousBox(
   };
 }
 /** Convert solved collection-space bounds back to a section origin without rewriting any local geometry. */
-function placed(section: PlacedSection, values: readonly PlacementValue[]): PlacedSection {
+function placed(
+  section: PlacedSection,
+  values: readonly PlacementValue[],
+): PlacedSection {
   const value = values.find((item) => item.id === section.id);
   if (!value) return reject('engine-failed', section.id, 'Solver omitted section bounds');
   return {

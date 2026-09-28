@@ -14,17 +14,27 @@ import { nodeShape } from '../notation/nodes.js';
 import { planContent } from '../content/sizing.js';
 import { parse, reject } from '../validation/outcomes.js';
 /** Build a section-scoped scene identity; public project owns rejection and retains the prior scene. */
-export function identity(section: string, kind: 'object' | 'group', id: string): VisualNode['id'] {
+export function identity(
+  section: string,
+  kind: 'object' | 'group',
+  id: string,
+): VisualNode['id'] {
   return parse(sceneId, `${section}:${kind}:${id}`);
 }
 /** Resolve canonical content once; a broken injected domain reader fails visibly. */
-function object(id: string, context: ContentContext): DiagramObject {
+function object(
+  id: string,
+  context: ContentContext,
+): DiagramObject {
   const found = context.collection.objects.find((item) => item.id === id);
   if (!found) return reject('invalid-input', id, 'Visible object is missing');
   return found;
 }
 /** Parent containers are addressed in the same section scope. */
-function parent(section: string, id: string | undefined): VisualNode['parent'] {
+function parent(
+  section: string,
+  id: string | undefined,
+): VisualNode['parent'] {
   if (id === undefined) return null;
   return identity(section, 'group', id);
 }
@@ -141,12 +151,18 @@ function sequencePresentation(
   return { shape: 'participant', source, module: true };
 }
 
-function compositionContext(module: boolean, context: ContentContext): ContentContext {
+function compositionContext(
+  module: boolean,
+  context: ContentContext,
+): ContentContext {
   if (!module) return context;
   return { ...context, chromePolicies: {} };
 }
 
-function chromeSource(module: boolean, source: DiagramObject): DiagramObject {
+function chromeSource(
+  module: boolean,
+  source: DiagramObject,
+): DiagramObject {
   return module ? participantSource(source) : source;
 }
 
@@ -162,7 +178,10 @@ function isSequenceModuleParticipant(
   );
 }
 
-function isDirectModuleAppearance(source: DiagramObject, view: Appearance): boolean {
+function isDirectModuleAppearance(
+  source: DiagramObject,
+  view: Appearance,
+): boolean {
   return source.kind === 'module' && view.group === undefined;
 }
 
@@ -217,7 +236,10 @@ function compactTreeRow(
     gutter,
   };
 }
-function treeParticipant(view: Appearance, source: DiagramObject): boolean {
+function treeParticipant(
+  view: Appearance,
+  source: DiagramObject,
+): boolean {
   if (view.participation !== undefined) return view.participation === 'tree';
   return source.kind !== 'note';
 }
@@ -231,13 +253,20 @@ function appearanceShape(
   return 'card';
 }
 /** Engineering cards reserve a padded header compartment; body content starts below its separator. */
-function headingGap(shape: VisualNode['shape'], context: ContentContext): number {
+function headingGap(
+  shape: VisualNode['shape'],
+  context: ContentContext,
+): number {
   if (['entity', 'module', 'interface', 'function'].includes(shape))
     return context.style.padding + context.style.gap;
   return context.style.gap;
 }
 /** Reserve represented content or an ordinary title; public project owns rejection and Authoring retains the prior scene. */
-export function projectGroup(group: Group, section: Section, context: ContentContext): VisualNode {
+export function projectGroup(
+  group: Group,
+  section: Section,
+  context: ContentContext,
+): VisualNode {
   if (group.represents !== undefined) return represented(group, section, context);
   const appearance = scopedContext(group.placement, group.role, 'medium', 'container', context);
   const initial = contentForeground(group.frame, group.parent, section, appearance);
@@ -273,7 +302,11 @@ export function projectGroup(group: Group, section: Section, context: ContentCon
   });
 }
 /** Reuse object measurement while preserving the group's distinct identity and parent scope. */
-function represented(group: Group, section: Section, context: ContentContext): VisualNode {
+function represented(
+  group: Group,
+  section: Section,
+  context: ContentContext,
+): VisualNode {
   const source = group.represents;
   if (source === undefined)
     return reject('invalid-input', group.id, 'Represented object is missing');
@@ -299,7 +332,10 @@ function represented(group: Group, section: Section, context: ContentContext): V
 }
 
 /** Role paint supplies content foreground as well as frame colours; missing roles fail at the public boundary. */
-function rolePaint(role: string, context: ContentContext): Paint {
+function rolePaint(
+  role: string,
+  context: ContentContext,
+): Paint {
   const paint = context.style.roles[role];
   if (!paint) return reject('missing-resource', role, 'Appearance role is unavailable');
   return paint;
@@ -351,12 +387,19 @@ function contentWidth(
   return insetWidth(width, shape, padding);
 }
 /** Inscribed diamond content has half the outer width; an impossibly small box retains a positive minimum. */
-function insetWidth(width: number, shape: VisualNode['shape'], padding: number): number {
+function insetWidth(
+  width: number,
+  shape: VisualNode['shape'],
+  padding: number,
+): number {
   const scale = shape === 'diamond' ? 2 : 1;
   return Math.max(1, width / scale - padding * 2);
 }
 /** Optional placement is copied explicitly so exact optional property semantics remain intact. */
-function placedView(object: Appearance['object'], placement: Appearance['placement']): Appearance {
+function placedView(
+  object: Appearance['object'],
+  placement: Appearance['placement'],
+): Appearance {
   const view: Appearance = { object, detail: 'full' };
   if (placement === undefined) return view;
   return { ...view, placement };
@@ -386,21 +429,30 @@ function contentForeground(
   return { ...context, style: { ...context.style, text: paint.text } };
 }
 /** Model has already rejected containment cycles; transparent regions inherit from their nearest painted ancestor. */
-function containerRole(id: Group['parent'], groups: readonly Group[]): string {
+function containerRole(
+  id: Group['parent'],
+  groups: readonly Group[],
+): string {
   return paintedRole(
     groups.find((group) => group.id === id),
     groups,
   );
 }
 /** An absent parent is the section surface; its neutral role supplies the readable foreground. */
-function paintedRole(group: Group | undefined, groups: readonly Group[]): string {
+function paintedRole(
+  group: Group | undefined,
+  groups: readonly Group[],
+): string {
   if (group === undefined) return 'neutral';
   if (group.frame !== 'none') return group.role;
   return containerRole(group.parent, groups);
 }
 
 /** Resolve parent context before measuring represented content; foreground depends on the visible ancestor. */
-function withinGroup(view: Appearance, parent: Group['parent']): Appearance {
+function withinGroup(
+  view: Appearance,
+  parent: Group['parent'],
+): Appearance {
   if (parent === undefined) return view;
   return { ...view, group: parent };
 }

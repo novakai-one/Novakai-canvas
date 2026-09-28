@@ -29,6 +29,9 @@ export function requireDepth(depth: number): void {
     );
 }
 /** Match layout scope by explicit parent identity rather than raw array adjacency. */
-export function scopedGroups(section: Section, parent: string | undefined): Section['groups'] {
+export function scopedGroups(
+  section: Section,
+  parent: string | undefined,
+): Section['groups'] {
   return section.groups.filter((group) => group.parent === parent);
 }

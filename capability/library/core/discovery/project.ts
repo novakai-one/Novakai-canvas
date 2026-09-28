@@ -1,21 +1,24 @@
-import type { LibrarySnapshot, CollectionProjection } from '../../contract/records/snapshot.js';
-import type { ReadVersions } from '../../contract/types.js';
+/*
+ * Building search hits from the collection projections. Rebuilt on every search; nothing is
+ * cached and the organisation is not touched. Pure; Authoring owns commit and recovery.
+ */
+import type {
+  LibrarySnapshot,
+  CollectionProjection,
+  SectionProjection,
+  ObjectProjection,
+} from '../../contract/records/snapshot.js';
 import type { SearchHit } from '../../contract/records/query.js';
 
-/** Code-unit order is deterministic across machines and independent of the user's locale. */
-export function compareText(left: string, right: string): number {
-  if (left < right) return -1;
-  if (left > right) return 1;
-  return 0;
+/**
+ * Builds every search hit of a snapshot, in inventory order: for each collection, the collection
+ * itself, then its sections, then its objects (including objects in no section).
+ */
+export function projectHits(snapshot: LibrarySnapshot): readonly SearchHit[] {
+  return snapshot.collections.flatMap(projectCollection);
 }
-/** Return original revision provenance in canonical collection-ID order. */
-export function readVersions(snapshot: LibrarySnapshot): ReadVersions {
-  const collections = snapshot.collections
-    .map((collection) => ({ id: collection.id, revision: collection.revision }))
-    .toSorted((left, right) => compareText(left.id, right.id));
-  return { catalog: { id: snapshot.catalog.id, revision: snapshot.catalog.revision }, collections };
-}
-/** All semantic objects produce hits, including those with no visible appearance. */
+
+/** The hits of one collection: the collection, its sections, then its objects. */
 function projectCollection(collection: CollectionProjection): readonly SearchHit[] {
   const collectionHit: SearchHit = {
     kind: 'collection',
@@ -25,25 +28,37 @@ function projectCollection(collection: CollectionProjection): readonly SearchHit
     description: collection.description,
     visibleIn: [],
   };
-  const sections = collection.sections.map((section): SearchHit => ({
+  const sections = collection.sections.map((section) => sectionHit(collection, section));
+  const objects = collection.objects.map((object) => objectHit(collection, object));
+  return [collectionHit, ...sections, ...objects];
+}
+
+/** A section's hit: its title, no description, visible in itself. */
+function sectionHit(
+  collection: CollectionProjection,
+  section: SectionProjection,
+): SearchHit {
+  return {
     kind: 'section',
     collection: collection.id,
     id: section.id,
     label: section.title,
     description: '',
     visibleIn: [section.id],
-  }));
-  const objects = collection.objects.map((object): SearchHit => ({
+  };
+}
+
+/** An object's hit: its label, description and the sections it is visible in. */
+function objectHit(
+  collection: CollectionProjection,
+  object: ObjectProjection,
+): SearchHit {
+  return {
     kind: 'object',
     collection: collection.id,
     id: object.id,
     label: object.label,
     description: object.description,
     visibleIn: object.visibleIn,
-  }));
-  return [collectionHit, ...sections, ...objects];
-}
-/** Rebuild a discovery projection from one validated snapshot; no cache or catalog mutation. */
-export function projectHits(snapshot: LibrarySnapshot): readonly SearchHit[] {
-  return snapshot.collections.flatMap(projectCollection);
+  };
 }

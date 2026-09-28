@@ -1,50 +1,114 @@
-import type { ResourceCommands } from './records/resource-commands.js';
-import type { SessionLifetime } from './ports/lifetime.js';
-import type { Authoring, Snapshot, Receipt, AuthoringResult } from './records/owners.js';
+/*
+ * Why this file exists
+ *
+ * Once a workspace is open, many parts of the service use it. The HTTP routes read it, save changes
+ * and render it; start-up checks it; shutdown closes it. None of them should need to know how it
+ * was built. For example, `GET /api/v1/render?id=my-diagram` becomes
+ * `session.render('my-diagram', signal)`.
+ *
+ * This file declares what one open workspace answers: `WorkspaceSession`. Each call answers with a
+ * `Result` (see `errors.ts`); the calls Authoring answers use Authoring's own `Result` and codes.
+ * It never checks who is calling: HTTP admission (ports/transport.ts) did that first.
+ */
+import type { ResourceCommands } from './ports/workspace.js';
+import type {
+  HistoryStatus,
+  Snapshot,
+  Receipt,
+  AuthoringResult,
+  Request,
+} from './records/capability-types.js';
 import type { Preparation } from '@novakai/canvas-authoring';
-import type { BuiltinResources } from './records/builtins.js';
-import type { WorkspaceReader } from './records/workspace.js';
-import type { CollectionRenderer } from './ports/collection-renderer.js';
-import type { ChangeChannel, CommittedChange } from './ports/notifications.js';
-import type { RenderDocument } from './records/rendering.js';
-import type { InspectionReport } from './records/inspection.js';
+import type { PreparedBuiltins } from './records/presets/builtins.js';
+import type { CommittedChange } from './ports/notifications.js';
+import type { RenderDocument } from './records/rendering/job.js';
+import type { InspectionReport } from './records/rendering/inspection.js';
 import type { Result } from './errors.js';
-import type { RouteOutcome } from './records/protocol.js';
-/** Session transport authenticates each caller before forwarding the explicit Authoring envelope. */
+import type { SentFile } from './records/transport/server.js';
+import type { AppliedCommit, PrepareMode } from './records/workspace/session.js';
+import type { CollectionId, WorkspaceId } from './brands.js';
+/**
+ * One open workspace and everything the service can ask of it. Each call runs only while the
+ * session is open; `close` waits for calls already running, then closes the workspace.
+ */
 export interface WorkspaceSession {
-  readonly workspace: string;
-  readonly installation: BuiltinResources;
+  /** The workspace's ID. `pnpm dev` always opens `local`. */
+  readonly workspace: WorkspaceId;
+  /** The shipped fonts, design tokens and recipe starters, and the built-in themes and recipes. */
+  readonly builtins: PreparedBuiltins;
+  /** Upload, restore and read stored files; prepare themes and recipes (see `ResourceCommands`). */
   readonly resources: ResourceCommands;
+  /**
+   * Reads the whole workspace as Authoring has it now: every stored record and its version. Fails
+   * with Authoring's codes, or `storage-unavailable` at `session` once the session is closing.
+   */
   read(): Promise<AuthoringResult<Snapshot>>;
-  history(): ReturnType<Authoring['history']>;
+  /**
+   * Reads the workspace's undo and redo status. Fails like `read`.
+   */
+  history(): Promise<AuthoringResult<HistoryStatus>>;
+  /**
+   * Checks a change without saving it. Authoring plans it and, for `with-preview`, also renders
+   * the preview images. Answers the preparation, or the receipt if this request was already saved.
+   * Fails with Authoring's codes (for example `revision-conflict`), or like `read` once closing.
+   */
   prepare(
-    request: unknown,
+    request: Request,
     signal: AbortSignal,
-    preview?: boolean,
+    mode: PrepareMode,
   ): Promise<AuthoringResult<Preparation | Receipt>>;
+  /**
+   * Saves a change through Authoring, then reads the workspace back, so the caller gets the new
+   * workspace without a second request. `options` are the apply options as sent (for example the
+   * `candidateHash` from `prepare`); Authoring checks them. Fails with Authoring's codes, or
+   * `storage-unavailable` at `snapshot` when the change was saved but the read-back failed.
+   */
   apply(
-    request: unknown,
+    request: Request,
     signal: AbortSignal,
-    options?: unknown,
-  ): Promise<AuthoringResult<Receipt>>;
-  receipt(request: unknown): Promise<AuthoringResult<Receipt | null>>;
-  render(collection: string, signal: AbortSignal): Promise<Result<RenderDocument>>;
-  inspect(collection: string, signal: AbortSignal): Promise<Result<InspectionReport>>;
-  exportArtifact(input: unknown, signal: AbortSignal): Promise<RouteOutcome>;
+    options: unknown,
+  ): Promise<AuthoringResult<AppliedCommit>>;
+  /**
+   * Finds the receipt of a request saved earlier, or `null` if none is stored. `requestId` is the
+   * `id` query text as sent, or `undefined` when none was sent; Authoring checks it. Fails like
+   * `read`.
+   */
+  receipt(requestId: string | undefined): Promise<AuthoringResult<Receipt | null>>;
+  /**
+   * Lays out one saved collection: measured text, placed nodes and routed wires. Fails with
+   * `not-found` when no collection has this ID, `unavailable` when the workspace can't be read or
+   * the render worker can't finish, and `cancelled` when `signal` aborts. Other render failures
+   * pass through (see `CollectionRenderer`).
+   */
+  render(
+    collection: CollectionId,
+    signal: AbortSignal,
+  ): Promise<Result<RenderDocument>>;
+  /**
+   * Renders one saved collection and reports its quality: warnings and counts, or why it could not
+   * be rendered. Fails like `render` when the collection is missing or the workspace can't be read.
+   */
+  inspect(
+    collection: CollectionId,
+    signal: AbortSignal,
+  ): Promise<Result<InspectionReport>>;
+  /**
+   * Makes one export file (DSL, Markdown, SVG or PNG) from the request as sent; the exporter
+   * checks it. Fails with `invalid-input` for a bad request, `unavailable` when a file can't be
+   * read or encoded, and `cancelled` when `signal` aborts (see `Exporter`).
+   */
+  exportFile(
+    input: unknown,
+    signal: AbortSignal,
+  ): Promise<Result<SentFile>>;
+  /**
+   * Calls `listener` after every saved change. Returns the function that stops listening.
+   */
   subscribe(listener: (change: CommittedChange) => void): () => void;
+  /**
+   * Waits for calls already running, then closes the change stream and the workspace files. Every
+   * later call gets the same answer. Fails with the files' own close failure, or `unavailable` at
+   * `shutdown`.
+   */
   close(): Promise<Result<void>>;
-}
-/** Lifecycles are already open when wiring this facade; construction starts no I/O and grants no alternative commit path. */
-export interface SessionDependencies {
-  readonly workspace: string;
-  readonly installation: BuiltinResources;
-  readonly resources: ResourceCommands;
-  readonly views: WorkspaceReader;
-  readonly renderer: CollectionRenderer;
-  readonly exporter: (input: unknown, signal: AbortSignal) => Promise<RouteOutcome>;
-  readonly changes: ChangeChannel;
-  readonly lifetime: SessionLifetime;
-  readonly readSignal: AbortSignal;
-  unavailable(): AuthoringResult<never>;
-  authoring(signal: AbortSignal): Authoring;
 }

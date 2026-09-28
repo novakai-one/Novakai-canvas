@@ -12,8 +12,8 @@ import { embedNestedPlan } from './nested-embedding-plan.js';
 import { roadNetwork } from './prototype-road-network.js';
 import { bridgeSpanGrowth, expandedSupportLedger } from './nested-support-expansion.js';
 import { projectNestedWires, readNestedProjectionSupports } from './nested-lane-projection.js';
-import { SupportRejection, reject } from './nested-support-graph.js';
-import { required, type retainSupportInput } from './nested-support-input.js';
+import { SupportRejection, reject, required } from './nested-support-graph.js';
+import type { retainSupportInput } from './nested-support-input.js';
 type Input = ReturnType<typeof retainSupportInput>;
 
 /** Materialize one admitted reservation with frozen choices. Not a scene-legality certificate.
@@ -57,7 +57,10 @@ function embed(request: NestedSupportRequest): NestedEmbeddingResult {
 /** The ordinary builder supplies its once-selected input and support-only observation.
  * No placement, routing, allocation, network or projection is repeated here.
  */
-export function prepareNestedEmbedding(input: Input, scene: NestedSupportRequest['scene']) {
+export function prepareNestedEmbedding(
+  input: Input,
+  scene: NestedSupportRequest['scene'],
+) {
   return materialize(input, scene, compileSupportInput(input, scene));
 }
 function materialize(

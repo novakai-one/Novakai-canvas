@@ -50,7 +50,10 @@ function checkEnd(
     reject('constraint-conflict', path, 'Activation extends after its named deactivation');
 }
 /** Missing/non-event source identities are never treated as an inferred activation boundary. */
-function event(id: string, source: VisualSection): Event {
+function event(
+  id: string,
+  source: VisualSection,
+): Event {
   const item = source.sequence.find((input) => input.item.id === id)?.item;
   if (item?.kind !== 'event')
     return reject('invalid-input', id, 'Activation event is missing from source');
@@ -74,7 +77,12 @@ function membership(
   return [{ fragment: item.parent, branch: item.branch }];
 }
 /** A shared enclosing alt with different branch IDs proves the two events cannot close one activation. */
-function checkAlternatives(start: Event, end: Event, source: VisualSection, path: string): void {
+function checkAlternatives(
+  start: Event,
+  end: Event,
+  source: VisualSection,
+  path: string,
+): void {
   const from = alternatives(start, source);
   const to = alternatives(end, source);
   if (from.some((a) => to.some((b) => a.fragment === b.fragment && a.branch !== b.branch)))

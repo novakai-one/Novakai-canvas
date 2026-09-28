@@ -48,7 +48,10 @@ function values(
   return items.map((item) => readBox(item.node.id, lookup));
 }
 /** Four checked fields construct each box; absent/nonfinite native values are never defaults. */
-function readBox(id: string, values: ReadonlyMap<string, number>): PlacementValue {
+function readBox(
+  id: string,
+  values: ReadonlyMap<string, number>,
+): PlacementValue {
   const parsed = box.safeParse({
     x: values.get(variableId(id, 'x')),
     y: values.get(variableId(id, 'y')),
@@ -71,7 +74,11 @@ async function solve(
   return { ok: true, value: values(result.value, problem, items) };
 }
 /** Only ancestor containment is exempt from nonoverlap; separate branches remain obstacles to one another. */
-function ancestor(parent: string, child: string, items: readonly PositionedInput[]): boolean {
+function ancestor(
+  parent: string,
+  child: string,
+  items: readonly PositionedInput[],
+): boolean {
   const node = items.find((item) => item.node.id === child)?.node;
   if (node?.parent === parent) return true;
   return nextAncestor(parent, node?.parent ?? null, items);
@@ -109,7 +116,10 @@ function collision(
   );
 }
 /** Each disjunct is a real nonoverlap inequality; preferences select order, not required truth. */
-function choices(pair: Collision, gap: number): readonly LinearConstraint[] {
+function choices(
+  pair: Collision,
+  gap: number,
+): readonly LinearConstraint[] {
   const a = pair.a.id;
   const b = pair.b.id;
   const horizontal = [
@@ -189,7 +199,10 @@ async function continueSearch(
   return rejectedBranch(result.error, remaining);
 }
 /** The same required-equation failure means an alternative branch, not an authored semantic contradiction. */
-function rejectedBranch(error: Diagnostic, remaining: number): Search {
+function rejectedBranch(
+  error: Diagnostic,
+  remaining: number,
+): Search {
   if (error.code === 'constraint-conflict') return { kind: 'dead-end', remaining };
   return { kind: 'failed', error, remaining };
 }

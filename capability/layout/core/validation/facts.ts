@@ -14,7 +14,11 @@ export function sameIds(
     reject('invalid-input', path, 'Candidate identity/cardinality differs from source', actual);
 }
 /** Foreign measured data and semantic metadata must match the authoritative owner projection. */
-export function same(expected: unknown, actual: unknown, path: string): void {
+export function same(
+  expected: unknown,
+  actual: unknown,
+  path: string,
+): void {
   if (!equal(expected, actual))
     reject(
       'invalid-input',
@@ -48,7 +52,10 @@ function contribution(
   return coefficient * value;
 }
 /** Required inequality/equality tolerances are explicit; soft preferences are not validity requirements. */
-function checkEquation(constraint: LinearConstraint, values: ReadonlyMap<string, number>): void {
+function checkEquation(
+  constraint: LinearConstraint,
+  values: ReadonlyMap<string, number>,
+): void {
   if (constraint.strength !== 'required') return;
   const total = constraint.terms.reduce(
     (sum, term) => sum + contribution(term.variable, term.coefficient, values),

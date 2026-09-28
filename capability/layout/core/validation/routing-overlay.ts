@@ -25,7 +25,10 @@ export function inspectRouting(
   routing.lanes.forEach((lane) => inspectLane(lane, roads));
   return routing;
 }
-function unique(items: readonly { readonly id: string }[], path: string): void {
+function unique(
+  items: readonly { readonly id: string }[],
+  path: string,
+): void {
   const ids = items.map((item) => item.id);
   sameIds([...new Set(ids)], ids, `${path}.routing`);
 }

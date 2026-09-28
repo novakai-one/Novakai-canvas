@@ -17,7 +17,10 @@ function record(value: unknown): unknown {
   );
 }
 /** Equality compares structure and values, not caller object identity. */
-export function equal(a: unknown, b: unknown): boolean {
+export function equal(
+  a: unknown,
+  b: unknown,
+): boolean {
   if (a === b) return true;
   return encoded(a) === encoded(b);
 }

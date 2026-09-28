@@ -3,7 +3,10 @@ import { label, objectId, size, sourceId } from '../brands.js';
 import { contentSchema, portSchema } from './content.js';
 import { frameSchema, compositionSchema } from './composition.js';
 
-/** Supported semantic node kinds, independent of the section displaying the node. */
+/**
+ * The 15 object kinds (for example `step`, `decision`, `entity`, `module`, `function`,
+ * `state`, `note`). The kind is the object's meaning, the same in every section that shows it.
+ */
 export const objectKind = z.enum([
   'step',
   'start',
@@ -22,7 +25,13 @@ export const objectKind = z.enum([
   'note',
 ]);
 
-/** Canonical node content and semantic appearance preferences. Section-specific geometry lives elsewhere. */
+/**
+ * An object (diagram node): `id`, `kind`, `label`, `role` (default `neutral`), `size` (default
+ * `medium`), `frame` (default `auto`), `composition` (default `stack`), optional positive whole
+ * `step`, and lists of `content`, `ports` and provenance `sources` (each default empty).
+ * Section-specific geometry lives in sections, not here. Exported, shared and unfrozen; `parse`
+ * throws a `ZodError`. Authoring owns correction, commit and recovery.
+ */
 export const objectSchema = z
   .strictObject({
     id: objectId,
@@ -39,8 +48,8 @@ export const objectSchema = z
   })
   .readonly();
 
-/** One reusable semantic object; several sections may show it without copying its content. */
+/** A parsed object. Several sections may show it without copying it. */
 export type DiagramObject = z.infer<typeof objectSchema>;
 
-/** Closed set of semantic node kinds accepted by the object schema. */
+/** One of the 15 object kinds. */
 export type ObjectKind = z.infer<typeof objectKind>;

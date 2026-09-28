@@ -92,14 +92,20 @@ function labelSegments(points: readonly Point[]): readonly Segment[] {
   return segments(points).reduce<readonly Segment[]>(extendRun, []);
 }
 /** Only forward collinear travel merges; bends and reversals retain their separate footprints. */
-function extendRun(runs: readonly Segment[], next: Segment): readonly Segment[] {
+function extendRun(
+  runs: readonly Segment[],
+  next: Segment,
+): readonly Segment[] {
   const previous = runs.at(-1);
   if (previous === undefined) return [next];
   if (!sameDirection(previous, next)) return [...runs, next];
   return [...runs.slice(0, -1), { a: previous.a, b: next.b }];
 }
 /** Signed unit directions distinguish a straight continuation from a retraced hairpin. */
-function sameDirection(a: Segment, b: Segment): boolean {
+function sameDirection(
+  a: Segment,
+  b: Segment,
+): boolean {
   return (
     Math.sign(a.b.x - a.a.x) === Math.sign(b.b.x - b.a.x) &&
     Math.sign(a.b.y - a.a.y) === Math.sign(b.b.y - b.a.y)

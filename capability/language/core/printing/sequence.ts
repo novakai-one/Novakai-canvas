@@ -18,12 +18,20 @@ export function printSequence(
     .map((item) => printItem(section, item, depth));
 }
 /** Message kind remains an attribute while event is the source construct. */
-function printItem(section: Section, item: Item, depth: number): string {
+function printItem(
+  section: Section,
+  item: Item,
+  depth: number,
+): string {
   if (item.kind === 'event') return header('event', item);
   return body(header('fragment', item), fragmentBody(section, item, depth + 1));
 }
 /** Alternative branch order and explicit identities remain exact across every read and replacement. */
-function fragmentBody(section: Section, fragment: Fragment, depth: number): readonly string[] {
+function fragmentBody(
+  section: Section,
+  fragment: Fragment,
+  depth: number,
+): readonly string[] {
   if (fragment.operator !== 'alt') return printSequence(section, fragment.id, undefined, depth);
   return fragment.branches.map((branch) =>
     body(header('branch', branch), printSequence(section, fragment.id, branch.id, depth)),

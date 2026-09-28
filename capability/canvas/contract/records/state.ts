@@ -1,4 +1,5 @@
 import type { Diagnostic } from '../errors.js';
+import type { GestureId } from '../brands.js';
 import type { Scene, SceneIndex, SceneStamp } from './scene.js';
 import type { Camera } from './camera.js';
 import type { Target } from './selection.js';
@@ -26,7 +27,7 @@ export interface SessionState {
   readonly tool: 'select' | 'hand' | 'connect';
   readonly connection: Endpoint | null;
   readonly draft: GestureDraft | null;
-  readonly routePreview?: (GeometryPreview & { readonly gesture: string }) | null;
+  readonly routePreview?: (GeometryPreview & { readonly gesture: GestureId }) | null;
   readonly recovery: readonly RecoverableDraft[];
   readonly reading: ReadingState | null;
   readonly treeCollapsed?: readonly string[];

@@ -17,7 +17,10 @@ interface Span {
 }
 
 /** A construction contact already owns the perpendicular rectangles and their full turn area. */
-function junction(a: PrototypeRoad, b: PrototypeRoad): readonly PrototypeJunction[] {
+function junction(
+  a: PrototypeRoad,
+  b: PrototypeRoad,
+): readonly PrototypeJunction[] {
   const horizontal = a.axis === 'horizontal' ? a : b;
   const vertical = a.axis === 'vertical' ? a : b;
   return [
@@ -37,7 +40,10 @@ function junction(a: PrototypeRoad, b: PrototypeRoad): readonly PrototypeJunctio
 }
 
 /** Remove all junction intervals before allocating straight lanes or their dividers. */
-function clearSpans(road: PrototypeRoad, junctions: readonly PrototypeJunction[]) {
+function clearSpans(
+  road: PrototypeRoad,
+  junctions: readonly PrototypeJunction[],
+) {
   const axis = axes[road.axis];
   const start = road.bounds[axis.along],
     end = start + road.bounds[axis.length];
@@ -91,7 +97,11 @@ function lane(
   };
 }
 
-function divider(road: PrototypeRoad, span: Span, index: number): PrototypeDivider {
+function divider(
+  road: PrototypeRoad,
+  span: Span,
+  index: number,
+): PrototypeDivider {
   const axis = axes[road.axis];
   return {
     id: `${road.id}:divider-${index}`,
@@ -106,12 +116,18 @@ function divider(road: PrototypeRoad, span: Span, index: number): PrototypeDivid
   };
 }
 
-function dividers(road: PrototypeRoad, spans: readonly Span[]): readonly PrototypeDivider[] {
+function dividers(
+  road: PrototypeRoad,
+  spans: readonly Span[],
+): readonly PrototypeDivider[] {
   if (road.directions.length !== 2) return [];
   return spans.map((span, index) => divider(road, span, index));
 }
 
-function roadParts(road: PrototypeRoad, junctions: readonly PrototypeJunction[]) {
+function roadParts(
+  road: PrototypeRoad,
+  junctions: readonly PrototypeJunction[],
+) {
   const { spans, events } = clearSpans(road, junctions);
   const lanes = spans.flatMap((span, part) =>
     road.directions.map((direction, index) => lane(road, span, part, direction, index)),
@@ -142,7 +158,10 @@ function junctionConnections(
       })),
   );
 }
-function endpointKey(lane: PrototypeLane, endpoint: 'entry' | 'exit'): string {
+function endpointKey(
+  lane: PrototypeLane,
+  endpoint: 'entry' | 'exit',
+): string {
   return `${lane[endpoint].x},${lane[endpoint].y}:${lane.direction}`;
 }
 /** Index coincident straight endpoints; junction connections retain ownership when both apply. */
@@ -207,7 +226,10 @@ function junctionKind(arms: number): 'bend' | 'intersection' {
 }
 const incomingArm = { right: 'left', left: 'right', down: 'top', up: 'bottom' } as const;
 const outgoingArm = { right: 'right', left: 'left', down: 'bottom', up: 'top' } as const;
-function arms(id: string, adjacency: ReturnType<typeof laneAdjacency>) {
+function arms(
+  id: string,
+  adjacency: ReturnType<typeof laneAdjacency>,
+) {
   return new Set([
     ...(adjacency.incoming.get(id) ?? []).map((l) => incomingArm[l.direction]),
     ...(adjacency.outgoing.get(id) ?? []).map((l) => outgoingArm[l.direction]),
@@ -215,7 +237,10 @@ function arms(id: string, adjacency: ReturnType<typeof laneAdjacency>) {
 }
 
 /** Pure, repeatable compilation of this prototype's roads into enforceable lanes and turn areas. */
-export function roadNetwork(roads: readonly PrototypeRoad[], contacts: readonly RoadContact[]) {
+export function roadNetwork(
+  roads: readonly PrototypeRoad[],
+  contacts: readonly RoadContact[],
+) {
   const areas = roadContactAreas(roads, contacts);
   const ownership = roadJunctionIndex(areas);
   const accessByJunction = junctionAccess(roads, ownership);
@@ -241,7 +266,10 @@ export function roadNetwork(roads: readonly PrototypeRoad[], contacts: readonly 
   };
 }
 
-function orderedContacts(roads: readonly PrototypeRoad[], contacts: readonly RoadContact[]) {
+function orderedContacts(
+  roads: readonly PrototypeRoad[],
+  contacts: readonly RoadContact[],
+) {
   const order = new Map(roads.map((r, i) => [r.id, i]));
   const normalized = contacts.map((c) =>
     (order.get(c.a.id) ?? 0) < (order.get(c.b.id) ?? 0) ? c : { a: c.b, b: c.a },

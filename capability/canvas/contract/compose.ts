@@ -37,6 +37,10 @@ export function createReactBindings(slots: RenderSlots): Promise<Result<ReactBin
       labels,
       roads,
       tree,
+      geometry,
+      keyboard,
+      browser,
+      gestureIds,
     ] = await Promise.all([
       import('../adapters/react-flow/CanvasSurface.js'),
       import('../adapters/react-flow/SceneNode.js'),
@@ -52,15 +56,28 @@ export function createReactBindings(slots: RenderSlots): Promise<Result<ReactBin
       import('../adapters/react-flow/WireLabel.js'),
       import('../adapters/react-flow/RoutingRoads.js'),
       import('../adapters/react-flow/TreeRow.js'),
+      import('../adapters/react-flow/geometry-gestures.js'),
+      import('../adapters/react-flow/keyboard-commands.js'),
+      import('../adapters/react-flow/browser-bindings.js'),
+      import('../adapters/react-flow/gesture-ids.js'),
     ]);
+    const parts = {
+      createGeometryGestures: geometry.createGeometryGestures,
+      createKeyboardCommands: keyboard.createKeyboardCommands,
+    };
     const CanvasSurface = surface.createCanvasSurface({
       RoutingRoads: roads.RoutingRoads,
       FontDefinitions: slots.FontDefinitions,
       createGraphSelector: records.createGraphSelector,
       useScene: scene.useScene,
-      createInteractions: (owners) =>
-        interactions.createInteractions({ ...owners, input: { ownsNativeInput, focusedId } }),
-      observeSize,
+      createInteractions: (host) =>
+        interactions.createInteractions(parts, {
+          session: host.session,
+          input: browser.browserInput,
+          nextGestureId: gestureIds.createGestureIds(host),
+          onError: host.onError,
+        }),
+      observeSize: browser.observeSize,
       SceneNode: node.createSceneNode({ ...slots, TreeRow: tree.createTreeRow(slots) }),
       SceneEdge: edge.createSceneEdge({
         ...slots,
@@ -73,32 +90,4 @@ export function createReactBindings(slots: RenderSlots): Promise<Result<ReactBin
     });
     return { CanvasSurface };
   });
-}
-
-/** Browser-native controls and modal descendants retain their own keyboard/pointer gestures. */
-function ownsNativeInput(target: EventTarget | null): boolean {
-  if (!(target instanceof Element)) return false;
-  return (
-    target.closest(
-      'input,textarea,select,button,a,[contenteditable="true"],dialog,[role="dialog"],[aria-modal="true"]',
-    ) !== null
-  );
-}
-/** Browser focus carries an opaque React Flow ID; scene policy resolves it through its admitted index. */
-function focusedId(target: EventTarget | null): string | null {
-  if (!(target instanceof Element)) return null;
-  return target.closest('.react-flow__node, .react-flow__edge')?.getAttribute('data-id') ?? null;
-}
-/** Native observation is bound at browser composition, injectable at the surface; cleanup belongs to the React effect. */
-function observeSize(
-  element: HTMLDivElement | null,
-  resize: (width: number, height: number) => void,
-): () => void {
-  if (element === null) return () => undefined;
-  const observer = new ResizeObserver((entries) => {
-    const size = entries[0]?.contentRect;
-    if (size) resize(size.width, size.height);
-  });
-  observer.observe(element);
-  return () => observer.disconnect();
 }

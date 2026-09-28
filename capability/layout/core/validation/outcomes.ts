@@ -24,7 +24,10 @@ export function requireValue<T>(result: Result<T>): T {
   return result.value;
 }
 /** Read only checked records from public/native boundaries; first invalid field is identified for correction. */
-export function parse<T>(schema: Parser<T>, input: unknown): T {
+export function parse<T>(
+  schema: Parser<T>,
+  input: unknown,
+): T {
   const parsed = schema.safeParse(input);
   if (parsed.success) return parsed.data;
   const issue = parsed.error.issues[0];
@@ -51,7 +54,10 @@ function encodeInput(value: unknown): string | undefined {
   }
 }
 /** JSON must not silently turn NaN/infinity into null or discard functions and symbols. */
-function checkedJsonValue(_key: string, value: unknown): unknown {
+function checkedJsonValue(
+  _key: string,
+  value: unknown,
+): unknown {
   if (typeof value === 'number' && !Number.isFinite(value))
     return reject('invalid-input', '$', 'Nonfinite geometry is not JSON data');
   return serializable(value);

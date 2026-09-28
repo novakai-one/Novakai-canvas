@@ -57,7 +57,10 @@ export interface RoadContact {
   readonly a: PrototypeRoad;
   readonly b: PrototypeRoad;
 }
-function crossing(registry: RoadRegistry, p: PrototypePoint): readonly RoadContact[] {
+function crossing(
+  registry: RoadRegistry,
+  p: PrototypePoint,
+): readonly RoadContact[] {
   return streetAt(registry, 'horizontal', p).flatMap((h) =>
     streetAt(registry, 'vertical', p).map((v) => ({ a: h.road, b: v.road })),
   );

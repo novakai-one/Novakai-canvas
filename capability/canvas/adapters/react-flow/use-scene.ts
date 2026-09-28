@@ -29,7 +29,10 @@ function createSelector(reader: ViewReader): (state: SessionState) => Result<Vie
   return select;
 }
 /** Subscribe to the Canvas store, never React Flow's internal node array; cleanup is supplied by the store. */
-export function useScene(session: SurfaceSession, reader: ViewReader): Result<ViewSnapshot> {
+export function useScene(
+  session: SurfaceSession,
+  reader: ViewReader,
+): Result<ViewSnapshot> {
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
   const select = useMemo(() => createSelector(reader), [reader]);
   return useMemo(() => select(state), [select, state]);

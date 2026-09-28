@@ -8,7 +8,10 @@ export function createDiagramOutline(
 ): ComponentType<OutlineProps> {
   const Button = slots.Button;
   /** Every row preserves measured text, relationships and explicit target identity; host opens requested editors. */
-  function entry(item: OutlineEntry, props: OutlineProps): ReactElement {
+  function entry(
+    item: OutlineEntry,
+    props: OutlineProps,
+  ): ReactElement {
     return (
       <li key={JSON.stringify(item.target)}>
         <strong>{item.label}</strong>
@@ -44,11 +47,17 @@ export function createDiagramOutline(
     );
   }
   /** Node member selection starts/completes the same typed connection intent as pointer handles. */
-  function connectMember(item: OutlineEntry, member: string, props: OutlineProps): void {
+  function connectMember(
+    item: OutlineEntry,
+    member: string,
+    props: OutlineProps,
+  ): void {
     if (item.target.kind !== 'node') return;
+    const issued = props.actions.nextGestureId();
+    if (!issued.ok) return;
     props.actions.dispatch({
       kind: 'connect',
-      id: props.actions.nextId(),
+      id: issued.value,
       endpoint: { section: item.target.section, node: item.target.id, member },
     });
   }

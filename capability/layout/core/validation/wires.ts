@@ -27,7 +27,10 @@ interface Context {
   readonly siblings: readonly VisualWire[] | undefined;
 }
 /** Reconstruct only authoritative wire data after exact attachment/route/label validation. */
-function rebind(wire: VisualWire, context: Context): RoutedWire {
+function rebind(
+  wire: VisualWire,
+  context: Context,
+): RoutedWire {
   const candidate = context.candidates.find((item) => item.id === wire.id);
   if (!candidate) return reject('invalid-input', wire.id, 'Candidate wire is missing');
   const branch = treeBranch(wire, context.nodes);
@@ -85,7 +88,10 @@ function checkGeometry(
   checkLabels(wire, candidate, context);
 }
 /** Every authored point in a locked route remains part of the stored corridor. */
-function checkManual(wire: VisualWire, candidate: SectionCandidate['wires'][number]): void {
+function checkManual(
+  wire: VisualWire,
+  candidate: SectionCandidate['wires'][number],
+): void {
   if (!wire.route.locked) return;
   if (wire.route.manual !== undefined) same(wire.route.manual, candidate.points, wire.id);
 }
@@ -128,7 +134,11 @@ function markerBounds(
   ];
 }
 /** A later connection may cross another wire, but may never strike through its label. */
-function checkLabelCrossing(id: string, box: Box, lines: readonly Segment[]): void {
+function checkLabelCrossing(
+  id: string,
+  box: Box,
+  lines: readonly Segment[],
+): void {
   if (lines.some((segment) => segmentHits(segment.a, segment.b, box)))
     reject('constraint-conflict', id, 'Another wire crosses this label');
 }
@@ -166,7 +176,10 @@ export function inspectWires(
 }
 
 /** Inspect final routes independently; an interior shared run hides which relationship reaches which endpoint. */
-function checkSharedRuns(wire: SectionCandidate['wires'][number], context: Context): void {
+function checkSharedRuns(
+  wire: SectionCandidate['wires'][number],
+  context: Context,
+): void {
   // After a human move, two wires may share a run rather than the move being refused.
   const others = context.behind
     ? []

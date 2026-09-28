@@ -40,7 +40,10 @@ export function checked(input: unknown): Collection {
   return result.value;
 }
 /** Rejection assertions require absence of candidate and the intended diagnostic family. */
-export function rejected(result: Result<unknown>, code: DiagnosticCode): void {
+export function rejected(
+  result: Result<unknown>,
+  code: DiagnosticCode,
+): void {
   assert(!result.ok, 'Expected a typed rejection');
   expect(result).not.toHaveProperty('value');
   expect(result.error.diagnostics).toEqual(
@@ -59,7 +62,10 @@ export function pins(collection: Collection): ResolvedResources {
   };
 }
 /** Apply only pure compiled intent in this fixture; no storage commit is asserted by Language tests. */
-export function edit(collection: Collection, statements: string): Collection {
+export function edit(
+  collection: Collection,
+  statements: string,
+): Collection {
   return value(
     language.lower({
       source: `patch 1 @${collection.id} { ${statements} }`,
@@ -119,13 +125,19 @@ export function graph(extra: Readonly<Record<string, unknown>> = {}): Collection
   });
 }
 /** Find a declared record by ID without assertions against private compiler representation. */
-export function object(collection: Collection, id: string): Collection['objects'][number] {
+export function object(
+  collection: Collection,
+  id: string,
+): Collection['objects'][number] {
   const item = collection.objects.find((node) => node.id === id);
   assert(item);
   return item;
 }
 /** View lookup keeps fixture failure messages local to the scenario. */
-export function section(collection: Collection, id = 'flow'): Collection['sections'][number] {
+export function section(
+  collection: Collection,
+  id = 'flow',
+): Collection['sections'][number] {
   const item = collection.sections.find((view) => view.id === id);
   assert(item);
   return item;

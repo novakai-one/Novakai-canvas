@@ -25,7 +25,11 @@ export function contentBounds(
   ]);
 }
 /** Section title sits above the full content, even when locked nodes have negative local coordinates. */
-export function titleBox(content: Box, measured: MeasuredContent, padding: number): Box {
+export function titleBox(
+  content: Box,
+  measured: MeasuredContent,
+  padding: number,
+): Box {
   return {
     x: content.x,
     y: content.y - padding - measured.height,
@@ -34,6 +38,10 @@ export function titleBox(content: Box, measured: MeasuredContent, padding: numbe
   };
 }
 /** A section's local visible bounds reserve its measured heading and outer padding. */
-export function sectionBounds(content: Box, title: Box, padding: number): Box {
+export function sectionBounds(
+  content: Box,
+  title: Box,
+  padding: number,
+): Box {
   return expand(union([content, title]), padding);
 }

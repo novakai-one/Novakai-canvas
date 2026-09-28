@@ -1,4 +1,10 @@
-import type { Collection } from '../../contract/ports/model.js';
+/*
+ * Whole-record patch operations (`add`, `replace`, `delete`) and `reset`, compiled into Model
+ * change data. Language lowers the declaration the same way as in a document; Model owns what a
+ * delete cascades into and clearing manual layout. Pure: nothing is written. Faults are
+ * `LanguageFault`s for `protect`. Language owns correcting the source; Authoring owns commit
+ * recovery.
+ */
 import type { Operation } from '../../contract/records/syntax.js';
 import type { ResolvedResources } from '../../contract/records/requests.js';
 import { lowerNode, lowerRecord } from '../lowering/content.js';
@@ -6,16 +12,25 @@ import { lowerSection } from '../lowering/views.js';
 import { lowerAsset } from '../lowering/resources.js';
 import type { RawRecord } from '../lowering/fields.js';
 import { accepted, reject } from '../validation/outcomes.js';
+import { recordNamespaces } from '../vocabulary/defaults.js';
 import { requirePlainAddress } from './targets.js';
-const namespaces: Readonly<Record<string, string>> = {
-  node: 'objects',
-  wire: 'relationships',
-  section: 'sections',
-  asset: 'assets',
-  source: 'sources',
-};
-/** Whole-record structural operations remain Model change data; Language never copies cascade semantics. */
-export function structuralChange(operation: Operation, resources: ResolvedResources): RawRecord {
+
+/**
+ * Compiles an `add`, `replace` or `delete` of a whole record addressed by a plain `@id`.
+ *
+ * - `add` / `replace`: the declaration is lowered (node, section and asset have their own
+ *   lowering; anything else is lowered as a plain record) and becomes a `create` or `replace`
+ *   in the target's namespace.
+ * - `delete node @id [cascade=true]`: becomes `delete-object`; `cascade` defaults to `false`.
+ * - `delete` of any other target: becomes a `remove` in its namespace.
+ *
+ * @throws `invalid-value` for an address that is not a plain `@id`; `syntax` for an `add` or
+ * `replace` without a declaration; and the faults of lowering the declaration.
+ */
+export function structuralChange(
+  operation: Operation,
+  resources: ResolvedResources,
+): RawRecord {
   requirePlainAddress(operation);
   if (operation.action === 'delete') return deleteRecord(operation);
   const value = declarationRecord(operation, resources);
@@ -25,30 +40,15 @@ export function structuralChange(operation: Operation, resources: ResolvedResour
     value,
   };
 }
-/** Node deletion is the only explicit cascade command; Model owns the dependency cleanup. */
-function deleteRecord(operation: Operation): RawRecord {
-  if (operation.target === 'node')
-    return {
-      op: 'delete-object',
-      id: operation.address.id,
-      cascade: operation.fields.cascade?.value ?? false,
-    };
-  return { op: 'remove', target: namespaces[operation.target], id: operation.address.id };
-}
-/** Construct-specific lowering is reused between document creation and patches. */
-function declarationRecord(operation: Operation, resources: ResolvedResources): RawRecord {
-  const item = operation.declaration;
-  if (item === null)
-    reject('syntax', operation.span, 'Complete declaration', 'Missing replacement declaration');
-  const translators: Readonly<Record<string, () => RawRecord>> = {
-    node: () => lowerNode(item),
-    section: () => accepted(lowerSection(item)),
-    asset: () => lowerAsset(item, resources),
-  };
-  const translate = translators[item.kind];
-  return translate === undefined ? lowerRecord(item) : translate();
-}
-/** Explicit reset operations preserve semantic constraints and clear only Model-owned manual data. */
+
+/**
+ * Compiles a `reset`: `reset layout @section` becomes `reset-layout`; `reset route
+ *
+ * @section/@wire` becomes `reset-route`. Model clears only the manual data.
+ *
+ * @throws `invalid-value` for a layout reset without a plain `@id`, or a route reset without a
+ * section.
+ */
 export function resetChange(operation: Operation): RawRecord {
   if (operation.target === 'layout') {
     requirePlainAddress(operation);
@@ -62,24 +62,37 @@ export function resetChange(operation: Operation): RawRecord {
     relationship: operation.address.id,
   };
 }
-/** Empty input cannot invent a collection; operation compilers always receive a valid original snapshot. */
-export function requireSnapshot(
-  snapshot: Collection | null,
-  operation: { readonly collection: string; readonly span: Operation['span'] },
-): Collection {
-  if (snapshot === null)
-    reject(
-      'unknown-target',
-      operation.span,
-      'Existing collection snapshot',
-      'Patch needs a snapshot',
-    );
-  if (snapshot.id !== operation.collection)
-    reject(
-      'unknown-target',
-      operation.span,
-      'Matching collection identity',
-      'Patch targets a different collection',
-    );
-  return snapshot;
+
+/** Deleting a node is the only explicit cascade; Model removes what depends on it. */
+function deleteRecord(operation: Operation): RawRecord {
+  if (operation.target === 'node')
+    return {
+      op: 'delete-object',
+      id: operation.address.id,
+      cascade: operation.fields.cascade?.value ?? false,
+    };
+  return { op: 'remove', target: namespaces[operation.target], id: operation.address.id };
 }
+
+/** The declaration lowered as in a document: node, section and asset have their own lowering. */
+function declarationRecord(
+  operation: Operation,
+  resources: ResolvedResources,
+): RawRecord {
+  const item = operation.declaration;
+  if (item === null)
+    reject('syntax', operation.span, 'Complete declaration', 'Missing replacement declaration');
+  switch (item.kind) {
+    case 'node':
+      return lowerNode(item);
+    case 'section':
+      return accepted(lowerSection(item));
+    case 'asset':
+      return lowerAsset(item, resources);
+    default:
+      return lowerRecord(item);
+  }
+}
+
+/** The shared namespace table, looked up by any target (the parser only sends record targets). */
+const namespaces: Readonly<Record<string, string>> = recordNamespaces;

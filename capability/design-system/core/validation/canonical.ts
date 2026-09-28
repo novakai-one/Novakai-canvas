@@ -19,7 +19,10 @@ function orderedRecord(value: unknown): unknown {
 }
 
 /** Code-point key ordering is independent of OS locale/ICU versions, keeping pinned identities reproducible. */
-function compareKeys(a: string, b: string): number {
+function compareKeys(
+  a: string,
+  b: string,
+): number {
   if (a < b) return -1;
   if (a > b) return 1;
   return 0;

@@ -231,11 +231,18 @@ function manualSection(
   };
 }
 /** Independent segment/rectangle test detects interior collisions without using Layout helpers. */
-function hits(points: readonly Point[], box: Box): boolean {
+function hits(
+  points: readonly Point[],
+  box: Box,
+): boolean {
   return points.slice(1).some((b, index) => segmentHit(points[index], b, box));
 }
 /** Test oracle uses axis intervals directly and excludes boundary tangency. */
-function segmentHit(a: Point | undefined, b: Point, box: Box): boolean {
+function segmentHit(
+  a: Point | undefined,
+  b: Point,
+  box: Box,
+): boolean {
   assert(a);
   if (a.y === b.y)
     return (
@@ -247,7 +254,11 @@ function segmentHit(a: Point | undefined, b: Point, box: Box): boolean {
   return verticalHit(a, b, box);
 }
 /** Vertical interval oracle complements the independently expressed horizontal test. */
-function verticalHit(a: Point, b: Point, box: Box): boolean {
+function verticalHit(
+  a: Point,
+  b: Point,
+  box: Box,
+): boolean {
   return (
     a.x > box.x &&
     a.x < box.x + box.width &&
@@ -256,12 +267,18 @@ function verticalHit(a: Point, b: Point, box: Box): boolean {
   );
 }
 /** A route's first/last lengths must reserve different source and target marker extents. */
-function manhattan(a: Point | undefined, b: Point | undefined): number {
+function manhattan(
+  a: Point | undefined,
+  b: Point | undefined,
+): number {
   assert(a && b);
   return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 }
 /** Rectangle oracle treats shared borders as clear, matching visible non-occlusion rather than coordinate equality. */
-function overlap(a: Box, b: Box): boolean {
+function overlap(
+  a: Box,
+  b: Box,
+): boolean {
   return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
 }
 /** ER cardinalities differ at each end so an accidental mirrored/default marker cannot pass. */
@@ -364,14 +381,22 @@ function quadraticSamples(path: string): readonly Point[] {
   });
 }
 /** Standard quadratic Bezier equation is separate from Layout's corner construction. */
-function quadratic(a: Point, control: Point, b: Point, t: number): Point {
+function quadratic(
+  a: Point,
+  control: Point,
+  b: Point,
+  t: number,
+): Point {
   return {
     x: (1 - t) ** 2 * a.x + 2 * (1 - t) * t * control.x + t ** 2 * b.x,
     y: (1 - t) ** 2 * a.y + 2 * (1 - t) * t * control.y + t ** 2 * b.y,
   };
 }
 /** Strict rectangle interiors are the independently checked forbidden region. */
-function insideBox(point: Point, box: Box): boolean {
+function insideBox(
+  point: Point,
+  box: Box,
+): boolean {
   return (
     point.x > box.x &&
     point.x < box.x + box.width &&
@@ -793,7 +818,10 @@ function groupBorderProjection(enter: boolean): Projection {
   );
 }
 /** Independent interval oracle checks four border centre lines without calling production obstacle construction. */
-function borderCrosses(label: Box, group: Box): boolean {
+function borderCrosses(
+  label: Box,
+  group: Box,
+): boolean {
   return [
     { ...group, height: 0 },
     { ...group, y: group.y + group.height, height: 0 },
@@ -802,7 +830,11 @@ function borderCrosses(label: Box, group: Box): boolean {
   ].some((border): boolean => overlap(label, border));
 }
 /** Each forged rectangle touches only the outward painted quarter-stroke, preserving exact measured dimensions. */
-function forgedBorderLabels(group: Box, stroke: number, label: Box): readonly Box[] {
+function forgedBorderLabels(
+  group: Box,
+  stroke: number,
+  label: Box,
+): readonly Box[] {
   const x = group.x + (group.width - label.width) / 2;
   const y = group.y + (group.height - label.height) / 2;
   return [
@@ -814,7 +846,10 @@ function forgedBorderLabels(group: Box, stroke: number, label: Box): readonly Bo
 }
 
 /** Both label corners must sit strictly inside the group for the positive interior-space assertion. */
-function labelInside(label: Box, group: Box): boolean {
+function labelInside(
+  label: Box,
+  group: Box,
+): boolean {
   return (
     insideBox(label, group) &&
     insideBox({ x: label.x + label.width, y: label.y + label.height }, group)

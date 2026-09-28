@@ -16,7 +16,10 @@ export const axes = {
 } as const;
 
 /** Inclusive rectangles also describe shared lane/junction endpoints. NaN fails comparisons. */
-export function contains(box: PrototypeBounds, point: PrototypePoint): boolean {
+export function contains(
+  box: PrototypeBounds,
+  point: PrototypePoint,
+): boolean {
   return [
     point.x >= box.x,
     point.x <= box.x + box.width,
@@ -24,10 +27,16 @@ export function contains(box: PrototypeBounds, point: PrototypePoint): boolean {
     point.y <= box.y + box.height,
   ].every(Boolean);
 }
-export function samePoint(a: PrototypePoint, b: PrototypePoint): boolean {
+export function samePoint(
+  a: PrototypePoint,
+  b: PrototypePoint,
+): boolean {
   return a.x === b.x && a.y === b.y;
 }
-export function intersection(a: PrototypeBounds, b: PrototypeBounds): PrototypeBounds {
+export function intersection(
+  a: PrototypeBounds,
+  b: PrototypeBounds,
+): PrototypeBounds {
   const x = Math.max(a.x, b.x),
     y = Math.max(a.y, b.y);
   return {

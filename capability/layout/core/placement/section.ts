@@ -58,7 +58,10 @@ export function sectionConstraints(
   });
 }
 /** Reconstruct placed data exclusively from the authoritative projection, never previous measured payloads. */
-function placed(node: VisualNode, values: readonly PlacementValue[]): PlacedNode {
+function placed(
+  node: VisualNode,
+  values: readonly PlacementValue[],
+): PlacedNode {
   const value = values.find((item) => item.id === node.id);
   if (!value) return reject('engine-failed', node.id, 'Solver omitted a visible node');
   return {

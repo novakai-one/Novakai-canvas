@@ -2,7 +2,10 @@ import type { SessionState } from '../../contract/records/state.js';
 import type { OutlineSection, OutlineEntry } from '../../contract/records/view.js';
 import type { PlacedSection, PlacedNode, RoutedWire } from '../../contract/records/scene.js';
 /** Every measured row/alt description is preserved in the accessible alternative to the graphical node. */
-function nodeEntry(node: PlacedNode, section: PlacedSection): OutlineEntry {
+function nodeEntry(
+  node: PlacedNode,
+  section: PlacedSection,
+): OutlineEntry {
   return {
     target: { kind: 'node', section: section.id, id: node.id },
     label: node.measured.label,
@@ -25,7 +28,10 @@ const markers = {
   'zero-many': 'zero or many',
 };
 /** Wire narration retains required labels, endpoint row/member identity and both cardinalities. */
-function wireEntry(wire: RoutedWire, section: PlacedSection): OutlineEntry {
+function wireEntry(
+  wire: RoutedWire,
+  section: PlacedSection,
+): OutlineEntry {
   const source =
     section.nodes.find((node) => node.id === wire.source.node)?.measured.label ?? wire.source.node;
   const target =

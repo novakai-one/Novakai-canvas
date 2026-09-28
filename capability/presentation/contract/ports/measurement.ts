@@ -8,5 +8,9 @@ export interface TextMetrics {
 /** Exact pinned metrics shared by local node layout and export. Version participates in the projection input key. */
 export interface MeasurementPort {
   readonly version: string;
-  measure(text: string, font: FontRef, size: number): Result<TextMetrics>;
+  measure(
+    text: string,
+    font: FontRef,
+    size: number,
+  ): Result<TextMetrics>;
 }

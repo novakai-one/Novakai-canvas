@@ -14,7 +14,11 @@ export function scopeEdges(
 }
 
 /** Descendants inherit their nearest root in this scope; unrelated branches contribute no spacing. */
-function owner(id: string, roots: readonly string[], section: VisualSection): string | null {
+function owner(
+  id: string,
+  roots: readonly string[],
+  section: VisualSection,
+): string | null {
   if (roots.includes(id)) return id;
   const node = section.nodes.find((item): boolean => item.id === id);
   return parentOwner(node?.parent ?? null, roots, section);
@@ -31,7 +35,11 @@ function parentOwner(
 }
 
 /** Missing endpoints and wires internal to one branch must not inflate the enclosing scope. */
-function edge(id: string, source: string | null, target: string | null): PlacementProblem['edges'] {
+function edge(
+  id: string,
+  source: string | null,
+  target: string | null,
+): PlacementProblem['edges'] {
   if (source === null || target === null || source === target) return [];
   return [{ id, source, target }];
 }
