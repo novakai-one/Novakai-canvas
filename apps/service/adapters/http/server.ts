@@ -1,10 +1,13 @@
 /*
- * The node:http edge of the service. Impure (sockets, timers). `TransportPolicy` decides the
- * request head, body, kind, query, status, envelope, browser access and event frames. Kept here:
- * loopback listen and close, socket limits, heartbeat, request order, the contract's fixed header
- * tables, the JSON content type, the `Content-Disposition` format and status 200 for bytes and
- * events. A failed start leaves the workspace with the caller. A request that throws answers
- * `unavailable`, and its client reconciles the request's receipt.
+ * Why this file exists
+ *
+ * The browser and the CLI reach the service over HTTP at 127.0.0.1. Something has to own the
+ * socket: listen, read each request, and write each answer. For example, `GET /api/v1/identity`
+ * with the CLI's token is let in, sent to the API router, and answered as JSON.
+ *
+ * This file is that socket code. It keeps only the plumbing: limits, timers, request order and
+ * fixed headers. Every decision, like who may come in or which status to send, comes from
+ * `TransportPolicy` (core/transport). A request that throws answers `unavailable`.
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { ServerBindings } from '../../contract/ports/transport.js';
@@ -60,8 +63,10 @@ const HANDLERS: Readonly<Record<RequestKind, Handler>> = Object.freeze({
 });
 
 /**
- * Listens on IPv4 loopback at `options.port`. Fails with `unavailable` at `server` when the port
- * cannot be opened. The workspace stays with the caller, which closes it.
+ * Starts the HTTP server on 127.0.0.1 at `options.port`, answering each request with `bindings`.
+ * Fails with `unavailable` at `server` when the port can't be opened; the caller still has the
+ * workspace, and closes it. The running server's `close` fails the same way if it can't close
+ * cleanly.
  */
 export function startHttpServer(
   options: ServerOptions,

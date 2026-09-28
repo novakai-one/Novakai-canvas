@@ -39,7 +39,7 @@ export async function runRenderWorker(): Promise<Result<void>> {
     }
     return workerEntry.serveRenderWorker({
       producer: { produce: derive.produceDiagram },
-      read: jobReader.readRenderingJob,
+      readJob: jobReader.readRenderingJob,
     });
   } catch {
     return failure('unavailable', 'worker', 'Rendering worker could not initialize');

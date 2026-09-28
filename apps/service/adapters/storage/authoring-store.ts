@@ -1,8 +1,14 @@
 /*
- * The Authoring store bridge: Persistence's conditional storage behind Authoring's snapshot,
- * receipt and commit roles. Storage failures keep their Persistence evidence under an Authoring
- * code. Each store keeps its own cache of snapshot views (in memory, no I/O of its own). Authoring
- * owns admission and uncertain-commit recovery; trusted compose alone binds it.
+ * Why this file exists
+ *
+ * Authoring saves every change, but it doesn't know about SQLite. It asks for three things: read
+ * the workspace, find a request's receipt, and commit a change. Persistence does the storing, and
+ * has its own mistake codes. For example, Persistence says `missing-resource` where Authoring says
+ * `missing-asset`.
+ *
+ * This file joins the two: it gives Authoring those three roles, backed by Persistence, and turns
+ * each storage mistake into Authoring's code, keeping Persistence's detail. It never decides
+ * whether a change is allowed; Authoring does.
  */
 import { receiptSchema, failure } from '@novakai/canvas-authoring';
 import type {
@@ -21,9 +27,10 @@ import type {
 import type { AuthoringStore, ConditionalStorage } from '../../contract/ports/storage.js';
 
 /**
- * Binds Authoring's snapshot, receipt and commit roles to one conditional storage, with a view
- * cache owned by this store. Each role fails as described on `rawSnapshot`, `receipt` and
- * `commit`; nothing rejects.
+ * Gives Authoring its three storage roles (read the workspace, find a receipt, commit), backed by
+ * `storage`. Finding a receipt answers `null` when none is stored.
+ * Mistakes: `permission-denied` at `workspace` for another workspace, `corrupt-record` at
+ * `receipt` for a stored receipt that can't be read, and Persistence's mistakes as Authoring codes.
  */
 export function createAuthoringStore(storage: ConditionalStorage): AuthoringStore {
   const bridge: StoreBridge = { storage, views: new WeakMap() };

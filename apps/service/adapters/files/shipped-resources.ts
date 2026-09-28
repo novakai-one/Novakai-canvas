@@ -1,9 +1,13 @@
 /*
- * Reads the installation's shipped resources: the bundled fonts (staged through Assets' font
- * codec), the Design System token sources and one recipe starter per family. Impure (file reads,
- * Assets staging). Nothing is admitted here: startup Authoring admission binds the presets and
- * owns commit and recovery. Bytes staged before a failure stay collectible; the caller repairs
- * the installation and retries.
+ * Why this file exists
+ *
+ * Every workspace starts with the same built-in fonts, design tokens and recipe starters. They ship
+ * with the app, in the resource folder. For example, `fonts/inter-latin-400-normal.woff2` is the
+ * body text font.
+ *
+ * This file reads those shipped files at start-up. Each font is stored through Assets and read
+ * back. It reads only the fixed list of files below, so no diagram can name another path. It never
+ * admits a preset; start-up does that through Authoring.
  */
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -17,11 +21,11 @@ import type { BuiltinFonts, BuiltinSources } from '../../contract/records/preset
 import type { HostPath } from '../../contract/brands.js';
 import { andThen, collect, failure, success, type Result } from '../../contract/errors.js';
 
-/** The Assets operations a shipped font is staged and read back through. */
-type FontStaging = Pick<Assets, 'stage' | 'resolve'>;
+/** The part of Assets a shipped font is stored through (`stage`) and read back from (`resolve`). */
+export type FontStore = Pick<Assets, 'stage' | 'resolve'>;
 
-/** The Design System reader of the token source files. */
-type TokenSourceReader = Pick<TokenFileBindings, 'source'>;
+/** The part of the Design System that reads the design token source files. */
+export type TokenSourceReader = Pick<TokenFileBindings, 'source'>;
 
 /** One shipped recipe starter: its family and DSL source. */
 type ShippedRecipe = BuiltinSources['recipes'][number];
@@ -65,22 +69,14 @@ const FONT_WIRE_ORDER: readonly (keyof BuiltinFonts)[] = Object.freeze([
 const FONT_LICENSE = 'SIL Open Font License 1.1';
 
 /**
- * Reads the shipped sources for startup.
- *
- * Steps, started together; once all have finished, the first failure in this order is returned:
- * 1. Stage each shipped font and read it back as Presentation's font set (see `stageFonts`).
- * 2. Read the Design System token sources.
- * 3. Read each shipped recipe starter (see `readRecipes`).
- *
- * Nothing is admitted. Fails with `unavailable` at `builtins` ("Bundled fonts, recipes or token
- * definitions could not be loaded") when a shipped file cannot be read, Assets or the Design
- * System rejects a resource, or Presentation rejects a font. The owner's failure is not kept.
- * Assets and the Design System answer with Results; one that throws instead gets the same
- * failure (caught here).
+ * Reads the shipped fonts, design token sources and recipe starters from `resourceRoot`. Each font
+ * is stored through `assets` and read back, so its bytes are the ones Assets keeps.
+ * Fails with `unavailable` at `builtins` when a shipped file can't be read, or Assets, the Design
+ * System or Presentation refuses one. Their own mistake is not kept.
  */
 export async function loadBuiltinSources(
   resourceRoot: HostPath,
-  assets: FontStaging,
+  assets: FontStore,
   tokens: TokenSourceReader,
 ): Promise<Result<BuiltinSources>> {
   try {
@@ -93,7 +89,7 @@ export async function loadBuiltinSources(
 /** Reads the fonts, token sources and recipes together (see `loadBuiltinSources`). */
 async function readShippedSources(
   resourceRoot: HostPath,
-  assets: FontStaging,
+  assets: FontStore,
   tokens: TokenSourceReader,
 ): Promise<Result<BuiltinSources>> {
   const [fonts, tokenSources, recipes] = await Promise.all([
@@ -115,7 +111,7 @@ async function readShippedSources(
  */
 async function stageFonts(
   root: HostPath,
-  assets: FontStaging,
+  assets: FontStore,
 ): Promise<Result<FontSet>> {
   const staged = await Promise.all(
     FONT_WIRE_ORDER.map((role) => stageFont(root, SHIPPED_MANIFEST.fonts[role], assets)),
@@ -132,7 +128,7 @@ async function stageFonts(
 async function stageFont(
   root: HostPath,
   file: string,
-  assets: FontStaging,
+  assets: FontStore,
 ): Promise<Result<FontSource>> {
   const bytes = await readShippedFile(join(root, 'fonts', file));
   if (!bytes.ok) return bytes;
@@ -154,7 +150,7 @@ async function stageFont(
  */
 function readStagedFont(
   digest: Digest,
-  assets: FontStaging,
+  assets: FontStore,
 ): Result<FontSource> {
   const blob = fromOwner(assets.resolve(digest));
   return andThen(blob, (stored) =>

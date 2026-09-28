@@ -1,8 +1,13 @@
 /*
- * The render worker's derivation: Presentation measures a job's collection and Layout arranges
- * it, with no database handle or mutable service state. Impure (native measurement and layout
- * engines). Runs in the render worker realm and the CLI's headless realm. A failed job keeps the
- * host's accepted scene; the host retries with corrected resources.
+ * Why this file exists
+ *
+ * A render job holds a collection and everything needed to draw it: fonts, style, images and
+ * layout options. Something has to turn that into a picture. For example, the job for
+ * `my-diagram` becomes a scene with every node placed and every wire routed.
+ *
+ * This file does the drawing. Presentation measures the text and boxes, then Layout places the
+ * nodes and routes the wires, from scratch each time. It runs on a render worker thread, and in
+ * `pnpm render:png`. It never reads the workspace, and never saves anything.
  */
 import type { FailureSource } from '../../contract/records/transport/failure-source.js';
 import { validate, fieldTypeDisplay, typeUseDisplay } from '@novakai/canvas-model';
@@ -34,16 +39,10 @@ interface MeasuredCollection {
 }
 
 /**
- * Renders the job's collection into a document.
- *
- * Steps; the first failure stops the render and no partial geometry is returned:
- * 1. Measure the collection with Presentation (see `measureCollection`).
- * 2. Arrange it with Layout, from scratch (see `arrangeCollection`).
- *
- * Fails with `invalid-input` at `render` ("A rendering owner rejected the input") when Model,
- * Presentation or Layout rejects the job, including a cancelled job (the owner's failure kept as
- * source). Fails with `unavailable` at `render` ("Diagram measurement or layout could not
- * complete") when native measurement or layout throws (caught here).
+ * Draws the job's collection: Presentation measures it, then Layout places and routes it.
+ * Mistakes: `invalid-input` at `render` when Model, Presentation or Layout refuses the job, or
+ * `signal` aborts (their mistake kept as the source); `unavailable` at `render` when measuring or
+ * layout crashes. It never answers part of a drawing.
  */
 export async function produceDiagram(
   job: RenderingJob,

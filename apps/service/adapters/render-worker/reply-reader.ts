@@ -1,8 +1,13 @@
 /*
- * The parent realm's reading of a render worker reply. Pure. A reply is checked against the job
- * that asked for it and decoded by its owners; no wire payload is cast into a trusted record.
- * Every refusal is one `invalid-input` at `render-response`: the host keeps its prior scene and
- * offers a retry instead of mounting unchecked data.
+ * Why this file exists
+ *
+ * A render worker's reply arrives as plain data, and a bad reply must never reach the browser. For
+ * example, the reply for `my-diagram` must repeat exactly the fonts and options its job sent, and
+ * carry a scene Layout accepts.
+ *
+ * This file checks one reply against the job that asked for it, and rebuilds the drawn document.
+ * Presentation and Layout check their own parts. Any mismatch is one mistake, `invalid-input` at
+ * `render-response`, and the caller keeps its last picture. It never passes on unchecked data.
  */
 import type { z } from 'zod';
 import {
@@ -30,21 +35,16 @@ interface AdmittedGeometry {
 }
 
 /**
- * The worker's reply as a RenderDocument for `job`.
- *
- * Steps; the first failure stops the reading:
- * 1. Check the envelope, and that the reply echoes the job's inputs (see `readReply`).
- * 2. Decode and admit its geometry (see `admitGeometry`).
- * 3. Decode its fonts, style and options (see `assembleDocument`).
- *
- * Fails with `invalid-input` at `render-response` ("Rendering response does not match the
- * admitted job") when any step fails. The owner's failure is not kept.
+ * Checks a worker's reply against the job that asked for it, and rebuilds the drawn document.
+ * The reply must repeat the job's collection, fonts, style and options exactly; Presentation and
+ * Layout then check the drawing itself. Fails with `invalid-input` at `render-response` when
+ * anything doesn't match or a check fails.
  */
 export function readRenderDocument(
-  input: unknown,
+  workerReply: unknown,
   job: RenderingJob,
 ): Result<RenderDocument> {
-  const reply = readReply(input, job);
+  const reply = readReply(workerReply, job);
   if (!reply.ok) return reply;
   const geometry = admitGeometry(reply.value, job);
   if (!geometry.ok) return geometry;

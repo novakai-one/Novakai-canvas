@@ -1,8 +1,13 @@
 /*
- * The local credentials of one server: the persistent agent credential file (created once,
- * owner-only, never overwritten) and the restart-scoped browser session and transport generation.
- * Impure (file system, crypto). Credential bytes never enter an API response, URL, diagnostic or
- * log. A refused credential file is the operator's to repair; startup or the CLI then retries.
+ * Why this file exists
+ *
+ * Only the person's own browser and CLI may use the service. For example, the CLI sends
+ * `Authorization: Bearer <token>`, and the token comes from the workspace's
+ * `agent-credential.json`. The browser gets a session cookie instead.
+ *
+ * This file makes and reads those secrets. The token file is made once, readable only by its
+ * owner, and never overwritten. Each start makes a new browser secret. No secret ever goes into an
+ * answer, URL, message or log. A bad token file is for the person to repair.
  */
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { mkdir, open } from 'node:fs/promises';
@@ -31,18 +36,18 @@ const credential = z.strictObject({
 const MAX_CREDENTIAL_BYTES = 1024;
 
 /**
- * Creates the agent credential file when it is missing, reads it back, and mints this start's
- * browser session and transport generation for the loopback address of `port`. Fails with
- * `unavailable` at `credential` when the file is unsafe or malformed (see `readCredential`), or
- * when it cannot be created or opened safely. Failed startup grants no authentication.
+ * Makes this start's secrets for 127.0.0.1:`port`: the CLI's token (making its file on the first
+ * start), a new browser session secret and a new `Generation` label.
+ * Fails with `unavailable` at `credential` when the token file can't be made, is a link or not a
+ * plain file, is readable by others, or is malformed.
  */
 export async function createLocalSecurity(
   port: LoopbackPort,
-  path: HostPath,
+  credentialFile: HostPath,
 ): Promise<Result<HttpSecurity>> {
   try {
-    await ensureCredential(path);
-    const agent = await readCredential(path);
+    await ensureCredential(credentialFile);
+    const agent = await readCredential(credentialFile);
     if (!agent.ok) return agent;
     return success(security(port, agent.value));
   } catch {
@@ -51,13 +56,13 @@ export async function createLocalSecurity(
 }
 
 /**
- * Reads the agent token for a local CLI; a missing or invalid file never creates a new identity.
- * Fails with `unavailable` at `credential` when the file is unsafe or malformed (see
- * `readCredential`), or cannot be read (the user starts the local service first).
+ * Reads the CLI's token from the credential file at `credentialFile` (its path as text). It never
+ * makes a new token. Fails with `unavailable` at `credential` when the file is missing, a link,
+ * readable by others, too large or malformed; the person starts the service first.
  */
-export async function readAgentCredential(path: string): Promise<Result<AgentToken>> {
+export async function readAgentCredential(credentialFile: string): Promise<Result<AgentToken>> {
   try {
-    return await readCredential(path);
+    return await readCredential(credentialFile);
   } catch {
     return refused('Agent credential could not be read; start the local service first');
   }

@@ -1,9 +1,13 @@
 /*
- * The render worker pool: node:worker_threads realms that run one render job at a time. One
- * initialized worker waits idle between jobs; a concurrent job starts its own worker, and a worker
- * not kept as the idle one is terminated when its job settles. Impure (threads, timers).
- * Cancellation, a crash, an early exit or the time limit terminates that job's worker; the parent
- * (compose/producer.ts) keeps the prior scene and the caller retries.
+ * Why this file exists
+ *
+ * Drawing a diagram can be slow, or can crash, so each drawing runs on a worker thread of its own.
+ * For example, two `GET /api/v1/render` requests at once run on two threads, and a drawing that
+ * runs past its time limit is stopped without harming the server.
+ *
+ * This file keeps those threads. One ready thread waits between jobs; an extra job starts its own
+ * thread, which ends with its job. Cancelling, a crash or the time limit ends that job's thread.
+ * It checks only the outer shape of a reply; reply-reader.ts checks the drawing.
  */
 import { Worker as NodeWorker } from 'node:worker_threads';
 import type { RenderingJob } from '../../contract/records/rendering/job.js';
@@ -11,6 +15,12 @@ import type { RenderTransport } from '../../contract/ports/rendering.js';
 import { workerReplyMessage, workerHandshake } from '../../contract/records/rendering/worker.js';
 import { failure, success, type Result } from '../../contract/errors.js';
 import type { CapabilityFailure } from '../../contract/records/transport/failure-source.js';
+
+/** The render worker pool: `run` sends a job to a free worker and answers its unchecked reply. */
+export interface RenderWorkerPool extends RenderTransport {
+  /** Answers once the first worker has started, or `unavailable` at `worker` when it can't. */
+  readonly ready: Promise<Result<void>>;
+}
 
 /** A started worker and the outcome of its start-up handshake. */
 interface WorkerSlot {
@@ -39,16 +49,15 @@ interface Pool {
 const NO_IDLE: IdleWorker = Object.freeze({ kind: 'none' });
 
 /**
- * Starts the pool with one idle worker; `ready` answers once it has loaded, or `unavailable` at
- * `worker` when it reports a startup failure, fails, exits or exceeds `timeoutMs` during start-up. `entry` is the worker
- * realm's script; compose names it. `run` fails with `cancelled` at `worker` when the signal
- * aborts, and `unavailable` at `worker` when a worker cannot start, fails, exits, exceeds
- * `timeoutMs` or returns a malformed result.
+ * Starts the render worker pool, with one worker that waits for the first job. `workerScript` is
+ * the file each worker thread runs (compose names it).
+ * Mistakes from `run`: `cancelled` at `worker` when the job is cancelled; `unavailable` at `worker`
+ * when a worker can't start, crashes, exits, runs past `timeoutMs` or sends a malformed reply.
  */
-export function createRenderTransport(
-  entry: URL,
+export function startRenderWorkerPool(
+  workerScript: URL,
   timeoutMs: number,
-): RenderTransport & { readonly ready: Promise<Result<void>> } {
+): RenderWorkerPool {
   let idle = NO_IDLE;
   const retire = (worker: NodeWorker): void => {
     if (idle.kind === 'ready' && idle.slot.worker === worker) idle = NO_IDLE;
@@ -57,7 +66,7 @@ export function createRenderTransport(
     const current = idle;
     idle = NO_IDLE;
     if (current.kind === 'ready') return current.slot;
-    return startWorker(entry, timeoutMs, retire);
+    return startWorker(workerScript, timeoutMs, retire);
   };
   const release = (slot: WorkerSlot): void => {
     if (idle.kind === 'ready') {

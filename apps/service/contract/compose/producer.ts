@@ -35,7 +35,7 @@ export async function startRenderWorkers(): Promise<Result<DiagramProducer>> {
       import('../../adapters/render-worker/pool.js'),
       import('../../adapters/render-worker/reply-reader.js'),
     ]);
-    const transport = worker.createRenderTransport(WORKER_ENTRY, RENDER_TIMEOUT_MS);
+    const transport = worker.startRenderWorkerPool(WORKER_ENTRY, RENDER_TIMEOUT_MS);
     const ready = await transport.ready;
     if (!ready.ok) return notInitialized();
     return success({

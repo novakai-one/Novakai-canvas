@@ -1,3 +1,13 @@
+/*
+ * Why this file exists
+ *
+ * A workspace is a folder on disk. For example, `pnpm dev --workspace ./my-workspace` needs two
+ * stores in that folder: `assets/` for uploaded files, and `workspace.sqlite` for the diagrams.
+ *
+ * This file opens both, in that order, and hands back one way to close them. If the database won't
+ * open, it closes the files store again. It only makes folders and opens the stores; it never
+ * writes a record, and never deletes or replaces an existing file.
+ */
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Assets } from '@novakai/canvas-assets';
@@ -8,6 +18,23 @@ import type {
   OpenStores,
 } from '../../contract/records/workspace/startup.js';
 import { failure, type Result } from '../../contract/errors.js';
+/**
+ * Opens the uploaded-files store, then the database, in `options.directory`, making the folder if
+ * it is missing. The answer's `close` closes both, and reports the first that failed to close.
+ * Fails with `unavailable`: at the store's path when a store won't open (its mistake kept as the
+ * source), or at `workspace` when the folder can't be made or a store throws.
+ */
+export async function openWorkspaceFiles(
+  options: WorkspaceOptions,
+  openers: StoreOpeners,
+): Promise<Result<OpenStores>> {
+  try {
+    await mkdir(join(options.directory, 'assets'), { recursive: true });
+    return open(options, openers);
+  } catch {
+    return failure('unavailable', 'workspace', 'Workspace files could not be opened');
+  }
+}
 /** Closing both owners is attempted even if one reports a failure; callers preserve the original files. */
 async function close(
   storage: Persistence,
@@ -45,16 +72,4 @@ function openDatabase(
     ok: true,
     value: { assets, storage: storage.value, close: () => close(storage.value, assets) },
   };
-}
-/** Explicit host lifecycle creates only directories/native handles; malformed paths never trigger deletion or replacement. */
-export async function openWorkspaceFiles(
-  options: WorkspaceOptions,
-  factories: StoreOpeners,
-): Promise<Result<OpenStores>> {
-  try {
-    await mkdir(join(options.directory, 'assets'), { recursive: true });
-    return open(options, factories);
-  } catch {
-    return failure('unavailable', 'workspace', 'Workspace files could not be opened');
-  }
 }

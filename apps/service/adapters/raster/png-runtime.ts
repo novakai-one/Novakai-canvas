@@ -1,9 +1,12 @@
 /*
- * The rasterizer adapter: compiles the resvg WebAssembly module installed with the service and
- * initializes Export's rasterizer with it. Impure (module resolution, file read). The first
- * preparation's promise is kept and shared by every later PNG request — a failed preparation
- * included — for the life of the rasterizer; the operator restores the module and restarts the
- * service.
+ * Why this file exists
+ *
+ * A PNG export needs resvg, a WebAssembly program that turns an SVG drawing into PNG pixels. It
+ * ships with the service as a file that must be loaded first. For example, the first
+ * `POST /api/v1/export` with `format: 'png'` loads it; later PNG exports reuse it.
+ *
+ * This file loads resvg once and hands it to Export. Every later request shares that first
+ * outcome, even a failure: then the person restores resvg and restarts the service.
  */
 import { createRequire } from 'node:module';
 import { readFile } from 'node:fs/promises';
@@ -22,8 +25,8 @@ type StartedPhase = Extract<RasterPhase, { readonly kind: 'started' }>;
 const UNSTARTED: RasterPhase = Object.freeze({ kind: 'unstarted' });
 
 /**
- * A PNG encoder that initializes on the first `prepare` and shares that outcome. `prepare` fails
- * with `unavailable` at `export.png` when the module cannot load or Export refuses it.
+ * Makes the PNG encoder. Its first `prepare` loads resvg; every later call shares that outcome.
+ * `prepare` fails with `unavailable` at `export.png` when resvg can't load or Export refuses it.
  */
 export function createPngEncoder(): PngEncoder {
   let phase = UNSTARTED;
