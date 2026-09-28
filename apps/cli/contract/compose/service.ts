@@ -16,7 +16,7 @@ import { createServiceReads } from '../../adapters/service-http/reads.js';
 import { createServiceAuthoring } from '../../adapters/service-http/authoring.js';
 import { createServiceResources } from '../../adapters/service-http/resources.js';
 import { runServiceCommand } from '../api.js';
-import type { ServicePorts } from '../api.js';
+import type { ServiceCommandDependencies } from '../api.js';
 import type { Result } from '../errors.js';
 import { failure, rejected, success } from '../errors.js';
 import type { ServiceCommand, ServiceOptions } from '../records/command.js';
@@ -59,13 +59,15 @@ async function readToken(workspace: FilePath): Promise<Result<AgentToken>> {
 function servicePorts(
   options: ServiceOptions,
   token: AgentToken,
-): ServicePorts {
+): ServiceCommandDependencies {
   const transport = createTransport(options.server, token);
+  const files = createLocalFiles();
   return {
     reads: createServiceReads(transport),
     authoring: createServiceAuthoring(transport),
     resources: createServiceResources(transport),
-    files: createLocalFiles(),
+    files,
+    writer: files,
     journal: createRequestJournal(resolve(options.workspace, 'requests')),
     reader: createResourceReader(),
     collections: { validate },

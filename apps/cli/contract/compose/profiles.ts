@@ -11,5 +11,6 @@ import { composeLanguage } from './language.js';
 
 /** Runs one profile command. Fails as the command does. */
 export async function runProfile(command: ProfileCommand): Promise<Result<string>> {
-  return runProfileCommand(command, { files: createLocalFiles(), language: composeLanguage() });
+  const files = createLocalFiles();
+  return runProfileCommand(command, { files, writer: files, language: composeLanguage() });
 }

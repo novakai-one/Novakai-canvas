@@ -6,19 +6,22 @@
  *
  *   invalid-arguments: read requires 1 operand(s)
  *
- * This file writes those messages in one place, so every check words the same mistake the same
- * way. The wording is kept as the earlier CLI printed it.
+ * This file writes the mistakes about the command's shape: which words and flags were typed. For
+ * example, a first word that isn't a command, the wrong number of words, or a flag the command
+ * doesn't take. Every check that finds one of those uses the same function here, so the same
+ * mistake is always worded the same way. A mistake about one typed value, such as a bad
+ * `--revision`, is written by the check that finds it, in `values.ts` or `recipe-values.ts`.
  *
- * Each function here returns a `Failure` (see `contract/errors.ts`), never a value. None of them
- * checks anything: the checks are in the files that call them. Nothing has been read or sent at
- * this point, so the agent only has to fix the command and run it again.
+ * None of these functions checks anything: the checks are in the files that call them. Each one
+ * returns `Result<never, LocalFailure>` (see `contract/errors.ts`): always a mistake, never a
+ * value. A `LocalFailure` is a mistake the CLI found itself, not one the service sent back.
+ * Nothing has been read or sent at this point, so the agent only has to fix the command and run it
+ * again.
  */
 import type { CommandName } from '../../contract/records/command.js';
 import type { LocalFailure, Result } from '../../contract/errors.js';
 import { failure } from '../../contract/errors.js';
-
-/** How many words a command takes after it: 0 (`list`) or 1 (`read my-diagram`). */
-export type OperandCount = 0 | 1;
+import type { OperandCount } from './table.js';
 
 /** What to type instead, after a flag that couldn't be read. */
 const malformedFlagRecovery =

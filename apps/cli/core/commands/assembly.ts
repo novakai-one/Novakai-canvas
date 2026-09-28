@@ -4,17 +4,19 @@
  * By this point the CLI knows the command, and that its words and flags fit. But every value is
  * still text as the agent typed it. In `pnpm canvas replace plan.canvas --revision 3`, the `3` is
  * only text. The rest of the CLI needs checked values: a real revision number, a file path, a
- * server address on this machine.
+ * service address on this machine.
  *
  * This file turns the accepted command into one `ParsedCommand`, with every value checked and
  * every left-out option filled in. It checks `--section`, `--object`, `--mode` and `--revision`
- * first, the same way for every command. Then it hands the command's own values to its builder,
- * in `service-commands.ts` or `profile-commands.ts`. Last, for a command sent to the service, it
- * adds where to send it (`--server`, `--workspace`).
+ * first, the same way for every command. (`--mode` says whether `preview`'s file creates,
+ * replaces or patches a collection.) Then it checks the command's own values with the command's
+ * `build…Command` function, in `service-commands.ts` or `profile-commands.ts`. Last, for a command
+ * sent to the service, it adds where to send it: `--server`, the service's address, and
+ * `--workspace`.
  *
- * It never reads a file or talks to the server. Each step answers with a `Result` (see
- * `contract/errors.ts`). The checks, and the mistakes they report, are in `values.ts` and
- * `recipe-values.ts`.
+ * It never reads a file or talks to the service. Each step answers with a `Result` (see
+ * `contract/errors.ts`). A mistake about one typed value is written by the check that finds it, in
+ * `values.ts` or `recipe-values.ts`.
  */
 import type {
   ChangeMode,
@@ -30,11 +32,11 @@ import { success } from '../../contract/errors.js';
 import { unsupported } from '../shared/results.js';
 import type {
   AcceptedCommand,
-  AcceptedWithOperand,
-  AcceptedWithoutOperand,
+  AcceptedNoOperandCommand,
+  AcceptedOneOperandCommand,
 } from './command-stages.js';
 import type { FilePath } from '../../contract/brands.js';
-import type { CommandFlags } from './flags.js';
+import type { TypedFlagText } from './flags.js';
 import {
   buildProfileDescribeCommand,
   buildProfileLintCommand,
@@ -56,7 +58,7 @@ import {
   checkChangeMode,
   checkReadScope,
   checkRevisionOption,
-  checkServiceOptions,
+  checkServerAndWorkspace,
 } from './values.js';
 
 /** The commands that run locally with a build-spec profile. */
@@ -72,9 +74,9 @@ interface ModeAndRevision {
 }
 
 /**
- * The read scope, --mode and --revision. Checked for every command before its operand, so the
- * first failure matches the base CLI. A command that does not take them was refused them, so it
- * holds the defaults and does not read them.
+ * The read scope, --mode and --revision. Checked for every command before its operand, so these
+ * mistakes are reported first. A command that does not take them was refused them, so it holds
+ * the defaults and does not read them.
  */
 interface ScopeModeAndRevision extends ModeAndRevision {
   readonly scope: ReadScope;
@@ -98,8 +100,9 @@ const profileCommands: Readonly<Record<ProfileCommandName, ProfileCommandName>> 
  *    wasn't typed, the command uses `defaultWorkspace`.
  *
  * The mistakes it can find: a bad `--section` or `--object` ID, an unknown `--mode`, a bad
- * `--revision`, a bad collection ID, request ID or recipe pin, an unknown profile, a missing or bad
- * recipe or scaffold flag, an empty file or `--out` path, or a `--server` not on this machine.
+ * `--revision`, a bad collection ID, request ID or recipe pin (such as `er@1.0.0#sha256:DIGEST`),
+ * an unknown profile, a missing or bad `recipe admit` flag or `profile scaffold` `--id`/`--title`,
+ * an empty file or `--out` path, or a `--server` not on this machine.
  */
 export function assembleCommand(
   accepted: AcceptedCommand,
@@ -118,7 +121,7 @@ export function assembleCommand(
  */
 function checkScopeModeAndRevision(
   name: CommandName,
-  flags: CommandFlags,
+  flags: TypedFlagText,
 ): Result<ScopeModeAndRevision> {
   const scope = checkReadScope(flags);
   if (!scope.ok) {
@@ -137,7 +140,7 @@ function checkScopeModeAndRevision(
  */
 function checkModeAndRevision(
   name: CommandName,
-  flags: CommandFlags,
+  flags: TypedFlagText,
 ): Result<ModeAndRevision> {
   const mode = checkChangeMode(name, flags);
   if (!mode.ok) {
@@ -174,7 +177,7 @@ function buildCommand(
  * `output-unavailable`, then `invalid-server`.
  */
 function buildNoOperandCommand(
-  accepted: AcceptedWithoutOperand,
+  accepted: AcceptedNoOperandCommand,
   defaultWorkspace: FilePath,
 ): Result<ParsedCommand> {
   const { name, flags } = accepted;
@@ -190,7 +193,7 @@ function buildNoOperandCommand(
  * sent with its --server and --workspace. Fails as its builder does, then with `invalid-server`.
  */
 function buildOperandCommand(
-  accepted: AcceptedWithOperand,
+  accepted: AcceptedOneOperandCommand,
   scopeModeAndRevision: ScopeModeAndRevision,
   defaultWorkspace: FilePath,
 ): Result<ParsedCommand> {
@@ -207,7 +210,7 @@ function buildOperandCommand(
 function buildProfileCommand(
   name: ProfileCommandName,
   operand: string,
-  flags: CommandFlags,
+  flags: TypedFlagText,
 ): Result<ProfileCommand> {
   switch (name) {
     case 'profile-describe':
@@ -233,7 +236,7 @@ function routeLocally(profileCommand: Result<ProfileCommand>): Result<ParsedComm
 function buildServiceCommand(
   name: OperandServiceCommandName,
   operand: string,
-  flags: CommandFlags,
+  flags: TypedFlagText,
   scopeModeAndRevision: ScopeModeAndRevision,
 ): Result<ServiceCommand> {
   const { scope, mode, revisionOption } = scopeModeAndRevision;
@@ -269,13 +272,13 @@ function buildServiceCommand(
  */
 function addServiceOptions(
   serviceCommand: Result<ServiceCommand>,
-  flags: CommandFlags,
+  flags: TypedFlagText,
   defaultWorkspace: FilePath,
 ): Result<ParsedCommand> {
   if (!serviceCommand.ok) {
     return serviceCommand;
   }
-  const options = checkServiceOptions(flags, defaultWorkspace);
+  const options = checkServerAndWorkspace(flags, defaultWorkspace);
   if (!options.ok) {
     return options;
   }

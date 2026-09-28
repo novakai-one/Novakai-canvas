@@ -6,14 +6,21 @@
  * `pnpm canvas read my-diagram --out read.canvas`: before it is sent, `my-diagram` has to be a
  * valid collection ID, and `read.canvas` a usable path.
  *
- * This file has one builder per kind of service command. Each checks the word typed after the
- * command, then the command's own flags, then `--request` and `--out`. It returns a
- * `ServiceCommand` with only the fields that command uses.
+ * This file has one `build…Command` function per kind of service command. Each checks the word
+ * typed after the command, then the command's own flags, then `--request` and `--out`. It returns
+ * a `ServiceCommand` with only the fields that command uses.
  *
- * It never sends anything. `assembly.ts` has already checked `--section`, `--object`, `--mode` and
- * `--revision`, and passes in the ones a command uses. Each check answers with a `Result` (see
- * `contract/errors.ts`). The checks, and the mistakes they report, are in `values.ts` and
- * `recipe-values.ts`.
+ * Words used below:
+ *   - A receipt is the service's record that a change was saved.
+ *   - `--request ID` sets the ID of the change a command sends, so its receipt can be found later.
+ *   - To admit a file is to save it on the service: `theme admit` saves a theme.
+ *   - An `…Option` type holds one flag that may be left out: `RevisionOption` is
+ *     `{ revision?: CollectionRevision }`.
+ *
+ * This file never sends anything; it only builds the command. `assembly.ts` has already checked
+ * `--section`, `--object`, `--mode` and `--revision`, and passes in the ones a command uses. Each
+ * check answers with a `Result` (see `contract/errors.ts`). A mistake about one typed value is
+ * written by the check that finds it, in `values.ts` or `recipe-values.ts`.
  */
 import type {
   ChangeMode,
@@ -27,14 +34,14 @@ import type {
 import type { FilePath } from '../../contract/brands.js';
 import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
-import type { CommandFlags } from './flags.js';
-import { checkExpansionRequest, checkRecipeHeader } from './recipe-values.js';
+import type { TypedFlagText } from './flags.js';
+import { checkRecipeHeader, checkRecipeInstantiate } from './recipe-values.js';
 import {
   checkCollectionId,
+  checkFilePath,
   checkOutOption,
   checkRequestId,
   checkRequestOption,
-  checkSourceFile,
 } from './values.js';
 
 /** `recipe admit`'s FILE and the recipe header from its --id --version --family --title. */
@@ -53,7 +60,7 @@ type RequestAndOutOptions = RequestOption & OutOption;
  */
 export function buildDescribeOrListCommand(
   name: 'describe' | 'list',
-  flags: CommandFlags,
+  flags: TypedFlagText,
 ): Result<ServiceCommand> {
   const outOption = checkOutOption(flags);
   if (!outOption.ok) {
@@ -70,7 +77,7 @@ export function buildDescribeOrListCommand(
  */
 export function buildReadCommand(
   typedCollectionId: string,
-  flags: CommandFlags,
+  flags: TypedFlagText,
   scope: ReadScope,
 ): Result<ServiceCommand> {
   const collection = checkCollectionId(typedCollectionId);
@@ -86,13 +93,13 @@ export function buildReadCommand(
 
 /**
  * Builds `inspect`, which reports on a collection's diagram: whether it is valid, its warnings,
- * and how many wires cross. `typedCollectionId` is the collection ID as typed.
+ * and how many connecting lines cross. `typedCollectionId` is the collection ID as typed.
  *
  * The mistakes it can find: a collection ID that isn't valid, then an empty `--out` path.
  */
 export function buildInspectCommand(
   typedCollectionId: string,
-  flags: CommandFlags,
+  flags: TypedFlagText,
 ): Result<ServiceCommand> {
   const collection = checkCollectionId(typedCollectionId);
   if (!collection.ok) {
@@ -106,15 +113,19 @@ export function buildInspectCommand(
 }
 
 /**
- * Builds `receipt`, `retry` or `apply`. Each acts on a request sent earlier, named by the request
- * ID typed after it: `pnpm canvas receipt req-1`. `typedRequestId` is that ID as typed.
+ * Builds `receipt`, `retry` or `apply`. Each acts on a change sent earlier, named by the request ID
+ * typed after it: `pnpm canvas receipt req-1`. `typedRequestId` is that ID as typed.
+ *
+ * - `receipt` shows whether the change was saved.
+ * - `retry` sends the same change again, when no receipt says it was saved.
+ * - `apply` saves a change that `preview` showed earlier.
  *
  * The mistakes it can find: a request ID that isn't valid, then an empty `--out` path.
  */
 export function buildReceiptRetryOrApplyCommand(
   name: 'receipt' | 'retry' | 'apply',
   typedRequestId: string,
-  flags: CommandFlags,
+  flags: TypedFlagText,
 ): Result<ServiceCommand> {
   const request = checkRequestId(typedRequestId);
   if (!request.ok) {
@@ -128,8 +139,8 @@ export function buildReceiptRetryOrApplyCommand(
 }
 
 /**
- * Builds `create` or `theme admit`. Each sends one file: a diagram to create, or a theme to save.
- * `typedFilePath` is the file's path as typed.
+ * Builds `create` or `theme admit`. The command sends one file: a diagram to create, or a theme to
+ * save. `typedFilePath` is the file's path as typed.
  *
  * The mistakes it can find: an empty file path, then a bad `--request` ID, then an empty `--out`
  * path.
@@ -137,9 +148,9 @@ export function buildReceiptRetryOrApplyCommand(
 export function buildCreateOrThemeAdmitCommand(
   name: 'create' | 'theme-admit',
   typedFilePath: string,
-  flags: CommandFlags,
+  flags: TypedFlagText,
 ): Result<ServiceCommand> {
-  const file = checkSourceFile(typedFilePath);
+  const file = checkFilePath(typedFilePath);
   if (!file.ok) {
     return file;
   }
@@ -151,8 +162,9 @@ export function buildCreateOrThemeAdmitCommand(
 }
 
 /**
- * Builds `replace` or `patch`. Each sends a file that changes a collection, with the revision the
- * agent last read (`revisionOption`, already checked). `typedFilePath` is the file's path as typed.
+ * Builds `replace` or `patch`. The command sends a file that changes a collection, with the
+ * revision the agent last read (`revisionOption`, already checked). `typedFilePath` is the file's
+ * path as typed.
  *
  * The mistakes it can find: an empty file path, then a bad `--request` ID, then an empty `--out`
  * path.
@@ -160,10 +172,10 @@ export function buildCreateOrThemeAdmitCommand(
 export function buildReplaceOrPatchCommand(
   name: 'replace' | 'patch',
   typedFilePath: string,
-  flags: CommandFlags,
+  flags: TypedFlagText,
   revisionOption: RevisionOption,
 ): Result<ServiceCommand> {
-  const file = checkSourceFile(typedFilePath);
+  const file = checkFilePath(typedFilePath);
   if (!file.ok) {
     return file;
   }
@@ -175,19 +187,20 @@ export function buildReplaceOrPatchCommand(
 }
 
 /**
- * Builds `preview`, which shows what a file would change without saving it. `mode` and
- * `revisionOption` were already checked. `typedFilePath` is the file's path as typed.
+ * Builds `preview`, which shows what a file would change without saving it. `mode` says whether
+ * the file creates, replaces or patches the collection (`--mode`). `mode` and `revisionOption`
+ * were already checked. `typedFilePath` is the file's path as typed.
  *
  * The mistakes it can find: an empty file path, then a bad `--request` ID, then an empty `--out`
  * path.
  */
 export function buildPreviewCommand(
   typedFilePath: string,
-  flags: CommandFlags,
+  flags: TypedFlagText,
   mode: ChangeMode,
   revisionOption: RevisionOption,
 ): Result<ServiceCommand> {
-  const file = checkSourceFile(typedFilePath);
+  const file = checkFilePath(typedFilePath);
   if (!file.ok) {
     return file;
   }
@@ -213,7 +226,7 @@ export function buildPreviewCommand(
  */
 export function buildRecipeAdmitCommand(
   typedFilePath: string,
-  flags: CommandFlags,
+  flags: TypedFlagText,
 ): Result<ServiceCommand> {
   const source = checkRecipeSource(typedFilePath, flags);
   if (!source.ok) {
@@ -228,15 +241,16 @@ export function buildRecipeAdmitCommand(
 
 /**
  * Builds `recipe instantiate`, which turns a saved recipe into diagram text. `typedPin` is the
- * exact recipe as typed, such as `er@1.0.0#sha256:DIGEST`.
+ * exact recipe as typed, such as `er@1.0.0#sha256:DIGEST`. `--namespace` is the new collection's
+ * ID.
  *
  * The mistakes it can find: a bad pin or `--namespace`, then an empty `--out` path.
  */
 export function buildRecipeInstantiateCommand(
   typedPin: string,
-  flags: CommandFlags,
+  flags: TypedFlagText,
 ): Result<ServiceCommand> {
-  const expansion = checkExpansionRequest(typedPin, flags.namespace);
+  const expansion = checkRecipeInstantiate(typedPin, flags.namespace);
   if (!expansion.ok) {
     return expansion;
   }
@@ -253,9 +267,9 @@ export function buildRecipeInstantiateCommand(
  */
 function checkRecipeSource(
   fileText: string,
-  flags: CommandFlags,
+  flags: TypedFlagText,
 ): Result<RecipeSource> {
-  const file = checkSourceFile(fileText);
+  const file = checkFilePath(fileText);
   if (!file.ok) {
     return file;
   }
@@ -267,7 +281,7 @@ function checkRecipeSource(
 }
 
 /** --request, then --out. Fails with `invalid-request`, then `output-unavailable`. */
-function checkRequestAndOutOptions(flags: CommandFlags): Result<RequestAndOutOptions> {
+function checkRequestAndOutOptions(flags: TypedFlagText): Result<RequestAndOutOptions> {
   const requestOption = checkRequestOption(flags);
   if (!requestOption.ok) {
     return requestOption;

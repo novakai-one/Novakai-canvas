@@ -8,7 +8,7 @@
 export { parseCommand } from '../core/commands/parse.js';
 export { helpText } from '../core/commands/help.js';
 export { runProfileCommand, runServiceCommand } from '../core/commands/dispatch.js';
-export type { ServicePorts } from '../core/commands/dispatch.js';
+export type { ServiceCommandDependencies } from '../core/commands/dispatch.js';
 
 /** `pnpm render:png`: compose.ts checks the argv, then runs the render over compose/render.ts. */
 export { parseRenderChoice } from '../core/render/request.js';

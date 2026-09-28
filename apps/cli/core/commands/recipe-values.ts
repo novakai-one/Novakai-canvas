@@ -6,16 +6,21 @@
  *   pnpm canvas recipe admit er.canvas --id er --version 1.0.0 --family er --title "ER diagram"
  *   pnpm canvas recipe instantiate er@1.0.0#sha256:DIGEST --namespace shop --out shop.canvas
  *
- * `recipe admit` saves a diagram file as a reusable recipe. Its four flags describe the recipe
- * (its header). `recipe instantiate` turns a saved recipe into diagram text the agent can edit. It
- * needs the exact recipe, written as ID, version and content digest (the recipe's pin), and
- * `--namespace`, the ID the new collection gets.
+ * `recipe admit` saves a diagram file as a reusable recipe. Its four flags make the recipe's
+ * header: its ID, version, family and title. The family is the kind of diagram the recipe makes,
+ * such as `er` (entity-relationship) or `sop` (standard operating procedure).
+ *
+ * `recipe instantiate` turns a saved recipe into diagram text the agent can edit. It needs the
+ * exact recipe, written as its pin: `ID@VERSION#sha256:DIGEST`, where the digest is a fingerprint
+ * of the recipe's content. `--namespace` becomes the new collection's ID.
  *
  * This file checks those values and returns them as checked types. The rules for IDs, versions and
- * families come from the Templates capability, so the CLI can't disagree with it.
+ * families come from the Templates capability, the part of Canvas that stores recipes and themes,
+ * so the CLI can't disagree with it. Templates' code calls a recipe or theme a "preset".
  *
  * It never reads the file or asks the service. Each check answers with a `Result` (see
- * `contract/errors.ts`). Every mistake here is `invalid-arguments`.
+ * `contract/errors.ts`). Every mistake here is `invalid-arguments`, written by the check that
+ * finds it.
  */
 import { presetId as presetIdSchema, version as versionSchema } from '../../contract/brands.js';
 import type { PresetDigest, PresetId, Version } from '../../contract/brands.js';
@@ -28,7 +33,7 @@ import { checked } from '../shared/checks.js';
 import type { Parser } from '../shared/checks.js';
 import { presetOfPin } from '../resources/digests.js';
 import { invalidArgumentsFailure } from './failures.js';
-import type { CommandFlags } from './flags.js';
+import type { TypedFlagText } from './flags.js';
 
 /** A missing or empty header flag, or an unknown --family. */
 const headerRequired = 'recipe admit requires --id --version --family --title';
@@ -71,9 +76,9 @@ type RecipePin = ExpansionRequest['pin'];
  *
  * The mistakes it can find, in this order: any of the four missing or empty; an `--id` that isn't
  * a letter followed by letters, digits, `_` or `-`; a `--version` not written like `1.0.0`; a
- * `--family` that isn't a recipe family, such as `er` or `sop`.
+ * `--family` that isn't a recipe family.
  */
-export function checkRecipeHeader(flags: CommandFlags): Result<RecipeHeader> {
+export function checkRecipeHeader(flags: TypedFlagText): Result<RecipeHeader> {
   const headerText = requireHeaderFlags(flags);
   if (!headerText.ok) {
     return headerText;
@@ -82,16 +87,18 @@ export function checkRecipeHeader(flags: CommandFlags): Result<RecipeHeader> {
 }
 
 /**
- * Checks what `recipe instantiate` asks for: the exact recipe and the new collection's ID. The
- * Templates capability calls this an expansion request.
+ * Checks what `recipe instantiate` asks for: the recipe's pin, and `--namespace`, the new
+ * collection's ID. They come back as one `ExpansionRequest`, the Templates name for "turn this
+ * recipe into diagram text".
  *
- * `typedPin` is the recipe as typed after the command, such as `er@1.0.0#sha256:DIGEST`.
+ * `typedPin` is the pin as typed after the command, such as `er@1.0.0#sha256:DIGEST`.
  * `typedNamespace` is the text after `--namespace`, or `undefined` when it wasn't typed.
  *
  * The mistakes it can find: a pin not in that shape; a pin whose ID, version or digest isn't
- * valid; `--namespace` missing or not a valid ID. Each has the usage line as its message.
+ * valid; `--namespace` missing or not a valid ID. Each one's message is the same usage line:
+ * `Use recipe instantiate ID@VERSION#sha256:DIGEST --namespace ID --out FILE`.
  */
-export function checkExpansionRequest(
+export function checkRecipeInstantiate(
   typedPin: string,
   typedNamespace: string | undefined,
 ): Result<ExpansionRequest> {
@@ -107,7 +114,7 @@ export function checkExpansionRequest(
 }
 
 /** All four header flags, each given and not empty. Fails with `invalid-arguments` naming all four. */
-function requireHeaderFlags(flags: CommandFlags): Result<HeaderText> {
+function requireHeaderFlags(flags: TypedFlagText): Result<HeaderText> {
   const { id, version, family, title } = flags;
   const allGiven = isFilled(id) && isFilled(version) && isFilled(family) && isFilled(title);
   if (!allGiven) {

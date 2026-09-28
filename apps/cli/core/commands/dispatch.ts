@@ -3,16 +3,17 @@
  *
  * Once a command line is parsed, something has to run it. `pnpm canvas read my-diagram` has to ask
  * the service for that collection. `pnpm canvas profile lint plan.canvas` has to check the file on
- * this machine. Each command has its own flow that does the work.
+ * this machine. Each command has its own code that does the work, in `core/reads`,
+ * `core/authoring`, `core/presets` and `core/profiles`. (`core/presets` saves themes and recipes;
+ * a preset is either one.)
  *
- * This file sends each command to the flow that answers it. Then it hands the answer to
- * `delivery.ts`, which prints it or writes it to the `--out` file.
+ * This file sends each command to the code that answers it. Then it hands the answer to
+ * `delivery.ts`, which keeps it for the screen or writes it to the `--out` file.
  *
- * It does no I/O itself. Every flow uses the tools it is handed (its ports), such as the service
- * connection or the file reader. It never prints and never sets the exit code: `cli/canvas.ts`
- * does that with what comes back. Each step answers with a `Result` (see `contract/errors.ts`).
- * If the answer to a sent change is lost, the agent checks it with `canvas receipt ID`, then
- * `canvas retry ID`.
+ * It does no I/O itself. The code it calls uses only the tools it is handed (its dependencies),
+ * such as the service connection or the file reader. It never prints and never sets the exit
+ * code: `cli/canvas.ts` does that with what comes back. Each step answers with a `Result` (see
+ * `contract/errors.ts`).
  */
 import type { ProfileCommand, ServiceCommand } from '../../contract/records/command.js';
 import type { ExpansionRequest } from '../../contract/records/foreign.js';
@@ -36,51 +37,58 @@ import { answerProfile } from '../profiles/commands.js';
 import type { ProfileDependencies } from '../profiles/commands.js';
 import { unsupported } from '../shared/results.js';
 import { deliverAnswer } from './delivery.js';
-import type { OutputPorts } from './delivery.js';
+import type { OutFileWriter } from './delivery.js';
 
-/** The one port `recipe instantiate` uses: it is a single service call, made here. */
-interface InstantiatePorts {
+/** What `recipe instantiate` uses: the one service call that turns a recipe into diagram text. */
+export interface RecipeInstantiateDependencies {
   readonly resources: Pick<ServiceResources, 'instantiate'>;
 }
 
+/** What every command uses to write its answer to the `--out` file. */
+export interface OutFileDependencies {
+  readonly writer: OutFileWriter;
+}
+
 /**
- * Every tool a service command may need, joined from each flow's own list: the service
- * connections, the file reader and writer, the request journal, the Language checker and more.
- * `contract/compose/service.ts` makes each one once.
+ * Every tool a service command may need, joined from each part's own list: the service
+ * connection, the file reader, the `--out` writer, the request journal (a copy of each change the
+ * CLI sends, kept in the workspace so `retry` can send it again), Language (which reads DSL text)
+ * and more. `contract/compose/service.ts` makes each one once.
  */
-export type ServicePorts = ReadDependencies &
+export type ServiceCommandDependencies = ReadDependencies &
   AuthorDependencies &
   RetryDependencies &
   AdmitDependencies &
-  InstantiatePorts &
-  OutputPorts;
+  RecipeInstantiateDependencies &
+  OutFileDependencies;
 
 /**
- * Every tool a profile command may need: the file reader for `lint`, the Language checker, and the
- * `--out` writer.
+ * Every tool a profile command may need: the file reader for `lint`, Language (which reads DSL
+ * text), and the `--out` writer.
  */
-export type ProfilePorts = ProfileDependencies & OutputPorts;
+export type ProfileCommandDependencies = ProfileDependencies & OutFileDependencies;
 
 /**
  * Runs a command on the local service, and returns the text to show on screen.
  *
  * It takes two steps. If a step finds a mistake, it stops there and returns that mistake.
- * 1. Send the command to the flow that answers it, such as `read` to the service reads.
+ * 1. Send the command to the code that answers it. For example, `read` goes to the code that reads
+ *    a collection.
  * 2. Keep the answer to show on screen, or write it to the `--out` file (`delivery.ts`).
  *
- * The mistakes it can find: whatever the flow reports (a missing collection, a stale `--revision`,
- * no answer from the service, …), or an `--out` file that can't be written. In that last case the
- * command already ran, so it must not be run again.
+ * The mistakes it can find: whatever that code reports (a missing collection, a stale
+ * `--revision`, no answer from the service, …), or an `--out` file that can't be written. In that
+ * last case the command already ran (see `delivery.ts`).
  */
 export async function runServiceCommand(
   command: ServiceCommand,
-  ports: ServicePorts,
+  dependencies: ServiceCommandDependencies,
 ): Promise<Result<string>> {
-  const answer = await answerServiceCommand(command, ports);
+  const answer = await answerServiceCommand(command, dependencies);
   if (!answer.ok) {
     return answer;
   }
-  return deliverAnswer(answer.value, command, ports);
+  return deliverAnswer(answer.value, command, dependencies.writer);
 }
 
 /**
@@ -95,49 +103,49 @@ export async function runServiceCommand(
  */
 export async function runProfileCommand(
   command: ProfileCommand,
-  ports: ProfilePorts,
+  dependencies: ProfileCommandDependencies,
 ): Promise<Result<string>> {
-  const answer = await answerProfile(command, ports);
+  const answer = await answerProfile(command, dependencies);
   if (!answer.ok) {
     return answer;
   }
-  return deliverAnswer(answer.value, command, ports);
+  return deliverAnswer(answer.value, command, dependencies.writer);
 }
 
 /**
- * Sends the command to the flow that answers it and returns the answer. Reads → service queries;
+ * Sends the command to the code that answers it and returns the answer. Reads → service queries;
  * `create`, `replace`, `patch`, `preview` → Authoring; `retry`, `apply` → replay the retained
  * request; `theme admit`, `recipe admit` → preset admission; `recipe instantiate` → one service
- * call. Fails as that flow does.
+ * call. Fails as that code does.
  */
 function answerServiceCommand(
   command: ServiceCommand,
-  ports: ServicePorts,
+  dependencies: ServiceCommandDependencies,
 ): Promise<Result<string>> {
   switch (command.name) {
     case 'describe':
-      return describeLanguage(ports);
+      return describeLanguage(dependencies);
     case 'list':
-      return listCollections(ports);
+      return listCollections(dependencies);
     case 'read':
-      return readCollection(command.collection, command.scope, ports);
+      return readCollection(command.collection, command.scope, dependencies);
     case 'inspect':
-      return inspectCollection(command.collection, ports);
+      return inspectCollection(command.collection, dependencies);
     case 'receipt':
-      return readReceipt(command.request, ports);
+      return readReceipt(command.request, dependencies);
     case 'create':
     case 'replace':
     case 'patch':
     case 'preview':
-      return authorSource(command, ports);
+      return authorSource(command, dependencies);
     case 'retry':
     case 'apply':
-      return replayRetainedRequest(command.request, ports);
+      return replayRetainedRequest(command.request, dependencies);
     case 'theme-admit':
     case 'recipe-admit':
-      return admitPreset(command, ports);
+      return admitPreset(command, dependencies);
     case 'recipe-instantiate':
-      return instantiateRecipe(command.expansion, ports);
+      return instantiateRecipe(command.expansion, dependencies);
     default:
       return Promise.resolve(unsupported(command));
   }
@@ -149,7 +157,7 @@ function answerServiceCommand(
  */
 function instantiateRecipe(
   expansion: ExpansionRequest,
-  ports: InstantiatePorts,
+  dependencies: RecipeInstantiateDependencies,
 ): Promise<Result<string>> {
-  return ports.resources.instantiate(expansion);
+  return dependencies.resources.instantiate(expansion);
 }

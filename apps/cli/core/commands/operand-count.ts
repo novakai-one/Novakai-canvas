@@ -7,15 +7,15 @@
  *
  *   invalid-arguments: read requires 1 operand(s)
  *
- * This file counts the words after the command. Which commands need none is written once, in
- * `table.ts`. The count is checked before any flag. It never checks what the word says; that
- * happens later, in `assembly.ts`.
+ * This file checks the number of words after the command. Which commands need none is written
+ * once, in `table.ts`. The count is checked before any flag. It never checks what the word says;
+ * that happens later, in `assembly.ts`.
  */
 import type { Result } from '../../contract/errors.js';
 import { success } from '../../contract/errors.js';
-import type { CountedCommand, IdentifiedCommand } from './command-stages.js';
+import type { CommandWithRightOperandCount, IdentifiedCommand } from './command-stages.js';
 import { operandCountFailure } from './failures.js';
-import type { GivenFlags } from './flags.js';
+import type { TypedFlags } from './flags.js';
 import { takesNoOperand } from './table.js';
 import type { NoOperandCommand, OneOperandCommand } from './table.js';
 
@@ -25,7 +25,9 @@ import type { NoOperandCommand, OneOperandCommand } from './table.js';
  *
  * The mistake it can find: too many or too few words (`invalid-arguments`).
  */
-export function countOperand(identified: IdentifiedCommand): Result<CountedCommand> {
+export function checkOperandCount(
+  identified: IdentifiedCommand,
+): Result<CommandWithRightOperandCount> {
   const { name, operandWords, flags } = identified;
   if (takesNoOperand(name)) {
     return requireNoOperand(name, operandWords, flags);
@@ -37,8 +39,8 @@ export function countOperand(identified: IdentifiedCommand): Result<CountedComma
 function requireNoOperand(
   name: NoOperandCommand,
   operandWords: readonly string[],
-  flags: GivenFlags,
-): Result<CountedCommand> {
+  flags: TypedFlags,
+): Result<CommandWithRightOperandCount> {
   if (operandWords.length > 0) {
     return operandCountFailure(name, 0);
   }
@@ -52,8 +54,8 @@ function requireNoOperand(
 function requireOneOperand(
   name: OneOperandCommand,
   operandWords: readonly string[],
-  flags: GivenFlags,
-): Result<CountedCommand> {
+  flags: TypedFlags,
+): Result<CommandWithRightOperandCount> {
   const [operand, ...extraWords] = operandWords;
   const hasExactlyOne = operand !== undefined && extraWords.length === 0;
   if (!hasExactlyOne) {

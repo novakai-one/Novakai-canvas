@@ -1,9 +1,10 @@
 /*
  * Why this file exists
  *
- * A profile is a set of rules a collection can follow. Today there is one, `build-spec@1`: five
- * documents that together describe a build plan. Three commands work with profiles, and they run
- * on this machine without the service:
+ * A profile is a set of rules a collection can follow. Today there is one, `build-spec@1`: a build
+ * plan written as one collection with five sections in a fixed order (the profile calls each
+ * section a document). Three commands work with profiles, and they run on this machine without
+ * the service:
  *
  *   pnpm canvas profile describe build-spec@1
  *   pnpm canvas profile scaffold build-spec@1 --id my-plan --title "My plan"
@@ -13,7 +14,9 @@
  * scaffold's `--id` and `--title`, lint's file path, and `--out`, and returns one `ProfileCommand`.
  *
  * It never reads or writes a file. Each check answers with a `Result` (see `contract/errors.ts`).
- * Most checks, and the mistakes they report, are in `values.ts`.
+ * A mistake about one typed value is written by the check that finds it: here for `--id` and
+ * `--title`, and in `values.ts` for the rest. A missing `--profile` on `profile lint` is reported
+ * earlier, by `accepted-flags.ts`.
  */
 import { collectionId } from '../../contract/brands.js';
 import type { CollectionId, FilePath } from '../../contract/brands.js';
@@ -23,8 +26,8 @@ import type { Result } from '../../contract/errors.js';
 import { failure, success } from '../../contract/errors.js';
 import { checked } from '../shared/checks.js';
 import { missingLintProfileFailure } from './failures.js';
-import type { CommandFlags } from './flags.js';
-import { checkOutOption, checkProfileId, checkSourceFile } from './values.js';
+import type { TypedFlagText } from './flags.js';
+import { checkFilePath, checkOutOption, checkProfileId } from './values.js';
 
 /** A flag `profile scaffold` requires: --id or --title. */
 type ScaffoldFlag = 'id' | 'title';
@@ -60,7 +63,7 @@ interface LintTarget {
  */
 export function buildProfileDescribeCommand(
   typedProfileId: string,
-  flags: CommandFlags,
+  flags: TypedFlagText,
 ): Result<ProfileCommand> {
   const profile = checkProfileId(typedProfileId);
   if (!profile.ok) {
@@ -83,7 +86,7 @@ export function buildProfileDescribeCommand(
  */
 export function buildProfileScaffoldCommand(
   typedProfileId: string,
-  flags: CommandFlags,
+  flags: TypedFlagText,
 ): Result<ProfileCommand> {
   const scaffoldTarget = checkScaffoldTarget(typedProfileId, flags);
   if (!scaffoldTarget.ok) {
@@ -98,14 +101,15 @@ export function buildProfileScaffoldCommand(
 
 /**
  * Builds `profile lint`, which checks that a collection file follows a profile's rules.
- * `typedFilePath` is the file's path as typed; the profile comes from `--profile`.
+ * `typedFilePath` is the file's path as typed; the profile comes from `--profile`, which
+ * `accepted-flags.ts` has already made sure was typed.
  *
- * The mistakes it can find: `--profile` missing or unknown, then an empty file path, then an empty
- * `--out` path.
+ * The mistakes it can find: an unknown `--profile`, then an empty file path, then an empty `--out`
+ * path.
  */
 export function buildProfileLintCommand(
   typedFilePath: string,
-  flags: CommandFlags,
+  flags: TypedFlagText,
 ): Result<ProfileCommand> {
   const lintTarget = checkLintTarget(typedFilePath, flags.profile);
   if (!lintTarget.ok) {
@@ -121,7 +125,7 @@ export function buildProfileLintCommand(
 /** The profile, then --id and --title. Fails with `unknown-profile`, then `invalid-arguments`. */
 function checkScaffoldTarget(
   profileText: string,
-  flags: CommandFlags,
+  flags: TypedFlagText,
 ): Result<ScaffoldTarget> {
   const profile = checkProfileId(profileText);
   if (!profile.ok) {
@@ -138,7 +142,7 @@ function checkScaffoldTarget(
  * --id and --title, each given and not blank, then --id as a collection ID. Fails with
  * `invalid-arguments`.
  */
-function checkScaffoldName(flags: CommandFlags): Result<ScaffoldName> {
+function checkScaffoldName(flags: TypedFlagText): Result<ScaffoldName> {
   const scaffoldText = requireScaffoldText(flags);
   if (!scaffoldText.ok) {
     return scaffoldText;
@@ -151,7 +155,7 @@ function checkScaffoldName(flags: CommandFlags): Result<ScaffoldName> {
 }
 
 /** --id, then --title, each given and not blank. Fails with `invalid-arguments` naming the flag. */
-function requireScaffoldText(flags: CommandFlags): Result<ScaffoldText> {
+function requireScaffoldText(flags: TypedFlagText): Result<ScaffoldText> {
   const idText = requireScaffoldFlag(flags.id, 'id');
   if (!idText.ok) {
     return idText;
@@ -191,7 +195,7 @@ function checkLintTarget(
   if (!profile.ok) {
     return profile;
   }
-  const file = checkSourceFile(fileText);
+  const file = checkFilePath(fileText);
   if (!file.ok) {
     return file;
   }

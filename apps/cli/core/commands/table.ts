@@ -6,8 +6,11 @@
  * part kept its own list, the lists would drift apart.
  *
  * This file keeps one row per command, with the flags it takes and its `--help` lines. It also
- * lists the commands typed with no word after them (`help`, `describe`, `list`), and the words that
- * start a two-word command (`theme`, `recipe`, `profile`).
+ * lists the commands typed with no word after them (`help`, `describe`, `list`), and the command
+ * groups: `theme`, `recipe` and `profile`, the words that start a two-word command.
+ *
+ * The word typed after a command is its operand: `my-diagram` in `read my-diagram`. A command takes
+ * no operand or exactly one.
  *
  * It holds data and simple lookups only. The rows are frozen, so nothing can change them while the
  * CLI runs.
@@ -26,9 +29,12 @@ export type NoOperandCommand = 'help' | 'describe' | 'list';
 
 /**
  * A command typed with one word after it: a collection ID (`read my-diagram`), a file, a request
- * ID, a profile or a recipe pin.
+ * ID, a profile, or a recipe pin (the exact recipe, such as `er@1.0.0#sha256:DIGEST`).
  */
 export type OneOperandCommand = Exclude<CommandName, NoOperandCommand>;
+
+/** How many words a command takes after it: 0 (`list`) or 1 (`read my-diagram`). */
+export type OperandCount = 0 | 1;
 
 /** One command's row: the flags it takes, and its lines in `--help`. */
 export interface CommandRow {
@@ -48,8 +54,8 @@ const answered: readonly TextFlag[] = Object.freeze(['out', ...sent]);
 const retained: readonly TextFlag[] = Object.freeze(['request', ...answered]);
 
 /**
- * `--help` added to a real command line still prints usage, as in the base CLI: `help` accepts and
- * ignores every flag but five (--profile, --id, --title, --section, --object).
+ * `--help` added to a real command line still prints usage: `help` accepts and ignores every flag
+ * but five (--profile, --id, --title, --section, --object).
  */
 const besideHelp: readonly TextFlag[] = Object.freeze([
   'revision',
@@ -158,11 +164,9 @@ const commandGroups: Readonly<Record<CommandGroup, CommandGroup>> = Object.freez
   profile: 'profile',
 } satisfies Record<CommandGroup, CommandGroup>);
 
-/**
- * Whether the word names a command, such as `read` or `recipe-admit`. A missing word doesn't, and
- * neither does `constructor`, a name every JavaScript object has.
- */
+/** Whether the word names a command, such as `read` or `recipe-admit`. A missing word doesn't. */
 export function isCommandName(word: string | undefined): word is CommandName {
+  // `hasOwn`, so `constructor`, which every JavaScript object has, isn't taken for a command.
   return word !== undefined && Object.hasOwn(commandTable, word);
 }
 
@@ -176,13 +180,12 @@ export function takesNoOperand(name: CommandName): name is NoOperandCommand {
   return Object.hasOwn(noOperandCommands, name);
 }
 
-/** Whether the command doesn't take the flag, as with `list --revision 3`. */
-export function refusesFlag(
+/** Whether the command takes the flag: yes for `read --section`, no for `list --revision`. */
+export function takesFlag(
   name: CommandName,
   flag: TextFlag,
 ): boolean {
-  const accepted = commandTable[name].accepted.includes(flag);
-  return !accepted;
+  return commandTable[name].accepted.includes(flag);
 }
 
 /** The command the way an agent types it: `recipe-admit` is typed `recipe admit`. */
